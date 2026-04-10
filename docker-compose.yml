@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: mia-postgres
+    environment:
+      POSTGRES_DB: mia
+      POSTGRES_USER: mia
+      POSTGRES_PASSWORD: mia
+    ports:
+      - "5432:5432"
+    volumes:
+      - mia_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mia -d mia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mia_postgres_data:
+

@@ -11,6 +11,7 @@ class Settings:
     api_v1_prefix: str
     log_level: str
     enable_docs: bool
+    database_url: str
 
 
 def _get_bool(name: str, default: bool) -> bool:
@@ -29,5 +30,8 @@ def get_settings() -> Settings:
         api_v1_prefix=os.getenv("MIA_API_V1_PREFIX", "/api/v1"),
         log_level=os.getenv("MIA_LOG_LEVEL", "INFO"),
         enable_docs=_get_bool("MIA_ENABLE_DOCS", True),
+        database_url=os.getenv(
+            "MIA_DATABASE_URL",
+            "postgresql+asyncpg://mia:mia@127.0.0.1:5432/mia",
+        ),
     )
-

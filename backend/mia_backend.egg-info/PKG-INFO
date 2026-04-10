@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: mia-backend
-Version: 0.1.0
-Summary: Mia FastAPI backend
-Requires-Python: >=3.11
-Requires-Dist: fastapi>=0.115.0
-Requires-Dist: uvicorn[standard]>=0.30.0
-Provides-Extra: dev
-Requires-Dist: pytest>=8.0.0; extra == "dev"

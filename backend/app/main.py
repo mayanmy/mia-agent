@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.core.config import get_settings
+from app.core.database import check_database
 from app.core.errors import AppError, app_error_handler, unhandled_error_handler
 from app.core.logging import configure_logging
 from app.core.responses import Result, success
@@ -23,12 +24,14 @@ def create_app() -> FastAPI:
 
     @app.get(f"{settings.api_v1_prefix}/health", response_model=Result[dict[str, str]])
     async def health() -> Result[dict[str, str]]:
+        database_ok = await check_database()
         return success(
             {
-                "status": "ok",
+                "status": "ok" if database_ok else "degraded",
                 "appName": settings.app_name,
                 "version": settings.app_version,
                 "environment": settings.environment,
+                "database": "ok" if database_ok else "unavailable",
             }
         )
 
@@ -36,4 +39,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
