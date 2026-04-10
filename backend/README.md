@@ -1,15 +1,12 @@
 # Mia Backend
 
-FastAPI backend for Mia.
+NestJS backend for Mia.
 
-## Run Locally
+## Install
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-uvicorn app.main:app --reload
+npm install
 ```
 
 ## Database
@@ -20,10 +17,18 @@ Start PostgreSQL with pgvector from the repository root:
 docker compose up -d postgres
 ```
 
-Run migrations from the backend directory:
+Run migrations:
 
 ```bash
-alembic upgrade head
+cd backend
+npm run prisma:generate
+npm run prisma:deploy
+```
+
+## Run Locally
+
+```bash
+npm run dev
 ```
 
 Health check:
@@ -31,3 +36,4 @@ Health check:
 ```bash
 curl http://127.0.0.1:8000/api/v1/health
 ```
+

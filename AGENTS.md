@@ -34,7 +34,7 @@ Mia 是一个面向团队内部使用的 AI Agent 开发平台，目标用户规
 ### 技术栈
 
 - Frontend: React + TypeScript + Vite。
-- Backend: Python FastAPI + Pydantic。
+- Backend: Node.js + NestJS + TypeScript。
 - Database: PostgreSQL + pgvector。
 - Storage: 本地文件存储，后续可按需要替换为 MinIO。
 - AI: OpenAI-compatible Chat/Embedding API。
@@ -53,7 +53,7 @@ Mia 是一个面向团队内部使用的 AI Agent 开发平台，目标用户规
 
 ## 代码组织规范
 
-Mia 后端采用模块化单体架构。代码运行在一个 FastAPI 服务内，但内部必须按业务模块隔离，避免全局 service、跨模块随意查表和循环依赖。
+Mia 后端采用模块化单体架构。代码运行在一个 NestJS 服务内，但内部必须按业务模块隔离，避免全局 service、跨模块随意查表和循环依赖。
 
 ### 后端目录结构
 
@@ -61,71 +61,76 @@ Mia 后端采用模块化单体架构。代码运行在一个 FastAPI 服务内�
 
 ```text
 backend/
-  app/
-    main.py
+  src/
+    main.ts
+    app.module.ts
     core/
-      config.py
-      database.py
-      security.py
-      errors.py
-      logging.py
-      pagination.py
+      config.ts
+      result.ts
+      result.interceptor.ts
+      errors.ts
+      pagination.ts
     modules/
       auth/
-        router.py
-        schemas.py
-        service.py
+        auth.module.ts
+        auth.controller.ts
+        auth.service.ts
+        dto/
       users/
-        router.py
-        schemas.py
-        service.py
-        models.py
+        users.module.ts
+        users.controller.ts
+        users.service.ts
+        dto/
       model_providers/
-        router.py
-        schemas.py
-        service.py
-        models.py
-        clients.py
+        model-providers.module.ts
+        model-providers.controller.ts
+        model-providers.service.ts
+        dto/
+        clients/
       agents/
-        router.py
-        schemas.py
-        service.py
-        models.py
+        agents.module.ts
+        agents.controller.ts
+        agents.service.ts
+        dto/
       knowledge/
-        router.py
-        schemas.py
-        service.py
-        models.py
-        parsing.py
-        chunking.py
+        knowledge.module.ts
+        knowledge.controller.ts
+        knowledge.service.ts
+        dto/
+        parsing.ts
+        chunking.ts
       retrieval/
-        schemas.py
-        service.py
-        vector_store.py
-        embedding.py
+        retrieval.module.ts
+        retrieval.service.ts
+        dto/
+        vector-store.ts
+        embedding.ts
       chat/
-        router.py
-        schemas.py
-        service.py
-        models.py
-        sse.py
+        chat.module.ts
+        chat.controller.ts
+        chat.service.ts
+        dto/
+        sse.ts
       tools/
-        schemas.py
-        registry.py
-        service.py
+        tools.module.ts
+        tools.service.ts
+        dto/
+        registry.ts
         builtin/
       logs/
-        router.py
-        schemas.py
-        service.py
-        models.py
+        logs.module.ts
+        logs.controller.ts
+        logs.service.ts
+        dto/
+      prisma/
+        prisma.module.ts
+        prisma.service.ts
     jobs/
-      document_indexing.py
-    integrations/
-      llm/
-        base.py
-        openai_compatible.py
-    tests/
+      document-indexing.job.ts
+  prisma/
+    schema.prisma
+    migrations/
+  test/
 ```
 
 新增业务能力时，优先放入已有模块。只有当它有独立数据模型、独立业务生命周期、独立权限边界时，才新增模块。
@@ -136,58 +141,58 @@ backend/
 
 | 文件 | 职责 | 可以依赖 | 禁止做什么 |
 | --- | --- | --- | --- |
-| `router.py` | 定义 FastAPI 路由、解析请求、声明依赖、返回响应 | 本模块 `schemas.py`、`service.py`，`core` 鉴权依赖 | 不写业务逻辑；不直接操作数据库；不直接调用外部 LLM；不拼 RAG Prompt |
-| `schemas.py` | 定义 Pydantic 请求、响应、内部 DTO | Python 标准库、Pydantic | 不访问数据库；不调用 service；不包含业务流程 |
-| `models.py` | 定义 SQLAlchemy/SQLModel 数据表模型 | `core.database` | 不写业务方法；不调用其他模块；不放接口返回结构 |
-| `service.py` | 实现本模块业务逻辑和对外公开用例 | 本模块文件、允许依赖的其他模块 service、`core` | 不处理 HTTP 细节；不返回 FastAPI Response；不直接读取环境变量 |
-| `clients.py` | 封装外部服务客户端，例如模型服务客户端 | `core.config`、`integrations` | 不写业务编排；不访问业务表 |
-| `parsing.py` / `chunking.py` | 文档解析、切分等纯处理逻辑 | 标准库、第三方解析库、本模块 schemas | 不访问数据库；不调用 LLM；不写任务状态 |
-| `sse.py` | 封装 SSE 事件格式、心跳、流式响应辅助 | `chat.schemas`、`core.errors` | 不加载 Agent；不检索知识库；不直接查库 |
-| `registry.py` | 注册和查找工具、Provider 等可插拔对象 | 本模块 schemas、具体实现 | 不执行跨模块业务流程 |
+| `*.module.ts` | 声明 NestJS 模块、controller、provider 和导出项 | 本模块 controller/service、允许依赖的模块 | 不写业务逻辑；不直接查库 |
+| `*.controller.ts` | 定义 HTTP 路由、解析请求、声明鉴权、返回 DTO | 本模块 `dto/`、`*.service.ts`，`core` 鉴权依赖 | 不写业务逻辑；不直接操作数据库；不直接调用外部 LLM；不拼 RAG Prompt |
+| `dto/` | 定义请求、响应、跨模块 DTO 类型 | TypeScript 类型、class DTO | 不访问数据库；不调用 service；不包含业务流程 |
+| `*.service.ts` | 实现本模块业务逻辑和对外公开用例 | 本模块文件、允许依赖的其他模块 service、`core` | 不处理 HTTP 细节；不直接读取环境变量 |
+| `clients/` | 封装外部服务客户端，例如模型服务客户端 | `core/config`、具体 SDK | 不写业务编排；不访问业务表 |
+| `parsing.ts` / `chunking.ts` | 文档解析、切分等纯处理逻辑 | 标准库、第三方解析库、本模块 DTO | 不访问数据库；不调用 LLM；不写任务状态 |
+| `sse.ts` | 封装 SSE 事件格式、心跳、流式响应辅助 | `chat/dto`、`core/errors` | 不加载 Agent；不检索知识库；不直接查库 |
+| `registry.ts` | 注册和查找工具、Provider 等可插拔对象 | 本模块 DTO、具体实现 | 不执行跨模块业务流程 |
 
 ### 每一层必须遵守的职责边界
 
-#### Router 层
+#### Controller 层
 
-- 每个接口只做四件事：接收请求、获取当前用户、调用 service、返回 response schema。
-- Router 不允许出现 SQL 查询、ORM session 查询、LLM 调用、Embedding 调用、文件解析、向量检索。
-- Router 不允许 import 其他模块的 `models.py`。
-- Router 可以 import 其他模块暴露的依赖函数，例如 `auth` 的 `get_current_user`。
+- 每个接口只做四件事：接收请求、获取当前用户、调用 service、返回 response DTO。
+- Controller 不允许出现 Prisma 查询、LLM 调用、Embedding 调用、文件解析、向量检索。
+- Controller 不允许 import 其他模块的 Prisma 内部实现。
+- Controller 可以使用 Guard/Decorator 获取当前用户。
 
 示例：
 
-```python
-@router.post("", response_model=AgentResponse)
-async def create_agent(
-    payload: AgentCreate,
-    current_user: CurrentUser = Depends(get_current_user),
-    session: AsyncSession = Depends(get_db_session),
-) -> AgentResponse:
-    return await agent_service.create_agent(session, current_user, payload)
+```typescript
+@Post()
+async createAgent(
+  @Body() payload: AgentCreateDto,
+  @CurrentUser() currentUser: CurrentUser,
+): Promise<AgentDetail> {
+  return this.agentsService.createAgent(currentUser.id, payload);
+}
 ```
 
-#### Schema 层
+#### DTO 层
 
-- 所有 API 输入输出必须定义在 `schemas.py`。
-- 请求 schema 使用 `Create`、`Update`、`Query` 后缀。
-- 响应 schema 使用 `Response`、`ListResponse`、`DetailResponse` 后缀。
+- 所有 API 输入输出必须定义在 `dto/`。
+- 请求 DTO 使用 `CreateDto`、`UpdateDto`、`QueryDto` 后缀。
+- 响应 DTO 使用 `ListItem`、`Detail`、`Response` 后缀。
 - 跨模块 service 调用如需传递复杂数据，必须定义明确 DTO，不直接传 ORM model。
-- Schema 不允许 import `models.py`、`service.py`。
+- DTO 不允许 import service 或 Prisma client。
 
-#### Model 层
+#### Prisma 层
 
-- 每张业务表只在所属模块的 `models.py` 中定义。
-- 其他模块不允许直接 import 外部模块的 ORM model 做查询。
+- 数据表定义统一放在 `backend/prisma/schema.prisma`。
+- 其他模块不允许绕过所属模块 service 直接读写外部模块的数据。
 - 关联表归属调用方模块。例如 Agent 绑定知识库的关系表属于 `agents` 模块，因为绑定关系是 Agent 配置的一部分。
-- Model 中不写业务逻辑方法，只保留字段、索引、关系声明。
+- Prisma schema 只定义数据结构、关系、索引和约束，不承载业务逻辑。
 
 #### Service 层
 
 - Service 是模块唯一允许承载业务逻辑的层。
-- 跨模块调用只能调用对方模块 `service.py` 中明确暴露的函数，不能跨模块直接查表。
+- 跨模块调用只能调用对方模块 `*.service.ts` 中明确暴露的方法，不能跨模块直接查表。
 - Service 入参和返回值优先使用 schema/DTO、基础类型、ID，不返回外部模块 ORM model。
-- Service 不允许 import `router.py`。
-- Service 不处理 HTTP 状态码细节，业务错误统一抛出 `core.errors` 中定义的异常。
+- Service 不允许 import `*.controller.ts`。
+- Service 不处理 HTTP 响应包装细节，业务错误统一抛出 `core/errors` 中定义的异常。
 
 #### Jobs 层
 
@@ -273,7 +278,7 @@ chat.service
 - SSE 事件类型固定使用：`message_start`、`retrieval_start`、`retrieval_result`、`token`、`tool_call`、`tool_result`、`message_end`、`error`、`ping`。
 - `chat.service` 必须检测客户端断开，并取消上游 LLM stream。
 - 单次对话必须记录 `request_id`、`user_id`、`agent_id`、`session_id`、耗时、错误、检索片段和模型信息。
-- SSE 事件格式必须在 `chat/schemas.py` 或 `chat/sse.py` 中统一定义，不允许各接口手写字符串格式。
+- SSE 事件格式必须在 `chat/dto/` 或 `chat/sse.ts` 中统一定义，不允许各接口手写字符串格式。
 
 ### 命名规则
 
@@ -290,10 +295,10 @@ chat.service
 
 1. 判断功能归属哪个模块。
 2. 如果涉及跨模块数据，先确认是否已有 service 可用。
-3. 在所属模块 `schemas.py` 定义输入输出结构。
-4. 如需新表，在所属模块 `models.py` 定义模型和索引。
-5. 在所属模块 `service.py` 实现业务逻辑。
-6. 在所属模块 `router.py` 暴露 API。
+3. 在所属模块 `dto/` 定义输入输出结构。
+4. 如需新表，在 `backend/prisma/schema.prisma` 定义模型和索引。
+5. 在所属模块 `*.service.ts` 实现业务逻辑。
+6. 在所属模块 `*.controller.ts` 暴露 API。
 7. 如需后台处理，在 `jobs/` 新增任务编排。
 8. 如需调用外部模型或服务，先封装到 `integrations/` 或对应 provider。
 9. 补充最小测试，覆盖 service 主路径和关键失败路径。
@@ -301,7 +306,7 @@ chat.service
 ### 禁止事项
 
 - 禁止创建全局 `services/`、`models/`、`schemas/` 目录承载业务代码。
-- 禁止模块之间直接 import 对方的 `models.py` 做查询。
+- 禁止模块之间绕过对方 service 直接读写对方数据。
 - 禁止在 router 中写业务流程。
 - 禁止在 model 中写业务流程。
 - 禁止让底层模块依赖 `chat` 或 `jobs`。
@@ -316,8 +321,8 @@ Mia 一期采用模块化单体，不提前拆微服务。但代码必须为未�
 
 | 准备项 | 当前做法 | 未来拆服务时的收益 |
 | --- | --- | --- |
-| 跨模块只通过 service 调用 | 调用其他模块时只 import 对方 `service.py` 暴露的函数 | 可替换为 HTTP/gRPC client |
-| 不跨模块传 ORM model | service 入参和返回值使用 ID、基础类型、Pydantic DTO | DTO 可直接变成远程 API schema |
+| 跨模块只通过 service 调用 | 调用其他模块时只依赖对方 module 导出的 service 方法 | 可替换为 HTTP/gRPC client |
+| 不跨模块传 ORM model | service 入参和返回值使用 ID、基础类型、TypeScript DTO | DTO 可直接变成远程 API schema |
 | 不跨模块直接查表 | 每个模块只查询自己的表 | 数据库可按服务拆分 |
 | 定义运行时配置 DTO | 如 `AgentRuntimeConfig`、`ModelRuntimeConfig`、`RetrievalContext` | 高频配置读取可远程化和缓存 |
 | 统一 request_id | 每次请求进入系统时生成并贯穿日志、SSE、任务 | 未来跨服务链路追踪 |
@@ -373,7 +378,7 @@ logs.schemas.LogEvent
 
 - DTO 可以新增字段，但删除字段必须确认所有调用方。
 - DTO 字段名使用稳定业务语义，不暴露数据库内部实现。
-- 跨模块 DTO 不包含 SQLAlchemy/SQLModel 对象、数据库 session、文件句柄或 SDK client。
+- 跨模块 DTO 不包含 Prisma 原始结果对象、数据库事务对象、文件句柄或 SDK client。
 - DTO 中如果包含敏感配置，例如 API key，只允许在模块内部使用，不允许返回给通用调用方。
 
 ### 可远程化接口约束
@@ -480,21 +485,22 @@ Mia 后续需要调用多个外部 LLM API，例如 OpenAI、Claude、Gemini、O
 推荐目录：
 
 ```text
-backend/app/modules/model_providers/
-  service.py
-  schemas.py
-  models.py
-  gateway.py
-  circuit_breaker.py
-  retry.py
-  timeout.py
-  rate_limit.py
+backend/src/modules/model-providers/
+  model-providers.module.ts
+  model-providers.controller.ts
+  model-providers.service.ts
+  gateway.ts
+  circuit-breaker.ts
+  retry.ts
+  timeout.ts
+  rate-limit.ts
+  dto/
   clients/
-    base.py
-    openai_client.py
-    claude_client.py
-    gemini_client.py
-    ollama_client.py
+    base.client.ts
+    openai.client.ts
+    claude.client.ts
+    gemini.client.ts
+    ollama.client.ts
 ```
 
 `chat`、`retrieval`、`tools` 等模块只允许调用 `model_providers.service`，不允许知道具体供应商 SDK。
@@ -516,14 +522,14 @@ async def create_embedding(...) -> EmbeddingResponse:
 
 规则：
 
-- 入参和返回值必须是 Pydantic DTO 或基础类型。
+- 入参和返回值必须是 TypeScript DTO 或基础类型。
 - 不返回第三方 SDK 原始对象。
 - 不把 API key、完整 provider secret 返回给调用方。
 - Provider 差异在 client 层消化，对上层暴露统一事件和错误类型。
 
 ### 线程与并发管理
 
-- FastAPI 中调用外部 LLM API 优先使用 `asyncio` + `httpx.AsyncClient`。
+- NestJS 中调用外部 LLM API 优先使用 `fetch`、`undici` 或官方 SDK 的异步接口。
 - 禁止为每个 LLM 请求手动创建线程。
 - 外部 HTTP 调用必须复用 async client，不能每次请求新建无管理的 client。
 - 每个 provider 必须有独立并发限制，避免单个供应商拖垮全部模型调用。
@@ -540,7 +546,7 @@ ollama_concurrency: 3
 embedding_concurrency: 5
 ```
 
-实现上使用 `asyncio.Semaphore` 或等价机制：
+实现上使用 provider 级并发队列、轻量 semaphore 或等价机制：
 
 ```text
 获取 provider semaphore
@@ -735,7 +741,7 @@ P95 总耗时
 Mia v0.1 至少实现：
 
 1. 所有 LLM 调用统一走 `model_providers.gateway`。
-2. 每个 provider 一个独立 `asyncio.Semaphore`。
+2. 每个 provider 一个独立并发限制器。
 3. 每个请求有 connect、first token、idle、total timeout。
 4. Embedding 可重试 2-3 次。
 5. 流式 Chat 只在首 token 前重试。
@@ -1047,13 +1053,13 @@ cursor = created_at + id
 - 大表查询必须带时间范围或 cursor。
 - 日志统计默认限制时间范围，例如最近 7 天或最近 30 天。
 - 列表页不要使用 `SELECT *`，只查展示字段。
-- 不允许在 Python 中对大量数据做过滤、排序、分页；必须交给数据库完成。
+- 不允许在 Node.js 内存中对大量数据做过滤、排序、分页；必须交给数据库完成。
 - 避免 N+1 查询；需要展示关联名称时，优先使用冗余字段或明确的批量查询。
 - 复杂统计不要放在对话主链路中执行。
 
 ### 迁移与变更规范
 
-- 所有表结构变更必须通过 Alembic migration。
+- 所有表结构变更必须通过 Prisma migration。
 - 新增外键字段时必须同时考虑索引。
 - 新增状态字段时必须确认是否需要和时间字段组成复合索引。
 - 新增唯一约束时必须考虑软删除场景。
@@ -1233,8 +1239,8 @@ pageSize
 ### 接口命名与 Schema 约定
 
 - API 请求字段使用 camelCase，例如 `pageSize`、`providerType`。
-- Python 内部字段使用 snake_case。
-- Pydantic schema 负责字段 alias 转换。
+- TypeScript 内部字段使用 camelCase。
+- Prisma model 字段与 API DTO 字段默认使用 camelCase；数据库列名如需 snake_case，由 Prisma `@map` / `@@map` 显式声明。
 - 列表响应 schema 使用 `{Resource}ListItem`。
 - 详情响应 schema 使用 `{Resource}Detail`。
 - 创建请求 schema 使用 `{Resource}Create`。

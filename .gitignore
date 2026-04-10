@@ -1,9 +1,10 @@
 dist
 node_modules
 .env
-.venv
-__pycache__
-*.pyc
 frontend/dist
-backend/.venv
-backend/*.egg-info
+frontend/node_modules
+backend/dist
+backend/node_modules
+backend/.env
+backend/coverage
+*.tsbuildinfo
