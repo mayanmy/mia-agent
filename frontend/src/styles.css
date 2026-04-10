@@ -1,0 +1,253 @@
+:root {
+  color: #1f2937;
+  background: #f7f8fb;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.appShell {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: 248px minmax(0, 1fr);
+}
+
+.sidebar {
+  border-right: 1px solid #dde3eb;
+  background: #ffffff;
+  padding: 20px 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 6px 22px;
+}
+
+.brandMark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.brandName {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.brandMeta {
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.navList {
+  display: grid;
+  gap: 4px;
+}
+
+.navItem {
+  border-radius: 8px;
+  color: #4b5563;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+
+.navItem:first-child,
+.navItem:hover {
+  background: #eef4ff;
+  color: #1d4ed8;
+}
+
+.main {
+  min-width: 0;
+  padding: 32px;
+}
+
+.workspace {
+  max-width: 1040px;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin: 0;
+  color: #111827;
+}
+
+h1 {
+  font-size: 32px;
+  line-height: 1.15;
+}
+
+h2 {
+  font-size: 16px;
+}
+
+.statusPill {
+  min-width: 84px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 12px;
+  text-align: center;
+}
+
+.statusPill.ready {
+  border-color: #b7e4c7;
+  background: #ecfdf3;
+  color: #16783f;
+}
+
+.statusPill.error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.panel {
+  border: 1px solid #dde3eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.panelHeader {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 16px 18px;
+}
+
+.muted,
+.errorText {
+  margin: 0;
+  padding: 18px;
+  font-size: 14px;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.errorText {
+  color: #be123c;
+}
+
+.healthGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.healthGrid div {
+  border-right: 1px solid #e5e7eb;
+  padding: 18px;
+}
+
+.healthGrid div:last-child {
+  border-right: 0;
+}
+
+.healthGrid dt {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.healthGrid dd {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .appShell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    border-bottom: 1px solid #dde3eb;
+    border-right: 0;
+  }
+
+  .navList {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .navItem {
+    overflow: hidden;
+    padding: 9px 6px;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .main {
+    padding: 22px 16px;
+  }
+
+  .pageHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .healthGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .healthGrid div {
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 0;
+  }
+
+  .healthGrid div:last-child {
+    border-bottom: 0;
+  }
+}
+
