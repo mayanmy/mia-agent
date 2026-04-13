@@ -7,4 +7,3 @@ import { PrismaModule } from './modules/prisma/prisma.module';
   imports: [PrismaModule, HealthModule],
 })
 export class AppModule {}
-

@@ -1,0 +1,27 @@
+import { HttpStatus } from '@nestjs/common';
+
+export const ErrorCodes = {
+  common: {
+    badRequest: 1001,
+    unauthorized: 1002,
+    forbidden: 1003,
+    notFound: 1004,
+    conflict: 1005,
+    internal: 9000,
+  },
+} as const;
+
+export class AppError extends Error {
+  readonly code: number;
+  readonly httpStatus: number;
+
+  constructor(
+    code: number,
+    message: string,
+    httpStatus = HttpStatus.BAD_REQUEST,
+  ) {
+    super(message);
+    this.code = code;
+    this.httpStatus = httpStatus;
+  }
+}

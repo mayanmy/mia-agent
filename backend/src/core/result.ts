@@ -19,3 +19,10 @@ export function success<T>(data: T | null = null, message = 'success'): Result<T
   };
 }
 
+export function failure(code: number, message: string): Result<null> {
+  return {
+    code,
+    message,
+    data: null,
+  };
+}
