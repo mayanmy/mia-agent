@@ -4,6 +4,13 @@ export type Result<T> = {
   data: T;
 };
 
+export type PageResult<T> = {
+  list: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -23,4 +30,3 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   return result.data;
 }
-

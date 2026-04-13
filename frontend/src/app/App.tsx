@@ -1,6 +1,7 @@
+import { ProvidersPage } from "../features/model-providers/ProvidersPage";
 import { HealthPage } from "../pages/HealthPage";
 
-const navItems = ["Agents", "Knowledge", "Chat", "Logs", "Settings"];
+const navItems = ["Providers", "Agents", "Knowledge", "Chat", "Logs"];
 
 export function App() {
   return (
@@ -22,9 +23,9 @@ export function App() {
         </nav>
       </aside>
       <main className="main">
-        <HealthPage />
+        <ProvidersPage />
+        <HealthPage compact />
       </main>
     </div>
   );
 }
-

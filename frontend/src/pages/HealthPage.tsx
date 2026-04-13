@@ -7,7 +7,11 @@ type LoadState =
   | { status: "ready"; data: HealthData }
   | { status: "error"; message: string };
 
-export function HealthPage() {
+type HealthPageProps = {
+  compact?: boolean;
+};
+
+export function HealthPage({ compact = false }: HealthPageProps) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
   useEffect(() => {
@@ -34,16 +38,18 @@ export function HealthPage() {
   }, []);
 
   return (
-    <section className="workspace">
-      <header className="pageHeader">
-        <div>
-          <p className="eyebrow">Workspace</p>
-          <h1>Mia</h1>
-        </div>
-        <div className={`statusPill ${state.status}`}>
-          {state.status === "ready" ? "Online" : state.status === "loading" ? "Checking" : "Offline"}
-        </div>
-      </header>
+    <section className={compact ? "workspace compactHealth" : "workspace"}>
+      {!compact && (
+        <header className="pageHeader">
+          <div>
+            <p className="eyebrow">Workspace</p>
+            <h1>Mia</h1>
+          </div>
+          <div className={`statusPill ${state.status}`}>
+            {state.status === "ready" ? "Online" : state.status === "loading" ? "Checking" : "Offline"}
+          </div>
+        </header>
+      )}
 
       <div className="panel">
         <div className="panelHeader">
@@ -75,4 +81,3 @@ export function HealthPage() {
     </section>
   );
 }
-

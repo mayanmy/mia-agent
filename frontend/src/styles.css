@@ -206,6 +206,170 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.compactHealth {
+  margin-top: 22px;
+}
+
+.twoColumnGrid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.formPanel,
+.tablePanel {
+  margin-bottom: 18px;
+}
+
+.formBody {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.formBody label {
+  display: grid;
+  gap: 7px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.formBody input,
+.formBody select {
+  width: 100%;
+  border: 1px solid #cfd7e2;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.formBody input:focus,
+.formBody select:focus {
+  border-color: #2563eb;
+  outline: 2px solid #dbeafe;
+}
+
+.formGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.checkboxRow {
+  align-items: center;
+  display: flex !important;
+  flex-direction: row;
+  gap: 8px !important;
+}
+
+.checkboxRow input {
+  width: 16px;
+  min-height: 16px;
+}
+
+.buttonRow,
+.tableActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.primaryButton {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.secondaryButton {
+  border: 1px solid #cfd7e2;
+  background: #ffffff;
+  color: #1f2937;
+}
+
+.textButton {
+  background: #eef4ff;
+  color: #1d4ed8;
+}
+
+.dangerButton {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.notice {
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+}
+
+.successNotice {
+  border: 1px solid #b7e4c7;
+  background: #ecfdf3;
+  color: #16783f;
+}
+
+.errorNotice {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 780px;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 13px 16px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+td {
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 760px) {
   .appShell {
     grid-template-columns: 1fr;
@@ -249,5 +413,9 @@ h2 {
   .healthGrid div:last-child {
     border-bottom: 0;
   }
-}
 
+  .twoColumnGrid,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
