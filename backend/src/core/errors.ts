@@ -9,6 +9,14 @@ export const ErrorCodes = {
     conflict: 1005,
     internal: 9000,
   },
+  provider: {
+    notFound: 2001,
+    nameExists: 2002,
+    inUse: 2003,
+    connectionFailed: 2004,
+    modelConfigNotFound: 2005,
+    modelConfigExists: 2006,
+  },
 } as const;
 
 export class AppError extends Error {

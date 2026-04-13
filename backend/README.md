@@ -7,6 +7,7 @@ NestJS backend for Mia.
 ```bash
 cd backend
 npm install
+cp .env.example .env
 ```
 
 ## Database
@@ -36,4 +37,3 @@ Health check:
 ```bash
 curl http://127.0.0.1:8000/api/v1/health
 ```
-

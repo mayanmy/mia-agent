@@ -7,3 +7,54 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ModelProviderType {
+  OPENAI_COMPATIBLE @map("openai_compatible")
+  OLLAMA            @map("ollama")
+  ANTHROPIC         @map("anthropic")
+  GEMINI            @map("gemini")
+
+  @@map("model_provider_type")
+}
+
+enum ModelConfigType {
+  CHAT      @map("chat")
+  EMBEDDING @map("embedding")
+
+  @@map("model_config_type")
+}
+
+model ModelProvider {
+  id              String            @id @default(uuid()) @db.Uuid
+  name            String
+  providerType    ModelProviderType @map("provider_type")
+  baseUrl         String            @map("base_url")
+  apiKeyEncrypted String?           @map("api_key_encrypted")
+  enabled         Boolean           @default(true)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime?         @map("deleted_at") @db.Timestamptz(6)
+  modelConfigs    ModelConfig[]
+
+  @@index([createdAt(sort: Desc)], map: "idx_model_providers_created_at")
+  @@index([enabled, createdAt(sort: Desc)], map: "idx_model_providers_enabled_created_at")
+  @@map("model_providers")
+}
+
+model ModelConfig {
+  id             String          @id @default(uuid()) @db.Uuid
+  providerId     String          @map("provider_id") @db.Uuid
+  modelName      String          @map("model_name")
+  modelType      ModelConfigType @map("model_type")
+  enabled        Boolean         @default(true)
+  timeoutSeconds Int             @default(120) @map("timeout_seconds")
+  maxTokens      Int?            @map("max_tokens")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime?       @map("deleted_at") @db.Timestamptz(6)
+  provider       ModelProvider   @relation(fields: [providerId], references: [id])
+
+  @@index([providerId], map: "idx_model_configs_provider_id")
+  @@index([modelType, enabled], map: "idx_model_configs_type_enabled")
+  @@index([createdAt(sort: Desc)], map: "idx_model_configs_created_at")
+  @@map("model_configs")
+}

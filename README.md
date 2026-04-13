@@ -23,6 +23,13 @@ cd ../frontend
 npm install
 ```
 
+## Environment
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
 ## Database
 
 Start PostgreSQL with pgvector:
@@ -65,4 +72,3 @@ Frontend: http://127.0.0.1:5173/
 npm run typecheck
 npm run build
 ```
-
