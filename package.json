@@ -1,0 +1,22 @@
+{
+  "name": "mia",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mia AI Agent Platform",
+  "scripts": {
+    "dev:web": "npm --prefix frontend run dev",
+    "dev:api": "npm --prefix backend run dev",
+    "build:web": "npm --prefix frontend run build",
+    "build:api": "npm --prefix backend run build",
+    "typecheck:web": "npm --prefix frontend run typecheck",
+    "typecheck:api": "npm --prefix backend run typecheck",
+    "prisma:generate": "npm --prefix backend run prisma:generate",
+    "prisma:migrate": "npm --prefix backend run prisma:migrate",
+    "prisma:deploy": "npm --prefix backend run prisma:deploy",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "build": "npm run build:api && npm run build:web",
+    "typecheck": "npm run typecheck:api && npm run typecheck:web"
+  }
+}
+
