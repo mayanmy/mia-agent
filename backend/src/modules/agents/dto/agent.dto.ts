@@ -1,6 +1,10 @@
 import { ModelConfigType, ModelProviderType } from '@prisma/client';
 
-export type AgentGenerationParams = Record<string, unknown>;
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+export type JsonObject = { [key: string]: JsonValue };
+
+export type AgentGenerationParams = JsonObject;
 
 export type AgentCreateDto = {
   name?: string;
