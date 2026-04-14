@@ -52,9 +52,33 @@ model ModelConfig {
   updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt      DateTime?       @map("deleted_at") @db.Timestamptz(6)
   provider       ModelProvider   @relation(fields: [providerId], references: [id])
+  agents         Agent[]
 
   @@index([providerId], map: "idx_model_configs_provider_id")
   @@index([modelType, enabled], map: "idx_model_configs_type_enabled")
   @@index([createdAt(sort: Desc)], map: "idx_model_configs_created_at")
   @@map("model_configs")
+}
+
+model Agent {
+  id               String      @id @default(uuid()) @db.Uuid
+  name             String
+  description      String      @default("")
+  systemPrompt     String      @map("system_prompt") @db.Text
+  modelConfigId    String      @map("model_config_id") @db.Uuid
+  temperature      Decimal     @default(0.70) @db.Decimal(3, 2)
+  maxTokens        Int?        @map("max_tokens")
+  timeoutSeconds   Int         @default(120) @map("timeout_seconds")
+  historyTurns     Int         @default(6) @map("history_turns")
+  generationParams Json?       @map("generation_params") @db.JsonB
+  enabled          Boolean     @default(true)
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?   @map("deleted_at") @db.Timestamptz(6)
+  modelConfig      ModelConfig @relation(fields: [modelConfigId], references: [id])
+
+  @@index([createdAt(sort: Desc)], map: "idx_agents_created_at")
+  @@index([modelConfigId], map: "idx_agents_model_config_id")
+  @@index([enabled, createdAt(sort: Desc)], map: "idx_agents_enabled_created_at")
+  @@map("agents")
 }
