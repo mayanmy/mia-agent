@@ -17,6 +17,10 @@ export const ErrorCodes = {
     modelConfigNotFound: 2005,
     modelConfigExists: 2006,
   },
+  agent: {
+    notFound: 3001,
+    invalidModelConfig: 3002,
+  },
 } as const;
 
 export class AppError extends Error {
