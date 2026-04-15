@@ -428,6 +428,7 @@ export class AgentsService {
       modelConfigId: agent.modelConfigId,
       modelName: agent.modelConfig.modelName,
       providerName: agent.modelConfig.provider.name,
+      temperature: Number(agent.temperature),
       enabled: agent.enabled,
       createdAt: agent.createdAt,
       updatedAt: agent.updatedAt,
@@ -438,7 +439,6 @@ export class AgentsService {
     return {
       ...this.toAgentListItem(agent),
       systemPrompt: agent.systemPrompt,
-      temperature: Number(agent.temperature),
       maxTokens: agent.maxTokens,
       timeoutSeconds: agent.timeoutSeconds,
       historyTurns: agent.historyTurns,

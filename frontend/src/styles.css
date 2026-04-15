@@ -73,13 +73,17 @@ a {
 
 .navItem {
   border-radius: 8px;
+  border: 0;
+  background: transparent;
   color: #4b5563;
+  cursor: pointer;
   font-size: 14px;
   font-weight: 600;
   padding: 10px 12px;
+  text-align: left;
 }
 
-.navItem:first-child,
+.navItem.active,
 .navItem:hover {
   background: #eef4ff;
   color: #1d4ed8;
@@ -91,7 +95,7 @@ a {
 }
 
 .workspace {
-  max-width: 1040px;
+  max-width: 1180px;
 }
 
 .pageHeader {
@@ -342,6 +346,21 @@ button:disabled {
   overflow-x: auto;
 }
 
+.agentFormGrid {
+  display: grid;
+  gap: 0 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.agentFormFull {
+  grid-column: 1 / -1;
+}
+
+.toolCheckboxGroup {
+  display: grid;
+  gap: 12px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -415,7 +434,12 @@ td {
   }
 
   .twoColumnGrid,
-  .formGrid {
+  .formGrid,
+  .agentFormGrid {
     grid-template-columns: 1fr;
+  }
+
+  .agentFormFull {
+    grid-column: auto;
   }
 }

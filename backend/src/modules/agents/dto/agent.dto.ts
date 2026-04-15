@@ -43,6 +43,7 @@ export type AgentListItem = {
   modelConfigId: string;
   modelName: string;
   providerName: string;
+  temperature: number;
   enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -50,7 +51,6 @@ export type AgentListItem = {
 
 export type AgentDetail = AgentListItem & {
   systemPrompt: string;
-  temperature: number;
   maxTokens: number | null;
   timeoutSeconds: number;
   historyTurns: number;
