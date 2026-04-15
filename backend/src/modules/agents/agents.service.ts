@@ -13,6 +13,8 @@ import {
   AgentModelConfigSummary,
   AgentQueryDto,
   AgentRuntimeConfig,
+  AgentToolBindingDto,
+  AgentToolBindingResult,
   AgentUpdateDto,
 } from './dto/agent.dto';
 
@@ -25,6 +27,12 @@ type AgentWithModelConfig = Prisma.AgentGetPayload<{
     modelConfig: {
       include: {
         provider: true;
+      };
+    };
+    agentTools: true;
+    _count: {
+      select: {
+        agentTools: true;
       };
     };
   };
@@ -63,6 +71,12 @@ export class AgentsService {
           modelConfig: {
             include: {
               provider: true,
+            },
+          },
+          agentTools: true,
+          _count: {
+            select: {
+              agentTools: true,
             },
           },
         },
@@ -104,6 +118,12 @@ export class AgentsService {
         modelConfig: {
           include: {
             provider: true,
+          },
+        },
+        agentTools: true,
+        _count: {
+          select: {
+            agentTools: true,
           },
         },
       },
@@ -153,6 +173,12 @@ export class AgentsService {
             provider: true,
           },
         },
+        agentTools: true,
+        _count: {
+          select: {
+            agentTools: true,
+          },
+        },
       },
     });
 
@@ -193,7 +219,56 @@ export class AgentsService {
       historyTurns: agent.historyTurns,
       generationParams: this.toGenerationParams(agent.generationParams),
       knowledgeBaseIds: [],
-      toolIds: [],
+      toolIds: agent.agentTools.map((tool) => tool.toolId),
+    };
+  }
+
+  async getAgentTools(id: string): Promise<AgentToolBindingResult> {
+    await this.ensureAgentExists(id);
+
+    const tools = await this.prisma.agentTool.findMany({
+      where: {
+        agentId: id,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    return {
+      agentId: id,
+      toolIds: tools.map((tool) => tool.toolId),
+    };
+  }
+
+  async updateAgentTools(
+    id: string,
+    payload: AgentToolBindingDto,
+  ): Promise<AgentToolBindingResult> {
+    await this.ensureAgentExists(id);
+    const toolIds = this.normalizeToolIds(payload.toolIds);
+
+    await this.prisma.$transaction([
+      this.prisma.agentTool.deleteMany({
+        where: {
+          agentId: id,
+        },
+      }),
+      ...(toolIds.length > 0
+        ? [
+            this.prisma.agentTool.createMany({
+              data: toolIds.map((toolId) => ({
+                agentId: id,
+                toolId,
+              })),
+            }),
+          ]
+        : []),
+    ]);
+
+    return {
+      agentId: id,
+      toolIds,
     };
   }
 
@@ -345,6 +420,30 @@ export class AgentsService {
     return value;
   }
 
+  private normalizeToolIds(value: unknown): string[] {
+    if (value === undefined || value === null) {
+      return [];
+    }
+
+    if (!Array.isArray(value)) {
+      throw new AppError(ErrorCodes.agent.invalidTools, 'toolIds must be an array');
+    }
+
+    const toolIds = value.map((item) => {
+      if (typeof item !== 'string' || item.trim().length === 0) {
+        throw new AppError(ErrorCodes.agent.invalidTools, 'toolIds must contain non-empty strings');
+      }
+
+      return item.trim();
+    });
+
+    if (toolIds.length > 50) {
+      throw new AppError(ErrorCodes.agent.invalidTools, 'toolIds cannot exceed 50 items');
+    }
+
+    return [...new Set(toolIds)];
+  }
+
   private parseEnabled(value: string): boolean {
     if (value === 'true') {
       return true;
@@ -410,6 +509,12 @@ export class AgentsService {
             provider: true,
           },
         },
+        agentTools: true,
+        _count: {
+          select: {
+            agentTools: true,
+          },
+        },
       },
     });
 
@@ -428,6 +533,7 @@ export class AgentsService {
       modelConfigId: agent.modelConfigId,
       modelName: agent.modelConfig.modelName,
       providerName: agent.modelConfig.provider.name,
+      toolCount: agent._count.agentTools,
       temperature: Number(agent.temperature),
       enabled: agent.enabled,
       createdAt: agent.createdAt,
@@ -443,6 +549,7 @@ export class AgentsService {
       timeoutSeconds: agent.timeoutSeconds,
       historyTurns: agent.historyTurns,
       generationParams: this.toGenerationParams(agent.generationParams),
+      toolIds: agent.agentTools.map((tool) => tool.toolId),
       modelConfig: this.toModelConfigSummary(agent),
     };
   }

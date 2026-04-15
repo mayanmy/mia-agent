@@ -6,6 +6,8 @@ import {
   AgentDetail,
   AgentListItem,
   AgentQueryDto,
+  AgentToolBindingDto,
+  AgentToolBindingResult,
   AgentUpdateDto,
 } from './dto/agent.dto';
 import { AgentsService } from './agents.service';
@@ -41,5 +43,18 @@ export class AgentsController {
   async deleteAgent(@Param('id') id: string): Promise<null> {
     await this.agentsService.deleteAgent(id);
     return null;
+  }
+
+  @Get(':id/tools')
+  async getAgentTools(@Param('id') id: string): Promise<AgentToolBindingResult> {
+    return this.agentsService.getAgentTools(id);
+  }
+
+  @Put(':id/tools')
+  async updateAgentTools(
+    @Param('id') id: string,
+    @Body() payload: AgentToolBindingDto,
+  ): Promise<AgentToolBindingResult> {
+    return this.agentsService.updateAgentTools(id, payload);
   }
 }

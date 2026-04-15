@@ -43,6 +43,7 @@ export type AgentListItem = {
   modelConfigId: string;
   modelName: string;
   providerName: string;
+  toolCount: number;
   temperature: number;
   enabled: boolean;
   createdAt: Date;
@@ -55,7 +56,17 @@ export type AgentDetail = AgentListItem & {
   timeoutSeconds: number;
   historyTurns: number;
   generationParams: AgentGenerationParams | null;
+  toolIds: string[];
   modelConfig: AgentModelConfigSummary;
+};
+
+export type AgentToolBindingDto = {
+  toolIds?: string[];
+};
+
+export type AgentToolBindingResult = {
+  agentId: string;
+  toolIds: string[];
 };
 
 export type AgentRuntimeConfig = {
