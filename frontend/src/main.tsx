@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
+import { BrowserRouter } from "react-router-dom";
 import "antd/dist/reset.css";
 
 import { App } from "./app/App";
@@ -20,7 +21,9 @@ createRoot(document.getElementById("root") as HTMLElement).render(
         }
       }}
     >
-      <App />
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
     </ConfigProvider>
   </StrictMode>
 );

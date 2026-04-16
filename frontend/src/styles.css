@@ -72,6 +72,7 @@ a {
 }
 
 .navItem {
+  display: block;
   border-radius: 8px;
   border: 0;
   background: transparent;
@@ -81,6 +82,7 @@ a {
   font-weight: 600;
   padding: 10px 12px;
   text-align: left;
+  text-decoration: none;
 }
 
 .navItem.active,

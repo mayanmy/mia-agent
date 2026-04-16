@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 
 import { AgentsPage } from "../features/agents/AgentsPage";
 import { ProvidersPage } from "../features/model-providers/ProvidersPage";
@@ -8,17 +8,20 @@ const navItems = ["providers", "agents", "knowledge", "chat", "logs"] as const;
 
 type NavItem = (typeof navItems)[number];
 
-const navLabels: Record<NavItem, string> = {
-  providers: "模型供应商",
-  agents: "Agent",
-  knowledge: "知识库",
-  chat: "对话",
-  logs: "日志"
+type NavConfig = {
+  label: string;
+  path: string;
+};
+
+const navConfig: Record<NavItem, NavConfig> = {
+  providers: { label: "模型供应商", path: "/providers" },
+  agents: { label: "Agent", path: "/agents" },
+  knowledge: { label: "知识库", path: "/knowledge" },
+  chat: { label: "对话", path: "/chat" },
+  logs: { label: "日志", path: "/logs" }
 };
 
 export function App() {
-  const [activeNav, setActiveNav] = useState<NavItem>("agents");
-
   return (
     <div className="appShell">
       <aside className="sidebar">
@@ -31,36 +34,49 @@ export function App() {
         </div>
         <nav className="navList" aria-label="主导航">
           {navItems.map((item) => (
-            <button
-              className={`navItem${activeNav === item ? " active" : ""}`}
+            <NavLink
+              className={({ isActive }) => `navItem${isActive ? " active" : ""}`}
+              end
               key={item}
-              onClick={() => setActiveNav(item)}
-              type="button"
+              to={navConfig[item].path}
             >
-              {navLabels[item]}
-            </button>
+              {navConfig[item].label}
+            </NavLink>
           ))}
         </nav>
       </aside>
       <main className="main">
-        {activeNav === "providers" && (
-          <>
-            <ProvidersPage />
-            <HealthPage compact />
-          </>
-        )}
-        {activeNav === "agents" && <AgentsPage />}
-        {activeNav !== "providers" && activeNav !== "agents" && (
-          <section className="workspace">
-            <header className="pageHeader">
-              <div>
-                <p className="eyebrow">{navLabels[activeNav]}</p>
-                <h1>{navLabels[activeNav]}</h1>
-              </div>
-            </header>
-          </section>
-        )}
+        <Routes>
+          <Route index element={<Navigate replace to="/agents" />} />
+          <Route
+            path="/providers"
+            element={
+              <>
+                <ProvidersPage />
+                <HealthPage compact />
+              </>
+            }
+          />
+          <Route path="/agents" element={<AgentsPage />} />
+          <Route path="/knowledge" element={<PlaceholderPage title={navConfig.knowledge.label} />} />
+          <Route path="/chat" element={<PlaceholderPage title={navConfig.chat.label} />} />
+          <Route path="/logs" element={<PlaceholderPage title={navConfig.logs.label} />} />
+          <Route path="*" element={<Navigate replace to="/agents" />} />
+        </Routes>
       </main>
     </div>
+  );
+}
+
+function PlaceholderPage({ title }: { title: string }) {
+  return (
+    <section className="workspace">
+      <header className="pageHeader">
+        <div>
+          <p className="eyebrow">{title}</p>
+          <h1>{title}</h1>
+        </div>
+      </header>
+    </section>
   );
 }
