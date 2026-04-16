@@ -60,9 +60,9 @@ const defaultFormValues: AgentFormValues = {
 };
 
 const builtinTools = [
-  { label: "HTTP Request", value: "http_request" },
-  { label: "Calculator", value: "calculator" },
-  { label: "Current Time", value: "current_time" }
+  { label: "HTTP 请求", value: "http_request" },
+  { label: "计算器", value: "calculator" },
+  { label: "当前时间", value: "current_time" }
 ];
 
 function formatDate(value: string): string {
@@ -155,12 +155,12 @@ export function AgentsPage() {
       width: 120
     },
     {
-      title: "enabled",
+      title: "启用状态",
       dataIndex: "enabled",
       key: "enabled",
       width: 110,
       render: (enabled: boolean) => (
-        <Tag color={enabled ? "green" : "default"}>{enabled ? "Enabled" : "Disabled"}</Tag>
+        <Tag color={enabled ? "green" : "default"}>{enabled ? "启用" : "停用"}</Tag>
       )
     },
     {
@@ -297,8 +297,8 @@ export function AgentsPage() {
     <section className="workspace">
       <header className="pageHeader">
         <div>
-          <p className="eyebrow">Agents</p>
-          <h1>Agent Management</h1>
+          <p className="eyebrow">Agent</p>
+          <h1>Agent 管理</h1>
         </div>
         <Space>
           <Button disabled={loading} onClick={() => void refresh()}>
@@ -392,7 +392,7 @@ export function AgentsPage() {
                     >
                       <InputNumber min={0} max={20} precision={0} style={{ width: "100%" }} />
                     </Form.Item>
-                    <Form.Item label="enabled" name="enabled" valuePropName="checked">
+                    <Form.Item label="启用" name="enabled" valuePropName="checked">
                       <Switch />
                     </Form.Item>
                   </div>

@@ -25,7 +25,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const result = (await response.json()) as Result<T>;
 
   if (!response.ok || result.code !== 200) {
-    throw new Error(result.message || "Request failed");
+    throw new Error(result.message || "请求失败");
   }
 
   return result.data;

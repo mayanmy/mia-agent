@@ -21,6 +21,18 @@ import {
 const providerTypes: ModelProviderType[] = ["OPENAI_COMPATIBLE", "OLLAMA", "ANTHROPIC", "GEMINI"];
 const modelTypes: ModelConfigType[] = ["CHAT", "EMBEDDING"];
 
+const providerTypeLabels: Record<ModelProviderType, string> = {
+  OPENAI_COMPATIBLE: "OpenAI 兼容",
+  OLLAMA: "Ollama",
+  ANTHROPIC: "Claude / Anthropic",
+  GEMINI: "Gemini"
+};
+
+const modelTypeLabels: Record<ModelConfigType, string> = {
+  CHAT: "对话模型",
+  EMBEDDING: "向量模型"
+};
+
 type LoadState = "idle" | "loading" | "saving";
 
 type ProviderFormState = {
@@ -120,7 +132,7 @@ export function ProvidersPage() {
         providerId: current.providerId || providerPage.list[0]?.id || ""
       }));
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "Failed to load providers");
+      setError(refreshError instanceof Error ? refreshError.message : "加载模型供应商失败");
     } finally {
       setState("idle");
     }
@@ -140,15 +152,15 @@ export function ProvidersPage() {
       const payload = toProviderPayload(providerForm);
       if (providerForm.id) {
         await updateProvider(providerForm.id, payload);
-        setMessage("Provider updated");
+        setMessage("供应商已更新");
       } else {
         await createProvider(payload);
-        setMessage("Provider created");
+        setMessage("供应商已创建");
       }
       setProviderForm(emptyProviderForm);
       await refresh();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Failed to save provider");
+      setError(submitError instanceof Error ? submitError.message : "保存供应商失败");
     } finally {
       setState("idle");
     }
@@ -164,15 +176,15 @@ export function ProvidersPage() {
       const payload = toModelConfigPayload(modelConfigForm);
       if (modelConfigForm.id) {
         await updateModelConfig(modelConfigForm.id, payload);
-        setMessage("Model config updated");
+        setMessage("模型配置已更新");
       } else {
         await createModelConfig(payload);
-        setMessage("Model config created");
+        setMessage("模型配置已创建");
       }
       setModelConfigForm({ ...emptyModelConfigForm, providerId: payload.providerId });
       await refresh();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Failed to save model config");
+      setError(submitError instanceof Error ? submitError.message : "保存模型配置失败");
     } finally {
       setState("idle");
     }
@@ -185,10 +197,10 @@ export function ProvidersPage() {
 
     try {
       await deleteProvider(id);
-      setMessage("Provider deleted");
+      setMessage("供应商已删除");
       await refresh();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Failed to delete provider");
+      setError(deleteError instanceof Error ? deleteError.message : "删除供应商失败");
     } finally {
       setState("idle");
     }
@@ -201,10 +213,10 @@ export function ProvidersPage() {
 
     try {
       await deleteModelConfig(id);
-      setMessage("Model config deleted");
+      setMessage("模型配置已删除");
       await refresh();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Failed to delete model config");
+      setError(deleteError instanceof Error ? deleteError.message : "删除模型配置失败");
     } finally {
       setState("idle");
     }
@@ -219,11 +231,11 @@ export function ProvidersPage() {
       const result = await testProviderConnection(id);
       setMessage(
         result.ok
-          ? `Connection ok in ${result.latencyMs}ms`
-          : `Connection failed: ${result.statusText}`
+          ? `连接正常，耗时 ${result.latencyMs}ms`
+          : `连接失败： ${result.statusText}`
       );
     } catch (testError) {
-      setError(testError instanceof Error ? testError.message : "Failed to test provider");
+      setError(testError instanceof Error ? testError.message : "测试供应商失败");
     } finally {
       setState("idle");
     }
@@ -233,11 +245,11 @@ export function ProvidersPage() {
     <section className="workspace">
       <header className="pageHeader">
         <div>
-          <p className="eyebrow">Settings</p>
-          <h1>Model Providers</h1>
+          <p className="eyebrow">设置</p>
+          <h1>模型供应商</h1>
         </div>
         <button className="secondaryButton" disabled={state === "loading"} onClick={() => void refresh()}>
-          Refresh
+          刷新
         </button>
       </header>
 
@@ -247,19 +259,19 @@ export function ProvidersPage() {
       <div className="twoColumnGrid">
         <form className="panel formPanel" onSubmit={(event) => void handleProviderSubmit(event)}>
           <div className="panelHeader">
-            <h2>{providerForm.id ? "Edit Provider" : "New Provider"}</h2>
+            <h2>{providerForm.id ? "编辑供应商" : "新增供应商"}</h2>
           </div>
           <div className="formBody">
             <label>
-              <span>Name</span>
+              <span>名称</span>
               <input
                 value={providerForm.name}
                 onChange={(event) => setProviderForm({ ...providerForm, name: event.target.value })}
-                placeholder="Local Ollama"
+                placeholder="本地 Ollama"
               />
             </label>
             <label>
-              <span>Type</span>
+              <span>类型</span>
               <select
                 value={providerForm.providerType}
                 onChange={(event) =>
@@ -271,13 +283,13 @@ export function ProvidersPage() {
               >
                 {providerTypes.map((type) => (
                   <option key={type} value={type}>
-                    {type}
+                    {providerTypeLabels[type]}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              <span>Base URL</span>
+              <span>基础 URL</span>
               <input
                 value={providerForm.baseUrl}
                 onChange={(event) =>
@@ -293,7 +305,7 @@ export function ProvidersPage() {
                 onChange={(event) =>
                   setProviderForm({ ...providerForm, apiKey: event.target.value })
                 }
-                placeholder={providerForm.id ? "Leave blank to clear" : "Optional"}
+                placeholder={providerForm.id ? "留空则清除" : "可选"}
                 type="password"
               />
             </label>
@@ -305,11 +317,11 @@ export function ProvidersPage() {
                 }
                 type="checkbox"
               />
-              <span>Enabled</span>
+              <span>启用</span>
             </label>
             <div className="buttonRow">
               <button className="primaryButton" disabled={state === "saving"} type="submit">
-                {providerForm.id ? "Save Provider" : "Create Provider"}
+                {providerForm.id ? "保存供应商" : "创建供应商"}
               </button>
               {providerForm.id && (
                 <button
@@ -317,7 +329,7 @@ export function ProvidersPage() {
                   onClick={() => setProviderForm(emptyProviderForm)}
                   type="button"
                 >
-                  Cancel
+                  取消
                 </button>
               )}
             </div>
@@ -326,18 +338,18 @@ export function ProvidersPage() {
 
         <form className="panel formPanel" onSubmit={(event) => void handleModelConfigSubmit(event)}>
           <div className="panelHeader">
-            <h2>{modelConfigForm.id ? "Edit Model" : "New Model"}</h2>
+            <h2>{modelConfigForm.id ? "编辑模型" : "新增模型"}</h2>
           </div>
           <div className="formBody">
             <label>
-              <span>Provider</span>
+              <span>供应商</span>
               <select
                 value={modelConfigForm.providerId}
                 onChange={(event) =>
                   setModelConfigForm({ ...modelConfigForm, providerId: event.target.value })
                 }
               >
-                <option value="">Select provider</option>
+                <option value="">请选择供应商</option>
                 {providerOptions.map((provider) => (
                   <option key={provider.value} value={provider.value}>
                     {provider.label}
@@ -346,7 +358,7 @@ export function ProvidersPage() {
               </select>
             </label>
             <label>
-              <span>Model Name</span>
+              <span>模型名称</span>
               <input
                 value={modelConfigForm.modelName}
                 onChange={(event) =>
@@ -356,7 +368,7 @@ export function ProvidersPage() {
               />
             </label>
             <label>
-              <span>Model Type</span>
+              <span>模型类型</span>
               <select
                 value={modelConfigForm.modelType}
                 onChange={(event) =>
@@ -368,14 +380,14 @@ export function ProvidersPage() {
               >
                 {modelTypes.map((type) => (
                   <option key={type} value={type}>
-                    {type}
+                    {modelTypeLabels[type]}
                   </option>
                 ))}
               </select>
             </label>
             <div className="formGrid">
               <label>
-                <span>Timeout</span>
+                <span>超时时间</span>
                 <input
                   min="1"
                   max="300"
@@ -390,14 +402,14 @@ export function ProvidersPage() {
                 />
               </label>
               <label>
-                <span>Max Tokens</span>
+                <span>最大 Token 数</span>
                 <input
                   min="1"
                   value={modelConfigForm.maxTokens}
                   onChange={(event) =>
                     setModelConfigForm({ ...modelConfigForm, maxTokens: event.target.value })
                   }
-                  placeholder="Optional"
+                  placeholder="可选"
                   type="number"
                 />
               </label>
@@ -410,11 +422,11 @@ export function ProvidersPage() {
                 }
                 type="checkbox"
               />
-              <span>Enabled</span>
+              <span>启用</span>
             </label>
             <div className="buttonRow">
               <button className="primaryButton" disabled={state === "saving"} type="submit">
-                {modelConfigForm.id ? "Save Model" : "Create Model"}
+                {modelConfigForm.id ? "保存模型" : "创建模型"}
               </button>
               {modelConfigForm.id && (
                 <button
@@ -427,7 +439,7 @@ export function ProvidersPage() {
                   }
                   type="button"
                 >
-                  Cancel
+                  取消
                 </button>
               )}
             </div>
@@ -437,27 +449,27 @@ export function ProvidersPage() {
 
       <div className="panel tablePanel">
         <div className="panelHeader">
-          <h2>Providers</h2>
+          <h2>供应商</h2>
         </div>
         <div className="tableWrap">
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Base URL</th>
-                <th>Status</th>
-                <th>Updated</th>
-                <th>Actions</th>
+                <th>名称</th>
+                <th>类型</th>
+                <th>基础 URL</th>
+                <th>状态</th>
+                <th>更新时间</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {providers.map((provider) => (
                 <tr key={provider.id}>
                   <td>{provider.name}</td>
-                  <td>{provider.providerType}</td>
+                  <td>{providerTypeLabels[provider.providerType]}</td>
                   <td>{provider.baseUrl}</td>
-                  <td>{provider.enabled ? "Enabled" : "Disabled"}</td>
+                  <td>{provider.enabled ? "启用" : "停用"}</td>
                   <td>{formatDate(provider.updatedAt)}</td>
                   <td>
                     <div className="tableActions">
@@ -475,21 +487,21 @@ export function ProvidersPage() {
                         }
                         type="button"
                       >
-                        Edit
+                        编辑
                       </button>
                       <button
                         className="textButton"
                         onClick={() => void handleTestProvider(provider.id)}
                         type="button"
                       >
-                        Test
+                        测试
                       </button>
                       <button
                         className="dangerButton"
                         onClick={() => void handleDeleteProvider(provider.id)}
                         type="button"
                       >
-                        Delete
+                        删除
                       </button>
                     </div>
                   </td>
@@ -497,7 +509,7 @@ export function ProvidersPage() {
               ))}
               {providers.length === 0 && (
                 <tr>
-                  <td colSpan={6}>No providers yet.</td>
+                  <td colSpan={6}>暂无供应商。</td>
                 </tr>
               )}
             </tbody>
@@ -507,18 +519,18 @@ export function ProvidersPage() {
 
       <div className="panel tablePanel">
         <div className="panelHeader">
-          <h2>Model Configs</h2>
+          <h2>模型配置</h2>
         </div>
         <div className="tableWrap">
           <table>
             <thead>
               <tr>
-                <th>Model</th>
-                <th>Type</th>
-                <th>Provider</th>
-                <th>Timeout</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th>模型</th>
+                <th>类型</th>
+                <th>供应商</th>
+                <th>超时时间</th>
+                <th>状态</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -527,10 +539,10 @@ export function ProvidersPage() {
                 return (
                   <tr key={config.id}>
                     <td>{config.modelName}</td>
-                    <td>{config.modelType}</td>
+                    <td>{modelTypeLabels[config.modelType]}</td>
                     <td>{provider?.name || config.providerId}</td>
                     <td>{config.timeoutSeconds}s</td>
-                    <td>{config.enabled ? "Enabled" : "Disabled"}</td>
+                    <td>{config.enabled ? "启用" : "停用"}</td>
                     <td>
                       <div className="tableActions">
                         <button
@@ -548,14 +560,14 @@ export function ProvidersPage() {
                           }
                           type="button"
                         >
-                          Edit
+                          编辑
                         </button>
                         <button
                           className="dangerButton"
                           onClick={() => void handleDeleteModelConfig(config.id)}
                           type="button"
                         >
-                          Delete
+                          删除
                         </button>
                       </div>
                     </td>
@@ -564,7 +576,7 @@ export function ProvidersPage() {
               })}
               {modelConfigs.length === 0 && (
                 <tr>
-                  <td colSpan={6}>No model configs yet.</td>
+                  <td colSpan={6}>暂无模型配置。</td>
                 </tr>
               )}
             </tbody>
@@ -574,4 +586,3 @@ export function ProvidersPage() {
     </section>
   );
 }
-

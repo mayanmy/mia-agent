@@ -4,12 +4,20 @@ import { AgentsPage } from "../features/agents/AgentsPage";
 import { ProvidersPage } from "../features/model-providers/ProvidersPage";
 import { HealthPage } from "../pages/HealthPage";
 
-const navItems = ["Providers", "Agents", "Knowledge", "Chat", "Logs"] as const;
+const navItems = ["providers", "agents", "knowledge", "chat", "logs"] as const;
 
 type NavItem = (typeof navItems)[number];
 
+const navLabels: Record<NavItem, string> = {
+  providers: "模型供应商",
+  agents: "Agent",
+  knowledge: "知识库",
+  chat: "对话",
+  logs: "日志"
+};
+
 export function App() {
-  const [activeNav, setActiveNav] = useState<NavItem>("Agents");
+  const [activeNav, setActiveNav] = useState<NavItem>("agents");
 
   return (
     <div className="appShell">
@@ -18,10 +26,10 @@ export function App() {
           <div className="brandMark">M</div>
           <div>
             <div className="brandName">Mia</div>
-            <div className="brandMeta">AI Agent Platform</div>
+            <div className="brandMeta">AI Agent 平台</div>
           </div>
         </div>
-        <nav className="navList" aria-label="Main navigation">
+        <nav className="navList" aria-label="主导航">
           {navItems.map((item) => (
             <button
               className={`navItem${activeNav === item ? " active" : ""}`}
@@ -29,25 +37,25 @@ export function App() {
               onClick={() => setActiveNav(item)}
               type="button"
             >
-              {item}
+              {navLabels[item]}
             </button>
           ))}
         </nav>
       </aside>
       <main className="main">
-        {activeNav === "Providers" && (
+        {activeNav === "providers" && (
           <>
             <ProvidersPage />
             <HealthPage compact />
           </>
         )}
-        {activeNav === "Agents" && <AgentsPage />}
-        {activeNav !== "Providers" && activeNav !== "Agents" && (
+        {activeNav === "agents" && <AgentsPage />}
+        {activeNav !== "providers" && activeNav !== "agents" && (
           <section className="workspace">
             <header className="pageHeader">
               <div>
-                <p className="eyebrow">{activeNav}</p>
-                <h1>{activeNav}</h1>
+                <p className="eyebrow">{navLabels[activeNav]}</p>
+                <h1>{navLabels[activeNav]}</h1>
               </div>
             </header>
           </section>
