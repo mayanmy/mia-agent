@@ -35,6 +35,7 @@ export type ProviderTestConnectionResult = {
   status: number | null;
   statusText: string;
   latencyMs: number;
+  url?: string;
 };
 
 export type ModelConfigListItem = {

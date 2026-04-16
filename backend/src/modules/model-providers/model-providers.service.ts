@@ -142,13 +142,15 @@ export class ModelProvidersService {
         status: response.status,
         statusText: response.statusText || '',
         latencyMs: Date.now() - startedAt,
+        url,
       };
     } catch (error) {
       return {
         ok: false,
         status: null,
-        statusText: error instanceof Error ? error.message : 'connection failed',
+        statusText: this.formatProviderConnectionError(provider, url, error),
         latencyMs: Date.now() - startedAt,
+        url,
       };
     }
   }
@@ -480,7 +482,7 @@ export class ModelProvidersService {
 
   private getProviderTestUrl(provider: ModelProvider): string {
     if (provider.providerType === ModelProviderType.OLLAMA) {
-      return `${provider.baseUrl}/api/tags`;
+      return `${this.getOllamaServerBaseUrl(provider.baseUrl)}/api/tags`;
     }
 
     if (provider.providerType === ModelProviderType.OPENAI_COMPATIBLE) {
@@ -488,6 +490,28 @@ export class ModelProvidersService {
     }
 
     return provider.baseUrl;
+  }
+
+  private getOllamaServerBaseUrl(baseUrl: string): string {
+    return baseUrl.replace(/\/v1$/u, '');
+  }
+
+  private formatProviderConnectionError(
+    provider: ModelProvider,
+    url: string,
+    error: unknown,
+  ): string {
+    const message = error instanceof Error ? error.message : 'connection failed';
+
+    if (provider.providerType !== ModelProviderType.OLLAMA) {
+      return `${message}; tested url: ${url}`;
+    }
+
+    return [
+      message,
+      `tested url: ${url}`,
+      'Ollama 本机部署时通常使用 http://127.0.0.1:11434；只有后端运行在 Docker 容器内时才使用 http://host.docker.internal:11434',
+    ].join('; ');
   }
 
   private getProviderTestHeaders(provider: ModelProvider): HeadersInit {
