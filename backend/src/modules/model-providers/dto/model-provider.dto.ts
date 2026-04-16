@@ -42,6 +42,8 @@ export type ModelConfigListItem = {
   providerId: string;
   modelName: string;
   modelType: ModelConfigType;
+  credentialName: string;
+  contextLength: number;
   enabled: boolean;
   timeoutSeconds: number;
   maxTokens: number | null;
@@ -57,6 +59,8 @@ export type ModelConfigCreateDto = {
   providerId?: string;
   modelName?: string;
   modelType?: ModelConfigType;
+  credentialName?: string;
+  contextLength?: number;
   enabled?: boolean;
   timeoutSeconds?: number;
   maxTokens?: number | null;
@@ -66,6 +70,8 @@ export type ModelConfigUpdateDto = {
   providerId?: string;
   modelName?: string;
   modelType?: ModelConfigType;
+  credentialName?: string;
+  contextLength?: number;
   enabled?: boolean;
   timeoutSeconds?: number;
   maxTokens?: number | null;

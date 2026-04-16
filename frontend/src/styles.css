@@ -361,6 +361,298 @@ button:disabled {
   gap: 12px;
 }
 
+.providersWorkspace {
+  max-width: 1280px;
+}
+
+.providersHero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.providersHero h1 {
+  font-size: 28px;
+  margin-bottom: 6px;
+}
+
+.providersHero p {
+  margin: 0;
+  color: #667085;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.providersHeroActions,
+.providerToolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.latestBadge {
+  display: inline-flex;
+  margin-left: 6px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  color: #667085;
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.providerToolbar {
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.providerToolbar .ant-input-search {
+  max-width: 320px;
+}
+
+.providerInstalledList {
+  display: grid;
+  gap: 12px;
+}
+
+.providerInstalledCard {
+  border-radius: 14px;
+}
+
+.providerInstalledCard .ant-card-body {
+  padding: 0;
+}
+
+.providerCardMain {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 18px;
+}
+
+.providerLogo,
+.marketplaceLogo {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.providerLogo {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  font-size: 16px;
+}
+
+.providerCardBody {
+  min-width: 0;
+  flex: 1;
+}
+
+.providerTitleRow,
+.providerCapabilityRow,
+.providerModelsRow,
+.providerModelChips,
+.modelChip {
+  display: flex;
+  align-items: center;
+}
+
+.providerTitleRow {
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.providerTitleRow strong {
+  color: #101828;
+  font-size: 18px;
+}
+
+.providerStatus {
+  color: #667085;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.providerCapabilityRow {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.providerActions {
+  justify-content: flex-end;
+}
+
+.providerModelsRow {
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #eef0f3;
+  background: #fbfcfe;
+  padding: 12px 18px;
+}
+
+.showModelsText {
+  color: #667085;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.providerModelChips {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modelChip {
+  gap: 8px;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 3px 10px rgb(15 23 42 / 6%);
+  color: #344054;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
+.modelDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #d0d5dd;
+}
+
+.modelDot.enabled {
+  background: #2ecc71;
+}
+
+.mutedInline {
+  color: #98a2b3;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.marketplaceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 28px;
+  padding: 22px 0 14px;
+}
+
+.marketplaceHeader h2 {
+  font-size: 18px;
+}
+
+.marketplaceHeader span {
+  color: #667085;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.marketplaceGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.marketplaceCard {
+  min-height: 160px;
+  border-radius: 14px;
+}
+
+.marketplaceCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.marketplaceLogo {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  font-size: 18px;
+}
+
+.marketplaceCardHeader strong {
+  color: #344054;
+  font-size: 18px;
+}
+
+.marketplaceCardHeader p,
+.marketplaceDescription {
+  color: #667085;
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.marketplaceDescription {
+  line-height: 1.5;
+}
+
+.providerModalGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hiddenModelAdvanced {
+  display: none;
+}
+
+.modelProviderIdentity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -2px 0 18px;
+  color: #374151;
+  font-size: 18px;
+}
+
+.modelProviderIdentity .providerLogo {
+  width: 34px;
+  height: 34px;
+  font-size: 14px;
+}
+
+.modelCredentialSection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 16px;
+  color: #667085;
+  font-weight: 700;
+}
+
+.modelCredentialSection::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+.modalHelpRow {
+  margin-top: 6px;
+  color: #0b5fff;
+  font-weight: 600;
+}
+
+.modalSecretNote {
+  border-top: 1px solid #e5e7eb;
+  margin: 18px -24px -20px;
+  padding: 14px 24px 0;
+  color: #667085;
+  font-size: 13px;
+  text-align: center;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -435,8 +727,24 @@ td {
 
   .twoColumnGrid,
   .formGrid,
-  .agentFormGrid {
+  .agentFormGrid,
+  .marketplaceGrid,
+  .providerModalGrid {
     grid-template-columns: 1fr;
+  }
+
+  .providersHero,
+  .providerToolbar,
+  .providerCardMain,
+  .providerModelsRow,
+  .marketplaceHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .providerActions,
+  .providerModelChips {
+    justify-content: flex-start;
   }
 
   .agentFormFull {

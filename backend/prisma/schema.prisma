@@ -45,6 +45,8 @@ model ModelConfig {
   providerId     String          @map("provider_id") @db.Uuid
   modelName      String          @map("model_name")
   modelType      ModelConfigType @map("model_type")
+  credentialName String          @default("") @map("credential_name")
+  contextLength  Int             @default(4096) @map("context_length")
   enabled        Boolean         @default(true)
   timeoutSeconds Int             @default(120) @map("timeout_seconds")
   maxTokens      Int?            @map("max_tokens")

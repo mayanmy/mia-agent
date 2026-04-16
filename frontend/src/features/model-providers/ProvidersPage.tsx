@@ -1,4 +1,19 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Button,
+  Card,
+  Empty,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Tag,
+  message
+} from "antd";
 
 import {
   createModelConfig,
@@ -29,112 +44,260 @@ const providerTypeLabels: Record<ModelProviderType, string> = {
 };
 
 const modelTypeLabels: Record<ModelConfigType, string> = {
-  CHAT: "对话模型",
-  EMBEDDING: "向量模型"
+  CHAT: "LLM",
+  EMBEDDING: "TEXT EMBEDDING"
 };
 
-type LoadState = "idle" | "loading" | "saving";
-
-type ProviderFormState = {
-  id: string | null;
+type ProviderFormValues = {
   name: string;
   providerType: ModelProviderType;
   baseUrl: string;
-  apiKey: string;
+  apiKey?: string;
   enabled: boolean;
 };
 
-type ModelConfigFormState = {
-  id: string | null;
+type ModelFormValues = {
   providerId: string;
   modelName: string;
   modelType: ModelConfigType;
+  credentialName: string;
+  baseUrl: string;
+  apiKey?: string;
+  contextLength: number;
+  timeoutSeconds: number;
+  maxTokens?: number | null;
   enabled: boolean;
-  timeoutSeconds: string;
-  maxTokens: string;
 };
 
-const emptyProviderForm: ProviderFormState = {
-  id: null,
+type ProviderTemplate = {
+  name: string;
+  author: string;
+  downloads: string;
+  description: string;
+  providerType: ModelProviderType;
+  baseUrl: string;
+  logo: string;
+  accent: string;
+};
+
+const providerTemplates: ProviderTemplate[] = [
+  {
+    name: "Ollama",
+    author: "local",
+    downloads: "本地",
+    description: "本地运行的 Ollama 模型服务，适合内网部署和离线使用。",
+    providerType: "OLLAMA",
+    baseUrl: "http://127.0.0.1:11434",
+    logo: "O",
+    accent: "#111827"
+  },
+  {
+    name: "OpenAI",
+    author: "langgenius",
+    downloads: "687,536",
+    description: "OpenAI 当前的语言、嵌入、内容审核与音频模型。",
+    providerType: "OPENAI_COMPATIBLE",
+    baseUrl: "https://api.openai.com/v1",
+    logo: "O",
+    accent: "#16c784"
+  },
+  {
+    name: "Anthropic",
+    author: "langgenius",
+    downloads: "173,537",
+    description: "Anthropic 的强大模型。",
+    providerType: "ANTHROPIC",
+    baseUrl: "https://api.anthropic.com/v1",
+    logo: "AI",
+    accent: "#d6a170"
+  },
+  {
+    name: "Amazon Bedrock",
+    author: "langgenius",
+    downloads: "84,126",
+    description: "The models of Amazon Bedrock",
+    providerType: "OPENAI_COMPATIBLE",
+    baseUrl: "https://bedrock-runtime.example.com/v1",
+    logo: "B",
+    accent: "#2f9e83"
+  },
+  {
+    name: "Gemini",
+    author: "langgenius",
+    downloads: "347,369",
+    description: "谷歌提供的 Gemini 模型。",
+    providerType: "GEMINI",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    logo: "✦",
+    accent: "#4f7cff"
+  },
+  {
+    name: "深度求索",
+    author: "langgenius",
+    downloads: "1,250,314",
+    description: "DeepSeek 提供的模型，例如 deepseek-chat、deepseek-reasoner 等。",
+    providerType: "OPENAI_COMPATIBLE",
+    baseUrl: "https://api.deepseek.com/v1",
+    logo: "DS",
+    accent: "#536dfe"
+  },
+  {
+    name: "通义千问",
+    author: "langgenius",
+    downloads: "312,806",
+    description: "阿里云提供的通义千问 Qwen 系列模型。",
+    providerType: "OPENAI_COMPATIBLE",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    logo: "Q",
+    accent: "#6c5ce7"
+  },
+  {
+    name: "Azure OpenAI",
+    author: "langgenius",
+    downloads: "204,153",
+    description: "Azure OpenAI Service Model",
+    providerType: "OPENAI_COMPATIBLE",
+    baseUrl: "https://YOUR_RESOURCE.openai.azure.com/openai/v1",
+    logo: "A",
+    accent: "#1677ff"
+  },
+  {
+    name: "Azure AI Studio",
+    author: "langgenius",
+    downloads: "33,367",
+    description: "Azure AI Studio",
+    providerType: "OPENAI_COMPATIBLE",
+    baseUrl: "https://YOUR_RESOURCE.services.ai.azure.com/models",
+    logo: "AS",
+    accent: "#3b82f6"
+  },
+  {
+    name: "Cohere",
+    author: "langgenius",
+    downloads: "49,105",
+    description: "Cohere",
+    providerType: "OPENAI_COMPATIBLE",
+    baseUrl: "https://api.cohere.com/v1",
+    logo: "C",
+    accent: "#3b6b57"
+  }
+];
+
+const providerDefaults: ProviderFormValues = {
   name: "",
   providerType: "OPENAI_COMPATIBLE",
-  baseUrl: "http://127.0.0.1:11434/v1",
+  baseUrl: "",
   apiKey: "",
   enabled: true
 };
 
-const emptyModelConfigForm: ModelConfigFormState = {
-  id: null,
+const modelDefaults: ModelFormValues = {
   providerId: "",
   modelName: "",
   modelType: "CHAT",
-  enabled: true,
-  timeoutSeconds: "120",
-  maxTokens: ""
+  credentialName: "",
+  baseUrl: "",
+  apiKey: "",
+  contextLength: 4096,
+  timeoutSeconds: 120,
+  maxTokens: null,
+  enabled: true
 };
 
-function toProviderPayload(form: ProviderFormState): ProviderPayload {
+function toProviderPayload(values: ProviderFormValues): ProviderPayload {
   return {
-    name: form.name.trim(),
-    providerType: form.providerType,
-    baseUrl: form.baseUrl.trim(),
-    apiKey: form.apiKey,
-    enabled: form.enabled
+    name: values.name.trim(),
+    providerType: values.providerType,
+    baseUrl: values.baseUrl.trim(),
+    apiKey: values.apiKey ?? "",
+    enabled: values.enabled
   };
 }
 
-function toModelConfigPayload(form: ModelConfigFormState): ModelConfigPayload {
+function toModelConfigPayload(values: ModelFormValues): ModelConfigPayload {
   return {
-    providerId: form.providerId,
-    modelName: form.modelName.trim(),
-    modelType: form.modelType,
-    enabled: form.enabled,
-    timeoutSeconds: Number(form.timeoutSeconds || 120),
-    maxTokens: form.maxTokens.trim() ? Number(form.maxTokens) : null
+    providerId: values.providerId,
+    modelName: values.modelName.trim(),
+    modelType: values.modelType,
+    credentialName: values.credentialName.trim(),
+    contextLength: values.contextLength,
+    timeoutSeconds: values.timeoutSeconds,
+    maxTokens: values.maxTokens ?? null,
+    enabled: values.enabled
   };
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(new Date(value));
+function getProviderLogo(provider: ProviderListItem): string {
+  const template = providerTemplates.find(
+    (item) => item.name.toLowerCase() === provider.name.toLowerCase()
+  );
+
+  return template?.logo || provider.name.slice(0, 2).toUpperCase();
+}
+
+function getProviderAccent(provider: ProviderListItem): string {
+  const template = providerTemplates.find(
+    (item) => item.name.toLowerCase() === provider.name.toLowerCase()
+  );
+
+  return template?.accent || "#2563eb";
 }
 
 export function ProvidersPage() {
+  const [providerForm] = Form.useForm<ProviderFormValues>();
+  const [modelForm] = Form.useForm<ModelFormValues>();
   const [providers, setProviders] = useState<ProviderListItem[]>([]);
   const [modelConfigs, setModelConfigs] = useState<ModelConfigListItem[]>([]);
-  const [providerForm, setProviderForm] = useState<ProviderFormState>(emptyProviderForm);
-  const [modelConfigForm, setModelConfigForm] =
-    useState<ModelConfigFormState>(emptyModelConfigForm);
-  const [state, setState] = useState<LoadState>("idle");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [providerDialogOpen, setProviderDialogOpen] = useState(false);
+  const [modelDialogOpen, setModelDialogOpen] = useState(false);
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
 
   const providerOptions = useMemo(
     () => providers.map((provider) => ({ label: provider.name, value: provider.id })),
     [providers]
   );
 
+  const selectedModelProvider = Form.useWatch("providerId", modelForm);
+  const modelProvider = useMemo(
+    () => providers.find((provider) => provider.id === selectedModelProvider),
+    [providers, selectedModelProvider]
+  );
+
+  const filteredProviders = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+
+    if (!keyword) {
+      return providers;
+    }
+
+    return providers.filter((provider) => {
+      const models = modelConfigs.filter((model) => model.providerId === provider.id);
+      return (
+        provider.name.toLowerCase().includes(keyword) ||
+        providerTypeLabels[provider.providerType].toLowerCase().includes(keyword) ||
+        models.some((model) => model.modelName.toLowerCase().includes(keyword))
+      );
+    });
+  }, [modelConfigs, providers, search]);
+
   async function refresh() {
-    setState("loading");
-    setError("");
+    setLoading(true);
 
     try {
       const [providerPage, modelConfigPage] = await Promise.all([
-        listProviders(),
-        listModelConfigs()
+        listProviders(1, 100),
+        listModelConfigs(1, 100)
       ]);
       setProviders(providerPage.list);
       setModelConfigs(modelConfigPage.list);
-      setModelConfigForm((current) => ({
-        ...current,
-        providerId: current.providerId || providerPage.list[0]?.id || ""
-      }));
-    } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "加载模型供应商失败");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载模型供应商失败");
     } finally {
-      setState("idle");
+      setLoading(false);
     }
   }
 
@@ -142,447 +305,461 @@ export function ProvidersPage() {
     void refresh();
   }, []);
 
-  async function handleProviderSubmit(event: FormEvent) {
-    event.preventDefault();
-    setState("saving");
-    setError("");
-    setMessage("");
+  function openCreateProvider(template?: ProviderTemplate) {
+    setEditingProviderId(null);
+    providerForm.setFieldsValue(
+      template
+        ? {
+            name: template.name,
+            providerType: template.providerType,
+            baseUrl: template.baseUrl,
+            apiKey: "",
+            enabled: true
+          }
+        : providerDefaults
+    );
+    setProviderDialogOpen(true);
+  }
+
+  function openEditProvider(provider: ProviderListItem) {
+    setEditingProviderId(provider.id);
+    providerForm.setFieldsValue({
+      name: provider.name,
+      providerType: provider.providerType,
+      baseUrl: provider.baseUrl,
+      apiKey: "",
+      enabled: provider.enabled
+    });
+    setProviderDialogOpen(true);
+  }
+
+  function openCreateModel(providerId: string) {
+    const provider = providers.find((item) => item.id === providerId);
+    setEditingModelId(null);
+    modelForm.setFieldsValue({
+      ...modelDefaults,
+      providerId,
+      credentialName: provider ? `${provider.name} 默认凭据` : "",
+      baseUrl: provider?.baseUrl ?? ""
+    });
+    setModelDialogOpen(true);
+  }
+
+  function openEditModel(config: ModelConfigListItem) {
+    const provider = providers.find((item) => item.id === config.providerId);
+    setEditingModelId(config.id);
+    modelForm.setFieldsValue({
+      providerId: config.providerId,
+      modelName: config.modelName,
+      modelType: config.modelType,
+      credentialName: config.credentialName,
+      baseUrl: provider?.baseUrl ?? "",
+      apiKey: "",
+      contextLength: config.contextLength,
+      timeoutSeconds: config.timeoutSeconds,
+      maxTokens: config.maxTokens,
+      enabled: config.enabled
+    });
+    setModelDialogOpen(true);
+  }
+
+  async function submitProvider(values: ProviderFormValues) {
+    setSaving(true);
 
     try {
-      const payload = toProviderPayload(providerForm);
-      if (providerForm.id) {
-        await updateProvider(providerForm.id, payload);
-        setMessage("供应商已更新");
+      const payload = toProviderPayload(values);
+      if (editingProviderId) {
+        await updateProvider(editingProviderId, payload);
+        message.success("供应商已更新");
       } else {
         await createProvider(payload);
-        setMessage("供应商已创建");
+        message.success("供应商已安装");
       }
-      setProviderForm(emptyProviderForm);
+      setProviderDialogOpen(false);
+      providerForm.resetFields();
       await refresh();
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "保存供应商失败");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存供应商失败");
     } finally {
-      setState("idle");
+      setSaving(false);
     }
   }
 
-  async function handleModelConfigSubmit(event: FormEvent) {
-    event.preventDefault();
-    setState("saving");
-    setError("");
-    setMessage("");
+  async function submitModel(values: ModelFormValues) {
+    setSaving(true);
 
     try {
-      const payload = toModelConfigPayload(modelConfigForm);
-      if (modelConfigForm.id) {
-        await updateModelConfig(modelConfigForm.id, payload);
-        setMessage("模型配置已更新");
+      const provider = providers.find((item) => item.id === values.providerId);
+      const baseUrl = values.baseUrl.trim();
+      const apiKey = values.apiKey?.trim();
+
+      if (provider && (baseUrl !== provider.baseUrl || apiKey)) {
+        await updateProvider(provider.id, {
+          name: provider.name,
+          providerType: provider.providerType,
+          baseUrl,
+          apiKey: apiKey || undefined,
+          enabled: provider.enabled
+        });
+      }
+
+      const payload = toModelConfigPayload(values);
+      if (editingModelId) {
+        await updateModelConfig(editingModelId, payload);
+        message.success("模型已更新");
       } else {
         await createModelConfig(payload);
-        setMessage("模型配置已创建");
+        message.success("模型已添加");
       }
-      setModelConfigForm({ ...emptyModelConfigForm, providerId: payload.providerId });
+      setModelDialogOpen(false);
+      modelForm.resetFields();
       await refresh();
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "保存模型配置失败");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存模型失败");
     } finally {
-      setState("idle");
+      setSaving(false);
     }
   }
 
-  async function handleDeleteProvider(id: string) {
-    setState("saving");
-    setError("");
-    setMessage("");
+  async function handleTestProvider(providerId: string) {
+    setLoading(true);
 
     try {
-      await deleteProvider(id);
-      setMessage("供应商已删除");
-      await refresh();
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "删除供应商失败");
-    } finally {
-      setState("idle");
-    }
-  }
-
-  async function handleDeleteModelConfig(id: string) {
-    setState("saving");
-    setError("");
-    setMessage("");
-
-    try {
-      await deleteModelConfig(id);
-      setMessage("模型配置已删除");
-      await refresh();
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "删除模型配置失败");
-    } finally {
-      setState("idle");
-    }
-  }
-
-  async function handleTestProvider(id: string) {
-    setState("saving");
-    setError("");
-    setMessage("");
-
-    try {
-      const result = await testProviderConnection(id);
-      setMessage(
-        result.ok
-          ? `连接正常，耗时 ${result.latencyMs}ms`
-          : `连接失败： ${result.statusText}`
+      const result = await testProviderConnection(providerId);
+      message[result.ok ? "success" : "error"](
+        result.ok ? `连接正常，耗时 ${result.latencyMs}ms` : `连接失败：${result.statusText}`
       );
-    } catch (testError) {
-      setError(testError instanceof Error ? testError.message : "测试供应商失败");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "测试连接失败");
     } finally {
-      setState("idle");
+      setLoading(false);
     }
+  }
+
+  async function handleDeleteProvider(providerId: string) {
+    setLoading(true);
+
+    try {
+      await deleteProvider(providerId);
+      message.success("供应商已删除");
+      await refresh();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "删除供应商失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDeleteModel(modelId: string) {
+    setLoading(true);
+
+    try {
+      await deleteModelConfig(modelId);
+      message.success("模型已删除");
+      await refresh();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "删除模型失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleModelProviderChange(providerId: string) {
+    const provider = providers.find((item) => item.id === providerId);
+    modelForm.setFieldsValue({
+      baseUrl: provider?.baseUrl ?? "",
+      credentialName: provider ? `${provider.name} 默认凭据` : ""
+    });
   }
 
   return (
-    <section className="workspace">
-      <header className="pageHeader">
+    <section className="workspace providersWorkspace">
+      <header className="providersHero">
         <div>
-          <p className="eyebrow">设置</p>
           <h1>模型供应商</h1>
+          <p>选择一个为应用提供能力的语言模型。在工作室中开始构建前，至少需要配置一个。</p>
         </div>
-        <button className="secondaryButton" disabled={state === "loading"} onClick={() => void refresh()}>
-          刷新
-        </button>
+        <div className="providersHeroActions">
+          <Button onClick={() => message.info("默认模型设置将在 Chat 模块接入后开放")}>
+            默认模型设置
+          </Button>
+          <Button onClick={() => void refresh()}>自动更新 <span className="latestBadge">最新</span></Button>
+        </div>
       </header>
 
-      {message && <div className="notice successNotice">{message}</div>}
-      {error && <div className="notice errorNotice">{error}</div>}
-
-      <div className="twoColumnGrid">
-        <form className="panel formPanel" onSubmit={(event) => void handleProviderSubmit(event)}>
-          <div className="panelHeader">
-            <h2>{providerForm.id ? "编辑供应商" : "新增供应商"}</h2>
-          </div>
-          <div className="formBody">
-            <label>
-              <span>名称</span>
-              <input
-                value={providerForm.name}
-                onChange={(event) => setProviderForm({ ...providerForm, name: event.target.value })}
-                placeholder="本地 Ollama"
-              />
-            </label>
-            <label>
-              <span>类型</span>
-              <select
-                value={providerForm.providerType}
-                onChange={(event) =>
-                  setProviderForm({
-                    ...providerForm,
-                    providerType: event.target.value as ModelProviderType
-                  })
-                }
-              >
-                {providerTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {providerTypeLabels[type]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>基础 URL</span>
-              <input
-                value={providerForm.baseUrl}
-                onChange={(event) =>
-                  setProviderForm({ ...providerForm, baseUrl: event.target.value })
-                }
-                placeholder="https://api.openai.com/v1"
-              />
-            </label>
-            <label>
-              <span>API Key</span>
-              <input
-                value={providerForm.apiKey}
-                onChange={(event) =>
-                  setProviderForm({ ...providerForm, apiKey: event.target.value })
-                }
-                placeholder={providerForm.id ? "留空则清除" : "可选"}
-                type="password"
-              />
-            </label>
-            <label className="checkboxRow">
-              <input
-                checked={providerForm.enabled}
-                onChange={(event) =>
-                  setProviderForm({ ...providerForm, enabled: event.target.checked })
-                }
-                type="checkbox"
-              />
-              <span>启用</span>
-            </label>
-            <div className="buttonRow">
-              <button className="primaryButton" disabled={state === "saving"} type="submit">
-                {providerForm.id ? "保存供应商" : "创建供应商"}
-              </button>
-              {providerForm.id && (
-                <button
-                  className="secondaryButton"
-                  onClick={() => setProviderForm(emptyProviderForm)}
-                  type="button"
-                >
-                  取消
-                </button>
-              )}
-            </div>
-          </div>
-        </form>
-
-        <form className="panel formPanel" onSubmit={(event) => void handleModelConfigSubmit(event)}>
-          <div className="panelHeader">
-            <h2>{modelConfigForm.id ? "编辑模型" : "新增模型"}</h2>
-          </div>
-          <div className="formBody">
-            <label>
-              <span>供应商</span>
-              <select
-                value={modelConfigForm.providerId}
-                onChange={(event) =>
-                  setModelConfigForm({ ...modelConfigForm, providerId: event.target.value })
-                }
-              >
-                <option value="">请选择供应商</option>
-                {providerOptions.map((provider) => (
-                  <option key={provider.value} value={provider.value}>
-                    {provider.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>模型名称</span>
-              <input
-                value={modelConfigForm.modelName}
-                onChange={(event) =>
-                  setModelConfigForm({ ...modelConfigForm, modelName: event.target.value })
-                }
-                placeholder="gpt-4.1-mini"
-              />
-            </label>
-            <label>
-              <span>模型类型</span>
-              <select
-                value={modelConfigForm.modelType}
-                onChange={(event) =>
-                  setModelConfigForm({
-                    ...modelConfigForm,
-                    modelType: event.target.value as ModelConfigType
-                  })
-                }
-              >
-                {modelTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {modelTypeLabels[type]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="formGrid">
-              <label>
-                <span>超时时间</span>
-                <input
-                  min="1"
-                  max="300"
-                  value={modelConfigForm.timeoutSeconds}
-                  onChange={(event) =>
-                    setModelConfigForm({
-                      ...modelConfigForm,
-                      timeoutSeconds: event.target.value
-                    })
-                  }
-                  type="number"
-                />
-              </label>
-              <label>
-                <span>最大 Token 数</span>
-                <input
-                  min="1"
-                  value={modelConfigForm.maxTokens}
-                  onChange={(event) =>
-                    setModelConfigForm({ ...modelConfigForm, maxTokens: event.target.value })
-                  }
-                  placeholder="可选"
-                  type="number"
-                />
-              </label>
-            </div>
-            <label className="checkboxRow">
-              <input
-                checked={modelConfigForm.enabled}
-                onChange={(event) =>
-                  setModelConfigForm({ ...modelConfigForm, enabled: event.target.checked })
-                }
-                type="checkbox"
-              />
-              <span>启用</span>
-            </label>
-            <div className="buttonRow">
-              <button className="primaryButton" disabled={state === "saving"} type="submit">
-                {modelConfigForm.id ? "保存模型" : "创建模型"}
-              </button>
-              {modelConfigForm.id && (
-                <button
-                  className="secondaryButton"
-                  onClick={() =>
-                    setModelConfigForm({
-                      ...emptyModelConfigForm,
-                      providerId: modelConfigForm.providerId
-                    })
-                  }
-                  type="button"
-                >
-                  取消
-                </button>
-              )}
-            </div>
-          </div>
-        </form>
+      <div className="providerToolbar">
+        <Input.Search
+          allowClear
+          placeholder="搜索模型..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <Button type="primary" onClick={() => openCreateProvider()}>
+          安装
+        </Button>
       </div>
 
-      <div className="panel tablePanel">
-        <div className="panelHeader">
-          <h2>供应商</h2>
-        </div>
-        <div className="tableWrap">
-          <table>
-            <thead>
-              <tr>
-                <th>名称</th>
-                <th>类型</th>
-                <th>基础 URL</th>
-                <th>状态</th>
-                <th>更新时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {providers.map((provider) => (
-                <tr key={provider.id}>
-                  <td>{provider.name}</td>
-                  <td>{providerTypeLabels[provider.providerType]}</td>
-                  <td>{provider.baseUrl}</td>
-                  <td>{provider.enabled ? "启用" : "停用"}</td>
-                  <td>{formatDate(provider.updatedAt)}</td>
-                  <td>
-                    <div className="tableActions">
-                      <button
-                        className="textButton"
-                        onClick={() =>
-                          setProviderForm({
-                            id: provider.id,
-                            name: provider.name,
-                            providerType: provider.providerType,
-                            baseUrl: provider.baseUrl,
-                            apiKey: "",
-                            enabled: provider.enabled
-                          })
-                        }
-                        type="button"
-                      >
-                        编辑
-                      </button>
-                      <button
-                        className="textButton"
-                        onClick={() => void handleTestProvider(provider.id)}
-                        type="button"
-                      >
-                        测试
-                      </button>
-                      <button
-                        className="dangerButton"
-                        onClick={() => void handleDeleteProvider(provider.id)}
-                        type="button"
-                      >
-                        删除
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {providers.length === 0 && (
-                <tr>
-                  <td colSpan={6}>暂无供应商。</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <div className="providerInstalledList" aria-busy={loading}>
+        {filteredProviders.map((provider) => {
+          const models = modelConfigs.filter((model) => model.providerId === provider.id);
+          return (
+            <Card className="providerInstalledCard" key={provider.id}>
+              <div className="providerCardMain">
+                <div
+                  className="providerLogo"
+                  style={{ backgroundColor: getProviderAccent(provider) }}
+                >
+                  {getProviderLogo(provider)}
+                </div>
+                <div className="providerCardBody">
+                  <div className="providerTitleRow">
+                    <strong>{provider.name}</strong>
+                    <Tag>{providerTypeLabels[provider.providerType]}</Tag>
+                    <span className="providerStatus">{provider.enabled ? "已启用" : "已停用"}</span>
+                  </div>
+                  <div className="providerCapabilityRow">
+                    <Tag>LLM</Tag>
+                    <Tag>TEXT EMBEDDING</Tag>
+                    <Tag>RERANK</Tag>
+                  </div>
+                </div>
+                <Space className="providerActions" wrap>
+                  <Button size="small" onClick={() => openEditProvider(provider)}>
+                    管理凭据
+                  </Button>
+                  <Button size="small" onClick={() => void handleTestProvider(provider.id)}>
+                    测试
+                  </Button>
+                  <Button size="small" type="primary" onClick={() => openCreateModel(provider.id)}>
+                    添加模型
+                  </Button>
+                  <Popconfirm
+                    title="删除供应商"
+                    description="确认删除这个供应商？"
+                    okText="删除"
+                    cancelText="取消"
+                    onConfirm={() => void handleDeleteProvider(provider.id)}
+                  >
+                    <Button danger size="small">
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              </div>
 
-      <div className="panel tablePanel">
-        <div className="panelHeader">
-          <h2>模型配置</h2>
-        </div>
-        <div className="tableWrap">
-          <table>
-            <thead>
-              <tr>
-                <th>模型</th>
-                <th>类型</th>
-                <th>供应商</th>
-                <th>超时时间</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {modelConfigs.map((config) => {
-                const provider = providers.find((item) => item.id === config.providerId);
-                return (
-                  <tr key={config.id}>
-                    <td>{config.modelName}</td>
-                    <td>{modelTypeLabels[config.modelType]}</td>
-                    <td>{provider?.name || config.providerId}</td>
-                    <td>{config.timeoutSeconds}s</td>
-                    <td>{config.enabled ? "启用" : "停用"}</td>
-                    <td>
-                      <div className="tableActions">
-                        <button
-                          className="textButton"
-                          onClick={() =>
-                            setModelConfigForm({
-                              id: config.id,
-                              providerId: config.providerId,
-                              modelName: config.modelName,
-                              modelType: config.modelType,
-                              enabled: config.enabled,
-                              timeoutSeconds: String(config.timeoutSeconds),
-                              maxTokens: config.maxTokens ? String(config.maxTokens) : ""
-                            })
-                          }
-                          type="button"
-                        >
-                          编辑
-                        </button>
-                        <button
-                          className="dangerButton"
-                          onClick={() => void handleDeleteModelConfig(config.id)}
-                          type="button"
-                        >
+              <div className="providerModelsRow">
+                <span className="showModelsText">显示模型</span>
+                <div className="providerModelChips">
+                  {models.length === 0 && <span className="mutedInline">暂无模型</span>}
+                  {models.map((model) => (
+                    <div className="modelChip" key={model.id}>
+                      <span className={model.enabled ? "modelDot enabled" : "modelDot"} />
+                      <span>{model.modelName}</span>
+                      <Tag>{modelTypeLabels[model.modelType]}</Tag>
+                      <Button size="small" type="text" onClick={() => openEditModel(model)}>
+                        配置
+                      </Button>
+                      <Popconfirm
+                        title="删除模型"
+                        description="确认删除这个模型？"
+                        okText="删除"
+                        cancelText="取消"
+                        onConfirm={() => void handleDeleteModel(model.id)}
+                      >
+                        <Button danger size="small" type="text">
                           删除
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {modelConfigs.length === 0 && (
-                <tr>
-                  <td colSpan={6}>暂无模型配置。</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                        </Button>
+                      </Popconfirm>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+
+        {filteredProviders.length === 0 && (
+          <Card>
+            <Empty description="暂无匹配的模型供应商" />
+          </Card>
+        )}
       </div>
+
+      <div className="marketplaceHeader">
+        <h2>安装模型供应商</h2>
+      </div>
+
+      <div className="marketplaceGrid">
+        {providerTemplates.map((template) => (
+          <Card
+            className="marketplaceCard"
+            hoverable
+            key={template.name}
+            onClick={() => openCreateProvider(template)}
+          >
+            <div className="marketplaceCardHeader">
+              <div className="marketplaceLogo" style={{ backgroundColor: template.accent }}>
+                {template.logo}
+              </div>
+              <div>
+                <strong>{template.name}</strong>
+                <p>{template.author} · ⇩ {template.downloads}</p>
+              </div>
+            </div>
+            <p className="marketplaceDescription">{template.description}</p>
+          </Card>
+        ))}
+      </div>
+
+      <Modal
+        destroyOnHidden
+        confirmLoading={saving}
+        okText={editingProviderId ? "保存" : "安装"}
+        open={providerDialogOpen}
+        title={editingProviderId ? "编辑模型供应商" : "安装模型供应商"}
+        width={620}
+        onCancel={() => setProviderDialogOpen(false)}
+        onOk={() => providerForm.submit()}
+      >
+        <Form<ProviderFormValues>
+          form={providerForm}
+          initialValues={providerDefaults}
+          layout="vertical"
+          onFinish={(values) => void submitProvider(values)}
+        >
+          <Form.Item label="名称" name="name" rules={[{ required: true, message: "请输入名称" }]}>
+            <Input placeholder="Ollama" />
+          </Form.Item>
+          <Form.Item
+            label="供应商类型"
+            name="providerType"
+            rules={[{ required: true, message: "请选择供应商类型" }]}
+          >
+            <Select
+              options={providerTypes.map((type) => ({
+                label: providerTypeLabels[type],
+                value: type
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
+            label="Base URL"
+            name="baseUrl"
+            rules={[{ required: true, message: "请输入 Base URL" }]}
+          >
+            <Input placeholder="https://api.openai.com/v1" />
+          </Form.Item>
+          <Form.Item label="API Key" name="apiKey">
+            <Input.Password placeholder={editingProviderId ? "留空则清除" : "可选"} />
+          </Form.Item>
+          <Form.Item label="启用" name="enabled" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        destroyOnHidden
+        confirmLoading={saving}
+        okText={editingModelId ? "保存" : "添加"}
+        open={modelDialogOpen}
+        title={editingModelId ? "配置模型" : "添加模型"}
+        width={620}
+        onCancel={() => setModelDialogOpen(false)}
+        onOk={() => modelForm.submit()}
+      >
+        <Form<ModelFormValues>
+          form={modelForm}
+          initialValues={modelDefaults}
+          layout="vertical"
+          onFinish={(values) => void submitModel(values)}
+        >
+          <Form.Item
+            label="供应商"
+            name="providerId"
+            rules={[{ required: true, message: "请选择供应商" }]}
+          >
+            <Select options={providerOptions} onChange={handleModelProviderChange} />
+          </Form.Item>
+          {modelProvider && (
+            <div className="modelProviderIdentity">
+              <div
+                className="providerLogo"
+                style={{ backgroundColor: getProviderAccent(modelProvider) }}
+              >
+                {getProviderLogo(modelProvider)}
+              </div>
+              <strong>{modelProvider.name}</strong>
+            </div>
+          )}
+          <Form.Item
+            label="模型名称"
+            name="modelName"
+            rules={[{ required: true, message: "请输入模型名称" }]}
+          >
+            <Input placeholder="qwen2.5" />
+          </Form.Item>
+          <Form.Item
+            label="模型类型"
+            name="modelType"
+            rules={[{ required: true, message: "请选择模型类型" }]}
+          >
+            <Select
+              options={[
+                ...modelTypes.map((type) => ({
+                  label: modelTypeLabels[type],
+                  value: type
+                })),
+                { label: "Rerank（暂未支持）", value: "RERANK", disabled: true }
+              ]}
+            />
+          </Form.Item>
+          <div className="modelCredentialSection">
+            <span>模型凭据</span>
+          </div>
+          <Form.Item label="凭据名称" name="credentialName">
+            <Input placeholder="请输入" />
+          </Form.Item>
+          <Form.Item
+            label="基础 URL"
+            name="baseUrl"
+            rules={[{ required: true, message: "请输入基础 URL" }]}
+          >
+            <Input placeholder="Ollama server 的基础 URL，例如 http://192.168.1.100:11434" />
+          </Form.Item>
+          <Form.Item label="API 密钥（可选）" name="apiKey">
+            <Input.Password placeholder="作为 Authorization 标头发送的 Bearer 令牌。如果没有身份验证，请留空。" />
+          </Form.Item>
+          <Form.Item
+            label="模型上下文长度"
+            name="contextLength"
+            rules={[{ required: true, message: "请输入模型上下文长度" }]}
+          >
+            <InputNumber min={1} max={1000000} precision={0} style={{ width: "100%" }} />
+          </Form.Item>
+          <div className="providerModalGrid hiddenModelAdvanced">
+            <Form.Item
+              label="超时时间"
+              name="timeoutSeconds"
+              rules={[{ required: true, message: "请输入超时时间" }]}
+            >
+              <InputNumber min={1} max={300} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+            <Form.Item label="最大 Token 数" name="maxTokens">
+              <InputNumber min={1} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </div>
+          <Form.Item label="启用" name="enabled" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <div className="modalHelpRow">
+            <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
+              如何集成 {modelProvider?.name ?? "模型供应商"} ↗
+            </a>
+          </div>
+          <div className="modalSecretNote">您的密钥将加密后存储。</div>
+        </Form>
+      </Modal>
     </section>
   );
 }

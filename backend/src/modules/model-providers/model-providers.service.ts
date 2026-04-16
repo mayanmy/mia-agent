@@ -21,6 +21,7 @@ import {
 } from './dto/model-provider.dto';
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
+const DEFAULT_CONTEXT_LENGTH = 4096;
 
 @Injectable()
 export class ModelProvidersService {
@@ -262,6 +263,8 @@ export class ModelProvidersService {
       providerId: this.requireNonEmptyString(payload.providerId, 'providerId'),
       modelName: this.requireNonEmptyString(payload.modelName, 'modelName'),
       modelType: this.requireModelType(payload.modelType),
+      credentialName: this.normalizeOptionalString(payload.credentialName),
+      contextLength: this.normalizeContextLength(payload.contextLength),
       enabled: payload.enabled ?? true,
       timeoutSeconds: this.normalizeTimeout(payload.timeoutSeconds),
       maxTokens: this.normalizeMaxTokens(payload.maxTokens),
@@ -277,6 +280,12 @@ export class ModelProvidersService {
         ? { modelName: this.requireNonEmptyString(payload.modelName, 'modelName') }
         : {}),
       ...(payload.modelType !== undefined ? { modelType: this.requireModelType(payload.modelType) } : {}),
+      ...(payload.credentialName !== undefined
+        ? { credentialName: this.normalizeOptionalString(payload.credentialName) }
+        : {}),
+      ...(payload.contextLength !== undefined
+        ? { contextLength: this.normalizeContextLength(payload.contextLength) }
+        : {}),
       ...(payload.enabled !== undefined ? { enabled: Boolean(payload.enabled) } : {}),
       ...(payload.timeoutSeconds !== undefined
         ? { timeoutSeconds: this.normalizeTimeout(payload.timeoutSeconds) }
@@ -288,6 +297,18 @@ export class ModelProvidersService {
   private requireNonEmptyString(value: unknown, field: string): string {
     if (typeof value !== 'string' || value.trim().length === 0) {
       throw new AppError(ErrorCodes.common.badRequest, `${field} is required`);
+    }
+
+    return value.trim();
+  }
+
+  private normalizeOptionalString(value: unknown): string {
+    if (value === undefined || value === null) {
+      return '';
+    }
+
+    if (typeof value !== 'string') {
+      throw new AppError(ErrorCodes.common.badRequest, 'credentialName must be a string');
     }
 
     return value.trim();
@@ -353,6 +374,23 @@ export class ModelProvidersService {
     }
 
     return maxTokens;
+  }
+
+  private normalizeContextLength(value: unknown): number {
+    if (value === undefined || value === null || value === '') {
+      return DEFAULT_CONTEXT_LENGTH;
+    }
+
+    const contextLength = Number(value);
+
+    if (!Number.isInteger(contextLength) || contextLength < 1 || contextLength > 1_000_000) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        'contextLength must be an integer between 1 and 1000000',
+      );
+    }
+
+    return contextLength;
   }
 
   private async ensureProviderExists(id: string): Promise<ModelProvider> {
@@ -498,6 +536,8 @@ export class ModelProvidersService {
       providerId: config.providerId,
       modelName: config.modelName,
       modelType: config.modelType,
+      credentialName: config.credentialName,
+      contextLength: config.contextLength,
       enabled: config.enabled,
       timeoutSeconds: config.timeoutSeconds,
       maxTokens: config.maxTokens,

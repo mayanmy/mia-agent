@@ -37,6 +37,8 @@ export type ModelConfigListItem = {
   providerId: string;
   modelName: string;
   modelType: ModelConfigType;
+  credentialName: string;
+  contextLength: number;
   enabled: boolean;
   timeoutSeconds: number;
   maxTokens: number | null;
@@ -52,6 +54,8 @@ export type ModelConfigPayload = {
   providerId: string;
   modelName: string;
   modelType: ModelConfigType;
+  credentialName: string;
+  contextLength: number;
   enabled: boolean;
   timeoutSeconds: number;
   maxTokens: number | null;
@@ -128,4 +132,3 @@ export function deleteModelConfig(id: string): Promise<null> {
     method: "DELETE"
   });
 }
-
