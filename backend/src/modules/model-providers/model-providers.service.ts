@@ -7,6 +7,11 @@ import { createPageResult, normalizePageQuery } from '../../core/pagination';
 import { PageResult } from '../../core/result';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  ChatCompletionRequest,
+  ChatCompletionResponse,
+  ChatStreamChunk,
+} from './dto/llm.dto';
+import {
   ModelConfigCreateDto,
   ModelConfigDetail,
   ModelConfigListItem,
@@ -19,13 +24,17 @@ import {
   ProviderTestConnectionResult,
   ProviderUpdateDto,
 } from './dto/model-provider.dto';
+import { ModelProvidersGateway } from './gateway';
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
 const DEFAULT_CONTEXT_LENGTH = 4096;
 
 @Injectable()
 export class ModelProvidersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gateway: ModelProvidersGateway,
+  ) {}
 
   async listProviders(query: ProviderQueryDto): Promise<PageResult<ProviderListItem>> {
     const page = normalizePageQuery(query);
@@ -234,6 +243,16 @@ export class ModelProvidersService {
       where: { id },
       data: { deletedAt: new Date(), enabled: false },
     });
+  }
+
+  async createChatCompletion(
+    request: ChatCompletionRequest,
+  ): Promise<ChatCompletionResponse> {
+    return this.gateway.createChatCompletion(request);
+  }
+
+  streamChatCompletion(request: ChatCompletionRequest): AsyncIterable<ChatStreamChunk> {
+    return this.gateway.streamChatCompletion(request);
   }
 
   private validateProviderCreate(payload: ProviderCreateDto): Required<ProviderCreateDto> {
