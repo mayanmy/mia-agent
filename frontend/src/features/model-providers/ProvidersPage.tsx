@@ -204,12 +204,14 @@ const modelDefaults: ModelFormValues = {
   enabled: true
 };
 
-function toProviderPayload(values: ProviderFormValues): ProviderPayload {
+function toProviderPayload(values: ProviderFormValues, keepEmptyApiKey = false): ProviderPayload {
+  const apiKey = values.apiKey?.trim();
+
   return {
     name: values.name.trim(),
     providerType: values.providerType,
     baseUrl: values.baseUrl.trim(),
-    apiKey: values.apiKey ?? "",
+    apiKey: keepEmptyApiKey && !apiKey ? undefined : apiKey ?? "",
     enabled: values.enabled
   };
 }
@@ -254,6 +256,7 @@ export function ProvidersPage() {
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [editingProviderApiKeyMasked, setEditingProviderApiKeyMasked] = useState("");
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [modelVisible, setModelVisible] = useState(false);
 
@@ -308,6 +311,7 @@ export function ProvidersPage() {
 
   function openCreateProvider(template?: ProviderTemplate) {
     setEditingProviderId(null);
+    setEditingProviderApiKeyMasked("");
     providerForm.setFieldsValue(
       template
         ? {
@@ -324,6 +328,7 @@ export function ProvidersPage() {
 
   function openEditProvider(provider: ProviderListItem) {
     setEditingProviderId(provider.id);
+    setEditingProviderApiKeyMasked(provider.apiKeyMasked);
     providerForm.setFieldsValue({
       name: provider.name,
       providerType: provider.providerType,
@@ -372,7 +377,7 @@ export function ProvidersPage() {
     setSaving(true);
 
     try {
-      const payload = toProviderPayload(values);
+      const payload = toProviderPayload(values, Boolean(editingProviderId));
       if (editingProviderId) {
         await updateProvider(editingProviderId, payload);
         message.success("供应商已更新");
@@ -625,7 +630,10 @@ export function ProvidersPage() {
         open={providerDialogOpen}
         title={editingProviderId ? "编辑模型供应商" : "安装模型供应商"}
         width={620}
-        onCancel={() => setProviderDialogOpen(false)}
+        onCancel={() => {
+          setProviderDialogOpen(false);
+          setEditingProviderApiKeyMasked("");
+        }}
         onOk={() => providerForm.submit()}
       >
         <Form<ProviderFormValues>
@@ -657,7 +665,13 @@ export function ProvidersPage() {
             <Input placeholder="https://api.openai.com/v1" />
           </Form.Item>
           <Form.Item label="API Key" name="apiKey">
-            <Input.Password placeholder={editingProviderId ? "留空则清除" : "可选"} />
+            <Input.Password
+              placeholder={
+                editingProviderId && editingProviderApiKeyMasked
+                  ? editingProviderApiKeyMasked
+                  : "可选"
+              }
+            />
           </Form.Item>
           <Form.Item label="启用" name="enabled" valuePropName="checked">
             <Switch />

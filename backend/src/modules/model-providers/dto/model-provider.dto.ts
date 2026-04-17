@@ -5,6 +5,8 @@ export type ProviderListItem = {
   name: string;
   providerType: ModelProviderType;
   baseUrl: string;
+  apiKeyConfigured: boolean;
+  apiKeyMasked: string;
   enabled: boolean;
   createdAt: Date;
   updatedAt: Date;

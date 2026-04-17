@@ -523,7 +523,11 @@ export class ModelProvidersService {
     const message = error instanceof Error ? error.message : 'connection failed';
 
     if (provider.providerType !== ModelProviderType.OLLAMA) {
-      return `${message}; tested url: ${url}`;
+      return [
+        message,
+        `tested url: ${url}`,
+        '请确认后端进程可以访问该地址；如果需要代理，必须为后端进程配置 HTTP_PROXY/HTTPS_PROXY 或在网关层接入代理 agent',
+      ].join('; ');
     }
 
     return [
@@ -558,10 +562,32 @@ export class ModelProvidersService {
       name: provider.name,
       providerType: provider.providerType,
       baseUrl: provider.baseUrl,
+      apiKeyConfigured: Boolean(provider.apiKeyEncrypted),
+      apiKeyMasked: this.maskEncryptedSecret(provider.apiKeyEncrypted),
       enabled: provider.enabled,
       createdAt: provider.createdAt,
       updatedAt: provider.updatedAt,
     };
+  }
+
+  private maskEncryptedSecret(value: string | null): string {
+    if (!value) {
+      return '';
+    }
+
+    try {
+      return this.maskSecret(decryptSecret(value));
+    } catch {
+      return '********';
+    }
+  }
+
+  private maskSecret(value: string): string {
+    if (value.length <= 6) {
+      return '*'.repeat(value.length);
+    }
+
+    return `${value.slice(0, 3)}*********${value.slice(-3)}`;
   }
 
   private toProviderDetail(
