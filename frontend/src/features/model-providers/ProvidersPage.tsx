@@ -255,6 +255,7 @@ export function ProvidersPage() {
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [modelVisible, setModelVisible] = useState(false);
 
   const providerOptions = useMemo(
     () => providers.map((provider) => ({ label: provider.name, value: provider.id })),
@@ -361,6 +362,10 @@ export function ProvidersPage() {
       enabled: config.enabled
     });
     setModelDialogOpen(true);
+  }
+
+  function showModel() {
+    setModelVisible(!modelVisible);
   }
 
   async function submitProvider(values: ProviderFormValues) {
@@ -548,8 +553,10 @@ export function ProvidersPage() {
               </div>
 
               <div className="providerModelsRow">
-                <span className="showModelsText">显示模型</span>
-                <div className="providerModelChips">
+                <Button className="showModelsText" size="small" type="text" onClick={() => showModel()}>
+                  {modelVisible ? '隐藏模型' : '显示模型'}
+                </Button>
+                {modelVisible && <div className="providerModelChips">
                   {models.length === 0 && <span className="mutedInline">暂无模型</span>}
                   {models.map((model) => (
                     <div className="modelChip" key={model.id}>
@@ -572,7 +579,7 @@ export function ProvidersPage() {
                       </Popconfirm>
                     </div>
                   ))}
-                </div>
+                </div>}
               </div>
             </Card>
           );
