@@ -1,4 +1,4 @@
-import { ModelConfigType, ModelProviderType } from '@prisma/client';
+import { ModelConfigType, ModelProviderType } from "@prisma/client";
 
 export type ProviderListItem = {
   id: string;
