@@ -28,6 +28,13 @@ import { ModelProvidersGateway } from './gateway';
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
 const DEFAULT_CONTEXT_LENGTH = 4096;
+const ANTHROPIC_VERSION = '2023-06-01';
+
+type ProviderTestRequest = {
+  requestUrl: string;
+  displayUrl: string;
+  headers: HeadersInit;
+};
 
 @Injectable()
 export class ModelProvidersService {
@@ -136,13 +143,12 @@ export class ModelProvidersService {
     const provider = await this.ensureProviderExists(id);
     const startedAt = Date.now();
     const timeoutMs = 30_000;
-    const url = this.getProviderTestUrl(provider);
-    const headers = this.getProviderTestHeaders(provider);
+    const testRequest = this.getProviderTestRequest(provider);
 
     try {
-      const response = await fetch(url, {
+      const response = await fetch(testRequest.requestUrl, {
         method: 'GET',
-        headers,
+        headers: testRequest.headers,
         signal: AbortSignal.timeout(timeoutMs),
       });
 
@@ -151,15 +157,15 @@ export class ModelProvidersService {
         status: response.status,
         statusText: response.statusText || '',
         latencyMs: Date.now() - startedAt,
-        url,
+        url: testRequest.displayUrl,
       };
     } catch (error) {
       return {
         ok: false,
         status: null,
-        statusText: this.formatProviderConnectionError(provider, url, error),
+        statusText: this.formatProviderConnectionError(provider, testRequest.displayUrl, error),
         latencyMs: Date.now() - startedAt,
-        url,
+        url: testRequest.displayUrl,
       };
     }
   }
@@ -499,20 +505,79 @@ export class ModelProvidersService {
     return config;
   }
 
-  private getProviderTestUrl(provider: ModelProvider): string {
+  private getProviderTestRequest(provider: ModelProvider): ProviderTestRequest {
+    const apiKey = provider.apiKeyEncrypted ? decryptSecret(provider.apiKeyEncrypted) : '';
+
     if (provider.providerType === ModelProviderType.OLLAMA) {
-      return `${this.getOllamaServerBaseUrl(provider.baseUrl)}/api/tags`;
+      const url = `${this.getOllamaServerBaseUrl(provider.baseUrl)}/api/tags`;
+
+      return {
+        requestUrl: url,
+        displayUrl: url,
+        headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
+      };
     }
 
     if (provider.providerType === ModelProviderType.OPENAI_COMPATIBLE) {
-      return `${provider.baseUrl}/models`;
+      const url = `${this.normalizeBaseUrl(provider.baseUrl)}/models`;
+
+      return {
+        requestUrl: url,
+        displayUrl: url,
+        headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
+      };
     }
 
-    return provider.baseUrl;
+    if (provider.providerType === ModelProviderType.ANTHROPIC) {
+      const url = `${this.normalizeBaseUrl(provider.baseUrl)}/models`;
+
+      return {
+        requestUrl: url,
+        displayUrl: url,
+        headers: {
+          ...(apiKey ? { 'x-api-key': apiKey } : {}),
+          'anthropic-version': ANTHROPIC_VERSION,
+        },
+      };
+    }
+
+    if (provider.providerType === ModelProviderType.GEMINI) {
+      return this.getGeminiTestRequest(provider.baseUrl, apiKey);
+    }
+
+    return {
+      requestUrl: provider.baseUrl,
+      displayUrl: provider.baseUrl,
+      headers: {},
+    };
   }
 
   private getOllamaServerBaseUrl(baseUrl: string): string {
     return baseUrl.replace(/\/v1$/u, '');
+  }
+
+  private getGeminiTestRequest(baseUrl: string, apiKey: string): ProviderTestRequest {
+    const url = new URL(`${this.normalizeBaseUrl(baseUrl)}/models`);
+
+    if (apiKey) {
+      url.searchParams.set('key', apiKey);
+    }
+
+    const displayUrl = new URL(url.toString());
+
+    if (apiKey) {
+      displayUrl.searchParams.set('key', '***');
+    }
+
+    return {
+      requestUrl: url.toString(),
+      displayUrl: displayUrl.toString(),
+      headers: {},
+    };
+  }
+
+  private normalizeBaseUrl(baseUrl: string): string {
+    return baseUrl.replace(/\/$/u, '');
   }
 
   private formatProviderConnectionError(
@@ -535,25 +600,6 @@ export class ModelProvidersService {
       `tested url: ${url}`,
       'Ollama 本机部署时通常使用 http://127.0.0.1:11434；只有后端运行在 Docker 容器内时才使用 http://host.docker.internal:11434',
     ].join('; ');
-  }
-
-  private getProviderTestHeaders(provider: ModelProvider): HeadersInit {
-    if (!provider.apiKeyEncrypted) {
-      return {};
-    }
-
-    const apiKey = decryptSecret(provider.apiKeyEncrypted);
-
-    if (provider.providerType === ModelProviderType.ANTHROPIC) {
-      return {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      };
-    }
-
-    return {
-      authorization: `Bearer ${apiKey}`,
-    };
   }
 
   private toProviderListItem(provider: ModelProvider): ProviderListItem {
