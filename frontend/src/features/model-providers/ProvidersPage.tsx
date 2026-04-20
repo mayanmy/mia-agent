@@ -258,7 +258,7 @@ export function ProvidersPage() {
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [editingProviderApiKeyMasked, setEditingProviderApiKeyMasked] = useState("");
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
-  const [modelVisible, setModelVisible] = useState(false);
+  const [expandedProviderIds, setExpandedProviderIds] = useState<Set<string>>(() => new Set());
 
   const providerOptions = useMemo(
     () => providers.map((provider) => ({ label: provider.name, value: provider.id })),
@@ -369,8 +369,18 @@ export function ProvidersPage() {
     setModelDialogOpen(true);
   }
 
-  function showModel() {
-    setModelVisible(!modelVisible);
+  function toggleProviderModels(providerId: string) {
+    setExpandedProviderIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(providerId)) {
+        next.delete(providerId);
+      } else {
+        next.add(providerId);
+      }
+
+      return next;
+    });
   }
 
   async function submitProvider(values: ProviderFormValues) {
@@ -512,6 +522,8 @@ export function ProvidersPage() {
       <div className="providerInstalledList" aria-busy={loading}>
         {filteredProviders.map((provider) => {
           const models = modelConfigs.filter((model) => model.providerId === provider.id);
+          const modelVisible = expandedProviderIds.has(provider.id);
+
           return (
             <Card className="providerInstalledCard" key={provider.id}>
               <div className="providerCardMain">
@@ -558,33 +570,40 @@ export function ProvidersPage() {
               </div>
 
               <div className="providerModelsRow">
-                <Button className="showModelsText" size="small" type="text" onClick={() => showModel()}>
-                  {modelVisible ? '隐藏模型' : '显示模型'}
+                <Button
+                  className="showModelsText"
+                  size="small"
+                  type="text"
+                  onClick={() => toggleProviderModels(provider.id)}
+                >
+                  {modelVisible ? "隐藏模型" : "显示模型"}
                 </Button>
-                {modelVisible && <div className="providerModelChips">
-                  {models.length === 0 && <span className="mutedInline">暂无模型</span>}
-                  {models.map((model) => (
-                    <div className="modelChip" key={model.id}>
-                      <span className={model.enabled ? "modelDot enabled" : "modelDot"} />
-                      <span>{model.modelName}</span>
-                      <Tag>{modelTypeLabels[model.modelType]}</Tag>
-                      <Button size="small" type="text" onClick={() => openEditModel(model)}>
-                        配置
-                      </Button>
-                      <Popconfirm
-                        title="删除模型"
-                        description="确认删除这个模型？"
-                        okText="删除"
-                        cancelText="取消"
-                        onConfirm={() => void handleDeleteModel(model.id)}
-                      >
-                        <Button danger size="small" type="text">
-                          删除
+                {modelVisible && (
+                  <div className="providerModelChips">
+                    {models.length === 0 && <span className="mutedInline">暂无模型</span>}
+                    {models.map((model) => (
+                      <div className="modelChip" key={model.id}>
+                        <span className={model.enabled ? "modelDot enabled" : "modelDot"} />
+                        <span>{model.modelName}</span>
+                        <Tag>{modelTypeLabels[model.modelType]}</Tag>
+                        <Button size="small" type="text" onClick={() => openEditModel(model)}>
+                          配置
                         </Button>
-                      </Popconfirm>
-                    </div>
-                  ))}
-                </div>}
+                        <Popconfirm
+                          title="删除模型"
+                          description="确认删除这个模型？"
+                          okText="删除"
+                          cancelText="取消"
+                          onConfirm={() => void handleDeleteModel(model.id)}
+                        >
+                          <Button danger size="small" type="text">
+                            删除
+                          </Button>
+                        </Popconfirm>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </Card>
           );
