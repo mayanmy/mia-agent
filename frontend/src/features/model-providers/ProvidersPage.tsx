@@ -16,6 +16,7 @@ import {
 } from "antd";
 
 import {
+  checkModelCapability,
   createModelConfig,
   createProvider,
   deleteModelConfig,
@@ -424,6 +425,21 @@ export function ProvidersPage() {
       }
 
       const payload = toModelConfigPayload(values);
+      const capability = await checkModelCapability({
+        providerId: payload.providerId,
+        modelName: payload.modelName,
+        modelType: payload.modelType
+      });
+
+      if (capability.verified && !capability.supported) {
+        message.error(capability.message);
+        return;
+      }
+
+      if (!capability.verified) {
+        message.warning(`模型能力未确认：${capability.message}`);
+      }
+
       if (editingModelId) {
         await updateModelConfig(editingModelId, payload);
         message.success("模型已更新");

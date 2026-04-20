@@ -3,6 +3,8 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/
 import { PageResult } from '../../core/result';
 import { ChatCompletionResponse, TestChatCompletionDto } from './dto/llm.dto';
 import {
+  ModelCapabilityCheckDto,
+  ModelCapabilityCheckResult,
   ModelConfigCreateDto,
   ModelConfigDetail,
   ModelConfigListItem,
@@ -25,6 +27,17 @@ export class ModelConfigsController {
   @Post()
   async createModelConfig(@Body() payload: ModelConfigCreateDto): Promise<ModelConfigDetail> {
     return this.modelProvidersService.createModelConfig(payload);
+  }
+
+  @Post('check-capability')
+  async checkCapability(
+    @Body() payload: ModelCapabilityCheckDto,
+  ): Promise<ModelCapabilityCheckResult> {
+    return this.modelProvidersService.checkModelCapability(
+      payload.providerId,
+      payload.modelName,
+      payload.modelType,
+    );
   }
 
   @Get(':id')

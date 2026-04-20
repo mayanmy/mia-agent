@@ -67,6 +67,17 @@ export type ModelConfigPayload = {
   maxTokens: number | null;
 };
 
+export type ModelCapability = "chat" | "embedding" | "rerank";
+
+export type ModelCapabilityCheckResult = {
+  modelName: string;
+  requestedType: ModelConfigType;
+  supported: boolean;
+  verified: boolean;
+  capabilities: ModelCapability[];
+  message: string;
+};
+
 export function listProviders(
   page = 1,
   pageSize = 20,
@@ -146,6 +157,15 @@ export function updateModelConfig(
 ): Promise<ModelConfigDetail> {
   return request<ModelConfigDetail>(`/api/v1/model-configs/${id}`, {
     method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function checkModelCapability(
+  payload: Pick<ModelConfigPayload, "providerId" | "modelName" | "modelType">,
+): Promise<ModelCapabilityCheckResult> {
+  return request<ModelCapabilityCheckResult>("/api/v1/model-configs/check-capability", {
+    method: "POST",
     body: JSON.stringify(payload),
   });
 }

@@ -12,6 +12,8 @@ import {
   ChatStreamChunk,
 } from './dto/llm.dto';
 import {
+  ModelCapability,
+  ModelCapabilityCheckResult,
   ModelConfigCreateDto,
   ModelConfigDetail,
   ModelConfigListItem,
@@ -198,8 +200,9 @@ export class ModelProvidersService {
 
   async createModelConfig(payload: ModelConfigCreateDto): Promise<ModelConfigDetail> {
     const data = this.validateModelConfigCreate(payload);
-    await this.ensureProviderExists(data.providerId);
+    const provider = await this.ensureProviderExists(data.providerId);
     await this.ensureModelConfigAvailable(data.providerId, data.modelName, data.modelType);
+    await this.ensureModelCapability(provider, data.modelName, data.modelType);
 
     const config = await this.prisma.modelConfig.create({
       data,
@@ -220,9 +223,10 @@ export class ModelProvidersService {
     const providerId = data.providerId ?? existing.providerId;
     const modelName = data.modelName ?? existing.modelName;
     const modelType = data.modelType ?? existing.modelType;
+    let provider = existing.provider;
 
     if (data.providerId) {
-      await this.ensureProviderExists(data.providerId);
+      provider = await this.ensureProviderExists(data.providerId);
     }
 
     if (
@@ -232,6 +236,8 @@ export class ModelProvidersService {
     ) {
       await this.ensureModelConfigAvailable(providerId, modelName, modelType, id);
     }
+
+    await this.ensureModelCapability(provider, modelName, modelType);
 
     const config = await this.prisma.modelConfig.update({
       where: { id },
@@ -259,6 +265,22 @@ export class ModelProvidersService {
 
   streamChatCompletion(request: ChatCompletionRequest): AsyncIterable<ChatStreamChunk> {
     return this.gateway.streamChatCompletion(request);
+  }
+
+  async checkModelCapability(
+    providerId: unknown,
+    modelName: unknown,
+    modelType: unknown,
+  ): Promise<ModelCapabilityCheckResult> {
+    const provider = await this.ensureProviderExists(
+      this.requireNonEmptyString(providerId, 'providerId'),
+    );
+
+    return this.resolveModelCapability(
+      provider,
+      this.requireNonEmptyString(modelName, 'modelName'),
+      this.requireModelType(modelType),
+    );
   }
 
   private validateProviderCreate(payload: ProviderCreateDto): Required<ProviderCreateDto> {
@@ -486,6 +508,177 @@ export class ModelProvidersService {
         HttpStatus.CONFLICT,
       );
     }
+  }
+
+  private async ensureModelCapability(
+    provider: ModelProvider,
+    modelName: string,
+    modelType: ModelConfigType,
+  ): Promise<void> {
+    const result = await this.resolveModelCapability(provider, modelName, modelType);
+
+    if (result.verified && !result.supported) {
+      throw new AppError(ErrorCodes.provider.connectionFailed, result.message, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  private async resolveModelCapability(
+    provider: ModelProvider,
+    modelName: string,
+    modelType: ModelConfigType,
+  ): Promise<ModelCapabilityCheckResult> {
+    if (provider.providerType === ModelProviderType.OLLAMA) {
+      return this.resolveOllamaModelCapability(provider, modelName, modelType);
+    }
+
+    const capabilities = this.inferModelCapabilities(provider.providerType, modelName);
+    const supported = this.hasRequestedCapability(capabilities, modelType);
+
+    return {
+      modelName,
+      requestedType: modelType,
+      supported,
+      verified: true,
+      capabilities,
+      message: supported
+        ? 'model capability matched'
+        : `model ${modelName} does not support ${modelType}`,
+    };
+  }
+
+  private async resolveOllamaModelCapability(
+    provider: ModelProvider,
+    modelName: string,
+    modelType: ModelConfigType,
+  ): Promise<ModelCapabilityCheckResult> {
+    const url = `${this.getOllamaServerBaseUrl(provider.baseUrl)}/api/tags`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: provider.apiKeyEncrypted
+          ? { authorization: `Bearer ${decryptSecret(provider.apiKeyEncrypted)}` }
+          : {},
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      if (!response.ok) {
+        return this.unverifiedCapabilityResult(
+          modelName,
+          modelType,
+          `cannot verify model capability: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      const data = (await response.json()) as {
+        models?: Array<{ name?: string; model?: string; capabilities?: string[] }>;
+      };
+      const model = data.models?.find((item) => item.name === modelName || item.model === modelName);
+
+      if (!model) {
+        return {
+          modelName,
+          requestedType: modelType,
+          supported: false,
+          verified: true,
+          capabilities: [],
+          message: `model ${modelName} not found in Ollama`,
+        };
+      }
+
+      const capabilities = this.normalizeOllamaCapabilities(model.capabilities ?? []);
+      const supported = this.hasRequestedCapability(capabilities, modelType);
+
+      return {
+        modelName,
+        requestedType: modelType,
+        supported,
+        verified: true,
+        capabilities,
+        message: supported
+          ? 'model capability matched'
+          : `model ${modelName} does not support ${modelType}`,
+      };
+    } catch (error) {
+      return this.unverifiedCapabilityResult(
+        modelName,
+        modelType,
+        error instanceof Error ? error.message : 'cannot verify model capability',
+      );
+    }
+  }
+
+  private unverifiedCapabilityResult(
+    modelName: string,
+    modelType: ModelConfigType,
+    message: string,
+  ): ModelCapabilityCheckResult {
+    return {
+      modelName,
+      requestedType: modelType,
+      supported: true,
+      verified: false,
+      capabilities: [],
+      message,
+    };
+  }
+
+  private inferModelCapabilities(
+    providerType: ModelProviderType,
+    modelName: string,
+  ): ModelCapability[] {
+    if (providerType === ModelProviderType.ANTHROPIC || providerType === ModelProviderType.GEMINI) {
+      return ['chat'];
+    }
+
+    const normalizedName = modelName.toLowerCase();
+
+    if (
+      normalizedName.includes('embedding') ||
+      normalizedName.includes('embed') ||
+      normalizedName.includes('text-embedding')
+    ) {
+      return ['embedding'];
+    }
+
+    if (normalizedName.includes('rerank')) {
+      return ['rerank'];
+    }
+
+    return ['chat'];
+  }
+
+  private normalizeOllamaCapabilities(capabilities: string[]): ModelCapability[] {
+    const normalized = new Set<ModelCapability>();
+
+    for (const capability of capabilities) {
+      const value = capability.toLowerCase();
+
+      if (value === 'completion' || value === 'chat') {
+        normalized.add('chat');
+      }
+
+      if (value === 'embedding' || value === 'embeddings') {
+        normalized.add('embedding');
+      }
+    }
+
+    return [...normalized];
+  }
+
+  private hasRequestedCapability(
+    capabilities: ModelCapability[],
+    modelType: ModelConfigType,
+  ): boolean {
+    if (modelType === ModelConfigType.CHAT) {
+      return capabilities.includes('chat');
+    }
+
+    if (modelType === ModelConfigType.EMBEDDING) {
+      return capabilities.includes('embedding');
+    }
+
+    return false;
   }
 
   private async findModelConfigDetail(id: string) {

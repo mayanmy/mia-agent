@@ -40,6 +40,17 @@ export type ProviderTestConnectionResult = {
   url?: string;
 };
 
+export type ModelCapability = "chat" | "embedding" | "rerank";
+
+export type ModelCapabilityCheckResult = {
+  modelName: string;
+  requestedType: ModelConfigType;
+  supported: boolean;
+  verified: boolean;
+  capabilities: ModelCapability[];
+  message: string;
+};
+
 export type ModelConfigListItem = {
   id: string;
   providerId: string;
@@ -78,6 +89,12 @@ export type ModelConfigUpdateDto = {
   enabled?: boolean;
   timeoutSeconds?: number;
   maxTokens?: number | null;
+};
+
+export type ModelCapabilityCheckDto = {
+  providerId?: string;
+  modelName?: string;
+  modelType?: ModelConfigType;
 };
 
 export type ProviderQueryDto = {
