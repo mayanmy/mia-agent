@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  AutoComplete,
   Button,
   Card,
   Empty,
@@ -22,6 +23,7 @@ import {
   deleteModelConfig,
   deleteProvider,
   getDefaultModelSettings,
+  listProviderModels,
   listModelConfigs,
   listProviders,
   testProviderConnection,
@@ -32,6 +34,7 @@ import {
   type ModelConfigPayload,
   type ModelConfigType,
   type ModelProviderType,
+  type ProviderRemoteModel,
   type ProviderListItem,
   type ProviderPayload
 } from "./api";
@@ -292,6 +295,8 @@ export function ProvidersPage() {
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [defaultModelDialogOpen, setDefaultModelDialogOpen] = useState(false);
+  const [syncingModels, setSyncingModels] = useState(false);
+  const [remoteModels, setRemoteModels] = useState<ProviderRemoteModel[]>([]);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [editingProviderApiKeyMasked, setEditingProviderApiKeyMasked] = useState("");
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
@@ -310,6 +315,17 @@ export function ProvidersPage() {
   const embeddingModelOptions = useMemo(
     () => buildModelSelectOptions(modelConfigs, providers, "EMBEDDING"),
     [modelConfigs, providers]
+  );
+
+  const remoteModelOptions = useMemo(
+    () =>
+      remoteModels.map((model) => ({
+        label: `${model.modelName}${model.capabilities.length > 0 ? ` · ${model.capabilities.join("/")}` : ""}${
+          model.contextLength ? ` · ${model.contextLength}` : ""
+        }`,
+        value: model.modelName
+      })),
+    [remoteModels]
   );
 
   const selectedModelProvider = Form.useWatch("providerId", modelForm);
@@ -389,6 +405,7 @@ export function ProvidersPage() {
   function openCreateModel(providerId: string) {
     const provider = providers.find((item) => item.id === providerId);
     setEditingModelId(null);
+    setRemoteModels([]);
     modelForm.setFieldsValue({
       ...modelDefaults,
       providerId,
@@ -401,6 +418,7 @@ export function ProvidersPage() {
   function openEditModel(config: ModelConfigListItem) {
     const provider = providers.find((item) => item.id === config.providerId);
     setEditingModelId(config.id);
+    setRemoteModels([]);
     modelForm.setFieldsValue({
       providerId: config.providerId,
       modelName: config.modelName,
@@ -583,9 +601,46 @@ export function ProvidersPage() {
 
   function handleModelProviderChange(providerId: string) {
     const provider = providers.find((item) => item.id === providerId);
+    setRemoteModels([]);
     modelForm.setFieldsValue({
       baseUrl: provider?.baseUrl ?? "",
       credentialName: provider ? `${provider.name} 默认凭据` : ""
+    });
+  }
+
+  async function syncProviderModels(providerId?: string) {
+    const targetProviderId = providerId || modelForm.getFieldValue("providerId");
+
+    if (!targetProviderId) {
+      message.warning("请先选择供应商");
+      return;
+    }
+
+    setSyncingModels(true);
+
+    try {
+      const models = await listProviderModels(targetProviderId);
+      setRemoteModels(models);
+      message.success(`已同步 ${models.length} 个模型`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "同步模型列表失败");
+    } finally {
+      setSyncingModels(false);
+    }
+  }
+
+  function handleRemoteModelChange(modelName: string) {
+    const remoteModel = remoteModels.find((item) => item.modelName === modelName);
+
+    if (!remoteModel) {
+      modelForm.setFieldsValue({ modelName });
+      return;
+    }
+
+    modelForm.setFieldsValue({
+      modelName: remoteModel.modelName,
+      modelType: remoteModel.suggestedType,
+      contextLength: remoteModel.contextLength ?? modelForm.getFieldValue("contextLength") ?? 4096
     });
   }
 
@@ -869,8 +924,20 @@ export function ProvidersPage() {
             name="modelName"
             rules={[{ required: true, message: "请输入模型名称" }]}
           >
-            <Input placeholder="qwen2.5" />
+            <AutoComplete
+              options={remoteModelOptions}
+              placeholder="qwen2.5"
+              onChange={handleRemoteModelChange}
+            />
           </Form.Item>
+          <Button
+            loading={syncingModels}
+            size="small"
+            type="default"
+            onClick={() => void syncProviderModels()}
+          >
+            同步模型列表
+          </Button>
           <Form.Item
             label="模型类型"
             name="modelType"

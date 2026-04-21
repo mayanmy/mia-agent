@@ -78,6 +78,13 @@ export type ModelCapabilityCheckResult = {
   message: string;
 };
 
+export type ProviderRemoteModel = {
+  modelName: string;
+  suggestedType: ModelConfigType;
+  capabilities: ModelCapability[];
+  contextLength: number | null;
+};
+
 export type DefaultModelSettings = {
   chatModelConfigId: string | null;
   embeddingModelConfigId: string | null;
@@ -134,6 +141,10 @@ export function testProviderConnection(
       method: "POST",
     },
   );
+}
+
+export function listProviderModels(id: string): Promise<ProviderRemoteModel[]> {
+  return request<ProviderRemoteModel[]>(`/api/v1/providers/${id}/models`);
 }
 
 export function listModelConfigs(

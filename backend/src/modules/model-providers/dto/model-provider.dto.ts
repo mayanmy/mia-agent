@@ -51,6 +51,13 @@ export type ModelCapabilityCheckResult = {
   message: string;
 };
 
+export type ProviderRemoteModel = {
+  modelName: string;
+  suggestedType: ModelConfigType;
+  capabilities: ModelCapability[];
+  contextLength: number | null;
+};
+
 export type ModelConfigListItem = {
   id: string;
   providerId: string;

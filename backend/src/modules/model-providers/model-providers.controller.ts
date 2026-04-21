@@ -5,6 +5,7 @@ import {
   ProviderCreateDto,
   ProviderDetail,
   ProviderListItem,
+  ProviderRemoteModel,
   ProviderQueryDto,
   ProviderTestConnectionResult,
   ProviderUpdateDto,
@@ -23,6 +24,11 @@ export class ModelProvidersController {
   @Post()
   async createProvider(@Body() payload: ProviderCreateDto): Promise<ProviderDetail> {
     return this.modelProvidersService.createProvider(payload);
+  }
+
+  @Get(':id/models')
+  async listProviderModels(@Param('id') id: string): Promise<ProviderRemoteModel[]> {
+    return this.modelProvidersService.listProviderModels(id);
   }
 
   @Get(':id')

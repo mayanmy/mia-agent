@@ -24,6 +24,7 @@ import {
   ProviderCreateDto,
   ProviderDetail,
   ProviderListItem,
+  ProviderRemoteModel,
   ProviderQueryDto,
   ProviderTestConnectionResult,
   ProviderUpdateDto,
@@ -172,6 +173,20 @@ export class ModelProvidersService {
         url: testRequest.displayUrl,
       };
     }
+  }
+
+  async listProviderModels(id: string): Promise<ProviderRemoteModel[]> {
+    const provider = await this.ensureProviderExists(id);
+
+    if (provider.providerType === ModelProviderType.OLLAMA) {
+      return this.listOllamaModels(provider);
+    }
+
+    if (provider.providerType === ModelProviderType.GEMINI) {
+      return this.listGeminiModels(provider);
+    }
+
+    return this.listOpenAIStyleModels(provider);
   }
 
   async listModelConfigs(query: ModelConfigQueryDto): Promise<PageResult<ModelConfigListItem>> {
@@ -569,6 +584,139 @@ export class ModelProvidersService {
     }
   }
 
+  private async listOllamaModels(provider: ModelProvider): Promise<ProviderRemoteModel[]> {
+    const url = `${this.getOllamaServerBaseUrl(provider.baseUrl)}/api/tags`;
+    const response = await this.fetchProviderModels(provider, url, {
+      headers: provider.apiKeyEncrypted
+        ? { authorization: `Bearer ${decryptSecret(provider.apiKeyEncrypted)}` }
+        : {},
+    });
+    const data = (await response.json()) as {
+      models?: Array<{
+        name?: string;
+        model?: string;
+        capabilities?: string[];
+        details?: { context_length?: number };
+      }>;
+    };
+
+    return this.sortRemoteModels(
+      (data.models ?? [])
+        .map((model) => {
+          const modelName = model.name ?? model.model ?? '';
+          const capabilities = this.normalizeOllamaCapabilities(model.capabilities ?? []);
+
+          return this.toRemoteModel(
+            modelName,
+            capabilities.length > 0 ? capabilities : this.inferModelCapabilities(provider.providerType, modelName),
+            model.details?.context_length ?? null,
+          );
+        })
+        .filter((model) => model.modelName),
+    );
+  }
+
+  private async listOpenAIStyleModels(provider: ModelProvider): Promise<ProviderRemoteModel[]> {
+    const testRequest = this.getProviderTestRequest(provider);
+    const response = await this.fetchProviderModels(provider, testRequest.requestUrl, {
+      headers: testRequest.headers,
+    });
+    const data = (await response.json()) as {
+      data?: Array<{ id?: string }>;
+    };
+
+    return this.sortRemoteModels(
+      (data.data ?? [])
+        .map((model) => {
+          const modelName = model.id ?? '';
+          return this.toRemoteModel(
+            modelName,
+            this.inferModelCapabilities(provider.providerType, modelName),
+            null,
+          );
+        })
+        .filter((model) => model.modelName),
+    );
+  }
+
+  private async listGeminiModels(provider: ModelProvider): Promise<ProviderRemoteModel[]> {
+    const testRequest = this.getProviderTestRequest(provider);
+    const response = await this.fetchProviderModels(provider, testRequest.requestUrl, {
+      headers: testRequest.headers,
+    });
+    const data = (await response.json()) as {
+      models?: Array<{
+        name?: string;
+        inputTokenLimit?: number;
+        supportedGenerationMethods?: string[];
+      }>;
+    };
+
+    return this.sortRemoteModels(
+      (data.models ?? [])
+        .map((model) => {
+          const modelName = model.name?.replace(/^models\//u, '') ?? '';
+          return this.toRemoteModel(
+            modelName,
+            this.normalizeGeminiCapabilities(model.supportedGenerationMethods ?? []),
+            model.inputTokenLimit ?? null,
+          );
+        })
+        .filter((model) => model.modelName),
+    );
+  }
+
+  private async fetchProviderModels(
+    provider: ModelProvider,
+    url: string,
+    init: RequestInit,
+  ): Promise<Response> {
+    const response = await fetch(url, {
+      method: 'GET',
+      ...init,
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (!response.ok) {
+      throw new AppError(
+        ErrorCodes.provider.connectionFailed,
+        `sync provider models failed with ${response.status} ${response.statusText}`,
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+
+    if (provider.providerType === ModelProviderType.GEMINI) {
+      return response;
+    }
+
+    return response;
+  }
+
+  private toRemoteModel(
+    modelName: string,
+    capabilities: ModelCapability[],
+    contextLength: number | null,
+  ): ProviderRemoteModel {
+    return {
+      modelName,
+      capabilities,
+      suggestedType: capabilities.includes('embedding') ? ModelConfigType.EMBEDDING : ModelConfigType.CHAT,
+      contextLength,
+    };
+  }
+
+  private sortRemoteModels(models: ProviderRemoteModel[]): ProviderRemoteModel[] {
+    const unique = new Map<string, ProviderRemoteModel>();
+
+    for (const model of models) {
+      unique.set(model.modelName, model);
+    }
+
+    return [...unique.values()].sort((left, right) =>
+      left.modelName.localeCompare(right.modelName),
+    );
+  }
+
   private async ensureModelCapability(
     provider: ModelProvider,
     modelName: string,
@@ -718,6 +866,24 @@ export class ModelProvidersService {
       }
 
       if (value === 'embedding' || value === 'embeddings') {
+        normalized.add('embedding');
+      }
+    }
+
+    return [...normalized];
+  }
+
+  private normalizeGeminiCapabilities(methods: string[]): ModelCapability[] {
+    const normalized = new Set<ModelCapability>();
+
+    for (const method of methods) {
+      const value = method.toLowerCase();
+
+      if (value === 'generatecontent' || value === 'streamgeneratecontent') {
+        normalized.add('chat');
+      }
+
+      if (value === 'embedcontent' || value === 'batchembedcontents') {
         normalized.add('embedding');
       }
     }
