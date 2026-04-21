@@ -97,6 +97,19 @@ export type ModelCapabilityCheckDto = {
   modelType?: ModelConfigType;
 };
 
+export type DefaultModelSettings = {
+  chatModelConfigId: string | null;
+  embeddingModelConfigId: string | null;
+  chatModelConfig: ModelConfigListItem | null;
+  embeddingModelConfig: ModelConfigListItem | null;
+  updatedAt: Date | null;
+};
+
+export type DefaultModelSettingsUpdateDto = {
+  chatModelConfigId?: string | null;
+  embeddingModelConfigId?: string | null;
+};
+
 export type ProviderQueryDto = {
   page?: string;
   pageSize?: string;

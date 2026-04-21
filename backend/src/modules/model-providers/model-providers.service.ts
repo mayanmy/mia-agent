@@ -12,6 +12,8 @@ import {
   ChatStreamChunk,
 } from './dto/llm.dto';
 import {
+  DefaultModelSettings,
+  DefaultModelSettingsUpdateDto,
   ModelCapability,
   ModelCapabilityCheckResult,
   ModelConfigCreateDto,
@@ -251,10 +253,20 @@ export class ModelProvidersService {
   async deleteModelConfig(id: string): Promise<void> {
     await this.findModelConfigDetail(id);
 
-    await this.prisma.modelConfig.update({
-      where: { id },
-      data: { deletedAt: new Date(), enabled: false },
-    });
+    await this.prisma.$transaction([
+      this.prisma.defaultModelSetting.updateMany({
+        where: { chatModelConfigId: id },
+        data: { chatModelConfigId: null },
+      }),
+      this.prisma.defaultModelSetting.updateMany({
+        where: { embeddingModelConfigId: id },
+        data: { embeddingModelConfigId: null },
+      }),
+      this.prisma.modelConfig.update({
+        where: { id },
+        data: { deletedAt: new Date(), enabled: false },
+      }),
+    ]);
   }
 
   async createChatCompletion(
@@ -281,6 +293,45 @@ export class ModelProvidersService {
       this.requireNonEmptyString(modelName, 'modelName'),
       this.requireModelType(modelType),
     );
+  }
+
+  async getDefaultModelSettings(): Promise<DefaultModelSettings> {
+    const settings = await this.findDefaultModelSettings();
+    return this.toDefaultModelSettings(settings);
+  }
+
+  async updateDefaultModelSettings(
+    payload: DefaultModelSettingsUpdateDto,
+  ): Promise<DefaultModelSettings> {
+    const chatModelConfigId = this.normalizeNullableId(payload.chatModelConfigId);
+    const embeddingModelConfigId = this.normalizeNullableId(payload.embeddingModelConfigId);
+
+    if (chatModelConfigId) {
+      await this.ensureDefaultModelConfig(chatModelConfigId, ModelConfigType.CHAT);
+    }
+
+    if (embeddingModelConfigId) {
+      await this.ensureDefaultModelConfig(embeddingModelConfigId, ModelConfigType.EMBEDDING);
+    }
+
+    const settings = await this.prisma.defaultModelSetting.upsert({
+      where: { id: 'global' },
+      create: {
+        id: 'global',
+        chatModelConfigId,
+        embeddingModelConfigId,
+      },
+      update: {
+        chatModelConfigId,
+        embeddingModelConfigId,
+      },
+      include: {
+        chatModelConfig: true,
+        embeddingModelConfig: true,
+      },
+    });
+
+    return this.toDefaultModelSettings(settings);
   }
 
   private validateProviderCreate(payload: ProviderCreateDto): Required<ProviderCreateDto> {
@@ -361,6 +412,14 @@ export class ModelProvidersService {
     }
 
     return value.trim();
+  }
+
+  private normalizeNullableId(value: unknown): string | null {
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+
+    return this.requireNonEmptyString(value, 'modelConfigId');
   }
 
   private requireUrl(value: unknown): string {
@@ -698,6 +757,42 @@ export class ModelProvidersService {
     return config;
   }
 
+  private async findDefaultModelSettings() {
+    return this.prisma.defaultModelSetting.findUnique({
+      where: { id: 'global' },
+      include: {
+        chatModelConfig: true,
+        embeddingModelConfig: true,
+      },
+    });
+  }
+
+  private async ensureDefaultModelConfig(
+    id: string,
+    modelType: ModelConfigType,
+  ): Promise<void> {
+    const modelConfig = await this.prisma.modelConfig.findFirst({
+      where: {
+        id,
+        modelType,
+        enabled: true,
+        deletedAt: null,
+        provider: {
+          enabled: true,
+          deletedAt: null,
+        },
+      },
+    });
+
+    if (!modelConfig) {
+      throw new AppError(
+        ErrorCodes.provider.modelConfigNotFound,
+        `${modelType} default model must reference an enabled ${modelType} model config`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   private getProviderTestRequest(provider: ModelProvider): ProviderTestRequest {
     const apiKey = provider.apiKeyEncrypted ? decryptSecret(provider.apiKeyEncrypted) : '';
 
@@ -860,6 +955,22 @@ export class ModelProvidersService {
     return {
       ...this.toModelConfigListItem(config),
       provider: this.toProviderListItem(config.provider),
+    };
+  }
+
+  private toDefaultModelSettings(
+    settings: Awaited<ReturnType<ModelProvidersService['findDefaultModelSettings']>>,
+  ): DefaultModelSettings {
+    return {
+      chatModelConfigId: settings?.chatModelConfigId ?? null,
+      embeddingModelConfigId: settings?.embeddingModelConfigId ?? null,
+      chatModelConfig: settings?.chatModelConfig
+        ? this.toModelConfigListItem(settings.chatModelConfig)
+        : null,
+      embeddingModelConfig: settings?.embeddingModelConfig
+        ? this.toModelConfigListItem(settings.embeddingModelConfig)
+        : null,
+      updatedAt: settings?.updatedAt ?? null,
     };
   }
 }

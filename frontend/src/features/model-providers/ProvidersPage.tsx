@@ -21,9 +21,11 @@ import {
   createProvider,
   deleteModelConfig,
   deleteProvider,
+  getDefaultModelSettings,
   listModelConfigs,
   listProviders,
   testProviderConnection,
+  updateDefaultModelSettings,
   updateModelConfig,
   updateProvider,
   type ModelConfigListItem,
@@ -68,6 +70,11 @@ type ModelFormValues = {
   timeoutSeconds: number;
   maxTokens?: number | null;
   enabled: boolean;
+};
+
+type DefaultModelFormValues = {
+  chatModelConfigId?: string | null;
+  embeddingModelConfigId?: string | null;
 };
 
 type ProviderTemplate = {
@@ -246,9 +253,37 @@ function getProviderAccent(provider: ProviderListItem): string {
   return template?.accent || "#2563eb";
 }
 
+function buildModelSelectOptions(
+  modelConfigs: ModelConfigListItem[],
+  providers: ProviderListItem[],
+  modelType: ModelConfigType
+) {
+  return providers
+    .map((provider) => {
+      const options = modelConfigs
+        .filter(
+          (model) =>
+            model.providerId === provider.id &&
+            model.modelType === modelType &&
+            model.enabled
+        )
+        .map((model) => ({
+          label: model.modelName,
+          value: model.id
+        }));
+
+      return {
+        label: provider.name,
+        options
+      };
+    })
+    .filter((group) => group.options.length > 0);
+}
+
 export function ProvidersPage() {
   const [providerForm] = Form.useForm<ProviderFormValues>();
   const [modelForm] = Form.useForm<ModelFormValues>();
+  const [defaultModelForm] = Form.useForm<DefaultModelFormValues>();
   const [providers, setProviders] = useState<ProviderListItem[]>([]);
   const [modelConfigs, setModelConfigs] = useState<ModelConfigListItem[]>([]);
   const [search, setSearch] = useState("");
@@ -256,6 +291,7 @@ export function ProvidersPage() {
   const [saving, setSaving] = useState(false);
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
+  const [defaultModelDialogOpen, setDefaultModelDialogOpen] = useState(false);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [editingProviderApiKeyMasked, setEditingProviderApiKeyMasked] = useState("");
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
@@ -264,6 +300,16 @@ export function ProvidersPage() {
   const providerOptions = useMemo(
     () => providers.map((provider) => ({ label: provider.name, value: provider.id })),
     [providers]
+  );
+
+  const chatModelOptions = useMemo(
+    () => buildModelSelectOptions(modelConfigs, providers, "CHAT"),
+    [modelConfigs, providers]
+  );
+
+  const embeddingModelOptions = useMemo(
+    () => buildModelSelectOptions(modelConfigs, providers, "EMBEDDING"),
+    [modelConfigs, providers]
   );
 
   const selectedModelProvider = Form.useWatch("providerId", modelForm);
@@ -370,6 +416,23 @@ export function ProvidersPage() {
     setModelDialogOpen(true);
   }
 
+  async function openDefaultModelDialog() {
+    setLoading(true);
+
+    try {
+      const settings = await getDefaultModelSettings();
+      defaultModelForm.setFieldsValue({
+        chatModelConfigId: settings.chatModelConfigId,
+        embeddingModelConfigId: settings.embeddingModelConfigId
+      });
+      setDefaultModelDialogOpen(true);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载默认模型设置失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function toggleProviderModels(providerId: string) {
     setExpandedProviderIds((current) => {
       const next = new Set(current);
@@ -457,6 +520,24 @@ export function ProvidersPage() {
     }
   }
 
+  async function submitDefaultModelSettings(values: DefaultModelFormValues) {
+    setSaving(true);
+
+    try {
+      await updateDefaultModelSettings({
+        chatModelConfigId: values.chatModelConfigId ?? null,
+        embeddingModelConfigId: values.embeddingModelConfigId ?? null
+      });
+      message.success("默认模型设置已保存");
+      setDefaultModelDialogOpen(false);
+      defaultModelForm.resetFields();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存默认模型设置失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleTestProvider(providerId: string) {
     setLoading(true);
 
@@ -516,7 +597,7 @@ export function ProvidersPage() {
           <p>选择一个为应用提供能力的语言模型。在工作室中开始构建前，至少需要配置一个。</p>
         </div>
         <div className="providersHeroActions">
-          <Button onClick={() => message.info("默认模型设置将在 Chat 模块接入后开放")}>
+          <Button onClick={() => void openDefaultModelDialog()}>
             默认模型设置
           </Button>
           <Button onClick={() => void refresh()}>自动更新 <span className="latestBadge">最新</span></Button>
@@ -657,6 +738,41 @@ export function ProvidersPage() {
           </Card>
         ))}
       </div>
+
+      <Modal
+        destroyOnHidden
+        confirmLoading={saving}
+        okText="保存"
+        open={defaultModelDialogOpen}
+        title="默认模型设置"
+        width={620}
+        onCancel={() => {
+          setDefaultModelDialogOpen(false);
+          defaultModelForm.resetFields();
+        }}
+        onOk={() => defaultModelForm.submit()}
+      >
+        <Form<DefaultModelFormValues>
+          form={defaultModelForm}
+          layout="vertical"
+          onFinish={(values) => void submitDefaultModelSettings(values)}
+        >
+          <Form.Item label="默认 Chat 模型" name="chatModelConfigId">
+            <Select
+              allowClear
+              options={chatModelOptions}
+              placeholder="请选择默认 Chat 模型"
+            />
+          </Form.Item>
+          <Form.Item label="默认 Embedding 模型" name="embeddingModelConfigId">
+            <Select
+              allowClear
+              options={embeddingModelOptions}
+              placeholder="请选择默认 Embedding 模型"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         destroyOnHidden

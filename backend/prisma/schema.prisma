@@ -55,11 +55,27 @@ model ModelConfig {
   deletedAt      DateTime?       @map("deleted_at") @db.Timestamptz(6)
   provider       ModelProvider   @relation(fields: [providerId], references: [id])
   agents         Agent[]
+  defaultChatSettings      DefaultModelSetting[] @relation("DefaultChatModel")
+  defaultEmbeddingSettings DefaultModelSetting[] @relation("DefaultEmbeddingModel")
 
   @@index([providerId], map: "idx_model_configs_provider_id")
   @@index([modelType, enabled], map: "idx_model_configs_type_enabled")
   @@index([createdAt(sort: Desc)], map: "idx_model_configs_created_at")
   @@map("model_configs")
+}
+
+model DefaultModelSetting {
+  id                     String       @id @default("global")
+  chatModelConfigId      String?      @map("chat_model_config_id") @db.Uuid
+  embeddingModelConfigId String?      @map("embedding_model_config_id") @db.Uuid
+  createdAt              DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  chatModelConfig        ModelConfig? @relation("DefaultChatModel", fields: [chatModelConfigId], references: [id], onDelete: SetNull)
+  embeddingModelConfig   ModelConfig? @relation("DefaultEmbeddingModel", fields: [embeddingModelConfigId], references: [id], onDelete: SetNull)
+
+  @@index([chatModelConfigId], map: "idx_default_model_settings_chat_model_config_id")
+  @@index([embeddingModelConfigId], map: "idx_default_model_settings_embedding_model_config_id")
+  @@map("default_model_settings")
 }
 
 model Agent {

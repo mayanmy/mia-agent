@@ -78,6 +78,19 @@ export type ModelCapabilityCheckResult = {
   message: string;
 };
 
+export type DefaultModelSettings = {
+  chatModelConfigId: string | null;
+  embeddingModelConfigId: string | null;
+  chatModelConfig: ModelConfigListItem | null;
+  embeddingModelConfig: ModelConfigListItem | null;
+  updatedAt: string | null;
+};
+
+export type DefaultModelSettingsPayload = {
+  chatModelConfigId: string | null;
+  embeddingModelConfigId: string | null;
+};
+
 export function listProviders(
   page = 1,
   pageSize = 20,
@@ -173,5 +186,18 @@ export function checkModelCapability(
 export function deleteModelConfig(id: string): Promise<null> {
   return request<null>(`/api/v1/model-configs/${id}`, {
     method: "DELETE",
+  });
+}
+
+export function getDefaultModelSettings(): Promise<DefaultModelSettings> {
+  return request<DefaultModelSettings>("/api/v1/model-defaults");
+}
+
+export function updateDefaultModelSettings(
+  payload: DefaultModelSettingsPayload,
+): Promise<DefaultModelSettings> {
+  return request<DefaultModelSettings>("/api/v1/model-defaults", {
+    method: "PUT",
+    body: JSON.stringify(payload),
   });
 }
