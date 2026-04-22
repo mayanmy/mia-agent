@@ -640,6 +640,12 @@ button:disabled {
   background: #e5e7eb;
 }
 
+.formLabelWithAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .modalHelpRow {
   margin-top: 6px;
   color: #0b5fff;

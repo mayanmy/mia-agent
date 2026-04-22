@@ -413,6 +413,7 @@ export function ProvidersPage() {
       baseUrl: provider?.baseUrl ?? ""
     });
     setModelDialogOpen(true);
+    void syncProviderModels(providerId);
   }
 
   function openEditModel(config: ModelConfigListItem) {
@@ -920,7 +921,23 @@ export function ProvidersPage() {
             </div>
           )}
           <Form.Item
-            label="模型名称"
+            label={
+              <span className="formLabelWithAction">
+                <span>模型名称</span>
+                <Button
+                  loading={syncingModels}
+                  size="small"
+                  type="default"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void syncProviderModels();
+                  }}
+                >
+                  同步模型列表
+                </Button>
+              </span>
+            }
             name="modelName"
             rules={[{ required: true, message: "请输入模型名称" }]}
           >
@@ -930,14 +947,6 @@ export function ProvidersPage() {
               onChange={handleRemoteModelChange}
             />
           </Form.Item>
-          <Button
-            loading={syncingModels}
-            size="small"
-            type="default"
-            onClick={() => void syncProviderModels()}
-          >
-            同步模型列表
-          </Button>
           <Form.Item
             label="模型类型"
             name="modelType"
