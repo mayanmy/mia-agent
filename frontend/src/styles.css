@@ -216,6 +216,108 @@ h2 {
   margin-top: 22px;
 }
 
+.chatWorkspace {
+  max-width: 1280px;
+}
+
+.chatLayout {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.chatSide {
+  min-height: 520px;
+}
+
+.chatSideBody {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.chatAgentMeta {
+  display: grid;
+  gap: 8px;
+}
+
+.chatAgentName {
+  color: #111827;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.chatAgentModel {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.chatPanel {
+  display: grid;
+  min-height: 640px;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.chatMessages {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+}
+
+.chatMessage {
+  display: grid;
+  gap: 6px;
+  max-width: 78%;
+}
+
+.chatMessage.user {
+  justify-self: end;
+}
+
+.chatMessage.assistant {
+  justify-self: start;
+}
+
+.chatMessageRole {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chatMessage.user .chatMessageRole {
+  text-align: right;
+}
+
+.chatMessageBubble {
+  border: 1px solid #dde3eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  line-height: 1.7;
+  padding: 12px 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chatMessage.user .chatMessageBubble {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.chatComposer {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  border-top: 1px solid #e5e7eb;
+  padding: 16px;
+}
+
 .twoColumnGrid {
   display: grid;
   gap: 18px;

@@ -1,6 +1,7 @@
 import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 
 import { AgentsPage } from "../features/agents/AgentsPage";
+import { ChatPage } from "../features/chat/ChatPage";
 import { ProvidersPage } from "../features/model-providers/ProvidersPage";
 import { HealthPage } from "../pages/HealthPage";
 
@@ -59,7 +60,7 @@ export function App() {
           />
           <Route path="/agents" element={<AgentsPage />} />
           <Route path="/knowledge" element={<PlaceholderPage title={navConfig.knowledge.label} />} />
-          <Route path="/chat" element={<PlaceholderPage title={navConfig.chat.label} />} />
+          <Route path="/chat" element={<ChatPage />} />
           <Route path="/logs" element={<PlaceholderPage title={navConfig.logs.label} />} />
           <Route path="*" element={<Navigate replace to="/agents" />} />
         </Routes>

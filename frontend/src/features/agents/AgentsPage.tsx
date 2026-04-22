@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Button,
   Checkbox,
@@ -100,6 +101,7 @@ function toFormValues(agent: AgentDetail): AgentFormValues {
 }
 
 export function AgentsPage() {
+  const navigate = useNavigate();
   const [form] = Form.useForm<AgentFormValues>();
   const [agents, setAgents] = useState<AgentTableItem[]>([]);
   const [providers, setProviders] = useState<ProviderListItem[]>([]);
@@ -175,9 +177,12 @@ export function AgentsPage() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 150,
+      width: 220,
       render: (_, record) => (
         <Space>
+          <Button type="link" onClick={() => navigate(`/chat?agentId=${record.id}`)}>
+            测试对话
+          </Button>
           <Button type="link" onClick={() => void openEditDialog(record.id)}>
             编辑
           </Button>
