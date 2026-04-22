@@ -4,6 +4,7 @@ import { ModelConfigType, Prisma } from '@prisma/client';
 import { AppError, ErrorCodes } from '../../core/errors';
 import { createPageResult, normalizePageQuery } from '../../core/pagination';
 import { PageResult } from '../../core/result';
+import { ModelProvidersService } from '../model-providers/model-providers.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AgentCreateDto,
@@ -42,7 +43,7 @@ type AgentCreateData = {
   name: string;
   description: string;
   systemPrompt: string;
-  modelConfigId: string;
+  modelConfigId: string | null;
   temperature: number;
   maxTokens: number | null;
   timeoutSeconds: number;
@@ -51,11 +52,16 @@ type AgentCreateData = {
   enabled: boolean;
 };
 
-type AgentUpdateData = Partial<AgentCreateData>;
+type AgentUpdateData = Partial<Omit<AgentCreateData, 'modelConfigId'>> & {
+  modelConfigId?: string;
+};
 
 @Injectable()
 export class AgentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly modelProvidersService: ModelProvidersService,
+  ) {}
 
   async listAgents(query: AgentQueryDto): Promise<PageResult<AgentListItem>> {
     const page = normalizePageQuery(query);
@@ -97,7 +103,8 @@ export class AgentsService {
 
   async createAgent(payload: AgentCreateDto): Promise<AgentDetail> {
     const data = this.validateAgentCreate(payload);
-    await this.ensureChatModelConfig(data.modelConfigId);
+    const modelConfigId = await this.resolveCreateModelConfigId(data.modelConfigId);
+    await this.ensureChatModelConfig(modelConfigId);
 
     const agent = await this.prisma.agent.create({
       data: {
@@ -105,7 +112,7 @@ export class AgentsService {
         description: data.description,
         systemPrompt: data.systemPrompt,
         modelConfig: {
-          connect: { id: data.modelConfigId },
+          connect: { id: modelConfigId },
         },
         temperature: data.temperature,
         maxTokens: data.maxTokens,
@@ -277,7 +284,7 @@ export class AgentsService {
       name: this.requireNonEmptyString(payload.name, 'name'),
       description: this.normalizeDescription(payload.description),
       systemPrompt: this.requireNonEmptyString(payload.systemPrompt, 'systemPrompt'),
-      modelConfigId: this.requireNonEmptyString(payload.modelConfigId, 'modelConfigId'),
+      modelConfigId: this.normalizeOptionalId(payload.modelConfigId),
       temperature: this.normalizeTemperature(payload.temperature),
       maxTokens: this.normalizeMaxTokens(payload.maxTokens),
       timeoutSeconds: this.normalizeTimeout(payload.timeoutSeconds),
@@ -326,6 +333,14 @@ export class AgentsService {
     }
 
     return value.trim();
+  }
+
+  private normalizeOptionalId(value: unknown): string | null {
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+
+    return this.requireNonEmptyString(value, 'modelConfigId');
   }
 
   private normalizeDescription(value: unknown): string {
@@ -470,6 +485,23 @@ export class AgentsService {
     if (!existing) {
       throw new AppError(ErrorCodes.agent.notFound, 'agent not found', HttpStatus.NOT_FOUND);
     }
+  }
+
+  private async resolveCreateModelConfigId(modelConfigId: string | null): Promise<string> {
+    if (modelConfigId) {
+      return modelConfigId;
+    }
+
+    const defaultModelConfigId = await this.modelProvidersService.getDefaultChatModelConfigId();
+
+    if (!defaultModelConfigId) {
+      throw new AppError(
+        ErrorCodes.agent.invalidModelConfig,
+        'default chat model is not configured',
+      );
+    }
+
+    return defaultModelConfigId;
   }
 
   private async ensureChatModelConfig(id: string): Promise<void> {

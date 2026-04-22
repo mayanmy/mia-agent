@@ -315,6 +315,11 @@ export class ModelProvidersService {
     return this.toDefaultModelSettings(settings);
   }
 
+  async getDefaultChatModelConfigId(): Promise<string | null> {
+    const settings = await this.findDefaultModelSettings();
+    return settings?.chatModelConfigId ?? null;
+  }
+
   async updateDefaultModelSettings(
     payload: DefaultModelSettingsUpdateDto,
   ): Promise<DefaultModelSettings> {

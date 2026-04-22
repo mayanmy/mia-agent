@@ -18,7 +18,7 @@ import {
 } from "antd";
 import type { TableProps } from "antd";
 
-import { listModelConfigs, listProviders } from "../model-providers/api";
+import { getDefaultModelSettings, listModelConfigs, listProviders } from "../model-providers/api";
 import type { ModelConfigListItem, ProviderListItem } from "../model-providers/api";
 import {
   createAgent,
@@ -104,6 +104,7 @@ export function AgentsPage() {
   const [agents, setAgents] = useState<AgentTableItem[]>([]);
   const [providers, setProviders] = useState<ProviderListItem[]>([]);
   const [modelConfigs, setModelConfigs] = useState<ModelConfigListItem[]>([]);
+  const [defaultChatModelConfigId, setDefaultChatModelConfigId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -205,10 +206,12 @@ export function AgentsPage() {
         listProviders(1, 100),
         listModelConfigs(1, 100)
       ]);
+      const defaultSettings = await getDefaultModelSettings().catch(() => null);
 
       setAgents(agentPage.list.map((agent) => ({ ...agent, toolCount: 0 })));
       setProviders(providerPage.list);
       setModelConfigs(modelConfigPage.list);
+      setDefaultChatModelConfigId(defaultSettings?.chatModelConfigId ?? null);
       setPagination({
         page: agentPage.page,
         pageSize: agentPage.pageSize,
@@ -229,9 +232,24 @@ export function AgentsPage() {
     setEditingId(null);
     form.setFieldsValue({
       ...defaultFormValues,
-      modelConfigId: modelOptions[0]?.options[0]?.value || ""
+      modelConfigId: resolveDefaultChatModelConfigId()
     });
     setDialogOpen(true);
+  }
+
+  function resolveDefaultChatModelConfigId(): string {
+    const defaultModelAvailable = modelConfigs.some(
+      (config) =>
+        config.id === defaultChatModelConfigId &&
+        config.modelType === "CHAT" &&
+        config.enabled
+    );
+
+    if (defaultChatModelConfigId && defaultModelAvailable) {
+      return defaultChatModelConfigId;
+    }
+
+    return modelOptions[0]?.options[0]?.value || "";
   }
 
   async function openEditDialog(id: string) {
