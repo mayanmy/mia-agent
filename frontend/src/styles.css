@@ -238,24 +238,44 @@ h2 {
 .chatSideBody {
   display: grid;
   gap: 18px;
+  min-width: 0;
   padding: 18px;
+}
+
+.chatAgentSelect {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.chatAgentSelect .ant-select-selector {
+  min-width: 0;
+}
+
+.chatAgentSelect .ant-select-selection-item,
+.chatAgentSelect .ant-select-selection-placeholder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chatAgentMeta {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .chatAgentName {
   color: #111827;
   font-size: 18px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .chatAgentModel {
   color: #64748b;
   font-size: 13px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .chatPanel {

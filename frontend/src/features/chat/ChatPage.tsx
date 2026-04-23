@@ -128,6 +128,7 @@ export function ChatPage() {
           </div>
           <div className="chatSideBody">
             <Select
+              className="chatAgentSelect"
               loading={loadingAgents}
               options={agents.map((agent) => ({
                 label: `${agent.name} · ${agent.providerName} / ${agent.modelName}`,
