@@ -217,17 +217,22 @@ h2 {
 }
 
 .chatWorkspace {
+  display: flex;
+  min-height: calc(100vh - 64px);
+  flex-direction: column;
   max-width: 1280px;
 }
 
 .chatLayout {
   display: grid;
+  flex: 1;
   gap: 18px;
   grid-template-columns: 320px minmax(0, 1fr);
+  min-height: 0;
 }
 
 .chatSide {
-  min-height: 520px;
+  min-height: 0;
 }
 
 .chatSideBody {
@@ -255,8 +260,8 @@ h2 {
 
 .chatPanel {
   display: grid;
-  min-height: 640px;
   grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
 }
 
 .chatMessages {
