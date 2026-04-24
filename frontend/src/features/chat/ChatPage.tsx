@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Button, Empty, Input, Select, Space, Spin, Tag, message } from "antd";
+import { Button, Empty, Input, Select, Space, Tag, message } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
-import { createChatCompletion, type ChatMessage } from "./api";
+import { streamChatCompletion, type ChatMessage } from "./api";
 
 type ChatUiMessage = ChatMessage & {
   id: string;
@@ -14,6 +14,7 @@ function createMessageId(): string {
 }
 
 export function ChatPage() {
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState(searchParams.get("agentId") || "");
@@ -76,35 +77,80 @@ export function ChatPage() {
       role: "user",
       content
     };
+    const assistantMessageId = createMessageId();
     const history = messages.map(({ role, content: messageContent }) => ({
       role,
       content: messageContent
     }));
 
-    setMessages((current) => [...current, nextUserMessage]);
+    setMessages((current) => [
+      ...current,
+      nextUserMessage,
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        content: ""
+      }
+    ]);
     setInput("");
     setSending(true);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
-      const result = await createChatCompletion({
-        agentId: selectedAgentId,
-        message: content,
-        history
-      });
-
-      setMessages((current) => [
-        ...current,
+      await streamChatCompletion(
         {
-          id: createMessageId(),
-          role: "assistant",
-          content: result.content || ""
+          agentId: selectedAgentId,
+          message: content,
+          history
+        },
+        {
+          signal: controller.signal,
+          onEvent: (event) => {
+            if (event.type === "token" && event.data.content) {
+              appendAssistantToken(assistantMessageId, event.data.content);
+            }
+
+            if (event.type === "error") {
+              throw new Error(event.data.message || "对话失败");
+            }
+          }
         }
-      ]);
+      );
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "对话失败");
+      if (error instanceof DOMException && error.name === "AbortError") {
+        appendAssistantToken(assistantMessageId, "\n\n已停止生成。");
+      } else {
+        message.error(error instanceof Error ? error.message : "对话失败");
+        removeAssistantMessageIfEmpty(assistantMessageId);
+      }
     } finally {
+      abortControllerRef.current = null;
       setSending(false);
     }
+  }
+
+  function appendAssistantToken(messageId: string, token: string) {
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === messageId
+          ? {
+              ...item,
+              content: `${item.content}${token}`
+            }
+          : item
+      )
+    );
+  }
+
+  function removeAssistantMessageIfEmpty(messageId: string) {
+    setMessages((current) =>
+      current.filter((item) => item.id !== messageId || item.content.trim().length > 0)
+    );
+  }
+
+  function handleStop() {
+    abortControllerRef.current?.abort();
   }
 
   return (
@@ -160,18 +206,12 @@ export function ChatPage() {
               messages.map((item) => (
                 <div className={`chatMessage ${item.role}`} key={item.id}>
                   <div className="chatMessageRole">{item.role === "user" ? "你" : "Agent"}</div>
-                  <div className="chatMessageBubble">{item.content}</div>
+                  <div className="chatMessageBubble">
+                    {item.content || (item.role === "assistant" && sending ? "正在生成..." : "")}
+                  </div>
                 </div>
               ))
             )}
-            {sending ? (
-              <div className="chatMessage assistant">
-                <div className="chatMessageRole">Agent</div>
-                <div className="chatMessageBubble">
-                  <Spin size="small" /> 正在生成...
-                </div>
-              </div>
-            ) : null}
           </div>
           <div className="chatComposer">
             <Input.TextArea
@@ -188,12 +228,19 @@ export function ChatPage() {
               }}
             />
             <Button
-              disabled={!selectedAgentId || !input.trim()}
-              loading={sending}
+              disabled={!selectedAgentId || (!sending && !input.trim())}
+              danger={sending}
               type="primary"
-              onClick={() => void handleSend()}
+              onClick={() => {
+                if (sending) {
+                  handleStop();
+                  return;
+                }
+
+                void handleSend();
+              }}
             >
-              发送
+              {sending ? "停止" : "发送"}
             </Button>
           </div>
         </div>

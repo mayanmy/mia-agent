@@ -13,6 +13,7 @@ export type ChatCompletionRequest = {
   temperature?: number;
   maxTokens?: number | null;
   timeoutSeconds?: number;
+  signal?: AbortSignal;
 };
 
 export type ChatCompletionResponse = {

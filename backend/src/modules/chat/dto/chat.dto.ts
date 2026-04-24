@@ -16,3 +16,10 @@ export type ChatCompletionResult = {
   providerName: string;
   content: string;
 };
+
+export type ChatStreamEventType = 'message_start' | 'token' | 'message_end' | 'error';
+
+export type ChatStreamEvent = {
+  type: ChatStreamEventType;
+  data: Record<string, unknown>;
+};

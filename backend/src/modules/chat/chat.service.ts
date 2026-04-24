@@ -4,7 +4,12 @@ import { AppError, ErrorCodes } from '../../core/errors';
 import { AgentsService } from '../agents/agents.service';
 import { ModelProvidersService } from '../model-providers/model-providers.service';
 import { ChatMessage } from '../model-providers/dto/llm.dto';
-import { ChatCompletionDto, ChatCompletionResult, ChatMessageDto } from './dto/chat.dto';
+import {
+  ChatCompletionDto,
+  ChatCompletionResult,
+  ChatMessageDto,
+  ChatStreamEvent,
+} from './dto/chat.dto';
 
 @Injectable()
 export class ChatService {
@@ -40,6 +45,71 @@ export class ChatService {
     };
   }
 
+  async *streamCompletion(
+    payload: ChatCompletionDto,
+    signal?: AbortSignal,
+  ): AsyncIterable<ChatStreamEvent> {
+    const agentId = this.requireNonEmptyString(payload.agentId, 'agentId');
+    const message = this.requireNonEmptyString(payload.message, 'message');
+    const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
+    const history = this.normalizeHistory(payload.history, agent.historyTurns);
+
+    yield {
+      type: 'message_start',
+      data: {
+        agentId: agent.agentId,
+        modelConfigId: agent.modelConfigId,
+        modelName: agent.modelName,
+        providerName: agent.providerType,
+      },
+    };
+
+    for await (const chunk of this.modelProvidersService.streamChatCompletion({
+      modelConfigId: agent.modelConfigId,
+      messages: [
+        { role: 'system', content: agent.systemPrompt },
+        ...history,
+        { role: 'user', content: message },
+      ],
+      temperature: agent.temperature,
+      maxTokens: agent.maxTokens,
+      timeoutSeconds: agent.timeoutSeconds,
+      signal,
+    })) {
+      if (chunk.type === 'token' && chunk.content) {
+        yield {
+          type: 'token',
+          data: {
+            content: chunk.content,
+          },
+        };
+      }
+
+      if (chunk.type === 'done') {
+        yield {
+          type: 'message_end',
+          data: {},
+        };
+        return;
+      }
+
+      if (chunk.type === 'error') {
+        yield {
+          type: 'error',
+          data: {
+            message: chunk.errorMessage || 'model stream failed',
+          },
+        };
+        return;
+      }
+    }
+
+    yield {
+      type: 'message_end',
+      data: {},
+    };
+  }
+
   private normalizeHistory(history: ChatMessageDto[] | undefined, maxTurns: number): ChatMessage[] {
     if (!Array.isArray(history) || maxTurns <= 0) {
       return [];
@@ -53,11 +123,13 @@ export class ChatService {
         return [];
       }
 
-      return [{
-        role,
-        content,
-      }];
-      });
+      return [
+        {
+          role,
+          content,
+        },
+      ];
+    });
 
     return normalized.slice(-maxTurns * 2);
   }

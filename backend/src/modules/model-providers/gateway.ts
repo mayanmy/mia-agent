@@ -36,6 +36,8 @@ export class ModelProvidersGateway {
   ): Promise<ChatCompletionResponse> {
     const { config, messages, timeoutMs } = await this.prepareChatCall(request);
     const controller = new AbortController();
+    const abort = () => controller.abort();
+    request.signal?.addEventListener('abort', abort, { once: true });
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
@@ -49,6 +51,7 @@ export class ModelProvidersGateway {
       throw this.normalizeProviderError(error);
     } finally {
       clearTimeout(timeout);
+      request.signal?.removeEventListener('abort', abort);
     }
   }
 
@@ -57,6 +60,8 @@ export class ModelProvidersGateway {
   ): AsyncIterable<ChatStreamChunk> {
     const { config, messages, timeoutMs } = await this.prepareChatCall(request);
     const controller = new AbortController();
+    const abort = () => controller.abort();
+    request.signal?.addEventListener('abort', abort, { once: true });
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
@@ -70,6 +75,7 @@ export class ModelProvidersGateway {
       throw this.normalizeProviderError(error);
     } finally {
       clearTimeout(timeout);
+      request.signal?.removeEventListener('abort', abort);
     }
   }
 
