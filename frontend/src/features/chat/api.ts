@@ -21,7 +21,7 @@ export type ChatCompletionResult = {
   content: string;
 };
 
-export type ChatStreamEventType = "message_start" | "token" | "message_end" | "error";
+export type ChatStreamEventType = "message_start" | "token" | "message_end" | "error" | "ping";
 
 export type ChatStreamEvent = {
   type: ChatStreamEventType;

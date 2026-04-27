@@ -31,6 +31,10 @@ export class ChatController {
     response.setHeader("Cache-Control", "no-cache, no-transform");
     response.setHeader("Connection", "keep-alive");
     response.flushHeaders?.();
+    const heartbeat = setInterval(() => {
+      response.write("event: ping\n");
+      response.write(`data: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+    }, 15000);
 
     try {
       for await (const event of this.chatService.streamCompletion(
@@ -49,6 +53,7 @@ export class ChatController {
         })}\n\n`,
       );
     } finally {
+      clearInterval(heartbeat);
       request.off("aborted", abort);
       response.off("close", abort);
       response.end();
