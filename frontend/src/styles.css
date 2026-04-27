@@ -218,9 +218,9 @@ h2 {
 
 .chatWorkspace {
   display: flex;
-  min-height: calc(100vh - 64px);
   flex-direction: column;
   max-width: 1280px;
+  height: calc(100vh - 64px);
 }
 
 .chatLayout {
@@ -290,7 +290,9 @@ h2 {
   gap: 16px;
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 20px;
+  scroll-behavior: smooth;
 }
 
 .chatMessage {

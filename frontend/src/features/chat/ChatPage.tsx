@@ -15,6 +15,7 @@ function createMessageId(): string {
 
 export function ChatPage() {
   const abortControllerRef = useRef<AbortController | null>(null);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState(searchParams.get("agentId") || "");
@@ -31,6 +32,18 @@ export function ChatPage() {
   useEffect(() => {
     void refreshAgents();
   }, []);
+
+  useEffect(() => {
+    const messagesElement = messagesRef.current;
+
+    if (!messagesElement) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      messagesElement.scrollTop = messagesElement.scrollHeight;
+    });
+  }, [messages, sending]);
 
   async function refreshAgents() {
     setLoadingAgents(true);
@@ -199,7 +212,7 @@ export function ChatPage() {
         </aside>
 
         <div className="chatPanel panel">
-          <div className="chatMessages">
+          <div className="chatMessages" ref={messagesRef}>
             {messages.length === 0 ? (
               <Empty description="发送一条消息测试 Agent" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
