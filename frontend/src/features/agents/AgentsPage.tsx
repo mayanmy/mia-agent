@@ -21,12 +21,15 @@ import type { TableProps } from "antd";
 
 import { getDefaultModelSettings, listModelConfigs, listProviders } from "../model-providers/api";
 import type { ModelConfigListItem, ProviderListItem } from "../model-providers/api";
+import { listTools, type ToolListItem } from "../tools/api";
 import {
   createAgent,
   deleteAgent,
   getAgent,
+  getAgentTools,
   listAgents,
   updateAgent,
+  updateAgentTools,
   type AgentDetail,
   type AgentListItem,
   type AgentPayload
@@ -60,12 +63,6 @@ const defaultFormValues: AgentFormValues = {
   toolIds: []
 };
 
-const builtinTools = [
-  { label: "HTTP 请求", value: "http_request" },
-  { label: "计算器", value: "calculator" },
-  { label: "当前时间", value: "current_time" }
-];
-
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
@@ -95,8 +92,8 @@ function toFormValues(agent: AgentDetail): AgentFormValues {
     temperature: agent.temperature,
     maxTokens: agent.maxTokens,
     historyTurns: agent.historyTurns,
-    enabled: agent.enabled,
-    toolIds: []
+  enabled: agent.enabled,
+    toolIds: agent.toolIds
   };
 }
 
@@ -106,6 +103,7 @@ export function AgentsPage() {
   const [agents, setAgents] = useState<AgentTableItem[]>([]);
   const [providers, setProviders] = useState<ProviderListItem[]>([]);
   const [modelConfigs, setModelConfigs] = useState<ModelConfigListItem[]>([]);
+  const [tools, setTools] = useState<ToolListItem[]>([]);
   const [defaultChatModelConfigId, setDefaultChatModelConfigId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -129,6 +127,21 @@ export function AgentsPage() {
       }))
       .filter((group) => group.options.length > 0);
   }, [modelConfigs, providers]);
+
+  const toolOptions = useMemo(
+    () =>
+      tools.map((tool) => ({
+        label: (
+          <div className="toolOption">
+            <div className="toolOptionName">{tool.name}</div>
+            <div className="toolOptionDescription">{tool.description}</div>
+          </div>
+        ),
+        value: tool.id,
+        disabled: !tool.enabled
+      })),
+    [tools]
+  );
 
   const columns: TableProps<AgentTableItem>["columns"] = [
     {
@@ -211,11 +224,15 @@ export function AgentsPage() {
         listProviders(1, 100),
         listModelConfigs(1, 100)
       ]);
-      const defaultSettings = await getDefaultModelSettings().catch(() => null);
+      const [defaultSettings, toolList] = await Promise.all([
+        getDefaultModelSettings().catch(() => null),
+        listTools()
+      ]);
 
-      setAgents(agentPage.list.map((agent) => ({ ...agent, toolCount: 0 })));
+      setAgents(agentPage.list);
       setProviders(providerPage.list);
       setModelConfigs(modelConfigPage.list);
+      setTools(toolList);
       setDefaultChatModelConfigId(defaultSettings?.chatModelConfigId ?? null);
       setPagination({
         page: agentPage.page,
@@ -261,9 +278,12 @@ export function AgentsPage() {
     setLoading(true);
 
     try {
-      const agent = await getAgent(id);
+      const [agent, bindings] = await Promise.all([getAgent(id), getAgentTools(id)]);
       setEditingId(agent.id);
-      form.setFieldsValue(toFormValues(agent));
+      form.setFieldsValue({
+        ...toFormValues(agent),
+        toolIds: bindings.toolIds
+      });
       setDialogOpen(true);
     } catch (error) {
       message.error(error instanceof Error ? error.message : "加载 Agent 详情失败");
@@ -277,12 +297,20 @@ export function AgentsPage() {
 
     try {
       const payload = toPayload(values);
+      let agentId = editingId;
+
       if (editingId) {
-        await updateAgent(editingId, payload);
+        const agent = await updateAgent(editingId, payload);
+        agentId = agent.id;
         message.success("Agent 已更新");
       } else {
-        await createAgent(payload);
+        const agent = await createAgent(payload);
+        agentId = agent.id;
         message.success("Agent 已创建");
+      }
+
+      if (agentId) {
+        await updateAgentTools(agentId, values.toolIds ?? []);
       }
 
       setDialogOpen(false);
@@ -426,7 +454,7 @@ export function AgentsPage() {
                 label: "工具绑定",
                 children: (
                   <Form.Item name="toolIds">
-                    <Checkbox.Group className="toolCheckboxGroup" options={builtinTools} />
+                    <Checkbox.Group className="toolCheckboxGroup" options={toolOptions} />
                   </Form.Item>
                 )
               }

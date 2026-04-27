@@ -10,6 +10,7 @@ export type AgentListItem = {
   modelConfigId: string;
   modelName: string;
   providerName: string;
+  toolCount: number;
   temperature: number;
   enabled: boolean;
   createdAt: string;
@@ -32,6 +33,7 @@ export type AgentDetail = AgentListItem & {
   timeoutSeconds: number;
   historyTurns: number;
   generationParams: AgentGenerationParams | null;
+  toolIds: string[];
   modelConfig: AgentModelConfigSummary;
 };
 
@@ -71,5 +73,24 @@ export function updateAgent(id: string, payload: AgentPayload): Promise<AgentDet
 export function deleteAgent(id: string): Promise<null> {
   return request<null>(`/api/v1/agents/${id}`, {
     method: "DELETE"
+  });
+}
+
+export type AgentToolBindingResult = {
+  agentId: string;
+  toolIds: string[];
+};
+
+export function getAgentTools(id: string): Promise<AgentToolBindingResult> {
+  return request<AgentToolBindingResult>(`/api/v1/agents/${id}/tools`);
+}
+
+export function updateAgentTools(
+  id: string,
+  toolIds: string[]
+): Promise<AgentToolBindingResult> {
+  return request<AgentToolBindingResult>(`/api/v1/agents/${id}/tools`, {
+    method: "PUT",
+    body: JSON.stringify({ toolIds })
   });
 }

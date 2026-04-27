@@ -345,6 +345,22 @@ h2 {
   padding: 16px;
 }
 
+.toolOption {
+  display: grid;
+  gap: 4px;
+  line-height: 1.4;
+}
+
+.toolOptionName {
+  color: #111827;
+  font-weight: 600;
+}
+
+.toolOptionDescription {
+  color: #64748b;
+  font-size: 12px;
+}
+
 .twoColumnGrid {
   display: grid;
   gap: 18px;
