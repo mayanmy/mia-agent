@@ -124,19 +124,16 @@ export class ChatService {
     const normalized = history.flatMap((item): ChatMessage[] => {
       const role = item?.role;
       const content = typeof item?.content === 'string' ? item.content.trim() : '';
-      const images = role === 'user' ? this.normalizeImages(item?.images) : [];
 
       if (
         (role !== 'user' && role !== 'assistant') ||
-        (content.length === 0 && images.length === 0)
+        content.length === 0
       ) {
         return [];
       }
 
       return [
-        role === 'user'
-          ? this.buildUserMessage(this.normalizeUserMessage(content, images), images)
-          : {
+        {
           role,
           content,
         },

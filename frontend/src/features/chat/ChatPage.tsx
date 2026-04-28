@@ -97,10 +97,9 @@ export function ChatPage() {
       images: currentImages
     };
     const assistantMessageId = createMessageId();
-    const history = messages.map(({ role, content: messageContent, images: messageImages }) => ({
+    const history = messages.map(({ role, content: messageContent }) => ({
       role,
-      content: messageContent,
-      images: messageImages
+      content: messageContent
     }));
 
     setMessages((current) => [

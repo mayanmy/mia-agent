@@ -70,8 +70,12 @@ export async function streamChatCompletion(
     signal: options.signal
   });
 
-  if (!response.ok || !response.body) {
+  if (!response.body) {
     throw new Error("流式对话请求失败");
+  }
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
   }
 
   const reader = response.body.getReader();
@@ -104,6 +108,15 @@ export async function streamChatCompletion(
     if (event) {
       options.onEvent(event);
     }
+  }
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const result = (await response.json()) as { message?: string };
+    return result.message || "流式对话请求失败";
+  } catch {
+    return "流式对话请求失败";
   }
 }
 
