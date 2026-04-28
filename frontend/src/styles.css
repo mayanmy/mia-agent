@@ -348,10 +348,42 @@ h2 {
 .chatComposer {
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: end;
   border-top: 1px solid #e5e7eb;
   padding: 16px;
+}
+
+.chatComposerInput {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.chatUploadPreviewList,
+.chatImageGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chatUploadPreview {
+  display: grid;
+  gap: 4px;
+  width: 96px;
+}
+
+.chatUploadPreview img,
+.chatImagePreview {
+  width: 96px;
+  height: 72px;
+  border: 1px solid #dde3eb;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.chatImageGrid {
+  margin-bottom: 10px;
 }
 
 .toolOption {

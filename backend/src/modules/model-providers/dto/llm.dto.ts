@@ -2,9 +2,21 @@ import { ModelProviderType } from '@prisma/client';
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 
+export type ChatContentPart =
+  | {
+      type: 'text';
+      text: string;
+    }
+  | {
+      type: 'image_url';
+      image_url: {
+        url: string;
+      };
+    };
+
 export type ChatMessage = {
   role: ChatRole;
-  content: string;
+  content: string | ChatContentPart[];
 };
 
 export type ChatCompletionRequest = {

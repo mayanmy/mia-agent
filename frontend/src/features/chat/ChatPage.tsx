@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Button, Empty, Input, Select, Space, Tag, message } from "antd";
+import { Button, Empty, Input, Select, Space, Tag, Upload, message } from "antd";
+import type { UploadProps } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
-import { streamChatCompletion, type ChatMessage } from "./api";
+import { streamChatCompletion, type ChatImageAttachment, type ChatMessage } from "./api";
 
 type ChatUiMessage = ChatMessage & {
   id: string;
 };
+
+const maxImageSize = 5 * 1024 * 1024;
 
 function createMessageId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -21,6 +24,7 @@ export function ChatPage() {
   const [selectedAgentId, setSelectedAgentId] = useState(searchParams.get("agentId") || "");
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
   const [input, setInput] = useState("");
+  const [images, setImages] = useState<ChatImageAttachment[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -81,19 +85,22 @@ export function ChatPage() {
       return;
     }
 
-    if (!content) {
+    if (!content && images.length === 0) {
       return;
     }
 
+    const currentImages = images;
     const nextUserMessage: ChatUiMessage = {
       id: createMessageId(),
       role: "user",
-      content
+      content,
+      images: currentImages
     };
     const assistantMessageId = createMessageId();
-    const history = messages.map(({ role, content: messageContent }) => ({
+    const history = messages.map(({ role, content: messageContent, images: messageImages }) => ({
       role,
-      content: messageContent
+      content: messageContent,
+      images: messageImages
     }));
 
     setMessages((current) => [
@@ -106,6 +113,7 @@ export function ChatPage() {
       }
     ]);
     setInput("");
+    setImages([]);
     setSending(true);
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -115,6 +123,7 @@ export function ChatPage() {
         {
           agentId: selectedAgentId,
           message: content,
+          images: currentImages,
           history
         },
         {
@@ -164,6 +173,40 @@ export function ChatPage() {
 
   function handleStop() {
     abortControllerRef.current?.abort();
+  }
+
+  const handleBeforeUpload: UploadProps["beforeUpload"] = async (file) => {
+    if (!file.type?.startsWith("image/")) {
+      message.warning("只能上传图片");
+      return Upload.LIST_IGNORE;
+    }
+
+    if ((file.size ?? 0) > maxImageSize) {
+      message.warning("单张图片不能超过 5MB");
+      return Upload.LIST_IGNORE;
+    }
+
+    if (images.length >= 4) {
+      message.warning("一次最多上传 4 张图片");
+      return Upload.LIST_IGNORE;
+    }
+
+    const dataUrl = await readFileAsDataUrl(file);
+
+    setImages((current) => [
+      ...current,
+      {
+        name: file.name,
+        mimeType: file.type || "image/png",
+        dataUrl
+      }
+    ]);
+
+    return false;
+  };
+
+  function removeImage(dataUrl: string) {
+    setImages((current) => current.filter((item) => item.dataUrl !== dataUrl));
   }
 
   return (
@@ -220,6 +263,13 @@ export function ChatPage() {
                 <div className={`chatMessage ${item.role}`} key={item.id}>
                   <div className="chatMessageRole">{item.role === "user" ? "你" : "Agent"}</div>
                   <div className="chatMessageBubble">
+                    {item.images?.length ? (
+                      <div className="chatImageGrid">
+                        {item.images.map((image) => (
+                          <img alt={image.name} className="chatImagePreview" key={image.dataUrl} src={image.dataUrl} />
+                        ))}
+                      </div>
+                    ) : null}
                     {item.content || (item.role === "assistant" && sending ? "正在生成..." : "")}
                   </div>
                 </div>
@@ -227,21 +277,44 @@ export function ChatPage() {
             )}
           </div>
           <div className="chatComposer">
-            <Input.TextArea
-              autoSize={{ minRows: 2, maxRows: 6 }}
+            <div className="chatComposerInput">
+              {images.length > 0 ? (
+                <div className="chatUploadPreviewList">
+                  {images.map((image) => (
+                    <div className="chatUploadPreview" key={image.dataUrl}>
+                      <img alt={image.name} src={image.dataUrl} />
+                      <Button size="small" type="text" onClick={() => removeImage(image.dataUrl)}>
+                        移除
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <Input.TextArea
+                autoSize={{ minRows: 2, maxRows: 6 }}
+                disabled={!selectedAgentId || sending}
+                placeholder="输入消息，测试当前 Agent 的真实模型调用"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onPressEnter={(event) => {
+                  if (!event.shiftKey) {
+                    event.preventDefault();
+                    void handleSend();
+                  }
+                }}
+              />
+            </div>
+            <Upload
+              accept="image/*"
+              beforeUpload={handleBeforeUpload}
               disabled={!selectedAgentId || sending}
-              placeholder="输入消息，测试当前 Agent 的真实模型调用"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onPressEnter={(event) => {
-                if (!event.shiftKey) {
-                  event.preventDefault();
-                  void handleSend();
-                }
-              }}
-            />
+              maxCount={4}
+              showUploadList={false}
+            >
+              <Button disabled={!selectedAgentId || sending}>上传图片</Button>
+            </Upload>
             <Button
-              disabled={!selectedAgentId || (!sending && !input.trim())}
+              disabled={!selectedAgentId || (!sending && !input.trim() && images.length === 0)}
               danger={sending}
               type="primary"
               onClick={() => {
@@ -260,4 +333,14 @@ export function ChatPage() {
       </div>
     </section>
   );
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("读取图片失败"));
+    reader.readAsDataURL(file);
+  });
 }

@@ -1,11 +1,19 @@
 export type ChatMessageDto = {
   role: 'user' | 'assistant';
   content: string;
+  images?: ChatImageAttachmentDto[];
+};
+
+export type ChatImageAttachmentDto = {
+  name: string;
+  mimeType: string;
+  dataUrl: string;
 };
 
 export type ChatCompletionDto = {
   agentId?: string;
   message?: string;
+  images?: ChatImageAttachmentDto[];
   history?: ChatMessageDto[];
 };
 

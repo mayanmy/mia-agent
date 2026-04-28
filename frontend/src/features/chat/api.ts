@@ -2,14 +2,22 @@ import { request } from "../../shared/api/client";
 
 export type ChatRole = "user" | "assistant";
 
+export type ChatImageAttachment = {
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+};
+
 export type ChatMessage = {
   role: ChatRole;
   content: string;
+  images?: ChatImageAttachment[];
 };
 
 export type ChatCompletionPayload = {
   agentId: string;
   message: string;
+  images: ChatImageAttachment[];
   history: ChatMessage[];
 };
 

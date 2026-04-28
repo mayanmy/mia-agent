@@ -144,16 +144,52 @@ export class ModelProvidersGateway {
       if (
         !message ||
         (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant') ||
-        typeof message.content !== 'string' ||
-        message.content.trim().length === 0
+        !this.isValidMessageContent(message.content)
       ) {
         throw new AppError(ErrorCodes.common.badRequest, 'messages is invalid');
       }
 
       return {
         role: message.role,
-        content: message.content.trim(),
+        content:
+          typeof message.content === 'string'
+            ? message.content.trim()
+            : message.content,
       };
+    });
+  }
+
+  private isValidMessageContent(content: unknown): boolean {
+    if (typeof content === 'string') {
+      return content.trim().length > 0;
+    }
+
+    if (!Array.isArray(content) || content.length === 0) {
+      return false;
+    }
+
+    return content.every((part) => {
+      if (!part || typeof part !== 'object') {
+        return false;
+      }
+
+      if ('type' in part && part.type === 'text') {
+        return 'text' in part && typeof part.text === 'string' && part.text.trim().length > 0;
+      }
+
+      if ('type' in part && part.type === 'image_url') {
+        const imageUrl = 'image_url' in part ? part.image_url : null;
+
+        return (
+          !!imageUrl &&
+          typeof imageUrl === 'object' &&
+          'url' in imageUrl &&
+          typeof imageUrl.url === 'string' &&
+          imageUrl.url.startsWith('data:image/')
+        );
+      }
+
+      return false;
     });
   }
 
