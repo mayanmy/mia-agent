@@ -163,12 +163,37 @@ export class OpenAICompatibleClient implements ProviderClient {
 
   private async toProviderError(response: Response): Promise<AppError> {
     const text = await response.text();
-    const detail = text ? `: ${text.slice(0, 500)}` : '';
+    const message = this.extractProviderErrorMessage(text);
+    const detail = message ? `: ${message}` : '';
 
     return new AppError(
       ErrorCodes.provider.connectionFailed,
       `provider request failed with ${response.status} ${response.statusText}${detail}`,
       HttpStatus.BAD_GATEWAY,
     );
+  }
+
+  private extractProviderErrorMessage(text: string): string {
+    if (!text) {
+      return '';
+    }
+
+    try {
+      const data = JSON.parse(text) as {
+        error?: {
+          message?: string;
+          code?: string;
+        };
+      };
+      const message = data.error?.message ?? text;
+
+      if (message.includes('Unexpected item type in content')) {
+        return '当前模型不支持图片输入，请切换到视觉模型后重试。';
+      }
+
+      return message.slice(0, 500);
+    } catch {
+      return text.slice(0, 500);
+    }
   }
 }

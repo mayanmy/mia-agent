@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ClipboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button, Empty, Input, Select, Space, Tag, Upload, message } from "antd";
 import type { UploadProps } from "antd";
@@ -89,6 +90,13 @@ export function ChatPage() {
       return;
     }
 
+    if (images.length > 0 && selectedAgent && !isLikelyVisionModel(selectedAgent.modelName)) {
+      message.warning(
+        `当前模型 ${selectedAgent.modelName} 不支持图片输入，请切换到 qwen-vl-max、qwen2.5-vl 等视觉模型。`
+      );
+      return;
+    }
+
     const currentImages = images;
     const nextUserMessage: ChatUiMessage = {
       id: createMessageId(),
@@ -174,20 +182,20 @@ export function ChatPage() {
     abortControllerRef.current?.abort();
   }
 
-  const handleBeforeUpload: UploadProps["beforeUpload"] = async (file) => {
+  async function addImageFile(file: File): Promise<boolean> {
     if (!file.type?.startsWith("image/")) {
       message.warning("只能上传图片");
-      return Upload.LIST_IGNORE;
+      return false;
     }
 
-    if ((file.size ?? 0) > maxImageSize) {
+    if (file.size > maxImageSize) {
       message.warning("单张图片不能超过 5MB");
-      return Upload.LIST_IGNORE;
+      return false;
     }
 
     if (images.length >= 4) {
       message.warning("一次最多上传 4 张图片");
-      return Upload.LIST_IGNORE;
+      return false;
     }
 
     const dataUrl = await readFileAsDataUrl(file);
@@ -201,8 +209,49 @@ export function ChatPage() {
       }
     ]);
 
+    return true;
+  }
+
+  const handleBeforeUpload: UploadProps["beforeUpload"] = async (file) => {
+    await addImageFile(file);
     return false;
   };
+
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(event.clipboardData.files).filter((file) =>
+      file.type.startsWith("image/")
+    );
+
+    if (files.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+
+    void addPastedImages(files);
+  }
+
+  async function addPastedImages(files: File[]) {
+    const remainingSlots = 4 - images.length;
+    const filesToAdd = files.slice(0, Math.max(remainingSlots, 0));
+    let addedCount = 0;
+
+    if (filesToAdd.length < files.length) {
+      message.warning("一次最多保留 4 张图片");
+    }
+
+    for (const file of filesToAdd) {
+      const added = await addImageFile(file);
+
+      if (added) {
+        addedCount += 1;
+      }
+    }
+
+    if (addedCount > 0) {
+      message.success(`已粘贴 ${addedCount} 张图片`);
+    }
+  }
 
   function removeImage(dataUrl: string) {
     setImages((current) => current.filter((item) => item.dataUrl !== dataUrl));
@@ -292,9 +341,10 @@ export function ChatPage() {
               <Input.TextArea
                 autoSize={{ minRows: 2, maxRows: 6 }}
                 disabled={!selectedAgentId || sending}
-                placeholder="输入消息，测试当前 Agent 的真实模型调用"
+                placeholder="输入消息，或直接粘贴图片"
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
+                onPaste={handlePaste}
                 onPressEnter={(event) => {
                   if (!event.shiftKey) {
                     event.preventDefault();
@@ -342,4 +392,21 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("读取图片失败"));
     reader.readAsDataURL(file);
   });
+}
+
+function isLikelyVisionModel(modelName: string): boolean {
+  const normalized = modelName.toLowerCase();
+  const visionModelKeywords = [
+    "vl",
+    "vision",
+    "omni",
+    "qvq",
+    "gpt-4o",
+    "gpt-4.1",
+    "gemini",
+    "claude-3",
+    "claude-4"
+  ];
+
+  return visionModelKeywords.some((keyword) => normalized.includes(keyword));
 }

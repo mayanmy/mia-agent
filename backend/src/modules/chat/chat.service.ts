@@ -27,6 +27,7 @@ export class ChatService {
     const images = this.normalizeImages(payload.images);
     const message = this.normalizeUserMessage(payload.message, images);
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
+    this.ensureImageInputSupported(agent.modelName, images);
     const history = this.normalizeHistory(payload.history, agent.historyTurns);
 
     const response = await this.modelProvidersService.createChatCompletion({
@@ -58,6 +59,7 @@ export class ChatService {
     const images = this.normalizeImages(payload.images);
     const message = this.normalizeUserMessage(payload.message, images);
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
+    this.ensureImageInputSupported(agent.modelName, images);
     const history = this.normalizeHistory(payload.history, agent.historyTurns);
 
     yield {
@@ -231,5 +233,38 @@ export class ChatService {
         })),
       ],
     };
+  }
+
+  private ensureImageInputSupported(modelName: string, images: ChatImageAttachmentDto[]): void {
+    if (images.length === 0) {
+      return;
+    }
+
+    if (this.isLikelyVisionModel(modelName)) {
+      return;
+    }
+
+    throw new AppError(
+      ErrorCodes.common.badRequest,
+      `当前模型 ${modelName} 不支持图片输入，请切换到视觉模型，例如 qwen-vl-max、qwen2.5-vl 或其他支持 image input 的模型。`,
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  private isLikelyVisionModel(modelName: string): boolean {
+    const normalized = modelName.toLowerCase();
+    const visionModelKeywords = [
+      'vl',
+      'vision',
+      'omni',
+      'qvq',
+      'gpt-4o',
+      'gpt-4.1',
+      'gemini',
+      'claude-3',
+      'claude-4',
+    ];
+
+    return visionModelKeywords.some((keyword) => normalized.includes(keyword));
   }
 }
