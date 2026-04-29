@@ -3,6 +3,7 @@ import { request } from "../../shared/api/client";
 export type ChatRole = "user" | "assistant";
 
 export type ChatImageAttachment = {
+  id?: string;
   name: string;
   mimeType: string;
   dataUrl: string;

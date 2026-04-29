@@ -97,7 +97,11 @@ export function ChatPage() {
       return;
     }
 
-    const currentImages = images;
+    const currentImages = images.map(({ name, mimeType, dataUrl }) => ({
+      name,
+      mimeType,
+      dataUrl
+    }));
     const nextUserMessage: ChatUiMessage = {
       id: createMessageId(),
       role: "user",
@@ -203,6 +207,7 @@ export function ChatPage() {
     setImages((current) => [
       ...current,
       {
+        id: createMessageId(),
         name: file.name,
         mimeType: file.type || "image/png",
         dataUrl
@@ -253,8 +258,12 @@ export function ChatPage() {
     }
   }
 
-  function removeImage(dataUrl: string) {
-    setImages((current) => current.filter((item) => item.dataUrl !== dataUrl));
+  function removeImage(id: string | undefined) {
+    if (!id) {
+      return;
+    }
+
+    setImages((current) => current.filter((item) => item.id !== id));
   }
 
   return (
@@ -313,8 +322,13 @@ export function ChatPage() {
                   <div className="chatMessageBubble">
                     {item.images?.length ? (
                       <div className="chatImageGrid">
-                        {item.images.map((image) => (
-                          <img alt={image.name} className="chatImagePreview" key={image.dataUrl} src={image.dataUrl} />
+                        {item.images.map((image, index) => (
+                          <img
+                            alt={image.name}
+                            className="chatImagePreview"
+                            key={image.id ?? `${image.dataUrl}-${index}`}
+                            src={image.dataUrl}
+                          />
                         ))}
                       </div>
                     ) : null}
@@ -328,10 +342,10 @@ export function ChatPage() {
             <div className="chatComposerInput">
               {images.length > 0 ? (
                 <div className="chatUploadPreviewList">
-                  {images.map((image) => (
-                    <div className="chatUploadPreview" key={image.dataUrl}>
+                  {images.map((image, index) => (
+                    <div className="chatUploadPreview" key={image.id ?? `${image.dataUrl}-${index}`}>
                       <img alt={image.name} src={image.dataUrl} />
-                      <Button size="small" type="text" onClick={() => removeImage(image.dataUrl)}>
+                      <Button size="small" type="text" onClick={() => removeImage(image.id)}>
                         移除
                       </Button>
                     </div>
