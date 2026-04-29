@@ -46,6 +46,9 @@ export type AgentListItem = {
   toolCount: number;
   temperature: number;
   enabled: boolean;
+  published: boolean;
+  publishedAt: Date | null;
+  shareToken: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -67,6 +70,21 @@ export type AgentToolBindingDto = {
 export type AgentToolBindingResult = {
   agentId: string;
   toolIds: string[];
+};
+
+export type AgentPublishResult = {
+  agentId: string;
+  published: boolean;
+  publishedAt: Date | null;
+  shareToken: string | null;
+};
+
+export type SharedAgentDetail = {
+  id: string;
+  name: string;
+  description: string;
+  modelName: string;
+  providerName: string;
 };
 
 export type AgentRuntimeConfig = {

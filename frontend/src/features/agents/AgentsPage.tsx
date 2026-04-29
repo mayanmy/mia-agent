@@ -28,6 +28,8 @@ import {
   getAgent,
   getAgentTools,
   listAgents,
+  publishAgent,
+  unpublishAgent,
   updateAgent,
   updateAgentTools,
   type AgentDetail,
@@ -180,6 +182,15 @@ export function AgentsPage() {
       )
     },
     {
+      title: "发布状态",
+      dataIndex: "published",
+      key: "published",
+      width: 110,
+      render: (published: boolean) => (
+        <Tag color={published ? "blue" : "default"}>{published ? "已发布" : "未发布"}</Tag>
+      )
+    },
+    {
       title: "创建时间",
       dataIndex: "createdAt",
       key: "createdAt",
@@ -190,12 +201,26 @@ export function AgentsPage() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 220,
+      width: 340,
       render: (_, record) => (
         <Space>
           <Button type="link" onClick={() => navigate(`/chat?agentId=${record.id}`)}>
             测试对话
           </Button>
+          {record.published ? (
+            <>
+              <Button type="link" onClick={() => void copyShareLink(record)}>
+                复制链接
+              </Button>
+              <Button type="link" onClick={() => void handleUnpublish(record.id)}>
+                取消发布
+              </Button>
+            </>
+          ) : (
+            <Button type="link" onClick={() => void handlePublish(record.id)}>
+              发布
+            </Button>
+          )}
           <Button type="link" onClick={() => void openEditDialog(record.id)}>
             编辑
           </Button>
@@ -338,6 +363,57 @@ export function AgentsPage() {
     }
   }
 
+  async function handlePublish(id: string) {
+    setLoading(true);
+
+    try {
+      const result = await publishAgent(id);
+      message.success("Agent 已发布");
+      await copyText(getShareUrl(result.shareToken));
+      await refresh();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "发布 Agent 失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleUnpublish(id: string) {
+    setLoading(true);
+
+    try {
+      await unpublishAgent(id);
+      message.success("Agent 已取消发布");
+      await refresh();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "取消发布失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function copyShareLink(agent: AgentTableItem) {
+    await copyText(getShareUrl(agent.shareToken));
+  }
+
+  function getShareUrl(shareToken: string | null): string {
+    if (!shareToken) {
+      return "";
+    }
+
+    return `${window.location.origin}/share/agents/${shareToken}`;
+  }
+
+  async function copyText(value: string) {
+    if (!value) {
+      message.warning("分享链接不存在，请重新发布");
+      return;
+    }
+
+    await navigator.clipboard.writeText(value);
+    message.success("分享链接已复制");
+  }
+
   function closeDialog() {
     setDialogOpen(false);
     setEditingId(null);
@@ -372,7 +448,7 @@ export function AgentsPage() {
           showSizeChanger: true
         }}
         rowKey="id"
-        scroll={{ x: 980 }}
+        scroll={{ x: 1200 }}
         onChange={(nextPagination) => {
           void refresh(nextPagination.current || 1, nextPagination.pageSize || 20);
         }}

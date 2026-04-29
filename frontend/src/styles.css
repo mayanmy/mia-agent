@@ -472,6 +472,38 @@ h2 {
   font-size: 12px;
 }
 
+.sharedAgentWorkspace {
+  display: grid;
+  min-height: calc(100vh - 64px);
+  place-items: center;
+}
+
+.sharedAgentPanel {
+  display: grid;
+  width: min(640px, 100%);
+  gap: 24px;
+  border: 1px solid #dde3eb;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 32px;
+}
+
+.sharedAgentDescription {
+  color: #64748b;
+  font-size: 15px;
+  line-height: 1.7;
+  margin: 16px 0;
+}
+
+.sharedAgentMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  color: #64748b;
+  font-size: 14px;
+}
+
 .twoColumnGrid {
   display: grid;
   gap: 18px;

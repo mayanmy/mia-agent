@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ModelConfigType, Prisma } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
 
 import { AppError, ErrorCodes } from '../../core/errors';
 import { createPageResult, normalizePageQuery } from '../../core/pagination';
@@ -12,11 +13,13 @@ import {
   AgentGenerationParams,
   AgentListItem,
   AgentModelConfigSummary,
+  AgentPublishResult,
   AgentQueryDto,
   AgentRuntimeConfig,
   AgentToolBindingDto,
   AgentToolBindingResult,
   AgentUpdateDto,
+  SharedAgentDetail,
 } from './dto/agent.dto';
 
 const DEFAULT_TEMPERATURE = 0.7;
@@ -202,6 +205,95 @@ export class AgentsService {
         enabled: false,
       },
     });
+  }
+
+  async publishAgent(id: string): Promise<AgentPublishResult> {
+    await this.ensureAgentExists(id);
+    const existing = await this.prisma.agent.findUnique({
+      where: { id },
+      select: {
+        shareToken: true,
+      },
+    });
+    const shareToken = existing?.shareToken || this.createShareToken();
+
+    const agent = await this.prisma.agent.update({
+      where: { id },
+      data: {
+        published: true,
+        publishedAt: new Date(),
+        shareToken,
+      },
+      select: {
+        id: true,
+        published: true,
+        publishedAt: true,
+        shareToken: true,
+      },
+    });
+
+    return {
+      agentId: agent.id,
+      published: agent.published,
+      publishedAt: agent.publishedAt,
+      shareToken: agent.shareToken,
+    };
+  }
+
+  async unpublishAgent(id: string): Promise<AgentPublishResult> {
+    await this.ensureAgentExists(id);
+
+    const agent = await this.prisma.agent.update({
+      where: { id },
+      data: {
+        published: false,
+        publishedAt: null,
+      },
+      select: {
+        id: true,
+        published: true,
+        publishedAt: true,
+        shareToken: true,
+      },
+    });
+
+    return {
+      agentId: agent.id,
+      published: agent.published,
+      publishedAt: agent.publishedAt,
+      shareToken: agent.shareToken,
+    };
+  }
+
+  async getSharedAgent(token: string): Promise<SharedAgentDetail> {
+    const shareToken = this.requireNonEmptyString(token, 'token');
+    const agent = await this.prisma.agent.findFirst({
+      where: {
+        shareToken,
+        published: true,
+        enabled: true,
+        deletedAt: null,
+      },
+      include: {
+        modelConfig: {
+          include: {
+            provider: true,
+          },
+        },
+      },
+    });
+
+    if (!agent) {
+      throw new AppError(ErrorCodes.agent.notFound, 'shared agent not found', HttpStatus.NOT_FOUND);
+    }
+
+    return {
+      id: agent.id,
+      name: agent.name,
+      description: agent.description,
+      modelName: agent.modelConfig.modelName,
+      providerName: agent.modelConfig.provider.name,
+    };
   }
 
   async getAgentRuntimeConfig(id: string): Promise<AgentRuntimeConfig> {
@@ -487,6 +579,10 @@ export class AgentsService {
     }
   }
 
+  private createShareToken(): string {
+    return randomBytes(18).toString('base64url');
+  }
+
   private async resolveCreateModelConfigId(modelConfigId: string | null): Promise<string> {
     if (modelConfigId) {
       return modelConfigId;
@@ -568,6 +664,9 @@ export class AgentsService {
       toolCount: agent._count.agentTools,
       temperature: Number(agent.temperature),
       enabled: agent.enabled,
+      published: agent.published,
+      publishedAt: agent.publishedAt,
+      shareToken: agent.shareToken,
       createdAt: agent.createdAt,
       updatedAt: agent.updatedAt,
     };

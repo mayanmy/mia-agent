@@ -5,7 +5,9 @@ import {
   AgentCreateDto,
   AgentDetail,
   AgentListItem,
+  AgentPublishResult,
   AgentQueryDto,
+  SharedAgentDetail,
   AgentToolBindingDto,
   AgentToolBindingResult,
   AgentUpdateDto,
@@ -26,6 +28,11 @@ export class AgentsController {
     return this.agentsService.createAgent(payload);
   }
 
+  @Get('shared/:token')
+  async getSharedAgent(@Param('token') token: string): Promise<SharedAgentDetail> {
+    return this.agentsService.getSharedAgent(token);
+  }
+
   @Get(':id')
   async getAgent(@Param('id') id: string): Promise<AgentDetail> {
     return this.agentsService.getAgent(id);
@@ -43,6 +50,16 @@ export class AgentsController {
   async deleteAgent(@Param('id') id: string): Promise<null> {
     await this.agentsService.deleteAgent(id);
     return null;
+  }
+
+  @Post(':id/publish')
+  async publishAgent(@Param('id') id: string): Promise<AgentPublishResult> {
+    return this.agentsService.publishAgent(id);
+  }
+
+  @Delete(':id/publish')
+  async unpublishAgent(@Param('id') id: string): Promise<AgentPublishResult> {
+    return this.agentsService.unpublishAgent(id);
   }
 
   @Get(':id/tools')

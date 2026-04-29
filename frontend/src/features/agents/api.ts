@@ -13,6 +13,9 @@ export type AgentListItem = {
   toolCount: number;
   temperature: number;
   enabled: boolean;
+  published: boolean;
+  publishedAt: string | null;
+  shareToken: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -74,6 +77,37 @@ export function deleteAgent(id: string): Promise<null> {
   return request<null>(`/api/v1/agents/${id}`, {
     method: "DELETE"
   });
+}
+
+export type AgentPublishResult = {
+  agentId: string;
+  published: boolean;
+  publishedAt: string | null;
+  shareToken: string | null;
+};
+
+export type SharedAgentDetail = {
+  id: string;
+  name: string;
+  description: string;
+  modelName: string;
+  providerName: string;
+};
+
+export function publishAgent(id: string): Promise<AgentPublishResult> {
+  return request<AgentPublishResult>(`/api/v1/agents/${id}/publish`, {
+    method: "POST"
+  });
+}
+
+export function unpublishAgent(id: string): Promise<AgentPublishResult> {
+  return request<AgentPublishResult>(`/api/v1/agents/${id}/publish`, {
+    method: "DELETE"
+  });
+}
+
+export function getSharedAgent(token: string): Promise<SharedAgentDetail> {
+  return request<SharedAgentDetail>(`/api/v1/agents/shared/${token}`);
 }
 
 export type AgentToolBindingResult = {
