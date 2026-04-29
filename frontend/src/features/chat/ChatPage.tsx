@@ -3,6 +3,7 @@ import type { ClipboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button, Empty, Input, Select, Space, Tag, Upload, message } from "antd";
 import type { UploadProps } from "antd";
+import { CloseOutlined } from "@ant-design/icons";
 
 import { listAgents, type AgentListItem } from "../agents/api";
 import {
@@ -434,9 +435,14 @@ export function ChatPage() {
                   {images.map((image, index) => (
                     <div className="chatUploadPreview" key={image.id ?? `${image.dataUrl}-${index}`}>
                       <img alt={image.name} src={image.dataUrl} />
-                      <Button size="small" type="text" onClick={() => removeImage(image.id)}>
-                        移除
-                      </Button>
+                      <button
+                        aria-label="移除图片"
+                        className="attachmentRemoveButton"
+                        type="button"
+                        onClick={() => removeImage(image.id)}
+                      >
+                        <CloseOutlined />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -446,9 +452,14 @@ export function ChatPage() {
                   {files.map((file, index) => (
                     <div className="chatFilePreview" key={file.id ?? `${file.name}-${index}`}>
                       <span>{file.name}</span>
-                      <Button size="small" type="text" onClick={() => removeFile(file.id)}>
-                        移除
-                      </Button>
+                      <button
+                        aria-label="移除文件"
+                        className="attachmentRemoveButton"
+                        type="button"
+                        onClick={() => removeFile(file.id)}
+                      >
+                        <CloseOutlined />
+                      </button>
                     </div>
                   ))}
                 </div>
