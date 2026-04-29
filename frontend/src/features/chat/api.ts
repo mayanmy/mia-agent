@@ -9,16 +9,26 @@ export type ChatImageAttachment = {
   dataUrl: string;
 };
 
+export type ChatFileAttachment = {
+  id?: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  content: string;
+};
+
 export type ChatMessage = {
   role: ChatRole;
   content: string;
   images?: ChatImageAttachment[];
+  files?: ChatFileAttachment[];
 };
 
 export type ChatCompletionPayload = {
   agentId: string;
   message: string;
   images: ChatImageAttachment[];
+  files: ChatFileAttachment[];
   history: ChatMessage[];
 };
 

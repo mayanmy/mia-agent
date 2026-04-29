@@ -2,6 +2,7 @@ export type ChatMessageDto = {
   role: 'user' | 'assistant';
   content: string;
   images?: ChatImageAttachmentDto[];
+  files?: ChatFileAttachmentDto[];
 };
 
 export type ChatImageAttachmentDto = {
@@ -10,10 +11,18 @@ export type ChatImageAttachmentDto = {
   dataUrl: string;
 };
 
+export type ChatFileAttachmentDto = {
+  name: string;
+  mimeType: string;
+  size: number;
+  content: string;
+};
+
 export type ChatCompletionDto = {
   agentId?: string;
   message?: string;
   images?: ChatImageAttachmentDto[];
+  files?: ChatFileAttachmentDto[];
   history?: ChatMessageDto[];
 };
 

@@ -348,7 +348,7 @@ h2 {
 .chatComposer {
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: end;
   border-top: 1px solid #e5e7eb;
   padding: 16px;
@@ -361,7 +361,9 @@ h2 {
 }
 
 .chatUploadPreviewList,
-.chatImageGrid {
+.chatImageGrid,
+.chatFilePreviewList,
+.chatFileGrid {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -383,6 +385,32 @@ h2 {
 }
 
 .chatImageGrid {
+  margin-bottom: 10px;
+}
+
+.chatFilePreview,
+.chatFileChip {
+  display: inline-flex;
+  max-width: 220px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #dde3eb;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 6px 8px;
+}
+
+.chatFilePreview span,
+.chatFileChip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatFileGrid {
   margin-bottom: 10px;
 }
 

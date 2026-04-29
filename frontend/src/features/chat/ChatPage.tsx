@@ -5,13 +5,38 @@ import { Button, Empty, Input, Select, Space, Tag, Upload, message } from "antd"
 import type { UploadProps } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
-import { streamChatCompletion, type ChatImageAttachment, type ChatMessage } from "./api";
+import {
+  streamChatCompletion,
+  type ChatFileAttachment,
+  type ChatImageAttachment,
+  type ChatMessage
+} from "./api";
 
 type ChatUiMessage = ChatMessage & {
   id: string;
 };
 
 const maxImageSize = 5 * 1024 * 1024;
+const maxFileSize = 1024 * 1024;
+const supportedTextFileExtensions = [
+  ".txt",
+  ".md",
+  ".json",
+  ".csv",
+  ".log",
+  ".yaml",
+  ".yml",
+  ".xml",
+  ".html",
+  ".css",
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".py",
+  ".java",
+  ".sql"
+];
 
 function createMessageId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -26,6 +51,7 @@ export function ChatPage() {
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
   const [input, setInput] = useState("");
   const [images, setImages] = useState<ChatImageAttachment[]>([]);
+  const [files, setFiles] = useState<ChatFileAttachment[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -86,7 +112,7 @@ export function ChatPage() {
       return;
     }
 
-    if (!content && images.length === 0) {
+    if (!content && images.length === 0 && files.length === 0) {
       return;
     }
 
@@ -102,11 +128,18 @@ export function ChatPage() {
       mimeType,
       dataUrl
     }));
+    const currentFiles = files.map(({ name, mimeType, size, content: fileContent }) => ({
+      name,
+      mimeType,
+      size,
+      content: fileContent
+    }));
     const nextUserMessage: ChatUiMessage = {
       id: createMessageId(),
       role: "user",
       content,
-      images: currentImages
+      images: currentImages,
+      files: currentFiles
     };
     const assistantMessageId = createMessageId();
     const history = messages.map(({ role, content: messageContent }) => ({
@@ -125,6 +158,7 @@ export function ChatPage() {
     ]);
     setInput("");
     setImages([]);
+    setFiles([]);
     setSending(true);
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -135,6 +169,7 @@ export function ChatPage() {
           agentId: selectedAgentId,
           message: content,
           images: currentImages,
+          files: currentFiles,
           history
         },
         {
@@ -266,6 +301,51 @@ export function ChatPage() {
     setImages((current) => current.filter((item) => item.id !== id));
   }
 
+  async function addTextFile(file: File): Promise<boolean> {
+    if (!isSupportedTextFile(file)) {
+      message.warning("当前只支持文本类文件，例如 txt、md、json、csv、代码文件");
+      return false;
+    }
+
+    if (file.size > maxFileSize) {
+      message.warning("单个文件不能超过 1MB");
+      return false;
+    }
+
+    if (files.length >= 4) {
+      message.warning("一次最多上传 4 个文件");
+      return false;
+    }
+
+    const content = await readFileAsText(file);
+
+    setFiles((current) => [
+      ...current,
+      {
+        id: createMessageId(),
+        name: file.name,
+        mimeType: file.type || "text/plain",
+        size: file.size,
+        content
+      }
+    ]);
+
+    return true;
+  }
+
+  const handleFileBeforeUpload: UploadProps["beforeUpload"] = async (file) => {
+    await addTextFile(file);
+    return false;
+  };
+
+  function removeFile(id: string | undefined) {
+    if (!id) {
+      return;
+    }
+
+    setFiles((current) => current.filter((item) => item.id !== id));
+  }
+
   return (
     <section className="workspace chatWorkspace">
       <header className="pageHeader">
@@ -332,6 +412,15 @@ export function ChatPage() {
                         ))}
                       </div>
                     ) : null}
+                    {item.files?.length ? (
+                      <div className="chatFileGrid">
+                        {item.files.map((file, index) => (
+                          <div className="chatFileChip" key={file.id ?? `${file.name}-${index}`}>
+                            {file.name}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     {item.content || (item.role === "assistant" && sending ? "正在生成..." : "")}
                   </div>
                 </div>
@@ -346,6 +435,18 @@ export function ChatPage() {
                     <div className="chatUploadPreview" key={image.id ?? `${image.dataUrl}-${index}`}>
                       <img alt={image.name} src={image.dataUrl} />
                       <Button size="small" type="text" onClick={() => removeImage(image.id)}>
+                        移除
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {files.length > 0 ? (
+                <div className="chatFilePreviewList">
+                  {files.map((file, index) => (
+                    <div className="chatFilePreview" key={file.id ?? `${file.name}-${index}`}>
+                      <span>{file.name}</span>
+                      <Button size="small" type="text" onClick={() => removeFile(file.id)}>
                         移除
                       </Button>
                     </div>
@@ -376,8 +477,20 @@ export function ChatPage() {
             >
               <Button disabled={!selectedAgentId || sending}>上传图片</Button>
             </Upload>
+            <Upload
+              accept={supportedTextFileExtensions.join(",")}
+              beforeUpload={handleFileBeforeUpload}
+              disabled={!selectedAgentId || sending}
+              maxCount={4}
+              showUploadList={false}
+            >
+              <Button disabled={!selectedAgentId || sending}>上传文件</Button>
+            </Upload>
             <Button
-              disabled={!selectedAgentId || (!sending && !input.trim() && images.length === 0)}
+              disabled={
+                !selectedAgentId ||
+                (!sending && !input.trim() && images.length === 0 && files.length === 0)
+              }
               danger={sending}
               type="primary"
               onClick={() => {
@@ -406,6 +519,26 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("读取图片失败"));
     reader.readAsDataURL(file);
   });
+}
+
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("读取文件失败"));
+    reader.readAsText(file);
+  });
+}
+
+function isSupportedTextFile(file: File): boolean {
+  if (file.type.startsWith("text/")) {
+    return true;
+  }
+
+  const lowerName = file.name.toLowerCase();
+
+  return supportedTextFileExtensions.some((extension) => lowerName.endsWith(extension));
 }
 
 function isLikelyVisionModel(modelName: string): boolean {

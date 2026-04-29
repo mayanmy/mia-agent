@@ -5,6 +5,7 @@ import { AgentsService } from '../agents/agents.service';
 import { ModelProvidersService } from '../model-providers/model-providers.service';
 import { ChatMessage } from '../model-providers/dto/llm.dto';
 import {
+  ChatFileAttachmentDto,
   ChatImageAttachmentDto,
   ChatCompletionDto,
   ChatCompletionResult,
@@ -14,6 +15,8 @@ import {
 
 const MAX_IMAGE_COUNT = 4;
 const MAX_IMAGE_DATA_URL_LENGTH = 7 * 1024 * 1024;
+const MAX_FILE_COUNT = 4;
+const MAX_FILE_CONTENT_LENGTH = 200_000;
 
 @Injectable()
 export class ChatService {
@@ -25,7 +28,8 @@ export class ChatService {
   async createCompletion(payload: ChatCompletionDto): Promise<ChatCompletionResult> {
     const agentId = this.requireNonEmptyString(payload.agentId, 'agentId');
     const images = this.normalizeImages(payload.images);
-    const message = this.normalizeUserMessage(payload.message, images);
+    const files = this.normalizeFiles(payload.files);
+    const message = this.normalizeUserMessage(payload.message, images, files);
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
     this.ensureImageInputSupported(agent.modelName, images);
     const history = this.normalizeHistory(payload.history, agent.historyTurns);
@@ -35,7 +39,7 @@ export class ChatService {
       messages: [
         { role: 'system', content: agent.systemPrompt },
         ...history,
-        this.buildUserMessage(message, images),
+        this.buildUserMessage(message, images, files),
       ],
       temperature: agent.temperature,
       maxTokens: agent.maxTokens,
@@ -57,7 +61,8 @@ export class ChatService {
   ): AsyncIterable<ChatStreamEvent> {
     const agentId = this.requireNonEmptyString(payload.agentId, 'agentId');
     const images = this.normalizeImages(payload.images);
-    const message = this.normalizeUserMessage(payload.message, images);
+    const files = this.normalizeFiles(payload.files);
+    const message = this.normalizeUserMessage(payload.message, images, files);
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
     this.ensureImageInputSupported(agent.modelName, images);
     const history = this.normalizeHistory(payload.history, agent.historyTurns);
@@ -77,7 +82,7 @@ export class ChatService {
       messages: [
         { role: 'system', content: agent.systemPrompt },
         ...history,
-        this.buildUserMessage(message, images),
+        this.buildUserMessage(message, images, files),
       ],
       temperature: agent.temperature,
       maxTokens: agent.maxTokens,
@@ -157,13 +162,21 @@ export class ChatService {
     return value.trim();
   }
 
-  private normalizeUserMessage(value: unknown, images: ChatImageAttachmentDto[]): string {
+  private normalizeUserMessage(
+    value: unknown,
+    images: ChatImageAttachmentDto[],
+    files: ChatFileAttachmentDto[],
+  ): string {
     if (typeof value === 'string' && value.trim().length > 0) {
       return value.trim();
     }
 
     if (images.length > 0) {
       return '请分析这张图片。';
+    }
+
+    if (files.length > 0) {
+      return '请阅读并分析这些文件内容。';
     }
 
     throw new AppError(
@@ -210,11 +223,56 @@ export class ChatService {
     });
   }
 
-  private buildUserMessage(content: string, images: ChatImageAttachmentDto[]): ChatMessage {
+  private normalizeFiles(value: unknown): ChatFileAttachmentDto[] {
+    if (value === undefined || value === null) {
+      return [];
+    }
+
+    if (!Array.isArray(value)) {
+      throw new AppError(ErrorCodes.common.badRequest, 'files must be an array');
+    }
+
+    if (value.length > MAX_FILE_COUNT) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        `files cannot exceed ${MAX_FILE_COUNT} items`,
+      );
+    }
+
+    return value.map((item) => {
+      const name = typeof item?.name === 'string' ? item.name.trim() : '';
+      const mimeType = typeof item?.mimeType === 'string' ? item.mimeType.trim() : '';
+      const size = Number(item?.size);
+      const content = typeof item?.content === 'string' ? item.content : '';
+
+      if (!name || !Number.isFinite(size) || size < 0 || content.trim().length === 0) {
+        throw new AppError(ErrorCodes.common.badRequest, 'files is invalid');
+      }
+
+      if (content.length > MAX_FILE_CONTENT_LENGTH) {
+        throw new AppError(ErrorCodes.common.badRequest, 'file content is too large');
+      }
+
+      return {
+        name,
+        mimeType,
+        size,
+        content,
+      };
+    });
+  }
+
+  private buildUserMessage(
+    content: string,
+    images: ChatImageAttachmentDto[],
+    files: ChatFileAttachmentDto[],
+  ): ChatMessage {
+    const textContent = this.appendFileContext(content, files);
+
     if (images.length === 0) {
       return {
         role: 'user',
-        content,
+        content: textContent,
       };
     }
 
@@ -223,7 +281,7 @@ export class ChatService {
       content: [
         {
           type: 'text',
-          text: content,
+          text: textContent,
         },
         ...images.map((image) => ({
           type: 'image_url' as const,
@@ -233,6 +291,27 @@ export class ChatService {
         })),
       ],
     };
+  }
+
+  private appendFileContext(content: string, files: ChatFileAttachmentDto[]): string {
+    if (files.length === 0) {
+      return content;
+    }
+
+    const fileContext = files
+      .map((file, index) => {
+        return [
+          `文件 ${index + 1}: ${file.name}`,
+          `MIME: ${file.mimeType || 'text/plain'}`,
+          '内容:',
+          '```',
+          file.content,
+          '```',
+        ].join('\n');
+      })
+      .join('\n\n');
+
+    return `${content}\n\n以下是用户上传的文件内容，请作为上下文参考：\n\n${fileContext}`;
   }
 
   private ensureImageInputSupported(modelName: string, images: ChatImageAttachmentDto[]): void {
