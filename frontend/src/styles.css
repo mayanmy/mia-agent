@@ -646,6 +646,22 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
+.agentActionCell {
+  align-items: center;
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+.agentActionCell .ant-btn-link {
+  padding-inline: 4px;
+}
+
+.agentActionCell .ant-btn-text {
+  height: 28px;
+  min-height: 28px;
+  width: 28px;
+}
+
 .toolCheckboxGroup {
   display: grid;
   gap: 12px;

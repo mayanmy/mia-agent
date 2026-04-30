@@ -3,11 +3,11 @@ import { useNavigate } from "react-router-dom";
 import {
   Button,
   Checkbox,
+  Dropdown,
   Form,
   Input,
   InputNumber,
   Modal,
-  Popconfirm,
   Select,
   Slider,
   Space,
@@ -17,7 +17,8 @@ import {
   Tag,
   message
 } from "antd";
-import type { TableProps } from "antd";
+import type { MenuProps, TableProps } from "antd";
+import { MoreOutlined } from "@ant-design/icons";
 
 import { getDefaultModelSettings, listModelConfigs, listProviders } from "../model-providers/api";
 import type { ModelConfigListItem, ProviderListItem } from "../model-providers/api";
@@ -201,44 +202,92 @@ export function AgentsPage() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 340,
-      render: (_, record) => (
-        <Space>
-          <Button type="link" onClick={() => navigate(`/chat?agentId=${record.id}`)}>
-            测试对话
-          </Button>
-          {record.published ? (
-            <>
-              <Button type="link" onClick={() => void copyShareLink(record)}>
-                复制链接
-              </Button>
-              <Button type="link" onClick={() => void handleUnpublish(record.id)}>
-                取消发布
-              </Button>
-            </>
-          ) : (
-            <Button type="link" onClick={() => void handlePublish(record.id)}>
-              发布
+      width: 160,
+      render: (_, record) => {
+        const menuItems: MenuProps["items"] = [
+          record.published
+            ? {
+                key: "copy",
+                label: "复制链接"
+              }
+            : {
+                key: "publish",
+                label: "发布"
+              },
+          ...(record.published
+            ? [
+                {
+                  key: "unpublish",
+                  label: "取消发布"
+                }
+              ]
+            : []),
+          {
+            type: "divider"
+          },
+          {
+            key: "edit",
+            label: "编辑"
+          },
+          {
+            key: "delete",
+            label: "删除",
+            danger: true
+          }
+        ];
+
+        const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
+          if (key === "publish") {
+            void handlePublish(record.id);
+            return;
+          }
+
+          if (key === "copy") {
+            void copyShareLink(record);
+            return;
+          }
+
+          if (key === "unpublish") {
+            void handleUnpublish(record.id);
+            return;
+          }
+
+          if (key === "edit") {
+            void openEditDialog(record.id);
+            return;
+          }
+
+          if (key === "delete") {
+            confirmDelete(record.id);
+          }
+        };
+
+        return (
+          <Space className="agentActionCell" size={4}>
+            <Button type="link" size="small" onClick={() => navigate(`/chat?agentId=${record.id}`)}>
+              测试对话
             </Button>
-          )}
-          <Button type="link" onClick={() => void openEditDialog(record.id)}>
-            编辑
-          </Button>
-          <Popconfirm
-            title="删除 Agent"
-            description="确认删除这个 Agent？"
-            okText="删除"
-            cancelText="取消"
-            onConfirm={() => void handleDelete(record.id)}
-          >
-            <Button danger type="link">
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      )
+            <Dropdown menu={{ items: menuItems, onClick: handleMenuClick }} trigger={["click"]}>
+              <Button aria-label="更多操作" icon={<MoreOutlined />} size="small" type="text" />
+            </Dropdown>
+          </Space>
+        );
+      }
     }
   ];
+
+  function confirmDelete(id: string) {
+    Modal.confirm({
+      title: "删除 Agent",
+      content: "确认删除这个 Agent？",
+      okText: "删除",
+      okButtonProps: {
+        danger: true
+      },
+      cancelText: "取消",
+      onOk: () => handleDelete(id)
+    });
+  }
 
   async function refresh(nextPage = pagination.page, nextPageSize = pagination.pageSize) {
     setLoading(true);
