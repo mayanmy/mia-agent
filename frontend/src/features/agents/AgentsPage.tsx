@@ -95,7 +95,7 @@ function toFormValues(agent: AgentDetail): AgentFormValues {
     temperature: agent.temperature,
     maxTokens: agent.maxTokens,
     historyTurns: agent.historyTurns,
-  enabled: agent.enabled,
+    enabled: agent.enabled,
     toolIds: agent.toolIds
   };
 }
@@ -111,6 +111,7 @@ export function AgentsPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [embedAgent, setEmbedAgent] = useState<AgentTableItem | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
 
@@ -217,6 +218,10 @@ export function AgentsPage() {
           ...(record.published
             ? [
                 {
+                  key: "embed",
+                  label: "嵌入代码"
+                },
+                {
                   key: "unpublish",
                   label: "取消发布"
                 }
@@ -244,6 +249,11 @@ export function AgentsPage() {
 
           if (key === "copy") {
             void copyShareLink(record);
+            return;
+          }
+
+          if (key === "embed") {
+            openEmbedDialog(record);
             return;
           }
 
@@ -445,12 +455,31 @@ export function AgentsPage() {
     await copyText(getShareUrl(agent.shareToken));
   }
 
+  function openEmbedDialog(agent: AgentTableItem) {
+    if (!agent.shareToken) {
+      message.warning("请先发布 Agent");
+      return;
+    }
+
+    setEmbedAgent(agent);
+  }
+
   function getShareUrl(shareToken: string | null): string {
     if (!shareToken) {
       return "";
     }
 
     return `${window.location.origin}/share/agents/${shareToken}`;
+  }
+
+  function getEmbedCode(shareToken: string | null): string {
+    if (!shareToken) {
+      return "";
+    }
+
+    const origin = window.location.origin;
+
+    return `<script src="${origin}/mia-agent-widget.js" data-agent-token="${shareToken}" data-api-base="${origin}" async></script>`;
   }
 
   async function copyText(value: string) {
@@ -586,6 +615,25 @@ export function AgentsPage() {
             ]}
           />
         </Form>
+      </Modal>
+
+      <Modal
+        destroyOnHidden
+        okText="复制代码"
+        open={Boolean(embedAgent)}
+        title="嵌入代码"
+        width={720}
+        onCancel={() => setEmbedAgent(null)}
+        onOk={() => void copyText(getEmbedCode(embedAgent?.shareToken ?? null))}
+      >
+        <p className="embedCodeHint">
+          将下面的代码粘贴到目标页面的 HTML 中，页面左下角会出现 Mia 聊天入口。
+        </p>
+        <Input.TextArea
+          readOnly
+          autoSize={{ minRows: 4, maxRows: 8 }}
+          value={getEmbedCode(embedAgent?.shareToken ?? null)}
+        />
       </Modal>
     </section>
   );

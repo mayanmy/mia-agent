@@ -662,6 +662,13 @@ button:disabled {
   width: 28px;
 }
 
+.embedCodeHint {
+  margin: 0 0 12px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .toolCheckboxGroup {
   display: grid;
   gap: 12px;

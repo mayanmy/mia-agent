@@ -40,7 +40,12 @@ export type ChatCompletionResult = {
   content: string;
 };
 
-export type ChatStreamEventType = "message_start" | "token" | "message_end" | "error" | "ping";
+export type ChatStreamEventType =
+  | "message_start"
+  | "token"
+  | "message_end"
+  | "error"
+  | "ping";
 
 export type ChatStreamEvent = {
   type: ChatStreamEventType;
@@ -55,11 +60,11 @@ export type ChatStreamEvent = {
 };
 
 export function createChatCompletion(
-  payload: ChatCompletionPayload
+  payload: ChatCompletionPayload,
 ): Promise<ChatCompletionResult> {
   return request<ChatCompletionResult>("/api/v1/chat/completions", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -70,15 +75,15 @@ export async function streamChatCompletion(
   options: {
     signal?: AbortSignal;
     onEvent: (event: ChatStreamEvent) => void;
-  }
+  },
 ): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/api/v1/chat/stream`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
-    signal: options.signal
+    signal: options.signal,
   });
 
   if (!response.body) {
@@ -113,6 +118,8 @@ export async function streamChatCompletion(
     }
   }
 
+  reader.releaseLock();
+
   if (buffer.trim()) {
     const event = parseSseEvent(buffer);
 
@@ -135,8 +142,12 @@ function parseSseEvent(rawEvent: string): ChatStreamEvent | null {
   const lines = rawEvent.split(/\r?\n/u);
   const eventTypeLine = lines.find((line) => line.startsWith("event:"));
   const dataLines = lines.filter((line) => line.startsWith("data:"));
-  const type = eventTypeLine?.slice("event:".length).trim() as ChatStreamEventType | undefined;
-  const dataText = dataLines.map((line) => line.slice("data:".length).trim()).join("\n");
+  const type = eventTypeLine?.slice("event:".length).trim() as
+    | ChatStreamEventType
+    | undefined;
+  const dataText = dataLines
+    .map((line) => line.slice("data:".length).trim())
+    .join("\n");
 
   if (!type) {
     return null;
@@ -145,14 +156,14 @@ function parseSseEvent(rawEvent: string): ChatStreamEvent | null {
   try {
     return {
       type,
-      data: dataText ? JSON.parse(dataText) : {}
+      data: dataText ? JSON.parse(dataText) : {},
     };
   } catch {
     return {
       type: "error",
       data: {
-        message: "流式响应解析失败"
-      }
+        message: "流式响应解析失败",
+      },
     };
   }
 }
