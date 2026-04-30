@@ -478,8 +478,17 @@ export function AgentsPage() {
     }
 
     const origin = window.location.origin;
+    const agentName = embedAgent?.name ? ` data-agent-name="${escapeHtmlAttribute(embedAgent.name)}"` : "";
 
-    return `<script src="${origin}/mia-agent-widget.js" data-agent-token="${shareToken}" data-api-base="${origin}" async></script>`;
+    return `<script src="${origin}/mia-agent-widget.js" data-agent-token="${shareToken}" data-api-base="${origin}"${agentName} async></script>`;
+  }
+
+  function escapeHtmlAttribute(value: string): string {
+    return value
+      .replace(/&/gu, "&amp;")
+      .replace(/"/gu, "&quot;")
+      .replace(/</gu, "&lt;")
+      .replace(/>/gu, "&gt;");
   }
 
   async function copyText(value: string) {
