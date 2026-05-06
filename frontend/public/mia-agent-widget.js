@@ -45,6 +45,8 @@
     activeKey: getAgentKey(window[registryName][0]),
     streaming: false,
     abortController: null,
+    images: [],
+    files: [],
     dragging: false,
     dragMoved: false,
     dragStartX: 0,
@@ -65,8 +67,15 @@
     '</header>' +
     '<main class="mia-agent-messages"></main>' +
     '<footer class="mia-agent-composer">' +
-    '<textarea class="mia-agent-input" rows="2" placeholder="输入消息..."></textarea>' +
+    '<div class="mia-agent-attachments"></div>' +
+    '<div class="mia-agent-composer-row">' +
+    '<textarea class="mia-agent-input" rows="2" placeholder="输入消息，或直接粘贴图片..."></textarea>' +
+    '<button class="mia-agent-tool-button mia-agent-image-button" type="button">图片</button>' +
+    '<button class="mia-agent-tool-button mia-agent-file-button" type="button">文件</button>' +
     '<button class="mia-agent-send" type="button">发送</button>' +
+    '</div>' +
+    '<input class="mia-agent-image-input" type="file" accept="image/*" multiple hidden />' +
+    '<input class="mia-agent-file-input" type="file" multiple hidden />' +
     '</footer>' +
     '</section>';
 
@@ -92,11 +101,19 @@
     ".mia-agent-bubble{max-width:84%;white-space:pre-wrap;word-break:break-word;border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.55}" +
     ".mia-agent-message-user .mia-agent-bubble{background:#2563eb;color:#fff;border-bottom-right-radius:4px}" +
     ".mia-agent-message-assistant .mia-agent-bubble{background:#f1f5f9;color:#111827;border-bottom-left-radius:4px}" +
-    ".mia-agent-composer{display:flex;gap:10px;align-items:flex-end;padding:12px;border-top:1px solid #e5e7eb;background:#fff}" +
+    ".mia-agent-composer{display:flex;flex-direction:column;gap:10px;padding:12px;border-top:1px solid #e5e7eb;background:#fff}" +
+    ".mia-agent-composer-row{display:flex;gap:8px;align-items:flex-end}" +
     ".mia-agent-input{flex:1;min-height:44px;max-height:120px;resize:none;border:1px solid #cbd5e1;border-radius:12px;padding:10px 12px;font:inherit;font-size:14px;outline:none}" +
     ".mia-agent-input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}" +
+    ".mia-agent-tool-button{height:44px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:#334155;font-weight:700;cursor:pointer;padding:0 10px;white-space:nowrap}" +
     ".mia-agent-send{min-width:64px;height:44px;border:0;border-radius:12px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer}" +
     ".mia-agent-send:disabled{background:#cbd5e1;cursor:not-allowed}" +
+    ".mia-agent-attachments{display:none;gap:8px;flex-wrap:wrap}" +
+    ".mia-agent-attachments.mia-agent-has-attachments{display:flex}" +
+    ".mia-agent-attachment{position:relative;display:flex;align-items:center;gap:6px;max-width:150px;border:1px solid #dbe3ef;border-radius:10px;background:#f8fafc;padding:6px 28px 6px 8px;font-size:12px;color:#334155}" +
+    ".mia-agent-attachment img{width:42px;height:42px;object-fit:cover;border-radius:8px}" +
+    ".mia-agent-attachment-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+    ".mia-agent-attachment-remove{position:absolute;right:4px;top:4px;width:20px;height:20px;border:0;border-radius:999px;background:#e5e7eb;color:#334155;line-height:20px;padding:0;cursor:pointer}" +
     ".mia-agent-hidden{display:none}";
 
   document.head.appendChild(style);
@@ -108,6 +125,11 @@
   var messagesEl = root.querySelector(".mia-agent-messages");
   var input = root.querySelector(".mia-agent-input");
   var sendButton = root.querySelector(".mia-agent-send");
+  var imageButton = root.querySelector(".mia-agent-image-button");
+  var fileButton = root.querySelector(".mia-agent-file-button");
+  var imageInput = root.querySelector(".mia-agent-image-input");
+  var fileInput = root.querySelector(".mia-agent-file-input");
+  var attachmentsEl = root.querySelector(".mia-agent-attachments");
   var titleEl = root.querySelector(".mia-agent-title");
   var subtitleEl = root.querySelector(".mia-agent-subtitle");
   var selector = root.querySelector(".mia-agent-selector");
@@ -126,13 +148,16 @@
       return;
     }
 
-    launcher.classList.add("mia-agent-hidden");
-    panel.classList.add("mia-agent-open");
+    openPanel();
     input.focus();
     loadActiveAgent();
   });
 
   selector.addEventListener("pointerdown", function (event) {
+    event.stopPropagation();
+  });
+
+  closeButton.addEventListener("pointerdown", function (event) {
     event.stopPropagation();
   });
 
@@ -149,12 +174,29 @@
   });
 
   closeButton.addEventListener("click", function () {
-    panel.classList.remove("mia-agent-open");
-    launcher.classList.remove("mia-agent-hidden");
+    closePanel();
   });
 
   sendButton.addEventListener("click", function () {
     sendMessage();
+  });
+
+  imageButton.addEventListener("click", function () {
+    imageInput.click();
+  });
+
+  fileButton.addEventListener("click", function () {
+    fileInput.click();
+  });
+
+  imageInput.addEventListener("change", function () {
+    addImageFiles(Array.prototype.slice.call(imageInput.files || []));
+    imageInput.value = "";
+  });
+
+  fileInput.addEventListener("change", function () {
+    addTextFiles(Array.prototype.slice.call(fileInput.files || []));
+    fileInput.value = "";
   });
 
   input.addEventListener("keydown", function (event) {
@@ -164,8 +206,42 @@
     }
   });
 
+  input.addEventListener("paste", function (event) {
+    var items = event.clipboardData && event.clipboardData.items;
+
+    if (!items) {
+      return;
+    }
+
+    Array.prototype.slice.call(items).forEach(function (item) {
+      if (item.kind === "file" && item.type.indexOf("image/") === 0) {
+        var file = item.getAsFile();
+
+        if (file) {
+          addImageFiles([file]);
+        }
+      }
+    });
+  });
+
   addDragHandle(launcher);
   addDragHandle(root.querySelector(".mia-agent-header"));
+
+  function openPanel() {
+    launcher.classList.add("mia-agent-hidden");
+    panel.classList.add("mia-agent-open");
+    requestAnimationFrame(function () {
+      keepRootInViewport();
+    });
+  }
+
+  function closePanel() {
+    panel.classList.remove("mia-agent-open");
+    launcher.classList.remove("mia-agent-hidden");
+    requestAnimationFrame(function () {
+      keepRootInViewport();
+    });
+  }
 
   function loadActiveAgent() {
     var entry = getActiveEntry();
@@ -205,8 +281,10 @@
 
   function sendMessage() {
     var content = input.value.trim();
+    var currentImages = state.images.slice();
+    var currentFiles = state.files.slice();
 
-    if (!content || state.streaming) {
+    if ((!content && currentImages.length === 0 && currentFiles.length === 0) || state.streaming) {
       return;
     }
 
@@ -226,7 +304,10 @@
     });
 
     input.value = "";
-    appendMessage("user", content);
+    state.images = [];
+    state.files = [];
+    renderAttachments();
+    appendMessage("user", buildUserDisplayContent(content, currentImages, currentFiles));
     var assistantMessage = appendMessage("assistant", "");
     state.streaming = true;
     sendButton.disabled = true;
@@ -240,8 +321,8 @@
       body: JSON.stringify({
         agentId: entry.agent.id,
         message: content,
-        images: [],
-        files: [],
+        images: currentImages,
+        files: currentFiles,
         history: history
       }),
       signal: state.abortController.signal
@@ -274,6 +355,139 @@
         sendButton.disabled = false;
         state.abortController = null;
       });
+  }
+
+  function addImageFiles(files) {
+    files.slice(0, Math.max(0, 4 - state.images.length)).forEach(function (file) {
+      if (!file || file.type.indexOf("image/") !== 0) {
+        return;
+      }
+
+      readFileAsDataUrl(file).then(function (dataUrl) {
+        state.images.push({
+          id: createId(),
+          name: file.name || "image",
+          mimeType: file.type || "image/png",
+          dataUrl: dataUrl
+        });
+        renderAttachments();
+      });
+    });
+  }
+
+  function addTextFiles(files) {
+    files.slice(0, Math.max(0, 4 - state.files.length)).forEach(function (file) {
+      if (!file) {
+        return;
+      }
+
+      readFileAsText(file).then(function (content) {
+        state.files.push({
+          id: createId(),
+          name: file.name || "file",
+          mimeType: file.type || "text/plain",
+          size: file.size || content.length,
+          content: content.slice(0, 200000)
+        });
+        renderAttachments();
+      });
+    });
+  }
+
+  function renderAttachments() {
+    attachmentsEl.innerHTML = "";
+    attachmentsEl.classList.toggle(
+      "mia-agent-has-attachments",
+      state.images.length > 0 || state.files.length > 0
+    );
+
+    state.images.forEach(function (image) {
+      attachmentsEl.appendChild(createAttachmentElement("image", image));
+    });
+    state.files.forEach(function (file) {
+      attachmentsEl.appendChild(createAttachmentElement("file", file));
+    });
+  }
+
+  function createAttachmentElement(type, item) {
+    var wrapper = document.createElement("div");
+    var name = document.createElement("span");
+    var remove = document.createElement("button");
+
+    wrapper.className = "mia-agent-attachment";
+    if (type === "image") {
+      var image = document.createElement("img");
+      image.src = item.dataUrl;
+      image.alt = item.name;
+      wrapper.appendChild(image);
+    }
+
+    name.className = "mia-agent-attachment-name";
+    name.textContent = item.name;
+    remove.className = "mia-agent-attachment-remove";
+    remove.type = "button";
+    remove.textContent = "×";
+    remove.addEventListener("click", function () {
+      if (type === "image") {
+        state.images = state.images.filter(function (image) {
+          return image.id !== item.id;
+        });
+      } else {
+        state.files = state.files.filter(function (file) {
+          return file.id !== item.id;
+        });
+      }
+
+      renderAttachments();
+    });
+
+    wrapper.appendChild(name);
+    wrapper.appendChild(remove);
+    return wrapper;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        resolve(String(reader.result || ""));
+      };
+      reader.onerror = function () {
+        reject(new Error("图片读取失败"));
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function readFileAsText(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        resolve(String(reader.result || ""));
+      };
+      reader.onerror = function () {
+        reject(new Error("文件读取失败"));
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  function createId() {
+    return String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+  }
+
+  function buildUserDisplayContent(content, images, files) {
+    var attachmentNames = images
+      .map(function (image) {
+        return "[图片] " + image.name;
+      })
+      .concat(
+        files.map(function (file) {
+          return "[文件] " + file.name;
+        })
+      );
+
+    return [content].concat(attachmentNames).filter(Boolean).join("\n");
   }
 
   function appendMessage(role, content) {
@@ -459,6 +673,10 @@
         return;
       }
 
+      if (handle !== launcher && isInteractiveElement(event.target)) {
+        return;
+      }
+
       event.preventDefault();
       var rect = root.getBoundingClientRect();
       state.dragging = true;
@@ -513,5 +731,28 @@
 
     root.style.left = left + "px";
     root.style.top = top + "px";
+  }
+
+  function keepRootInViewport() {
+    var rect = root.getBoundingClientRect();
+    var currentLeft = rect.left;
+    var currentTop = rect.top;
+
+    if (root.style.bottom && !root.style.top) {
+      root.style.left = rect.left + "px";
+      root.style.top = rect.top + "px";
+      root.style.right = "auto";
+      root.style.bottom = "auto";
+    }
+
+    moveRoot(currentLeft, currentTop);
+  }
+
+  function isInteractiveElement(target) {
+    return Boolean(
+      target &&
+        target.closest &&
+        target.closest("button,select,textarea,input,a,label")
+    );
   }
 })();
