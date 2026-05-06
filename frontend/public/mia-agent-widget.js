@@ -7,6 +7,23 @@
     (currentScript ? new URL(currentScript.src).origin : window.location.origin);
   var registryName = "__MIA_AGENT_WIDGET_AGENTS__";
   var eventName = "mia-agent-widget:agents-changed";
+  var styleId = "mia-agent-widget-style";
+
+  window.MiaAgentWidget = window.MiaAgentWidget || {};
+  window.MiaAgentWidget.destroy = function () {
+    var rootElement = document.getElementById("mia-agent-widget-root");
+    var styleElement = document.getElementById(styleId);
+
+    if (rootElement) {
+      rootElement.remove();
+    }
+
+    if (styleElement) {
+      styleElement.remove();
+    }
+
+    window[registryName] = [];
+  };
 
   if (!token) {
     return;
@@ -54,6 +71,7 @@
     '</section>';
 
   var style = document.createElement("style");
+  style.id = styleId;
   style.textContent =
     "#mia-agent-widget-root{position:fixed;left:24px;bottom:24px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;touch-action:none}" +
     "#mia-agent-widget-root *{box-sizing:border-box}" +
@@ -417,7 +435,7 @@
     agents.forEach(function (entry) {
       var option = document.createElement("option");
       option.value = getAgentKey(entry);
-      option.textContent = entry.agent?.name || entry.name || "Mia Agent";
+      option.textContent = (entry.agent && entry.agent.name) || entry.name || "Mia Agent";
       selector.appendChild(option);
     });
 

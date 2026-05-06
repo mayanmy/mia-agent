@@ -54,6 +54,8 @@ type AgentTableItem = AgentListItem & {
   toolCount: number;
 };
 
+type EmbedScenario = "single" | "multi" | "spa";
+
 const defaultFormValues: AgentFormValues = {
   name: "",
   description: "",
@@ -112,6 +114,7 @@ export function AgentsPage() {
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [embedAgent, setEmbedAgent] = useState<AgentTableItem | null>(null);
+  const [embedScenario, setEmbedScenario] = useState<EmbedScenario>("single");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
 
@@ -461,6 +464,7 @@ export function AgentsPage() {
       return;
     }
 
+    setEmbedScenario("single");
     setEmbedAgent(agent);
   }
 
@@ -472,15 +476,70 @@ export function AgentsPage() {
     return `${window.location.origin}/share/agents/${shareToken}`;
   }
 
-  function getEmbedCode(shareToken: string | null): string {
+  function getEmbedCode(shareToken: string | null, scenario = embedScenario): string {
     if (!shareToken) {
       return "";
     }
 
-    const origin = window.location.origin;
-    const agentName = embedAgent?.name ? ` data-agent-name="${escapeHtmlAttribute(embedAgent.name)}"` : "";
+    if (scenario === "multi") {
+      return getMultiAgentEmbedCode(shareToken);
+    }
 
-    return `<script src="${origin}/mia-agent-widget.js" data-agent-token="${shareToken}" data-api-base="${origin}"${agentName} async></script>`;
+    if (scenario === "spa") {
+      return getSpaEmbedCode(shareToken);
+    }
+
+    return getScriptTag(shareToken, embedAgent?.name);
+  }
+
+  function getScriptTag(shareToken: string, agentName?: string): string {
+    const origin = window.location.origin;
+    const nameAttribute = agentName ? ` data-agent-name="${escapeHtmlAttribute(agentName)}"` : "";
+
+    return `<script src="${origin}/mia-agent-widget.js" data-agent-token="${shareToken}" data-api-base="${origin}"${nameAttribute} async></script>`;
+  }
+
+  function getMultiAgentEmbedCode(shareToken: string): string {
+    const origin = window.location.origin;
+    const currentName = embedAgent?.name || "当前 Agent";
+
+    return [
+      "<!-- 同一页面可放多段 script，最终只会显示一个 Mia 入口，聊天框内可切换 Agent。 -->",
+      getScriptTag(shareToken, currentName),
+      `<script src="${origin}/mia-agent-widget.js" data-agent-token="另一个 Agent 的 shareToken" data-api-base="${origin}" data-agent-name="另一个 Agent 名称" async></script>`
+    ].join("\n");
+  }
+
+  function getSpaEmbedCode(shareToken: string): string {
+    const origin = window.location.origin;
+    const currentName = escapeJsString(embedAgent?.name || "当前 Agent");
+
+    return `<script>
+function loadMiaAgentWidget(agent) {
+  if (window.MiaAgentWidget && window.MiaAgentWidget.destroy) {
+    window.MiaAgentWidget.destroy();
+  }
+
+  document.querySelectorAll("script[data-mia-widget-loader]").forEach(function (element) {
+    element.remove();
+  });
+
+  var script = document.createElement("script");
+  script.src = "${origin}/mia-agent-widget.js";
+  script.async = true;
+  script.setAttribute("data-mia-widget-loader", "true");
+  script.setAttribute("data-api-base", "${origin}");
+  script.setAttribute("data-agent-token", agent.token);
+  script.setAttribute("data-agent-name", agent.name);
+  document.body.appendChild(script);
+}
+
+// 在路由变化时调用，传入当前页面对应的 Agent。
+loadMiaAgentWidget({
+  token: "${shareToken}",
+  name: "${currentName}"
+});
+</script>`;
   }
 
   function escapeHtmlAttribute(value: string): string {
@@ -489,6 +548,10 @@ export function AgentsPage() {
       .replace(/"/gu, "&quot;")
       .replace(/</gu, "&lt;")
       .replace(/>/gu, "&gt;");
+  }
+
+  function escapeJsString(value: string): string {
+    return value.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"').replace(/\n/gu, "\\n");
   }
 
   async function copyText(value: string) {
@@ -635,15 +698,52 @@ export function AgentsPage() {
         onCancel={() => setEmbedAgent(null)}
         onOk={() => void copyText(getEmbedCode(embedAgent?.shareToken ?? null))}
       >
-        <p className="embedCodeHint">
-          将下面的代码粘贴到目标页面的 HTML 中，页面左下角会出现 Mia 聊天入口。
-        </p>
-        <Input.TextArea
-          readOnly
-          autoSize={{ minRows: 4, maxRows: 8 }}
-          value={getEmbedCode(embedAgent?.shareToken ?? null)}
+        <Tabs
+          activeKey={embedScenario}
+          items={[
+            {
+              key: "single",
+              label: "单页面单 Agent",
+              children: (
+                <EmbedCodePanel
+                  code={getEmbedCode(embedAgent?.shareToken ?? null, "single")}
+                  description="适合普通页面：每个页面只嵌入当前这个 Agent，页面左下角出现一个 Mia 聊天入口。"
+                />
+              )
+            },
+            {
+              key: "multi",
+              label: "同页多 Agent",
+              children: (
+                <EmbedCodePanel
+                  code={getEmbedCode(embedAgent?.shareToken ?? null, "multi")}
+                  description="适合同一个页面需要多个 Agent：放多段 script，页面仍然只有一个入口，聊天框顶部用下拉框切换 Agent。"
+                />
+              )
+            },
+            {
+              key: "spa",
+              label: "SPA 路由切换",
+              children: (
+                <EmbedCodePanel
+                  code={getEmbedCode(embedAgent?.shareToken ?? null, "spa")}
+                  description="适合 React/Vue 等单页应用：路由变化时调用 loadMiaAgentWidget，先销毁旧 widget，再加载当前页面对应的 Agent。"
+                />
+              )
+            }
+          ]}
+          onChange={(key) => setEmbedScenario(key as EmbedScenario)}
         />
       </Modal>
     </section>
+  );
+}
+
+function EmbedCodePanel({ code, description }: { code: string; description: string }) {
+  return (
+    <>
+      <p className="embedCodeHint">{description}</p>
+      <Input.TextArea readOnly autoSize={{ minRows: 7, maxRows: 14 }} value={code} />
+    </>
   );
 }
