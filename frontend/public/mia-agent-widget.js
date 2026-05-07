@@ -70,10 +70,12 @@
     '<main class="mia-agent-messages"></main>' +
     '<footer class="mia-agent-composer">' +
     '<div class="mia-agent-attachments"></div>' +
-    '<div class="mia-agent-composer-row">' +
-    '<textarea class="mia-agent-input" rows="2" placeholder="输入消息，或直接粘贴图片..."></textarea>' +
+    '<div class="mia-agent-toolbar">' +
     '<button class="mia-agent-tool-button mia-agent-image-button" type="button">图片</button>' +
     '<button class="mia-agent-tool-button mia-agent-file-button" type="button">文件</button>' +
+    '</div>' +
+    '<div class="mia-agent-composer-row">' +
+    '<textarea class="mia-agent-input" rows="2" placeholder="输入消息，或直接粘贴图片..."></textarea>' +
     '<button class="mia-agent-send" type="button">发送</button>' +
     '</div>' +
     '<input class="mia-agent-image-input" type="file" accept="image/*" multiple hidden />' +
@@ -104,10 +106,11 @@
     ".mia-agent-message-user .mia-agent-bubble{background:#2563eb;color:#fff;border-bottom-right-radius:4px}" +
     ".mia-agent-message-assistant .mia-agent-bubble{background:#f1f5f9;color:#111827;border-bottom-left-radius:4px}" +
     ".mia-agent-composer{display:flex;flex-direction:column;gap:10px;padding:12px;border-top:1px solid #e5e7eb;background:#fff}" +
+    ".mia-agent-toolbar{display:flex;gap:8px;align-items:center}" +
     ".mia-agent-composer-row{display:flex;gap:8px;align-items:flex-end}" +
     ".mia-agent-input{flex:1;min-height:44px;max-height:120px;resize:none;border:1px solid #cbd5e1;border-radius:12px;padding:10px 12px;font:inherit;font-size:14px;outline:none}" +
     ".mia-agent-input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}" +
-    ".mia-agent-tool-button{height:44px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:#334155;font-weight:700;cursor:pointer;padding:0 10px;white-space:nowrap}" +
+    ".mia-agent-tool-button{height:32px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#334155;font-weight:700;cursor:pointer;padding:0 10px;white-space:nowrap}" +
     ".mia-agent-send{min-width:64px;height:44px;border:0;border-radius:12px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer}" +
     ".mia-agent-send:disabled{background:#cbd5e1;cursor:not-allowed}" +
     ".mia-agent-attachments{display:none;gap:8px;flex-wrap:wrap}" +
