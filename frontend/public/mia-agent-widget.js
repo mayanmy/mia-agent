@@ -145,6 +145,9 @@
   window.addEventListener(eventName, function () {
     renderAgentOptions();
     updateHeader();
+    if (panel.classList.contains("mia-agent-open")) {
+      loadAllAgents();
+    }
   });
 
   launcher.addEventListener("click", function () {
@@ -155,7 +158,7 @@
 
     openPanel();
     input.focus();
-    loadActiveAgent();
+    loadAllAgents();
   });
 
   selector.addEventListener("pointerdown", function (event) {
@@ -252,6 +255,18 @@
   function loadActiveAgent() {
     var entry = getActiveEntry();
 
+    loadAgentEntry(entry, true);
+  }
+
+  function loadAllAgents() {
+    var activeEntry = getActiveEntry();
+
+    (window[registryName] || []).forEach(function (entry) {
+      loadAgentEntry(entry, entry === activeEntry);
+    });
+  }
+
+  function loadAgentEntry(entry, shouldGreet) {
     if (!entry || entry.agent || entry.loadingAgent) {
       return;
     }
@@ -269,9 +284,12 @@
         entry.agent = result.data;
         entry.name = entry.agent.name || entry.name || "Mia";
         renderAgentOptions();
-        updateHeader();
 
-        if (entry.messages.length === 0 && getActiveEntry() === entry) {
+        if (getActiveEntry() === entry) {
+          updateHeader();
+        }
+
+        if (shouldGreet && entry.messages.length === 0 && getActiveEntry() === entry) {
           appendMessage("assistant", "您好，我是 " + (entry.agent.name || "Mia") + "，请问有什么可以帮您？");
         }
       })
