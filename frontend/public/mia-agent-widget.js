@@ -52,7 +52,9 @@
     dragStartX: 0,
     dragStartY: 0,
     rootStartLeft: 24,
-    rootStartTop: 0
+    rootStartTop: 0,
+    closedLeft: null,
+    closedTop: null
   };
 
   var root = document.createElement("div");
@@ -228,6 +230,7 @@
   addDragHandle(root.querySelector(".mia-agent-header"));
 
   function openPanel() {
+    captureClosedPosition();
     launcher.classList.add("mia-agent-hidden");
     panel.classList.add("mia-agent-open");
     requestAnimationFrame(function () {
@@ -239,7 +242,7 @@
     panel.classList.remove("mia-agent-open");
     launcher.classList.remove("mia-agent-hidden");
     requestAnimationFrame(function () {
-      keepRootInViewport();
+      restoreClosedPosition();
     });
   }
 
@@ -708,11 +711,16 @@
     });
 
     handle.addEventListener("pointerup", function (event) {
+      var shouldCaptureClosedPosition = state.dragMoved;
       state.dragging = false;
       try {
         handle.releasePointerCapture(event.pointerId);
       } catch (error) {
         // Pointer capture may already be released by the browser.
+      }
+
+      if (shouldCaptureClosedPosition) {
+        captureClosedPosition();
       }
     });
 
@@ -746,6 +754,26 @@
     }
 
     moveRoot(currentLeft, currentTop);
+  }
+
+  function captureClosedPosition() {
+    var rect = root.getBoundingClientRect();
+
+    state.closedLeft = rect.left;
+    state.closedTop = rect.top;
+    root.style.left = rect.left + "px";
+    root.style.top = rect.top + "px";
+    root.style.right = "auto";
+    root.style.bottom = "auto";
+  }
+
+  function restoreClosedPosition() {
+    if (typeof state.closedLeft !== "number" || typeof state.closedTop !== "number") {
+      keepRootInViewport();
+      return;
+    }
+
+    moveRoot(state.closedLeft, state.closedTop);
   }
 
   function isInteractiveElement(target) {
