@@ -429,6 +429,30 @@ export function ChatPage() {
             )}
           </div>
           <div className="chatComposer">
+            <div className="chatComposerToolbar">
+              <Upload
+                accept="image/*"
+                beforeUpload={handleBeforeUpload}
+                disabled={!selectedAgentId || sending}
+                maxCount={4}
+                showUploadList={false}
+              >
+                <Button className="chatComposerToolButton" disabled={!selectedAgentId || sending}>
+                  上传图片
+                </Button>
+              </Upload>
+              <Upload
+                accept={supportedTextFileExtensions.join(",")}
+                beforeUpload={handleFileBeforeUpload}
+                disabled={!selectedAgentId || sending}
+                maxCount={4}
+                showUploadList={false}
+              >
+                <Button className="chatComposerToolButton" disabled={!selectedAgentId || sending}>
+                  上传文件
+                </Button>
+              </Upload>
+            </div>
             <div className="chatComposerInput">
               {images.length > 0 ? (
                 <div className="chatUploadPreviewList">
@@ -479,24 +503,6 @@ export function ChatPage() {
                 }}
               />
             </div>
-            <Upload
-              accept="image/*"
-              beforeUpload={handleBeforeUpload}
-              disabled={!selectedAgentId || sending}
-              maxCount={4}
-              showUploadList={false}
-            >
-              <Button disabled={!selectedAgentId || sending}>上传图片</Button>
-            </Upload>
-            <Upload
-              accept={supportedTextFileExtensions.join(",")}
-              beforeUpload={handleFileBeforeUpload}
-              disabled={!selectedAgentId || sending}
-              maxCount={4}
-              showUploadList={false}
-            >
-              <Button disabled={!selectedAgentId || sending}>上传文件</Button>
-            </Upload>
             <Button
               disabled={
                 !selectedAgentId ||
