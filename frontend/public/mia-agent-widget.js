@@ -2,12 +2,19 @@
   var currentScript = document.currentScript;
   var token = currentScript && currentScript.getAttribute("data-agent-token");
   var agentName = currentScript && currentScript.getAttribute("data-agent-name");
+  var mode = (currentScript && currentScript.getAttribute("data-mode")) || "floating";
+  var containerSelector = currentScript && currentScript.getAttribute("data-container");
+  var isInline = mode === "inline";
   var apiBase =
     (currentScript && currentScript.getAttribute("data-api-base")) ||
     (currentScript ? new URL(currentScript.src).origin : window.location.origin);
   var registryName = "__MIA_AGENT_WIDGET_AGENTS__";
   var eventName = "mia-agent-widget:agents-changed";
   var styleId = "mia-agent-widget-style";
+  var rootId = isInline
+    ? "mia-agent-widget-inline-" + createSafeId(apiBase + "-" + token + "-" + (containerSelector || "body"))
+    : "mia-agent-widget-root";
+  var inlineAgents = [];
 
   window.MiaAgentWidget = window.MiaAgentWidget || {};
   window.MiaAgentWidget.destroy = function () {
@@ -29,20 +36,38 @@
     return;
   }
 
-  window[registryName] = window[registryName] || [];
-  registerAgent({
-    token: token,
-    apiBase: apiBase,
-    name: agentName || ""
-  });
+  if (isInline) {
+    registerAgentTo(inlineAgents, {
+      token: token,
+      apiBase: apiBase,
+      name: agentName || ""
+    });
+  } else {
+    window[registryName] = window[registryName] || [];
+    registerAgentTo(window[registryName], {
+      token: token,
+      apiBase: apiBase,
+      name: agentName || ""
+    });
+  }
 
-  if (document.getElementById("mia-agent-widget-root")) {
+  if (isInline && document.getElementById(rootId)) {
+    return;
+  }
+
+  if (!isInline && document.getElementById(rootId)) {
     window.dispatchEvent(new CustomEvent(eventName));
     return;
   }
 
+  var mountTarget = resolveMountTarget();
+
+  if (!mountTarget) {
+    return;
+  }
+
   var state = {
-    activeKey: getAgentKey(window[registryName][0]),
+    activeKey: getAgentKey(getAgents()[0]),
     streaming: false,
     abortController: null,
     images: [],
@@ -58,7 +83,8 @@
   };
 
   var root = document.createElement("div");
-  root.id = "mia-agent-widget-root";
+  root.id = rootId;
+  root.className = isInline ? "mia-agent-widget-inline" : "mia-agent-widget-floating";
   root.innerHTML =
     '<button class="mia-agent-launcher" type="button" aria-label="打开 Mia 对话">M</button>' +
     '<section class="mia-agent-panel" aria-label="Mia 对话窗口">' +
@@ -87,11 +113,16 @@
   style.id = styleId;
   style.textContent =
     "#mia-agent-widget-root{position:fixed;right:24px;bottom:24px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;touch-action:none}" +
-    "#mia-agent-widget-root *{box-sizing:border-box}" +
+    "#mia-agent-widget-root *,.mia-agent-widget-inline *{box-sizing:border-box}" +
+    ".mia-agent-widget-inline{position:relative;width:100%;height:100%;min-height:420px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827}" +
     ".mia-agent-launcher{width:56px;height:56px;border:0;border-radius:18px;background:#2563eb;color:#fff;font-size:24px;font-weight:800;box-shadow:0 14px 34px rgba(37,99,235,.32);cursor:grab;user-select:none}" +
     ".mia-agent-launcher:active{cursor:grabbing}" +
     ".mia-agent-panel{display:none;width:360px;height:560px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:hidden;border:1px solid #dbe3ef;border-radius:18px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.2)}" +
     ".mia-agent-panel.mia-agent-open{display:flex;flex-direction:column}" +
+    ".mia-agent-widget-inline .mia-agent-launcher{display:none}" +
+    ".mia-agent-widget-inline .mia-agent-panel{display:flex;width:100%;height:100%;max-width:none;max-height:none;box-shadow:none}" +
+    ".mia-agent-widget-inline .mia-agent-close{display:none}" +
+    ".mia-agent-widget-inline .mia-agent-header{cursor:default}" +
     ".mia-agent-header{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;background:#f8fafc;cursor:grab;user-select:none}" +
     ".mia-agent-header:active{cursor:grabbing}" +
     ".mia-agent-title{font-size:16px;font-weight:800;line-height:1.2}" +
@@ -121,8 +152,10 @@
     ".mia-agent-attachment-remove{position:absolute;right:4px;top:4px;width:20px;height:20px;border:0;border-radius:999px;background:#e5e7eb;color:#334155;line-height:20px;padding:0;cursor:pointer}" +
     ".mia-agent-hidden{display:none}";
 
-  document.head.appendChild(style);
-  document.body.appendChild(root);
+  if (!document.getElementById(styleId)) {
+    document.head.appendChild(style);
+  }
+  mountTarget.appendChild(root);
 
   var launcher = root.querySelector(".mia-agent-launcher");
   var panel = root.querySelector(".mia-agent-panel");
@@ -142,13 +175,15 @@
   renderAgentOptions();
   updateHeader();
 
-  window.addEventListener(eventName, function () {
-    renderAgentOptions();
-    updateHeader();
-    if (panel.classList.contains("mia-agent-open")) {
-      loadAllAgents();
-    }
-  });
+  if (!isInline) {
+    window.addEventListener(eventName, function () {
+      renderAgentOptions();
+      updateHeader();
+      if (panel.classList.contains("mia-agent-open")) {
+        loadAllAgents();
+      }
+    });
+  }
 
   launcher.addEventListener("click", function () {
     if (state.dragMoved) {
@@ -232,8 +267,13 @@
     });
   });
 
-  addDragHandle(launcher);
-  addDragHandle(root.querySelector(".mia-agent-header"));
+  if (isInline) {
+    panel.classList.add("mia-agent-open");
+    loadAllAgents();
+  } else {
+    addDragHandle(launcher);
+    addDragHandle(root.querySelector(".mia-agent-header"));
+  }
 
   function openPanel() {
     captureClosedPosition();
@@ -261,7 +301,7 @@
   function loadAllAgents() {
     var activeEntry = getActiveEntry();
 
-    (window[registryName] || []).forEach(function (entry) {
+    getAgents().forEach(function (entry) {
       loadAgentEntry(entry, entry === activeEntry);
     });
   }
@@ -625,9 +665,9 @@
     }
   }
 
-  function registerAgent(nextAgent) {
+  function registerAgentTo(agents, nextAgent) {
     var key = getAgentKey(nextAgent);
-    var existing = window[registryName].filter(function (item) {
+    var existing = agents.filter(function (item) {
       return getAgentKey(item) === key;
     })[0];
 
@@ -637,7 +677,7 @@
       return;
     }
 
-    window[registryName].push({
+    agents.push({
       key: key,
       token: nextAgent.token,
       apiBase: nextAgent.apiBase,
@@ -648,12 +688,16 @@
     });
   }
 
+  function getAgents() {
+    return isInline ? inlineAgents : window[registryName] || [];
+  }
+
   function getAgentKey(agent) {
     return agent.apiBase + "::" + agent.token;
   }
 
   function getActiveEntry() {
-    var agents = window[registryName] || [];
+    var agents = getAgents();
     var entry = agents.filter(function (item) {
       return getAgentKey(item) === state.activeKey;
     })[0];
@@ -667,7 +711,7 @@
   }
 
   function renderAgentOptions() {
-    var agents = window[registryName] || [];
+    var agents = getAgents();
     selector.innerHTML = "";
 
     agents.forEach(function (entry) {
@@ -819,5 +863,21 @@
         target.closest &&
         target.closest("button,select,textarea,input,a,label")
     );
+  }
+
+  function resolveMountTarget() {
+    if (!isInline) {
+      return document.body;
+    }
+
+    if (!containerSelector) {
+      return currentScript && currentScript.parentElement;
+    }
+
+    return document.querySelector(containerSelector);
+  }
+
+  function createSafeId(value) {
+    return String(value || "default").replace(/[^a-zA-Z0-9_-]/g, "-");
   }
 })();

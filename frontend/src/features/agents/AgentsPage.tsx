@@ -54,7 +54,7 @@ type AgentTableItem = AgentListItem & {
   toolCount: number;
 };
 
-type EmbedScenario = "single" | "multi" | "spa";
+type EmbedScenario = "single" | "multi" | "spa" | "inline";
 
 const defaultFormValues: AgentFormValues = {
   name: "",
@@ -489,6 +489,10 @@ export function AgentsPage() {
       return getSpaEmbedCode(shareToken);
     }
 
+    if (scenario === "inline") {
+      return getInlineEmbedCode(shareToken);
+    }
+
     return getScriptTag(shareToken, embedAgent?.name);
   }
 
@@ -540,6 +544,17 @@ loadMiaAgentWidget({
   name: "${currentName}"
 });
 </script>`;
+  }
+
+  function getInlineEmbedCode(shareToken: string): string {
+    const origin = window.location.origin;
+    const currentName = embedAgent?.name || "当前 Agent";
+
+    return [
+      '<div id="mia-agent-container" style="height: 600px;"></div>',
+      "",
+      `<script src="${origin}/mia-agent-widget.js" data-agent-token="${shareToken}" data-api-base="${origin}" data-agent-name="${escapeHtmlAttribute(currentName)}" data-mode="inline" data-container="#mia-agent-container" async></script>`
+    ].join("\n");
   }
 
   function escapeHtmlAttribute(value: string): string {
@@ -728,6 +743,16 @@ loadMiaAgentWidget({
                 <EmbedCodePanel
                   code={getEmbedCode(embedAgent?.shareToken ?? null, "spa")}
                   description="适合 React/Vue 等单页应用：路由变化时调用 loadMiaAgentWidget，先销毁旧 widget，再加载当前页面对应的 Agent。"
+                />
+              )
+            },
+            {
+              key: "inline",
+              label: "页面内嵌",
+              children: (
+                <EmbedCodePanel
+                  code={getEmbedCode(embedAgent?.shareToken ?? null, "inline")}
+                  description="适合把 Chat 作为页面内容的一部分：指定容器后直接渲染完整聊天框，不显示右下角悬浮按钮，也不支持拖动。"
                 />
               )
             }
