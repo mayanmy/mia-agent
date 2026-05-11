@@ -741,7 +741,11 @@
       }
 
       if (shouldCaptureClosedPosition) {
-        captureClosedPosition();
+        if (handle === launcher) {
+          captureClosedPosition();
+        } else {
+          captureClosedPositionFromPanel();
+        }
       }
     });
 
@@ -788,6 +792,13 @@
     root.style.bottom = "auto";
   }
 
+  function captureClosedPositionFromPanel() {
+    var rect = root.getBoundingClientRect();
+
+    state.closedLeft = rect.left;
+    state.closedTop = rect.bottom - getLauncherSize();
+  }
+
   function restoreClosedPosition() {
     if (typeof state.closedLeft !== "number" || typeof state.closedTop !== "number") {
       keepRootInViewport();
@@ -795,6 +806,10 @@
     }
 
     moveRoot(state.closedLeft, state.closedTop);
+  }
+
+  function getLauncherSize() {
+    return 56;
   }
 
   function isInteractiveElement(target) {
