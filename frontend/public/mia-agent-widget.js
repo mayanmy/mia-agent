@@ -222,6 +222,7 @@
     renderMessages();
     updateHeader();
     loadActiveAgent();
+    ensureWelcomeMessage(getActiveEntry());
   });
 
   closeButton.addEventListener("click", function () {
@@ -337,8 +338,8 @@
           updateHeader();
         }
 
-        if (shouldGreet && entry.messages.length === 0 && getActiveEntry() === entry) {
-          appendMessage("assistant", "您好，我是 " + (entry.agent.name || "Mia") + "，请问有什么可以帮您？");
+        if (shouldGreet && getActiveEntry() === entry) {
+          ensureWelcomeMessage(entry);
         }
       })
       .catch(function (error) {
@@ -349,6 +350,14 @@
       .finally(function () {
         entry.loadingAgent = false;
       });
+  }
+
+  function ensureWelcomeMessage(entry) {
+    if (!entry || !entry.agent || entry.messages.length > 0 || getActiveEntry() !== entry) {
+      return;
+    }
+
+    appendMessage("assistant", "您好，我是 " + (entry.agent.name || "Mia") + "，请问有什么可以帮您？");
   }
 
   function sendMessage() {
