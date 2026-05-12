@@ -500,7 +500,7 @@ export function AgentsPage() {
     const origin = window.location.origin;
     const nameAttribute = agentName ? ` data-agent-name="${escapeHtmlAttribute(agentName)}"` : "";
 
-    return `<script src="${origin}/mia-agent-widget.js" data-agent-token="${shareToken}" data-api-base="${origin}"${nameAttribute} async></script>`;
+    return `<script src="${origin}/mia-agent-widget.js" data-agent-token="${shareToken}" data-api-base="${origin}"${nameAttribute} data-launcher-icon="M" data-launcher-size="56" async></script>`;
   }
 
   function getMultiAgentEmbedCode(shareToken: string): string {
@@ -535,13 +535,17 @@ function loadMiaAgentWidget(agent) {
   script.setAttribute("data-api-base", "${origin}");
   script.setAttribute("data-agent-token", agent.token);
   script.setAttribute("data-agent-name", agent.name);
+  script.setAttribute("data-launcher-icon", agent.icon || "M");
+  script.setAttribute("data-launcher-size", String(agent.iconSize || 56));
   document.body.appendChild(script);
 }
 
 // 在路由变化时调用，传入当前页面对应的 Agent。
 loadMiaAgentWidget({
   token: "${shareToken}",
-  name: "${currentName}"
+  name: "${currentName}",
+  icon: "M",
+  iconSize: 56
 });
 </script>`;
   }
@@ -722,7 +726,7 @@ loadMiaAgentWidget({
               children: (
                 <EmbedCodePanel
                   code={getEmbedCode(embedAgent?.shareToken ?? null, "single")}
-                  description="适合普通页面：每个页面只嵌入当前这个 Agent，页面左下角出现一个 Mia 聊天入口。"
+                  description='适合普通页面：每个页面只嵌入当前这个 Agent，页面右下角出现一个 Mia 聊天入口。可调整 data-launcher-icon 和 data-launcher-size；如果要用图片图标，改用 data-launcher-icon-url="https://..."。'
                 />
               )
             },

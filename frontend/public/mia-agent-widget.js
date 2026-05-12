@@ -4,6 +4,11 @@
   var agentName = currentScript && currentScript.getAttribute("data-agent-name");
   var mode = (currentScript && currentScript.getAttribute("data-mode")) || "floating";
   var containerSelector = currentScript && currentScript.getAttribute("data-container");
+  var launcherIcon = (currentScript && currentScript.getAttribute("data-launcher-icon")) || "M";
+  var launcherIconUrl = currentScript && currentScript.getAttribute("data-launcher-icon-url");
+  var launcherSize = normalizeLauncherSize(
+    (currentScript && currentScript.getAttribute("data-launcher-size")) || "56"
+  );
   var isInline = mode === "inline";
   var apiBase =
     (currentScript && currentScript.getAttribute("data-api-base")) ||
@@ -86,7 +91,7 @@
   root.id = rootId;
   root.className = isInline ? "mia-agent-widget-inline" : "mia-agent-widget-floating";
   root.innerHTML =
-    '<button class="mia-agent-launcher" type="button" aria-label="打开 Mia 对话">M</button>' +
+    '<button class="mia-agent-launcher" type="button" aria-label="打开 Mia 对话"></button>' +
     '<section class="mia-agent-panel" aria-label="Mia 对话窗口">' +
     '<header class="mia-agent-header">' +
     '<div><div class="mia-agent-title">Mia</div><div class="mia-agent-subtitle">AI Agent</div></div>' +
@@ -115,7 +120,8 @@
     "#mia-agent-widget-root{position:fixed;right:24px;bottom:24px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;touch-action:none}" +
     "#mia-agent-widget-root *,.mia-agent-widget-inline *{box-sizing:border-box}" +
     ".mia-agent-widget-inline{position:relative;width:100%;height:100%;min-height:420px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827}" +
-    ".mia-agent-launcher{width:56px;height:56px;border:0;border-radius:18px;background:#2563eb;color:#fff;font-size:24px;font-weight:800;box-shadow:0 14px 34px rgba(37,99,235,.32);cursor:grab;user-select:none}" +
+    ".mia-agent-launcher{width:var(--mia-launcher-size,56px);height:var(--mia-launcher-size,56px);border:0;border-radius:calc(var(--mia-launcher-size,56px) * .32);background:#2563eb;color:#fff;font-size:calc(var(--mia-launcher-size,56px) * .43);font-weight:800;box-shadow:0 14px 34px rgba(37,99,235,.32);cursor:grab;user-select:none;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;padding:0}" +
+    ".mia-agent-launcher img{width:100%;height:100%;object-fit:cover;display:block}" +
     ".mia-agent-launcher:active{cursor:grabbing}" +
     ".mia-agent-panel{display:none;width:360px;height:560px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:hidden;border:1px solid #dbe3ef;border-radius:18px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.2)}" +
     ".mia-agent-panel.mia-agent-open{display:flex;flex-direction:column}" +
@@ -171,6 +177,8 @@
   var titleEl = root.querySelector(".mia-agent-title");
   var subtitleEl = root.querySelector(".mia-agent-subtitle");
   var selector = root.querySelector(".mia-agent-selector");
+  root.style.setProperty("--mia-launcher-size", launcherSize + "px");
+  renderLauncherIcon();
 
   renderAgentOptions();
   updateHeader();
@@ -854,7 +862,7 @@
   }
 
   function getLauncherSize() {
-    return 56;
+    return launcherSize;
   }
 
   function isInteractiveElement(target) {
@@ -879,5 +887,29 @@
 
   function createSafeId(value) {
     return String(value || "default").replace(/[^a-zA-Z0-9_-]/g, "-");
+  }
+
+  function normalizeLauncherSize(value) {
+    var parsed = Number.parseInt(String(value), 10);
+
+    if (!Number.isFinite(parsed)) {
+      return 56;
+    }
+
+    return Math.min(Math.max(parsed, 40), 96);
+  }
+
+  function renderLauncherIcon() {
+    launcher.innerHTML = "";
+
+    if (launcherIconUrl) {
+      var image = document.createElement("img");
+      image.alt = launcherIcon || "Mia";
+      image.src = launcherIconUrl;
+      launcher.appendChild(image);
+      return;
+    }
+
+    launcher.textContent = launcherIcon || "M";
   }
 })();
