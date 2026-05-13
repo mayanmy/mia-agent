@@ -150,7 +150,7 @@
     ".mia-agent-bubble{max-width:84%;white-space:pre-wrap;word-break:break-word;border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.55}" +
     ".mia-agent-message-user .mia-agent-bubble{background:#2563eb;color:#fff;border-bottom-right-radius:4px}" +
     ".mia-agent-message-assistant .mia-agent-bubble{background:#f1f5f9;color:#111827;border-bottom-left-radius:4px}" +
-    ".mia-agent-composer{display:flex;flex-direction:column;gap:10px;padding:12px;border-top:1px solid #e5e7eb;background:#fff}" +
+    ".mia-agent-composer{display:flex;flex:0 0 auto;flex-direction:column;gap:10px;padding:12px;border-top:1px solid #e5e7eb;background:#fff}" +
     ".mia-agent-toolbar{display:flex;gap:8px;align-items:center}" +
     ".mia-agent-composer-row{display:flex;gap:8px;align-items:flex-end}" +
     ".mia-agent-input{flex:1;min-height:44px;max-height:120px;resize:none;border:1px solid #cbd5e1;border-radius:12px;padding:10px 12px;font:inherit;font-size:14px;outline:none}" +
@@ -343,16 +343,17 @@
     root.style.position = "fixed";
     root.style.left = "12px";
     root.style.top = "12px";
-    root.style.right = "12px";
-    root.style.bottom = "12px";
-    root.style.width = "auto";
-    root.style.height = "auto";
+    root.style.right = "auto";
+    root.style.bottom = "auto";
+    root.style.width = "calc(100vw - 24px)";
+    root.style.height = "calc(100vh - 24px)";
     root.style.zIndex = "2147483647";
     panel.style.display = "flex";
     panel.style.width = "100%";
     panel.style.height = "100%";
     panel.style.maxWidth = "none";
     panel.style.maxHeight = "none";
+    panel.style.minHeight = "0";
     fullscreenButton.textContent = "↙";
     fullscreenButton.setAttribute("aria-label", "退出全屏");
   }
