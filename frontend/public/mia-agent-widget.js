@@ -150,6 +150,9 @@
     ".mia-agent-bubble{max-width:84%;white-space:pre-wrap;word-break:break-word;border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.55}" +
     ".mia-agent-message-user .mia-agent-bubble{background:#2563eb;color:#fff;border-bottom-right-radius:4px}" +
     ".mia-agent-message-assistant .mia-agent-bubble{background:#f1f5f9;color:#111827;border-bottom-left-radius:4px}" +
+    ".mia-agent-message-meta{display:inline-flex;align-items:center;gap:8px;margin-top:4px;color:#94a3b8;font-size:12px}" +
+    ".mia-agent-meta-button{width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:#64748b;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:14px}" +
+    ".mia-agent-meta-button:disabled{opacity:.35;cursor:not-allowed}" +
     ".mia-agent-composer{display:flex;flex:0 0 auto;flex-direction:column;gap:10px;padding:12px;border-top:1px solid #e5e7eb;background:#fff}" +
     ".mia-agent-toolbar{display:flex;gap:8px;align-items:center}" +
     ".mia-agent-composer-row{display:flex;gap:8px;align-items:flex-end}" +
@@ -657,13 +660,15 @@
     var message = {
       role: role,
       content: content,
-      bubble: bubble
+      bubble: bubble,
+      createdAt: Date.now()
     };
 
     wrapper.className = "mia-agent-message mia-agent-message-" + role;
     bubble.className = "mia-agent-bubble";
     bubble.textContent = content || " ";
     wrapper.appendChild(bubble);
+    wrapper.appendChild(createMessageMeta(message));
     messagesEl.appendChild(wrapper);
     if (entry) {
       entry.messages.push(message);
@@ -689,10 +694,54 @@
       bubble.className = "mia-agent-bubble";
       bubble.textContent = message.content || " ";
       wrapper.appendChild(bubble);
+      wrapper.appendChild(createMessageMeta(message));
       messagesEl.appendChild(wrapper);
       message.bubble = bubble;
     });
     scrollToBottom();
+  }
+
+  function createMessageMeta(message) {
+    var meta = document.createElement("div");
+    var time = document.createElement("span");
+    var copyButton = document.createElement("button");
+    var editButton = document.createElement("button");
+
+    meta.className = "mia-agent-message-meta";
+    time.textContent = formatMessageTime(message.createdAt || Date.now());
+    copyButton.className = "mia-agent-meta-button";
+    copyButton.type = "button";
+    copyButton.title = "复制";
+    copyButton.textContent = "⧉";
+    copyButton.addEventListener("click", function () {
+      copyText(message.content || "");
+    });
+    editButton.className = "mia-agent-meta-button";
+    editButton.type = "button";
+    editButton.title = "编辑";
+    editButton.textContent = "✎";
+    editButton.disabled = message.role !== "user";
+    meta.appendChild(time);
+    meta.appendChild(copyButton);
+    meta.appendChild(editButton);
+
+    return meta;
+  }
+
+  function copyText(value) {
+    if (!String(value || "").trim() || !navigator.clipboard) {
+      return;
+    }
+
+    navigator.clipboard.writeText(value);
+  }
+
+  function formatMessageTime(value) {
+    return new Intl.DateTimeFormat(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).format(new Date(value));
   }
 
   function scrollToBottom() {

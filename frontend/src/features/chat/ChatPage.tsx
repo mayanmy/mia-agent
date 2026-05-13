@@ -3,7 +3,7 @@ import type { ClipboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button, Empty, Input, Select, Space, Tag, Upload, message } from "antd";
 import type { UploadProps } from "antd";
-import { CloseOutlined } from "@ant-design/icons";
+import { CloseOutlined, CopyOutlined, EditOutlined } from "@ant-design/icons";
 
 import { listAgents, type AgentListItem } from "../agents/api";
 import {
@@ -15,6 +15,7 @@ import {
 
 type ChatUiMessage = ChatMessage & {
   id: string;
+  createdAt: number;
 };
 
 const maxImageSize = 5 * 1024 * 1024;
@@ -41,6 +42,14 @@ const supportedTextFileExtensions = [
 
 function createMessageId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function formatMessageTime(value: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(new Date(value));
 }
 
 export function ChatPage() {
@@ -140,7 +149,8 @@ export function ChatPage() {
       role: "user",
       content,
       images: currentImages,
-      files: currentFiles
+      files: currentFiles,
+      createdAt: Date.now()
     };
     const assistantMessageId = createMessageId();
     const history = messages.map(({ role, content: messageContent }) => ({
@@ -154,7 +164,8 @@ export function ChatPage() {
       {
         id: assistantMessageId,
         role: "assistant",
-        content: ""
+        content: "",
+        createdAt: Date.now()
       }
     ]);
     setInput("");
@@ -220,6 +231,15 @@ export function ChatPage() {
 
   function handleStop() {
     abortControllerRef.current?.abort();
+  }
+
+  async function copyMessageContent(content: string) {
+    if (!content.trim()) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(content);
+    message.success("已复制");
   }
 
   async function addImageFile(file: File): Promise<boolean> {
@@ -423,6 +443,26 @@ export function ChatPage() {
                       </div>
                     ) : null}
                     {item.content || (item.role === "assistant" && sending ? "正在生成..." : "")}
+                  </div>
+                  <div className="chatMessageMeta">
+                    <span>{formatMessageTime(item.createdAt)}</span>
+                    <Button
+                      aria-label="复制消息"
+                      className="chatMessageMetaButton"
+                      disabled={!item.content.trim()}
+                      icon={<CopyOutlined />}
+                      size="small"
+                      type="text"
+                      onClick={() => void copyMessageContent(item.content)}
+                    />
+                    <Button
+                      aria-label="编辑消息"
+                      className="chatMessageMetaButton"
+                      disabled={item.role !== "user"}
+                      icon={<EditOutlined />}
+                      size="small"
+                      type="text"
+                    />
                   </div>
                 </div>
               ))

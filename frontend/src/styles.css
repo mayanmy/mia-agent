@@ -339,6 +339,27 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.chatMessageMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 13px;
+  justify-self: end;
+}
+
+.chatMessage.assistant .chatMessageMeta {
+  justify-self: start;
+}
+
+.chatMessageMetaButton {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  color: #64748b;
+}
+
 .chatMessage.user .chatMessageBubble {
   border-color: #2563eb;
   background: #2563eb;
