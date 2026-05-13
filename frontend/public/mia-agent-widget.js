@@ -84,7 +84,12 @@
     rootStartLeft: 24,
     rootStartTop: 0,
     closedLeft: null,
-    closedTop: null
+    closedTop: null,
+    fullscreen: false,
+    beforeFullscreenLeft: null,
+    beforeFullscreenTop: null,
+    beforeFullscreenRootStyle: "",
+    beforeFullscreenPanelStyle: ""
   };
 
   var root = document.createElement("div");
@@ -96,6 +101,7 @@
     '<header class="mia-agent-header">' +
     '<div><div class="mia-agent-title">Mia</div><div class="mia-agent-subtitle">AI Agent</div></div>' +
     '<select class="mia-agent-selector" aria-label="选择 Agent"></select>' +
+    '<button class="mia-agent-fullscreen" type="button" aria-label="全屏">⛶</button>' +
     '<button class="mia-agent-close" type="button" aria-label="关闭">×</button>' +
     '</header>' +
     '<main class="mia-agent-messages"></main>' +
@@ -123,19 +129,21 @@
     ".mia-agent-launcher{width:var(--mia-launcher-size,56px);height:var(--mia-launcher-size,56px);border:0;border-radius:calc(var(--mia-launcher-size,56px) * .32);background:#2563eb;color:#fff;font-size:calc(var(--mia-launcher-size,56px) * .43);font-weight:800;box-shadow:0 14px 34px rgba(37,99,235,.32);cursor:grab;user-select:none;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;padding:0}" +
     ".mia-agent-launcher img{width:100%;height:100%;object-fit:cover;display:block}" +
     ".mia-agent-launcher:active{cursor:grabbing}" +
-    ".mia-agent-panel{display:none;width:360px;height:560px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:hidden;border:1px solid #dbe3ef;border-radius:18px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.2)}" +
+    ".mia-agent-panel{display:none;width:360px;height:560px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:hidden;border:1px solid #dbe3ef;border-radius:18px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.2);min-height:0}" +
     ".mia-agent-panel.mia-agent-open{display:flex;flex-direction:column}" +
+    ".mia-agent-widget-fullscreen{position:fixed!important;left:12px!important;top:12px!important;right:auto!important;bottom:auto!important;width:calc(100vw - 24px)!important;height:calc(100vh - 24px)!important;z-index:2147483647}" +
+    ".mia-agent-widget-fullscreen .mia-agent-panel{display:flex!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;border-radius:14px;box-shadow:0 24px 80px rgba(15,23,42,.28);min-height:0}" +
     ".mia-agent-widget-inline .mia-agent-launcher{display:none}" +
     ".mia-agent-widget-inline .mia-agent-panel{display:flex;width:100%;height:100%;max-width:none;max-height:none;box-shadow:none}" +
     ".mia-agent-widget-inline .mia-agent-close{display:none}" +
     ".mia-agent-widget-inline .mia-agent-header{cursor:default}" +
-    ".mia-agent-header{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;background:#f8fafc;cursor:grab;user-select:none}" +
+    ".mia-agent-header{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:10px;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;background:#f8fafc;cursor:grab;user-select:none}" +
     ".mia-agent-header:active{cursor:grabbing}" +
     ".mia-agent-title{font-size:16px;font-weight:800;line-height:1.2}" +
     ".mia-agent-subtitle{margin-top:4px;color:#64748b;font-size:12px;line-height:1.2}" +
     ".mia-agent-selector{max-width:132px;height:32px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#111827;padding:0 8px;font:inherit;font-size:12px;outline:none;cursor:pointer}" +
-    ".mia-agent-close{width:30px;height:30px;border:0;border-radius:999px;background:#e5e7eb;color:#334155;font-size:20px;line-height:1;cursor:pointer}" +
-    ".mia-agent-messages{flex:1;overflow:auto;padding:16px;background:#fff}" +
+    ".mia-agent-close,.mia-agent-fullscreen{width:30px;height:30px;border:0;border-radius:999px;background:#e5e7eb;color:#334155;font-size:18px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}" +
+    ".mia-agent-messages{flex:1 1 auto;min-height:0;overflow:auto;padding:16px;background:#fff}" +
     ".mia-agent-message{margin-bottom:12px;display:flex;flex-direction:column}" +
     ".mia-agent-message-user{align-items:flex-end}" +
     ".mia-agent-message-assistant{align-items:flex-start}" +
@@ -166,6 +174,7 @@
   var launcher = root.querySelector(".mia-agent-launcher");
   var panel = root.querySelector(".mia-agent-panel");
   var closeButton = root.querySelector(".mia-agent-close");
+  var fullscreenButton = root.querySelector(".mia-agent-fullscreen");
   var messagesEl = root.querySelector(".mia-agent-messages");
   var input = root.querySelector(".mia-agent-input");
   var sendButton = root.querySelector(".mia-agent-send");
@@ -212,6 +221,10 @@
     event.stopPropagation();
   });
 
+  fullscreenButton.addEventListener("pointerdown", function (event) {
+    event.stopPropagation();
+  });
+
   selector.addEventListener("change", function () {
     if (state.streaming) {
       selector.value = state.activeKey;
@@ -227,6 +240,10 @@
 
   closeButton.addEventListener("click", function () {
     closePanel();
+  });
+
+  fullscreenButton.addEventListener("click", function () {
+    toggleFullscreen();
   });
 
   sendButton.addEventListener("click", function () {
@@ -294,11 +311,72 @@
   }
 
   function closePanel() {
+    if (state.fullscreen) {
+      exitFullscreen();
+    }
+
     panel.classList.remove("mia-agent-open");
     launcher.classList.remove("mia-agent-hidden");
     requestAnimationFrame(function () {
       restoreClosedPosition();
     });
+  }
+
+  function toggleFullscreen() {
+    if (state.fullscreen) {
+      exitFullscreen();
+      return;
+    }
+
+    enterFullscreen();
+  }
+
+  function enterFullscreen() {
+    var rect = root.getBoundingClientRect();
+
+    state.fullscreen = true;
+    state.beforeFullscreenLeft = rect.left;
+    state.beforeFullscreenTop = rect.top;
+    state.beforeFullscreenRootStyle = root.getAttribute("style") || "";
+    state.beforeFullscreenPanelStyle = panel.getAttribute("style") || "";
+    root.classList.add("mia-agent-widget-fullscreen");
+    root.style.position = "fixed";
+    root.style.left = "12px";
+    root.style.top = "12px";
+    root.style.right = "12px";
+    root.style.bottom = "12px";
+    root.style.width = "auto";
+    root.style.height = "auto";
+    root.style.zIndex = "2147483647";
+    panel.style.display = "flex";
+    panel.style.width = "100%";
+    panel.style.height = "100%";
+    panel.style.maxWidth = "none";
+    panel.style.maxHeight = "none";
+    fullscreenButton.textContent = "↙";
+    fullscreenButton.setAttribute("aria-label", "退出全屏");
+  }
+
+  function exitFullscreen() {
+    state.fullscreen = false;
+    root.classList.remove("mia-agent-widget-fullscreen");
+    root.setAttribute("style", state.beforeFullscreenRootStyle);
+    panel.setAttribute("style", state.beforeFullscreenPanelStyle);
+    root.style.setProperty("--mia-launcher-size", launcherSize + "px");
+    fullscreenButton.textContent = "⛶";
+    fullscreenButton.setAttribute("aria-label", "全屏");
+
+    if (
+      typeof state.beforeFullscreenLeft === "number" &&
+      typeof state.beforeFullscreenTop === "number" &&
+      !isInline
+    ) {
+      root.style.left = state.beforeFullscreenLeft + "px";
+      root.style.top = state.beforeFullscreenTop + "px";
+      root.style.right = "auto";
+      root.style.bottom = "auto";
+      keepRootInViewport();
+    }
   }
 
   function loadActiveAgent() {
@@ -754,6 +832,10 @@
 
   function addDragHandle(handle) {
     handle.addEventListener("pointerdown", function (event) {
+      if (state.fullscreen) {
+        return;
+      }
+
       if (event.button !== undefined && event.button !== 0) {
         return;
       }
