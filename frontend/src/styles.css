@@ -358,6 +358,13 @@ h2 {
   min-height: 24px;
   padding: 0;
   color: #64748b;
+  background: transparent;
+}
+
+.chatMessageMetaButton:hover,
+.chatMessageMetaButton:focus {
+  background: transparent !important;
+  color: #475569 !important;
 }
 
 .chatMessage.user .chatMessageBubble {

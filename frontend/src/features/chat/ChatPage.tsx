@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ClipboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Button, Empty, Input, Select, Space, Tag, Upload, message } from "antd";
+import { App as AntdApp, Button, Empty, Input, Select, Space, Tag, Upload } from "antd";
 import type { UploadProps } from "antd";
 import { CloseOutlined, CopyOutlined, EditOutlined } from "@ant-design/icons";
 
@@ -53,6 +53,7 @@ function formatMessageTime(value: number): string {
 }
 
 export function ChatPage() {
+  const { message: messageApi } = AntdApp.useApp();
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -97,7 +98,7 @@ export function ChatPage() {
       setAgents(enabledAgents);
       setSelectedAgentId(nextAgentId);
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "加载 Agent 失败");
+      messageApi.error(error instanceof Error ? error.message : "加载 Agent 失败");
     } finally {
       setLoadingAgents(false);
     }
@@ -118,7 +119,7 @@ export function ChatPage() {
     const content = input.trim();
 
     if (!selectedAgentId) {
-      message.warning("请选择 Agent");
+      messageApi.warning("请选择 Agent");
       return;
     }
 
@@ -127,7 +128,7 @@ export function ChatPage() {
     }
 
     if (images.length > 0 && selectedAgent && !isLikelyVisionModel(selectedAgent.modelName)) {
-      message.warning(
+      messageApi.warning(
         `当前模型 ${selectedAgent.modelName} 不支持图片输入，请切换到 qwen-vl-max、qwen2.5-vl 等视觉模型。`
       );
       return;
@@ -201,7 +202,7 @@ export function ChatPage() {
       if (error instanceof DOMException && error.name === "AbortError") {
         appendAssistantToken(assistantMessageId, "\n\n已停止生成。");
       } else {
-        message.error(error instanceof Error ? error.message : "对话失败");
+        messageApi.error(error instanceof Error ? error.message : "对话失败");
         removeAssistantMessageIfEmpty(assistantMessageId);
       }
     } finally {
@@ -239,22 +240,22 @@ export function ChatPage() {
     }
 
     await navigator.clipboard.writeText(content);
-    message.success("已复制");
+    messageApi.success("已复制");
   }
 
   async function addImageFile(file: File): Promise<boolean> {
     if (!file.type?.startsWith("image/")) {
-      message.warning("只能上传图片");
+      messageApi.warning("只能上传图片");
       return false;
     }
 
     if (file.size > maxImageSize) {
-      message.warning("单张图片不能超过 5MB");
+      messageApi.warning("单张图片不能超过 5MB");
       return false;
     }
 
     if (images.length >= 4) {
-      message.warning("一次最多上传 4 张图片");
+      messageApi.warning("一次最多上传 4 张图片");
       return false;
     }
 
@@ -298,7 +299,7 @@ export function ChatPage() {
     let addedCount = 0;
 
     if (filesToAdd.length < files.length) {
-      message.warning("一次最多保留 4 张图片");
+      messageApi.warning("一次最多保留 4 张图片");
     }
 
     for (const file of filesToAdd) {
@@ -310,7 +311,7 @@ export function ChatPage() {
     }
 
     if (addedCount > 0) {
-      message.success(`已粘贴 ${addedCount} 张图片`);
+      messageApi.success(`已粘贴 ${addedCount} 张图片`);
     }
   }
 
@@ -324,17 +325,17 @@ export function ChatPage() {
 
   async function addTextFile(file: File): Promise<boolean> {
     if (!isSupportedTextFile(file)) {
-      message.warning("当前只支持文本类文件，例如 txt、md、json、csv、代码文件");
+      messageApi.warning("当前只支持文本类文件，例如 txt、md、json、csv、代码文件");
       return false;
     }
 
     if (file.size > maxFileSize) {
-      message.warning("单个文件不能超过 1MB");
+      messageApi.warning("单个文件不能超过 1MB");
       return false;
     }
 
     if (files.length >= 4) {
-      message.warning("一次最多上传 4 个文件");
+      messageApi.warning("一次最多上传 4 个文件");
       return false;
     }
 
