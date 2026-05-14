@@ -3,7 +3,7 @@ import type { ClipboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { App as AntdApp, Button, Empty, Input, Select, Space, Tag, Upload } from "antd";
 import type { UploadProps } from "antd";
-import { CloseOutlined, CopyOutlined, EditOutlined } from "@ant-design/icons";
+import { CloseOutlined, CopyOutlined } from "@ant-design/icons";
 
 import { listAgents, type AgentListItem } from "../agents/api";
 import {
@@ -455,14 +455,6 @@ export function ChatPage() {
                       size="small"
                       type="text"
                       onClick={() => void copyMessageContent(item.content)}
-                    />
-                    <Button
-                      aria-label="编辑消息"
-                      className="chatMessageMetaButton"
-                      disabled={item.role !== "user"}
-                      icon={<EditOutlined />}
-                      size="small"
-                      type="text"
                     />
                   </div>
                 </div>

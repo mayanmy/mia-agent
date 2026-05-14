@@ -705,7 +705,6 @@
     var meta = document.createElement("div");
     var time = document.createElement("span");
     var copyButton = document.createElement("button");
-    var editButton = document.createElement("button");
 
     meta.className = "mia-agent-message-meta";
     time.textContent = formatMessageTime(message.createdAt || Date.now());
@@ -716,14 +715,8 @@
     copyButton.addEventListener("click", function () {
       copyText(message.content || "");
     });
-    editButton.className = "mia-agent-meta-button";
-    editButton.type = "button";
-    editButton.title = "编辑";
-    editButton.textContent = "✎";
-    editButton.disabled = message.role !== "user";
     meta.appendChild(time);
     meta.appendChild(copyButton);
-    meta.appendChild(editButton);
 
     return meta;
   }
