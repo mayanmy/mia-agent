@@ -20,6 +20,28 @@
     ? "mia-agent-widget-inline-" + createSafeId(apiBase + "-" + token + "-" + (containerSelector || "body"))
     : "mia-agent-widget-root";
   var inlineAgents = [];
+  var maxAttachmentCount = 4;
+  var maxImageSize = 5 * 1024 * 1024;
+  var maxFileSize = 1024 * 1024;
+  var supportedTextFileExtensions = [
+    ".txt",
+    ".md",
+    ".json",
+    ".csv",
+    ".log",
+    ".yaml",
+    ".yml",
+    ".xml",
+    ".html",
+    ".css",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".py",
+    ".java",
+    ".sql"
+  ];
 
   window.MiaAgentWidget = window.MiaAgentWidget || {};
   window.MiaAgentWidget.destroy = function () {
@@ -593,8 +615,16 @@
   }
 
   function addImageFiles(files) {
-    files.slice(0, Math.max(0, 4 - state.images.length)).forEach(function (file) {
+    files.forEach(function (file) {
+      if (state.images.length >= maxAttachmentCount) {
+        return;
+      }
+
       if (!file || file.type.indexOf("image/") !== 0) {
+        return;
+      }
+
+      if (file.size > maxImageSize) {
         return;
       }
 
@@ -611,8 +641,16 @@
   }
 
   function addTextFiles(files) {
-    files.slice(0, Math.max(0, 4 - state.files.length)).forEach(function (file) {
+    files.forEach(function (file) {
+      if (state.files.length >= maxAttachmentCount) {
+        return;
+      }
+
       if (!file) {
+        return;
+      }
+
+      if (!isSupportedTextFile(file) || file.size > maxFileSize) {
         return;
       }
 
@@ -622,10 +660,22 @@
           name: file.name || "file",
           mimeType: file.type || "text/plain",
           size: file.size || content.length,
-          content: content.slice(0, 200000)
+          content: content
         });
         renderAttachments();
       });
+    });
+  }
+
+  function isSupportedTextFile(file) {
+    if (file.type && file.type.indexOf("text/") === 0) {
+      return true;
+    }
+
+    var lowerName = String(file.name || "").toLowerCase();
+
+    return supportedTextFileExtensions.some(function (extension) {
+      return lowerName.slice(-extension.length) === extension;
     });
   }
 
