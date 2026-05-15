@@ -160,6 +160,7 @@
     ".mia-agent-input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}" +
     ".mia-agent-tool-button{height:32px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#334155;font-weight:700;cursor:pointer;padding:0 10px;white-space:nowrap}" +
     ".mia-agent-send{min-width:64px;height:44px;border:0;border-radius:12px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer}" +
+    ".mia-agent-send.mia-agent-stop{background:#ef4444}" +
     ".mia-agent-send:disabled{background:#cbd5e1;cursor:not-allowed}" +
     ".mia-agent-attachments{display:none;gap:8px;flex-wrap:wrap}" +
     ".mia-agent-attachments.mia-agent-has-attachments{display:flex}" +
@@ -250,6 +251,11 @@
   });
 
   sendButton.addEventListener("click", function () {
+    if (state.streaming) {
+      stopStreaming();
+      return;
+    }
+
     sendMessage();
   });
 
@@ -447,7 +453,11 @@
     var currentImages = state.images.slice();
     var currentFiles = state.files.slice();
 
-    if ((!content && currentImages.length === 0 && currentFiles.length === 0) || state.streaming) {
+    if (state.streaming) {
+      return;
+    }
+
+    if (!content && currentImages.length === 0 && currentFiles.length === 0) {
       return;
     }
 
@@ -473,7 +483,9 @@
     appendMessage("user", buildUserDisplayContent(content, currentImages, currentFiles));
     var assistantMessage = appendMessage("assistant", "");
     state.streaming = true;
-    sendButton.disabled = true;
+    sendButton.disabled = false;
+    sendButton.textContent = "停止";
+    sendButton.classList.add("mia-agent-stop");
     state.abortController = new AbortController();
 
     fetch(entry.apiBase + "/api/v1/chat/stream", {
@@ -508,6 +520,18 @@
         });
       })
       .catch(function (error) {
+        if (isAbortError(error)) {
+          if (!assistantMessage.content) {
+            assistantMessage.content = "已停止生成。";
+            assistantMessage.bubble.textContent = assistantMessage.content;
+          } else {
+            assistantMessage.content += "\n\n已停止生成。";
+            assistantMessage.bubble.textContent = assistantMessage.content;
+          }
+          scrollToBottom();
+          return;
+        }
+
         if (!assistantMessage.content) {
           assistantMessage.content = error.message || "对话失败";
           assistantMessage.bubble.textContent = assistantMessage.content;
@@ -516,8 +540,23 @@
       .finally(function () {
         state.streaming = false;
         sendButton.disabled = false;
+        sendButton.textContent = "发送";
+        sendButton.classList.remove("mia-agent-stop");
         state.abortController = null;
       });
+  }
+
+  function stopStreaming() {
+    if (state.abortController) {
+      state.abortController.abort();
+    }
+  }
+
+  function isAbortError(error) {
+    return (
+      (typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError") ||
+      (error && error.name === "AbortError")
+    );
   }
 
   function addImageFiles(files) {
