@@ -469,6 +469,16 @@
       return;
     }
 
+    if (currentImages.length > 0 && !isLikelyVisionModel(getAgentModelName(entry.agent))) {
+      appendMessage(
+        "assistant",
+        "当前模型 " +
+          (getAgentModelName(entry.agent) || "未知模型") +
+          " 不支持图片输入，请切换到 qwen-vl-max、qwen2.5-vl 等视觉模型。"
+      );
+      return;
+    }
+
     var history = entry.messages.slice(-12).map(function (message) {
       return {
         role: message.role,
@@ -557,6 +567,29 @@
       (typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError") ||
       (error && error.name === "AbortError")
     );
+  }
+
+  function getAgentModelName(agent) {
+    return String((agent && (agent.modelName || agent.model_name)) || "");
+  }
+
+  function isLikelyVisionModel(modelName) {
+    var normalized = String(modelName || "").toLowerCase();
+    var visionModelKeywords = [
+      "vl",
+      "vision",
+      "omni",
+      "qvq",
+      "gpt-4o",
+      "gpt-4.1",
+      "gemini",
+      "claude-3",
+      "claude-4"
+    ];
+
+    return visionModelKeywords.some(function (keyword) {
+      return normalized.indexOf(keyword) >= 0;
+    });
   }
 
   function addImageFiles(files) {
