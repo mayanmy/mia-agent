@@ -179,8 +179,10 @@
     ".mia-agent-toolbar{display:flex;gap:8px;align-items:center}" +
     ".mia-agent-composer-row{display:flex;gap:8px;align-items:flex-end}" +
     ".mia-agent-input{flex:1;min-height:44px;max-height:120px;resize:none;border:1px solid #cbd5e1;border-radius:12px;padding:10px 12px;font:inherit;font-size:14px;outline:none}" +
+    ".mia-agent-input:disabled{background:#f8fafc;color:#94a3b8;cursor:not-allowed}" +
     ".mia-agent-input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}" +
     ".mia-agent-tool-button{height:32px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#334155;font-weight:700;cursor:pointer;padding:0 10px;white-space:nowrap}" +
+    ".mia-agent-tool-button:disabled{background:#f8fafc;color:#94a3b8;cursor:not-allowed}" +
     ".mia-agent-send{min-width:64px;height:44px;border:0;border-radius:12px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer}" +
     ".mia-agent-send.mia-agent-stop{background:#ef4444}" +
     ".mia-agent-send:disabled{background:#cbd5e1;cursor:not-allowed}" +
@@ -515,9 +517,7 @@
     appendMessage("user", buildUserDisplayContent(content, currentImages, currentFiles));
     var assistantMessage = appendMessage("assistant", "");
     state.streaming = true;
-    sendButton.disabled = false;
-    sendButton.textContent = "停止";
-    sendButton.classList.add("mia-agent-stop");
+    updateStreamingControls();
     state.abortController = new AbortController();
 
     fetch(entry.apiBase + "/api/v1/chat/stream", {
@@ -571,11 +571,22 @@
       })
       .finally(function () {
         state.streaming = false;
-        sendButton.disabled = false;
-        sendButton.textContent = "发送";
-        sendButton.classList.remove("mia-agent-stop");
         state.abortController = null;
+        updateStreamingControls();
       });
+  }
+
+  function updateStreamingControls() {
+    var isStreaming = Boolean(state.streaming);
+
+    input.disabled = isStreaming;
+    imageButton.disabled = isStreaming;
+    fileButton.disabled = isStreaming;
+    imageInput.disabled = isStreaming;
+    fileInput.disabled = isStreaming;
+    sendButton.disabled = false;
+    sendButton.textContent = isStreaming ? "停止" : "发送";
+    sendButton.classList.toggle("mia-agent-stop", isStreaming);
   }
 
   function stopStreaming() {
