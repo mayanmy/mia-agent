@@ -111,7 +111,8 @@
     beforeFullscreenLeft: null,
     beforeFullscreenTop: null,
     beforeFullscreenRootStyle: "",
-    beforeFullscreenPanelStyle: ""
+    beforeFullscreenPanelStyle: "",
+    toastTimer: null
   };
 
   var root = document.createElement("div");
@@ -140,7 +141,8 @@
     '<input class="mia-agent-image-input" type="file" accept="image/*" multiple hidden />' +
     '<input class="mia-agent-file-input" type="file" multiple hidden />' +
     '</footer>' +
-    '</section>';
+    '</section>' +
+    '<div class="mia-agent-toast" role="status" aria-live="polite"></div>';
 
   var style = document.createElement("style");
   style.id = styleId;
@@ -192,6 +194,10 @@
     ".mia-agent-attachment img{width:42px;height:42px;object-fit:cover;border-radius:8px}" +
     ".mia-agent-attachment-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
     ".mia-agent-attachment-remove{position:absolute;right:4px;top:4px;width:20px;height:20px;border:0;border-radius:999px;background:#e5e7eb;color:#334155;line-height:20px;padding:0;cursor:pointer}" +
+    ".mia-agent-toast{position:absolute;left:50%;top:12px;z-index:2;min-width:96px;max-width:260px;transform:translate(-50%,-8px);border-radius:12px;background:#fff;color:#111827;box-shadow:0 14px 36px rgba(15,23,42,.18);padding:10px 14px;font-size:14px;line-height:1.4;text-align:center;opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease}" +
+    ".mia-agent-toast-visible{opacity:1;transform:translate(-50%,0)}" +
+    ".mia-agent-toast-success{border-left:4px solid #22c55e}" +
+    ".mia-agent-toast-error{border-left:4px solid #ef4444}" +
     ".mia-agent-hidden{display:none}";
 
   if (!document.getElementById(styleId)) {
@@ -211,6 +217,7 @@
   var imageInput = root.querySelector(".mia-agent-image-input");
   var fileInput = root.querySelector(".mia-agent-file-input");
   var attachmentsEl = root.querySelector(".mia-agent-attachments");
+  var toastEl = root.querySelector(".mia-agent-toast");
   var titleEl = root.querySelector(".mia-agent-title");
   var subtitleEl = root.querySelector(".mia-agent-subtitle");
   var selector = root.querySelector(".mia-agent-selector");
@@ -628,14 +635,17 @@
   function addImageFiles(files) {
     files.forEach(function (file) {
       if (state.images.length >= maxAttachmentCount) {
+        showToast("一次最多上传 4 张图片", "error");
         return;
       }
 
       if (!file || file.type.indexOf("image/") !== 0) {
+        showToast("只能上传图片", "error");
         return;
       }
 
       if (file.size > maxImageSize) {
+        showToast("单张图片不能超过 5MB", "error");
         return;
       }
 
@@ -647,6 +657,8 @@
           dataUrl: dataUrl
         });
         renderAttachments();
+      }).catch(function () {
+        showToast("图片读取失败", "error");
       });
     });
   }
@@ -654,6 +666,7 @@
   function addTextFiles(files) {
     files.forEach(function (file) {
       if (state.files.length >= maxAttachmentCount) {
+        showToast("一次最多上传 4 个文件", "error");
         return;
       }
 
@@ -661,7 +674,13 @@
         return;
       }
 
-      if (!isSupportedTextFile(file) || file.size > maxFileSize) {
+      if (!isSupportedTextFile(file)) {
+        showToast("当前只支持文本类文件", "error");
+        return;
+      }
+
+      if (file.size > maxFileSize) {
+        showToast("单个文件不能超过 1MB", "error");
         return;
       }
 
@@ -674,6 +693,8 @@
           content: content
         });
         renderAttachments();
+      }).catch(function () {
+        showToast("文件读取失败", "error");
       });
     });
   }
@@ -859,7 +880,28 @@
       return;
     }
 
-    navigator.clipboard.writeText(value);
+    navigator.clipboard.writeText(value).then(function () {
+      showToast("已复制", "success");
+    }).catch(function () {
+      showToast("复制失败", "error");
+    });
+  }
+
+  function showToast(message, type) {
+    if (!toastEl) {
+      return;
+    }
+
+    if (state.toastTimer) {
+      clearTimeout(state.toastTimer);
+    }
+
+    toastEl.textContent = message;
+    toastEl.className = "mia-agent-toast mia-agent-toast-" + (type || "success") + " mia-agent-toast-visible";
+    state.toastTimer = setTimeout(function () {
+      toastEl.className = "mia-agent-toast mia-agent-toast-" + (type || "success");
+      state.toastTimer = null;
+    }, 1800);
   }
 
   function formatMessageTime(value) {
