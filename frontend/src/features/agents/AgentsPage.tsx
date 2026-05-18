@@ -246,7 +246,7 @@ export function AgentsPage() {
 
         const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
           if (key === "publish") {
-            void handlePublish(record.id);
+            confirmPublish(record.id);
             return;
           }
 
@@ -261,7 +261,7 @@ export function AgentsPage() {
           }
 
           if (key === "unpublish") {
-            void handleUnpublish(record.id);
+            confirmUnpublish(record.id);
             return;
           }
 
@@ -425,6 +425,19 @@ export function AgentsPage() {
     }
   }
 
+  function confirmPublish(id: string) {
+    Modal.confirm({
+      title: "发布 Agent",
+      content: "确认发布这个 Agent？",
+      okText: "发布",
+      okButtonProps: {
+        danger: true
+      },
+      cancelText: "取消",
+      onOk: () => handlePublish(id)
+    });
+  }
+
   async function handlePublish(id: string) {
     setLoading(true);
 
@@ -438,6 +451,19 @@ export function AgentsPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function confirmUnpublish(id: string) {
+    Modal.confirm({
+      title: "取消发布 Agent",
+      content: "确认取消发布这个 Agent？",
+      okText: "取消发布",
+      okButtonProps: {
+        danger: true
+      },
+      cancelText: "取消",
+      onOk: () => handleUnpublish(id)
+    });
   }
 
   async function handleUnpublish(id: string) {
