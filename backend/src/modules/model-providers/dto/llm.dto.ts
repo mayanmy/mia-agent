@@ -1,6 +1,6 @@
 import { ModelProviderType } from '@prisma/client';
 
-export type ChatRole = 'system' | 'user' | 'assistant';
+export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export type ChatContentPart =
   | {
@@ -17,6 +17,21 @@ export type ChatContentPart =
 export type ChatMessage = {
   role: ChatRole;
   content: string | ChatContentPart[];
+  toolCallId?: string;
+  toolCalls?: LLMToolCall[];
+};
+
+export type LLMToolDefinition = {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+};
+
+export type LLMToolCall = {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  rawArguments: string;
 };
 
 export type ChatCompletionRequest = {
@@ -25,6 +40,8 @@ export type ChatCompletionRequest = {
   temperature?: number;
   maxTokens?: number | null;
   timeoutSeconds?: number;
+  tools?: LLMToolDefinition[];
+  toolChoice?: 'auto' | 'none';
   signal?: AbortSignal;
 };
 
@@ -33,6 +50,7 @@ export type ChatCompletionResponse = {
   model: string;
   providerId: string;
   providerType: ModelProviderType;
+  toolCalls?: LLMToolCall[];
   usage?: {
     promptTokens?: number;
     completionTokens?: number;
@@ -40,11 +58,22 @@ export type ChatCompletionResponse = {
   };
 };
 
-export type ChatStreamChunk = {
-  type: 'token' | 'done' | 'error';
-  content?: string;
-  errorMessage?: string;
-};
+export type ChatStreamChunk =
+  | {
+      type: 'token';
+      content: string;
+    }
+  | {
+      type: 'tool_call';
+      toolCall: LLMToolCall;
+    }
+  | {
+      type: 'done';
+    }
+  | {
+      type: 'error';
+      errorMessage?: string;
+    };
 
 export type ProviderRuntimeConfig = {
   providerId: string;
@@ -60,6 +89,8 @@ export type ProviderChatRequest = {
   messages: ChatMessage[];
   temperature?: number;
   maxTokens?: number | null;
+  tools?: LLMToolDefinition[];
+  toolChoice?: 'auto' | 'none';
   signal: AbortSignal;
 };
 

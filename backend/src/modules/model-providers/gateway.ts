@@ -45,6 +45,8 @@ export class ModelProvidersGateway {
         messages,
         temperature: request.temperature,
         maxTokens: request.maxTokens ?? config.maxTokens,
+        tools: this.normalizeTools(request.tools),
+        toolChoice: request.toolChoice,
         signal: controller.signal,
       });
     } catch (error) {
@@ -69,6 +71,8 @@ export class ModelProvidersGateway {
         messages,
         temperature: request.temperature,
         maxTokens: request.maxTokens ?? config.maxTokens,
+        tools: this.normalizeTools(request.tools),
+        toolChoice: request.toolChoice,
         signal: controller.signal,
       });
     } catch (error) {
@@ -143,8 +147,13 @@ export class ModelProvidersGateway {
     return messages.map((message) => {
       if (
         !message ||
-        (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant') ||
-        !this.isValidMessageContent(message.content)
+        (
+          message.role !== 'system' &&
+          message.role !== 'user' &&
+          message.role !== 'assistant' &&
+          message.role !== 'tool'
+        ) ||
+        !this.isValidMessageContent(message.content, message)
       ) {
         throw new AppError(ErrorCodes.common.badRequest, 'messages is invalid');
       }
@@ -155,11 +164,47 @@ export class ModelProvidersGateway {
           typeof message.content === 'string'
             ? message.content.trim()
             : message.content,
+        ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
+        ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
       };
     });
   }
 
-  private isValidMessageContent(content: unknown): boolean {
+  private normalizeTools(tools: ChatCompletionRequest['tools']): ChatCompletionRequest['tools'] {
+    if (!tools) {
+      return undefined;
+    }
+
+    if (!Array.isArray(tools)) {
+      throw new AppError(ErrorCodes.common.badRequest, 'tools is invalid');
+    }
+
+    return tools.map((tool) => {
+      if (
+        !tool ||
+        typeof tool.name !== 'string' ||
+        tool.name.trim().length === 0 ||
+        typeof tool.description !== 'string' ||
+        !tool.parameters ||
+        typeof tool.parameters !== 'object' ||
+        Array.isArray(tool.parameters)
+      ) {
+        throw new AppError(ErrorCodes.common.badRequest, 'tools is invalid');
+      }
+
+      return {
+        name: tool.name.trim(),
+        description: tool.description,
+        parameters: tool.parameters,
+      };
+    });
+  }
+
+  private isValidMessageContent(content: unknown, message?: ChatMessage): boolean {
+    if (message?.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0) {
+      return typeof content === 'string';
+    }
+
     if (typeof content === 'string') {
       return content.trim().length > 0;
     }
