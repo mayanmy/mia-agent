@@ -7,6 +7,7 @@ import { createPageResult, normalizePageQuery } from '../../core/pagination';
 import { PageResult } from '../../core/result';
 import { ModelProvidersService } from '../model-providers/model-providers.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ToolsService } from '../tools/tools.service';
 import {
   AgentCreateDto,
   AgentDetail,
@@ -64,6 +65,7 @@ export class AgentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly modelProvidersService: ModelProvidersService,
+    private readonly toolsService: ToolsService,
   ) {}
 
   async listAgents(query: AgentQueryDto): Promise<PageResult<AgentListItem>> {
@@ -346,6 +348,7 @@ export class AgentsService {
   ): Promise<AgentToolBindingResult> {
     await this.ensureAgentExists(id);
     const toolIds = this.normalizeToolIds(payload.toolIds);
+    this.ensureToolIdsExist(toolIds);
 
     await this.prisma.$transaction([
       this.prisma.agentTool.deleteMany({
@@ -549,6 +552,24 @@ export class AgentsService {
     }
 
     return [...new Set(toolIds)];
+  }
+
+  private ensureToolIdsExist(toolIds: string[]): void {
+    if (toolIds.length === 0) {
+      return;
+    }
+
+    const availableToolIds = new Set(
+      this.toolsService.getToolDefinitions(toolIds).map((tool) => tool.id),
+    );
+    const missingToolIds = toolIds.filter((toolId) => !availableToolIds.has(toolId));
+
+    if (missingToolIds.length > 0) {
+      throw new AppError(
+        ErrorCodes.agent.invalidTools,
+        `unknown or disabled toolIds: ${missingToolIds.join(', ')}`,
+      );
+    }
   }
 
   private parseEnabled(value: string): boolean {
