@@ -3,7 +3,13 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { AppError, ErrorCodes } from '../../core/errors';
 import { AgentsService } from '../agents/agents.service';
 import { ModelProvidersService } from '../model-providers/model-providers.service';
-import { ChatMessage } from '../model-providers/dto/llm.dto';
+import {
+  ChatMessage,
+  LLMToolCall,
+  LLMToolDefinition,
+} from '../model-providers/dto/llm.dto';
+import { ToolDefinition, ToolJsonValue } from '../tools/dto/tool.dto';
+import { ToolsService } from '../tools/tools.service';
 import {
   ChatFileAttachmentDto,
   ChatImageAttachmentDto,
@@ -17,12 +23,14 @@ const MAX_IMAGE_COUNT = 4;
 const MAX_IMAGE_DATA_URL_LENGTH = 7 * 1024 * 1024;
 const MAX_FILE_COUNT = 4;
 const MAX_FILE_CONTENT_LENGTH = 200_000;
+const MAX_TOOL_ROUNDS = 3;
 
 @Injectable()
 export class ChatService {
   constructor(
     private readonly agentsService: AgentsService,
     private readonly modelProvidersService: ModelProvidersService,
+    private readonly toolsService: ToolsService,
   ) {}
 
   async createCompletion(payload: ChatCompletionDto): Promise<ChatCompletionResult> {
@@ -33,14 +41,18 @@ export class ChatService {
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
     this.ensureImageInputSupported(agent.modelName, images);
     const history = this.normalizeHistory(payload.history, agent.historyTurns);
+    const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
+    const llmTools = this.toLLMToolDefinitions(toolDefinitions);
+    const messages: ChatMessage[] = [
+      { role: 'system', content: agent.systemPrompt },
+      ...history,
+      this.buildUserMessage(message, images, files),
+    ];
 
-    const response = await this.modelProvidersService.createChatCompletion({
+    const response = await this.createCompletionWithTools({
       modelConfigId: agent.modelConfigId,
-      messages: [
-        { role: 'system', content: agent.systemPrompt },
-        ...history,
-        this.buildUserMessage(message, images, files),
-      ],
+      messages,
+      tools: llmTools,
       temperature: agent.temperature,
       maxTokens: agent.maxTokens,
       timeoutSeconds: agent.timeoutSeconds,
@@ -66,6 +78,13 @@ export class ChatService {
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
     this.ensureImageInputSupported(agent.modelName, images);
     const history = this.normalizeHistory(payload.history, agent.historyTurns);
+    const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
+    const llmTools = this.toLLMToolDefinitions(toolDefinitions);
+    const messages: ChatMessage[] = [
+      { role: 'system', content: agent.systemPrompt },
+      ...history,
+      this.buildUserMessage(message, images, files),
+    ];
 
     yield {
       type: 'message_start',
@@ -77,28 +96,46 @@ export class ChatService {
       },
     };
 
-    for await (const chunk of this.modelProvidersService.streamChatCompletion({
-      modelConfigId: agent.modelConfigId,
-      messages: [
-        { role: 'system', content: agent.systemPrompt },
-        ...history,
-        this.buildUserMessage(message, images, files),
-      ],
-      temperature: agent.temperature,
-      maxTokens: agent.maxTokens,
-      timeoutSeconds: agent.timeoutSeconds,
-      signal,
-    })) {
-      if (chunk.type === 'token' && chunk.content) {
-        yield {
-          type: 'token',
-          data: {
-            content: chunk.content,
-          },
-        };
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
+      const toolCalls: LLMToolCall[] = [];
+      let assistantContent = '';
+
+      for await (const chunk of this.modelProvidersService.streamChatCompletion({
+        modelConfigId: agent.modelConfigId,
+        messages,
+        tools: llmTools,
+        toolChoice: llmTools.length > 0 ? 'auto' : undefined,
+        temperature: agent.temperature,
+        maxTokens: agent.maxTokens,
+        timeoutSeconds: agent.timeoutSeconds,
+        signal,
+      })) {
+        if (chunk.type === 'token' && chunk.content) {
+          assistantContent += chunk.content;
+          yield {
+            type: 'token',
+            data: {
+              content: chunk.content,
+            },
+          };
+        }
+
+        if (chunk.type === 'tool_call') {
+          toolCalls.push(chunk.toolCall);
+        }
+
+        if (chunk.type === 'error') {
+          yield {
+            type: 'error',
+            data: {
+              message: chunk.errorMessage || 'model stream failed',
+            },
+          };
+          return;
+        }
       }
 
-      if (chunk.type === 'done') {
+      if (toolCalls.length === 0) {
         yield {
           type: 'message_end',
           data: {},
@@ -106,21 +143,166 @@ export class ChatService {
         return;
       }
 
-      if (chunk.type === 'error') {
+      if (round >= MAX_TOOL_ROUNDS) {
         yield {
           type: 'error',
           data: {
-            message: chunk.errorMessage || 'model stream failed',
+            message: 'tool call rounds exceeded',
           },
         };
         return;
       }
+
+      messages.push({
+        role: 'assistant',
+        content: assistantContent,
+        toolCalls,
+      });
+
+      for (const toolCall of toolCalls) {
+        yield {
+          type: 'tool_call',
+          data: {
+            id: toolCall.id,
+            name: toolCall.name,
+            arguments: toolCall.arguments,
+          },
+        };
+
+        const result = await this.toolsService.executeTool({
+          toolId: toolCall.name,
+          input: this.toToolInput(toolCall.arguments),
+          agentId: agent.agentId,
+          signal,
+        });
+
+        yield {
+          type: 'tool_result',
+          data: result,
+        };
+
+        messages.push({
+          role: 'tool',
+          toolCallId: toolCall.id,
+          content: JSON.stringify(result.ok ? result.output ?? null : {
+            errorType: result.errorType,
+            errorMessage: result.errorMessage,
+          }),
+        });
+      }
     }
 
     yield {
-      type: 'message_end',
-      data: {},
+      type: 'error',
+      data: {
+        message: 'tool call rounds exceeded',
+      },
     };
+  }
+
+  private async createCompletionWithTools(request: {
+    modelConfigId: string;
+    messages: ChatMessage[];
+    tools: LLMToolDefinition[];
+    temperature: number;
+    maxTokens: number | null;
+    timeoutSeconds: number;
+  }): Promise<{
+    content: string;
+    model: string;
+    providerId: string;
+    providerType: string;
+  }> {
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
+      const response = await this.modelProvidersService.createChatCompletion({
+        modelConfigId: request.modelConfigId,
+        messages: request.messages,
+        tools: request.tools,
+        toolChoice: request.tools.length > 0 ? 'auto' : undefined,
+        temperature: request.temperature,
+        maxTokens: request.maxTokens,
+        timeoutSeconds: request.timeoutSeconds,
+      });
+
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        return response;
+      }
+
+      if (round >= MAX_TOOL_ROUNDS) {
+        throw new AppError(
+          ErrorCodes.common.badRequest,
+          'tool call rounds exceeded',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      request.messages.push({
+        role: 'assistant',
+        content: response.content,
+        toolCalls: response.toolCalls,
+      });
+
+      for (const toolCall of response.toolCalls) {
+        const result = await this.toolsService.executeTool({
+          toolId: toolCall.name,
+          input: this.toToolInput(toolCall.arguments),
+        });
+
+        request.messages.push({
+          role: 'tool',
+          toolCallId: toolCall.id,
+          content: JSON.stringify(result.ok ? result.output ?? null : {
+            errorType: result.errorType,
+            errorMessage: result.errorMessage,
+          }),
+        });
+      }
+    }
+
+    throw new AppError(
+      ErrorCodes.common.badRequest,
+      'tool call rounds exceeded',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  private toLLMToolDefinitions(tools: ToolDefinition[]): LLMToolDefinition[] {
+    return tools.map((tool) => ({
+      name: tool.id,
+      description: tool.description,
+      parameters: tool.inputSchema,
+    }));
+  }
+
+  private toToolInput(value: Record<string, unknown>): Record<string, ToolJsonValue> {
+    const input: Record<string, ToolJsonValue> = {};
+
+    for (const [key, item] of Object.entries(value)) {
+      input[key] = this.toToolJsonValue(item);
+    }
+
+    return input;
+  }
+
+  private toToolJsonValue(value: unknown): ToolJsonValue {
+    if (
+      value === null ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => this.toToolJsonValue(item));
+    }
+
+    if (value && typeof value === 'object') {
+      return this.toToolInput(value as Record<string, unknown>);
+    }
+
+    return null;
   }
 
   private normalizeHistory(history: ChatMessageDto[] | undefined, maxTurns: number): ChatMessage[] {
