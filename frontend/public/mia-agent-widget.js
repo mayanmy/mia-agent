@@ -112,7 +112,8 @@
     beforeFullscreenTop: null,
     beforeFullscreenRootStyle: "",
     beforeFullscreenPanelStyle: "",
-    toastTimer: null
+    toastTimer: null,
+    autoScroll: true
   };
 
   var root = document.createElement("div");
@@ -333,6 +334,10 @@
     });
   });
 
+  messagesEl.addEventListener("scroll", function () {
+    state.autoScroll = isNearScrollBottom();
+  });
+
   if (isInline) {
     panel.classList.add("mia-agent-open");
     loadAllAgents();
@@ -520,6 +525,7 @@
     input.value = "";
     state.images = [];
     state.files = [];
+    state.autoScroll = true;
     renderAttachments();
     appendMessage("user", buildUserDisplayContent(content, currentImages, currentFiles));
     var assistantMessage = appendMessage("assistant", "");
@@ -550,7 +556,7 @@
           if (event.type === "token" && event.data.content) {
             assistantMessage.content += event.data.content;
             assistantMessage.bubble.textContent = assistantMessage.content;
-            scrollToBottom();
+            scrollToBottomIfNeeded();
           }
 
           if (event.type === "error") {
@@ -567,7 +573,7 @@
             assistantMessage.content += "\n\n已停止生成。";
             assistantMessage.bubble.textContent = assistantMessage.content;
           }
-          scrollToBottom();
+          scrollToBottomIfNeeded();
           return;
         }
 
@@ -827,7 +833,7 @@
     if (entry) {
       entry.messages.push(message);
     }
-    scrollToBottom();
+    scrollToBottomIfNeeded();
 
     return message;
   }
@@ -852,6 +858,7 @@
       messagesEl.appendChild(wrapper);
       message.bubble = bubble;
     });
+    state.autoScroll = true;
     scrollToBottom();
   }
 
@@ -914,6 +921,16 @@
 
   function scrollToBottom() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function scrollToBottomIfNeeded() {
+    if (state.autoScroll) {
+      scrollToBottom();
+    }
+  }
+
+  function isNearScrollBottom() {
+    return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight <= 32;
   }
 
   function readStream(body, onEvent) {

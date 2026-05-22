@@ -56,6 +56,7 @@ export function ChatPage() {
   const { message: messageApi } = AntdApp.useApp();
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const autoScrollRef = useRef(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState(searchParams.get("agentId") || "");
@@ -78,7 +79,7 @@ export function ChatPage() {
   useEffect(() => {
     const messagesElement = messagesRef.current;
 
-    if (!messagesElement) {
+    if (!messagesElement || !autoScrollRef.current) {
       return;
     }
 
@@ -159,6 +160,7 @@ export function ChatPage() {
       content: messageContent
     }));
 
+    autoScrollRef.current = true;
     setMessages((current) => [
       ...current,
       nextUserMessage,
@@ -232,6 +234,16 @@ export function ChatPage() {
 
   function handleStop() {
     abortControllerRef.current?.abort();
+  }
+
+  function handleMessagesScroll() {
+    const messagesElement = messagesRef.current;
+
+    if (!messagesElement) {
+      return;
+    }
+
+    autoScrollRef.current = isNearScrollBottom(messagesElement);
   }
 
   async function copyMessageContent(content: string) {
@@ -414,7 +426,7 @@ export function ChatPage() {
         </aside>
 
         <div className="chatPanel panel">
-          <div className="chatMessages" ref={messagesRef}>
+          <div className="chatMessages" ref={messagesRef} onScroll={handleMessagesScroll}>
             {messages.length === 0 ? (
               <Empty description="发送一条消息测试 Agent" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
@@ -606,4 +618,9 @@ function isLikelyVisionModel(modelName: string): boolean {
   ];
 
   return visionModelKeywords.some((keyword) => normalized.includes(keyword));
+}
+
+function isNearScrollBottom(element: HTMLElement): boolean {
+  const threshold = 32;
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= threshold;
 }
