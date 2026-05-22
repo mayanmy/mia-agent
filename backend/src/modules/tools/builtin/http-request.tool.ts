@@ -32,6 +32,12 @@ export const httpRequestTool: BuiltinTool = {
         type: 'object',
         description: 'POST 请求的 JSON body。',
       },
+      timeoutMs: {
+        type: 'number',
+        minimum: 1,
+        maximum: 30_000,
+        description: '请求超时时间，单位毫秒，最大 30000。',
+      },
     },
     required: ['url'],
     additionalProperties: false,
@@ -40,6 +46,7 @@ export const httpRequestTool: BuiltinTool = {
     const url = normalizeUrl(input.url);
     const method = normalizeMethod(input.method);
     const body = normalizeBody(input.body);
+    const timeoutMs = normalizeTimeoutMs(input.timeoutMs);
     const startedAt = Date.now();
     const response = await fetch(url, {
       method,
@@ -48,7 +55,7 @@ export const httpRequestTool: BuiltinTool = {
         ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
       },
       body: method === 'POST' && body !== undefined ? JSON.stringify(body) : undefined,
-      signal: buildTimeoutSignal(context),
+      signal: buildTimeoutSignal(context, timeoutMs),
     });
     const text = await readLimitedResponse(response);
 
@@ -118,9 +125,25 @@ function normalizeBody(value: ToolJsonValue): ToolJsonValue | undefined {
   return value;
 }
 
-function buildTimeoutSignal(context: ToolExecutionContext): AbortSignal {
+function normalizeTimeoutMs(value: ToolJsonValue): number {
+  if (value === undefined || value === null || value === '') {
+    return DEFAULT_TIMEOUT_MS;
+  }
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error('timeoutMs must be a number');
+  }
+
+  if (value < 1 || value > 30_000) {
+    throw new Error('timeoutMs must be between 1 and 30000');
+  }
+
+  return value;
+}
+
+function buildTimeoutSignal(context: ToolExecutionContext, timeoutMs: number): AbortSignal {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   if (context.signal?.aborted) {
     clearTimeout(timeout);

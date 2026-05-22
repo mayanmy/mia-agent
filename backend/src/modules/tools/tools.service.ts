@@ -109,7 +109,12 @@ export class ToolsService {
   }
 
   private getErrorType(error: unknown): string {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'name' in error &&
+      error.name === 'AbortError'
+    ) {
       return 'canceled';
     }
 
