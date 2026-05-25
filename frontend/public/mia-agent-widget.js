@@ -179,7 +179,8 @@
     ".mia-agent-message-meta{display:inline-flex;align-items:center;gap:8px;margin-top:4px;color:#94a3b8;font-size:12px}" +
     ".mia-agent-meta-button{width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:#64748b;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:14px}" +
     ".mia-agent-meta-button:disabled{opacity:.35;cursor:not-allowed}" +
-    ".mia-agent-scroll-bottom{position:absolute;right:18px;bottom:112px;z-index:3;width:34px;height:34px;border:0;border-radius:999px;background:#2563eb;color:#fff;box-shadow:0 10px 28px rgba(15,23,42,.2);cursor:pointer;font-size:18px;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0}" +
+    ".mia-agent-scroll-bottom{position:absolute;left:50%;bottom:108px;z-index:3;width:42px;height:42px;transform:translateX(-50%);border:1px solid #dfe3ea;border-radius:999px;background:#fff;color:#111827;box-shadow:0 4px 14px rgba(15,23,42,.08);cursor:pointer;font-size:28px;font-weight:300;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0}" +
+    ".mia-agent-scroll-bottom:hover{border-color:#cfd5dd;background:#fff;color:#111827}" +
     ".mia-agent-composer{display:flex;flex:0 0 auto;flex-direction:column;gap:10px;padding:12px;border-top:1px solid #e5e7eb;background:#fff}" +
     ".mia-agent-toolbar{display:flex;gap:6px;align-items:center}" +
     ".mia-agent-composer-row{display:flex;gap:8px;align-items:flex-end}" +
