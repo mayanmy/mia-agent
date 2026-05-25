@@ -129,6 +129,7 @@
     '<button class="mia-agent-close" type="button" aria-label="关闭">×</button>' +
     '</header>' +
     '<main class="mia-agent-messages"></main>' +
+    '<button class="mia-agent-scroll-bottom mia-agent-hidden" type="button" aria-label="回到底部">↓</button>' +
     '<footer class="mia-agent-composer">' +
     '<div class="mia-agent-attachments"></div>' +
     '<div class="mia-agent-toolbar">' +
@@ -154,7 +155,7 @@
     ".mia-agent-launcher{width:var(--mia-launcher-size,56px);height:var(--mia-launcher-size,56px);border:0;border-radius:calc(var(--mia-launcher-size,56px) * .32);background:#2563eb;color:#fff;font-size:calc(var(--mia-launcher-size,56px) * .43);font-weight:800;box-shadow:0 14px 34px rgba(37,99,235,.32);cursor:grab;user-select:none;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;padding:0}" +
     ".mia-agent-launcher img{width:100%;height:100%;object-fit:cover;display:block}" +
     ".mia-agent-launcher:active{cursor:grabbing}" +
-    ".mia-agent-panel{display:none;width:360px;height:560px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:hidden;border:1px solid #dbe3ef;border-radius:18px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.2);min-height:0}" +
+    ".mia-agent-panel{display:none;position:relative;width:360px;height:560px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:hidden;border:1px solid #dbe3ef;border-radius:18px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.2);min-height:0}" +
     ".mia-agent-panel.mia-agent-open{display:flex;flex-direction:column}" +
     ".mia-agent-widget-fullscreen{position:fixed!important;left:12px!important;top:12px!important;right:auto!important;bottom:auto!important;width:calc(100vw - 24px)!important;height:calc(100vh - 24px)!important;z-index:2147483647}" +
     ".mia-agent-widget-fullscreen .mia-agent-panel{display:flex!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;border-radius:14px;box-shadow:0 24px 80px rgba(15,23,42,.28);min-height:0}" +
@@ -178,6 +179,7 @@
     ".mia-agent-message-meta{display:inline-flex;align-items:center;gap:8px;margin-top:4px;color:#94a3b8;font-size:12px}" +
     ".mia-agent-meta-button{width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:#64748b;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:14px}" +
     ".mia-agent-meta-button:disabled{opacity:.35;cursor:not-allowed}" +
+    ".mia-agent-scroll-bottom{position:absolute;right:18px;bottom:112px;z-index:3;width:34px;height:34px;border:0;border-radius:999px;background:#2563eb;color:#fff;box-shadow:0 10px 28px rgba(15,23,42,.2);cursor:pointer;font-size:18px;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0}" +
     ".mia-agent-composer{display:flex;flex:0 0 auto;flex-direction:column;gap:10px;padding:12px;border-top:1px solid #e5e7eb;background:#fff}" +
     ".mia-agent-toolbar{display:flex;gap:6px;align-items:center}" +
     ".mia-agent-composer-row{display:flex;gap:8px;align-items:flex-end}" +
@@ -211,6 +213,7 @@
   var closeButton = root.querySelector(".mia-agent-close");
   var fullscreenButton = root.querySelector(".mia-agent-fullscreen");
   var messagesEl = root.querySelector(".mia-agent-messages");
+  var scrollBottomButton = root.querySelector(".mia-agent-scroll-bottom");
   var input = root.querySelector(".mia-agent-input");
   var sendButton = root.querySelector(".mia-agent-send");
   var imageButton = root.querySelector(".mia-agent-image-button");
@@ -336,6 +339,11 @@
 
   messagesEl.addEventListener("scroll", function () {
     state.autoScroll = isNearScrollBottom();
+    updateScrollBottomButton();
+  });
+
+  scrollBottomButton.addEventListener("click", function () {
+    scrollToBottom();
   });
 
   if (isInline) {
@@ -920,7 +928,9 @@
   }
 
   function scrollToBottom() {
+    state.autoScroll = true;
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    updateScrollBottomButton();
   }
 
   function scrollToBottomIfNeeded() {
@@ -931,6 +941,10 @@
 
   function isNearScrollBottom() {
     return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight <= 32;
+  }
+
+  function updateScrollBottomButton() {
+    scrollBottomButton.classList.toggle("mia-agent-hidden", state.autoScroll);
   }
 
   function readStream(body, onEvent) {

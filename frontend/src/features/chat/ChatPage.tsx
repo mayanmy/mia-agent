@@ -3,7 +3,7 @@ import type { ClipboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { App as AntdApp, Button, Empty, Input, Select, Space, Tag, Upload } from "antd";
 import type { UploadProps } from "antd";
-import { CloseOutlined, CopyOutlined } from "@ant-design/icons";
+import { ArrowDownOutlined, CloseOutlined, CopyOutlined } from "@ant-design/icons";
 
 import { listAgents, type AgentListItem } from "../agents/api";
 import {
@@ -66,6 +66,7 @@ export function ChatPage() {
   const [files, setFiles] = useState<ChatFileAttachment[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [sending, setSending] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   const selectedAgent = useMemo(
     () => agents.find((agent) => agent.id === selectedAgentId) ?? null,
@@ -85,6 +86,7 @@ export function ChatPage() {
 
     requestAnimationFrame(() => {
       messagesElement.scrollTop = messagesElement.scrollHeight;
+      setShowScrollBottom(false);
     });
   }, [messages, sending]);
 
@@ -108,6 +110,8 @@ export function ChatPage() {
   function handleAgentChange(agentId: string) {
     setSelectedAgentId(agentId);
     setMessages([]);
+    autoScrollRef.current = true;
+    setShowScrollBottom(false);
 
     if (agentId) {
       setSearchParams({ agentId });
@@ -161,6 +165,7 @@ export function ChatPage() {
     }));
 
     autoScrollRef.current = true;
+    setShowScrollBottom(false);
     setMessages((current) => [
       ...current,
       nextUserMessage,
@@ -243,7 +248,21 @@ export function ChatPage() {
       return;
     }
 
-    autoScrollRef.current = isNearScrollBottom(messagesElement);
+    const isAtBottom = isNearScrollBottom(messagesElement);
+    autoScrollRef.current = isAtBottom;
+    setShowScrollBottom(!isAtBottom);
+  }
+
+  function scrollMessagesToBottom() {
+    const messagesElement = messagesRef.current;
+
+    if (!messagesElement) {
+      return;
+    }
+
+    autoScrollRef.current = true;
+    messagesElement.scrollTop = messagesElement.scrollHeight;
+    setShowScrollBottom(false);
   }
 
   async function copyMessageContent(content: string) {
@@ -473,6 +492,16 @@ export function ChatPage() {
               ))
             )}
           </div>
+          {showScrollBottom ? (
+            <Button
+              aria-label="回到底部"
+              className="chatScrollBottomButton"
+              icon={<ArrowDownOutlined />}
+              shape="circle"
+              type="primary"
+              onClick={scrollMessagesToBottom}
+            />
+          ) : null}
           <div className="chatComposer">
             <div className="chatComposerToolbar">
               <Upload

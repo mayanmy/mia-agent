@@ -291,6 +291,7 @@ h2 {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
+  position: relative;
 }
 
 .chatMessages {
@@ -302,6 +303,14 @@ h2 {
   overscroll-behavior: contain;
   padding: 20px;
   scroll-behavior: smooth;
+}
+
+.chatScrollBottomButton {
+  bottom: 138px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+  position: absolute;
+  right: 24px;
+  z-index: 2;
 }
 
 .chatMessage {
