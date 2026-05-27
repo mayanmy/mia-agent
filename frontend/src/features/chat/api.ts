@@ -43,6 +43,8 @@ export type ChatCompletionResult = {
 export type ChatStreamEventType =
   | "message_start"
   | "token"
+  | "tool_call"
+  | "tool_result"
   | "message_end"
   | "error"
   | "ping";
