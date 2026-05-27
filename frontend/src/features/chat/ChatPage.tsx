@@ -13,9 +13,20 @@ import {
   type ChatMessage
 } from "./api";
 
+type ChatToolEvent = {
+  id: string;
+  name: string;
+  arguments?: Record<string, unknown>;
+  status: "running" | "success" | "error";
+  output?: unknown;
+  errorMessage?: string;
+  elapsedMs?: number;
+};
+
 type ChatUiMessage = ChatMessage & {
   id: string;
   createdAt: number;
+  toolEvents?: ChatToolEvent[];
 };
 
 const maxImageSize = 5 * 1024 * 1024;
@@ -199,6 +210,25 @@ export function ChatPage() {
               appendAssistantToken(assistantMessageId, event.data.content);
             }
 
+            if (event.type === "tool_call") {
+              appendToolCall(assistantMessageId, {
+                id: event.data.id || createMessageId(),
+                name: event.data.name || "unknown_tool",
+                arguments: event.data.arguments,
+                status: "running"
+              });
+            }
+
+            if (event.type === "tool_result") {
+              updateToolResult(assistantMessageId, {
+                toolId: event.data.toolId || "",
+                ok: Boolean(event.data.ok),
+                output: event.data.output,
+                errorMessage: event.data.errorMessage,
+                elapsedMs: event.data.elapsedMs
+              });
+            }
+
             if (event.type === "error") {
               throw new Error(event.data.message || "对话失败");
             }
@@ -228,6 +258,59 @@ export function ChatPage() {
             }
           : item
       )
+    );
+  }
+
+  function appendToolCall(messageId: string, toolEvent: ChatToolEvent) {
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === messageId
+          ? {
+              ...item,
+              toolEvents: [...(item.toolEvents ?? []), toolEvent]
+            }
+          : item
+      )
+    );
+  }
+
+  function updateToolResult(
+    messageId: string,
+    result: {
+      toolId: string;
+      ok: boolean;
+      output?: unknown;
+      errorMessage?: string;
+      elapsedMs?: number;
+    }
+  ) {
+    setMessages((current) =>
+      current.map((item) => {
+        if (item.id !== messageId || !item.toolEvents?.length) {
+          return item;
+        }
+
+        const index = findLastToolEventIndex(item.toolEvents, result.toolId);
+
+        if (index < 0) {
+          return item;
+        }
+
+        return {
+          ...item,
+          toolEvents: item.toolEvents.map((toolEvent, currentIndex) =>
+            currentIndex === index
+              ? {
+                  ...toolEvent,
+                  status: result.ok ? "success" : "error",
+                  output: result.output,
+                  errorMessage: result.errorMessage,
+                  elapsedMs: result.elapsedMs
+                }
+              : toolEvent
+          )
+        };
+      })
     );
   }
 
@@ -474,6 +557,38 @@ export function ChatPage() {
                         ))}
                       </div>
                     ) : null}
+                    {item.toolEvents?.length ? (
+                      <div className="chatToolEvents">
+                        {item.toolEvents.map((toolEvent) => (
+                          <div
+                            className={`chatToolEvent ${toolEvent.status}`}
+                            key={toolEvent.id}
+                          >
+                            <div className="chatToolEventHeader">
+                              <span className="chatToolEventName">
+                                {formatToolName(toolEvent.name)}
+                              </span>
+                              <span className="chatToolEventStatus">
+                                {formatToolStatus(toolEvent)}
+                              </span>
+                            </div>
+                            {toolEvent.arguments &&
+                            Object.keys(toolEvent.arguments).length > 0 ? (
+                              <div className="chatToolEventDetail">
+                                参数：{formatCompactJson(toolEvent.arguments)}
+                              </div>
+                            ) : null}
+                            {toolEvent.status !== "running" ? (
+                              <div className="chatToolEventDetail">
+                                {toolEvent.status === "success"
+                                  ? `结果：${formatCompactJson(toolEvent.output)}`
+                                  : `失败：${toolEvent.errorMessage || "工具调用失败"}`}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     {item.content || (item.role === "assistant" && sending ? "正在生成..." : "")}
                   </div>
                   <div className="chatMessageMeta">
@@ -647,6 +762,57 @@ function isLikelyVisionModel(modelName: string): boolean {
   ];
 
   return visionModelKeywords.some((keyword) => normalized.includes(keyword));
+}
+
+function findLastToolEventIndex(toolEvents: ChatToolEvent[], toolId: string): number {
+  for (let index = toolEvents.length - 1; index >= 0; index -= 1) {
+    const toolEvent = toolEvents[index];
+
+    if (toolEvent.name === toolId && toolEvent.status === "running") {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function formatToolName(name: string): string {
+  const labels: Record<string, string> = {
+    calculator: "计算器",
+    current_time: "当前时间",
+    http_request: "HTTP 请求"
+  };
+
+  return labels[name] ?? name;
+}
+
+function formatToolStatus(toolEvent: ChatToolEvent): string {
+  if (toolEvent.status === "running") {
+    return "调用中";
+  }
+
+  const elapsed = Number.isFinite(toolEvent.elapsedMs)
+    ? ` · ${toolEvent.elapsedMs}ms`
+    : "";
+
+  return toolEvent.status === "success" ? `完成${elapsed}` : `失败${elapsed}`;
+}
+
+function formatCompactJson(value: unknown): string {
+  if (value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    const text = JSON.stringify(value);
+    return text.length > 180 ? `${text.slice(0, 180)}...` : text;
+  } catch {
+    return String(value);
+  }
 }
 
 function isNearScrollBottom(element: HTMLElement): boolean {

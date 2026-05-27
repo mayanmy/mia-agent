@@ -176,6 +176,13 @@
     ".mia-agent-bubble{max-width:84%;white-space:pre-wrap;word-break:break-word;border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.55}" +
     ".mia-agent-message-user .mia-agent-bubble{background:#2563eb;color:#fff;border-bottom-right-radius:4px}" +
     ".mia-agent-message-assistant .mia-agent-bubble{background:#f1f5f9;color:#111827;border-bottom-left-radius:4px}" +
+    ".mia-agent-tool-events{display:grid;gap:6px;max-width:84%;margin:0 0 8px 0}" +
+    ".mia-agent-tool-event{display:grid;gap:4px;border:1px solid #dfe6ef;border-radius:8px;background:#f8fafc;color:#334155;padding:8px 10px;font-size:12px;line-height:1.45}" +
+    ".mia-agent-tool-event-success{border-color:#cce8d7;background:#f7fdf9}" +
+    ".mia-agent-tool-event-error{border-color:#f4c7c7;background:#fff8f8}" +
+    ".mia-agent-tool-event-header{display:flex;align-items:center;justify-content:space-between;gap:10px}" +
+    ".mia-agent-tool-event-name{color:#111827;font-weight:700}" +
+    ".mia-agent-tool-event-status,.mia-agent-tool-event-detail{color:#64748b;word-break:break-word}" +
     ".mia-agent-message-meta{display:inline-flex;align-items:center;gap:8px;margin-top:4px;color:#94a3b8;font-size:12px}" +
     ".mia-agent-meta-button{width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:#64748b;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:14px}" +
     ".mia-agent-meta-button:disabled{opacity:.35;cursor:not-allowed}" +
@@ -568,6 +575,16 @@
             scrollToBottomIfNeeded();
           }
 
+          if (event.type === "tool_call") {
+            appendToolCall(assistantMessage, event.data);
+            scrollToBottomIfNeeded();
+          }
+
+          if (event.type === "tool_result") {
+            updateToolResult(assistantMessage, event.data);
+            scrollToBottomIfNeeded();
+          }
+
           if (event.type === "error") {
             throw new Error(event.data.message || "对话失败");
           }
@@ -826,17 +843,23 @@
     var entry = getActiveEntry();
     var wrapper = document.createElement("div");
     var bubble = document.createElement("div");
+    var toolEventsEl = document.createElement("div");
     var message = {
       role: role,
       content: content,
       bubble: bubble,
+      toolEvents: [],
+      toolEventsEl: toolEventsEl,
       createdAt: Date.now()
     };
 
     wrapper.className = "mia-agent-message mia-agent-message-" + role;
     bubble.className = "mia-agent-bubble";
+    toolEventsEl.className = "mia-agent-tool-events";
+    toolEventsEl.hidden = true;
     bubble.textContent = content || " ";
     wrapper.appendChild(bubble);
+    wrapper.appendChild(toolEventsEl);
     wrapper.appendChild(createMessageMeta(message));
     messagesEl.appendChild(wrapper);
     if (entry) {
@@ -859,13 +882,19 @@
     entry.messages.forEach(function (message) {
       var wrapper = document.createElement("div");
       var bubble = document.createElement("div");
+      var toolEventsEl = document.createElement("div");
       wrapper.className = "mia-agent-message mia-agent-message-" + message.role;
       bubble.className = "mia-agent-bubble";
+      toolEventsEl.className = "mia-agent-tool-events";
+      toolEventsEl.hidden = true;
       bubble.textContent = message.content || " ";
       wrapper.appendChild(bubble);
+      wrapper.appendChild(toolEventsEl);
       wrapper.appendChild(createMessageMeta(message));
       messagesEl.appendChild(wrapper);
       message.bubble = bubble;
+      message.toolEventsEl = toolEventsEl;
+      renderToolEvents(message);
     });
     state.autoScroll = true;
     scrollToBottom();
@@ -889,6 +918,128 @@
     meta.appendChild(copyButton);
 
     return meta;
+  }
+
+  function appendToolCall(message, data) {
+    message.toolEvents = message.toolEvents || [];
+    message.toolEvents.push({
+      id: data.id || String(Date.now()),
+      name: data.name || "unknown_tool",
+      arguments: data.arguments || {},
+      status: "running"
+    });
+    renderToolEvents(message);
+  }
+
+  function updateToolResult(message, data) {
+    var toolEvents = message.toolEvents || [];
+    var index = -1;
+
+    for (var currentIndex = toolEvents.length - 1; currentIndex >= 0; currentIndex -= 1) {
+      if (toolEvents[currentIndex].name === data.toolId && toolEvents[currentIndex].status === "running") {
+        index = currentIndex;
+        break;
+      }
+    }
+
+    if (index < 0) {
+      return;
+    }
+
+    toolEvents[index].status = data.ok ? "success" : "error";
+    toolEvents[index].output = data.output;
+    toolEvents[index].errorMessage = data.errorMessage;
+    toolEvents[index].elapsedMs = data.elapsedMs;
+    renderToolEvents(message);
+  }
+
+  function renderToolEvents(message) {
+    var container = message.toolEventsEl;
+    var toolEvents = message.toolEvents || [];
+
+    if (!container) {
+      return;
+    }
+
+    container.innerHTML = "";
+    container.hidden = toolEvents.length === 0;
+
+    toolEvents.forEach(function (toolEvent) {
+      var item = document.createElement("div");
+      var header = document.createElement("div");
+      var name = document.createElement("span");
+      var status = document.createElement("span");
+
+      item.className = "mia-agent-tool-event mia-agent-tool-event-" + toolEvent.status;
+      header.className = "mia-agent-tool-event-header";
+      name.className = "mia-agent-tool-event-name";
+      status.className = "mia-agent-tool-event-status";
+      name.textContent = formatToolName(toolEvent.name);
+      status.textContent = formatToolStatus(toolEvent);
+      header.appendChild(name);
+      header.appendChild(status);
+      item.appendChild(header);
+
+      if (toolEvent.arguments && Object.keys(toolEvent.arguments).length > 0) {
+        item.appendChild(createToolEventDetail("参数：" + formatCompactJson(toolEvent.arguments)));
+      }
+
+      if (toolEvent.status !== "running") {
+        item.appendChild(
+          createToolEventDetail(
+            toolEvent.status === "success"
+              ? "结果：" + formatCompactJson(toolEvent.output)
+              : "失败：" + (toolEvent.errorMessage || "工具调用失败")
+          )
+        );
+      }
+
+      container.appendChild(item);
+    });
+  }
+
+  function createToolEventDetail(text) {
+    var detail = document.createElement("div");
+    detail.className = "mia-agent-tool-event-detail";
+    detail.textContent = text;
+    return detail;
+  }
+
+  function formatToolName(name) {
+    var labels = {
+      calculator: "计算器",
+      current_time: "当前时间",
+      http_request: "HTTP 请求"
+    };
+
+    return labels[name] || name;
+  }
+
+  function formatToolStatus(toolEvent) {
+    if (toolEvent.status === "running") {
+      return "调用中";
+    }
+
+    var elapsed = Number.isFinite(toolEvent.elapsedMs) ? " · " + toolEvent.elapsedMs + "ms" : "";
+
+    return toolEvent.status === "success" ? "完成" + elapsed : "失败" + elapsed;
+  }
+
+  function formatCompactJson(value) {
+    if (value === undefined) {
+      return "";
+    }
+
+    if (typeof value === "string") {
+      return value;
+    }
+
+    try {
+      var text = JSON.stringify(value);
+      return text.length > 180 ? text.slice(0, 180) + "..." : text;
+    } catch (_error) {
+      return String(value);
+    }
   }
 
   function copyText(value) {

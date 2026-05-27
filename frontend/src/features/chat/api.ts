@@ -52,6 +52,15 @@ export type ChatStreamEventType =
 export type ChatStreamEvent = {
   type: ChatStreamEventType;
   data: {
+    id?: string;
+    name?: string;
+    arguments?: Record<string, unknown>;
+    toolId?: string;
+    ok?: boolean;
+    output?: unknown;
+    errorType?: string;
+    errorMessage?: string;
+    elapsedMs?: number;
     content?: string;
     message?: string;
     agentId?: string;
