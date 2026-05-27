@@ -116,6 +116,7 @@ export function AgentsPage() {
   const [embedAgent, setEmbedAgent] = useState<AgentTableItem | null>(null);
   const [embedScenario, setEmbedScenario] = useState<EmbedScenario>("single");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [loadedToolIds, setLoadedToolIds] = useState<string[]>([]);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
 
   const modelOptions = useMemo(() => {
@@ -339,6 +340,7 @@ export function AgentsPage() {
 
   function openCreateDialog() {
     setEditingId(null);
+    setLoadedToolIds([]);
     form.setFieldsValue({
       ...defaultFormValues,
       modelConfigId: resolveDefaultChatModelConfigId()
@@ -367,6 +369,7 @@ export function AgentsPage() {
     try {
       const [agent, bindings] = await Promise.all([getAgent(id), getAgentTools(id)]);
       setEditingId(agent.id);
+      setLoadedToolIds(bindings.toolIds);
       form.setFieldsValue({
         ...toFormValues(agent),
         toolIds: bindings.toolIds
@@ -397,11 +400,12 @@ export function AgentsPage() {
       }
 
       if (agentId) {
-        await updateAgentTools(agentId, values.toolIds ?? []);
+        await updateAgentTools(agentId, resolveSubmittedToolIds(values.toolIds));
       }
 
       setDialogOpen(false);
       setEditingId(null);
+      setLoadedToolIds([]);
       form.resetFields();
       await refresh();
     } catch (error) {
@@ -612,7 +616,18 @@ loadMiaAgentWidget({
   function closeDialog() {
     setDialogOpen(false);
     setEditingId(null);
+    setLoadedToolIds([]);
     form.resetFields();
+  }
+
+  function resolveSubmittedToolIds(value: AgentFormValues["toolIds"] | undefined): string[] {
+    const fieldValue = value ?? form.getFieldValue("toolIds");
+
+    if (Array.isArray(fieldValue)) {
+      return fieldValue;
+    }
+
+    return editingId ? loadedToolIds : [];
   }
 
   return (
