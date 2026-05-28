@@ -24,6 +24,7 @@ const MAX_IMAGE_DATA_URL_LENGTH = 7 * 1024 * 1024;
 const MAX_FILE_COUNT = 4;
 const MAX_FILE_CONTENT_LENGTH = 200_000;
 const MAX_TOOL_ROUNDS = 3;
+const DEFAULT_TIMEZONE = 'Asia/Shanghai';
 
 @Injectable()
 export class ChatService {
@@ -44,7 +45,7 @@ export class ChatService {
     const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
     const llmTools = this.toLLMToolDefinitions(toolDefinitions);
     const messages: ChatMessage[] = [
-      { role: 'system', content: agent.systemPrompt },
+      { role: 'system', content: this.buildSystemPrompt(agent.systemPrompt, llmTools) },
       ...history,
       this.buildUserMessage(message, images, files),
     ];
@@ -81,7 +82,7 @@ export class ChatService {
     const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
     const llmTools = this.toLLMToolDefinitions(toolDefinitions);
     const messages: ChatMessage[] = [
-      { role: 'system', content: agent.systemPrompt },
+      { role: 'system', content: this.buildSystemPrompt(agent.systemPrompt, llmTools) },
       ...history,
       this.buildUserMessage(message, images, files),
     ];
@@ -96,9 +97,16 @@ export class ChatService {
       },
     };
 
+    const inferredToolCall = this.inferToolCallFromUserMessage(message, llmTools);
+
+    if (inferredToolCall) {
+      yield* this.executeToolCalls([inferredToolCall], messages, agent.agentId, signal);
+    }
+
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
-      const toolCalls: LLMToolCall[] = [];
+      let toolCalls: LLMToolCall[] = [];
       let assistantContent = '';
+      const bufferedTokens: string[] = [];
 
       for await (const chunk of this.modelProvidersService.streamChatCompletion({
         modelConfigId: agent.modelConfigId,
@@ -112,12 +120,17 @@ export class ChatService {
       })) {
         if (chunk.type === 'token' && chunk.content) {
           assistantContent += chunk.content;
-          yield {
-            type: 'token',
-            data: {
-              content: chunk.content,
-            },
-          };
+
+          if (llmTools.length > 0) {
+            bufferedTokens.push(chunk.content);
+          } else {
+            yield {
+              type: 'token',
+              data: {
+                content: chunk.content,
+              },
+            };
+          }
         }
 
         if (chunk.type === 'tool_call') {
@@ -136,6 +149,32 @@ export class ChatService {
       }
 
       if (toolCalls.length === 0) {
+        toolCalls = this.parseTextToolCalls(assistantContent, llmTools);
+      }
+
+      if (toolCalls.length === 0) {
+        const fallbackAnswer = assistantContent.trim().length === 0
+          ? this.formatLatestToolResultAnswer(messages)
+          : '';
+
+        if (fallbackAnswer) {
+          yield {
+            type: 'token',
+            data: {
+              content: fallbackAnswer,
+            },
+          };
+        }
+
+        for (const token of bufferedTokens) {
+          yield {
+            type: 'token',
+            data: {
+              content: token,
+            },
+          };
+        }
+
         yield {
           type: 'message_end',
           data: {},
@@ -153,43 +192,7 @@ export class ChatService {
         return;
       }
 
-      messages.push({
-        role: 'assistant',
-        content: assistantContent,
-        toolCalls,
-      });
-
-      for (const toolCall of toolCalls) {
-        yield {
-          type: 'tool_call',
-          data: {
-            id: toolCall.id,
-            name: toolCall.name,
-            arguments: toolCall.arguments,
-          },
-        };
-
-        const result = await this.toolsService.executeTool({
-          toolId: toolCall.name,
-          input: this.toToolInput(toolCall.arguments),
-          agentId: agent.agentId,
-          signal,
-        });
-
-        yield {
-          type: 'tool_result',
-          data: result,
-        };
-
-        messages.push({
-          role: 'tool',
-          toolCallId: toolCall.id,
-          content: JSON.stringify(result.ok ? result.output ?? null : {
-            errorType: result.errorType,
-            errorMessage: result.errorMessage,
-          }),
-        });
-      }
+      yield* this.executeToolCalls(toolCalls, messages, agent.agentId, signal, assistantContent);
     }
 
     yield {
@@ -214,6 +217,15 @@ export class ChatService {
     providerType: string;
   }> {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
+      const latestUserMessage = [...request.messages].reverse().find((message) => message.role === 'user');
+      const inferredToolCall = round === 0 && typeof latestUserMessage?.content === 'string'
+        ? this.inferToolCallFromUserMessage(latestUserMessage.content, request.tools)
+        : null;
+
+      if (inferredToolCall) {
+        await this.executeToolCallsForCompletion([inferredToolCall], request.messages);
+      }
+
       const response = await this.modelProvidersService.createChatCompletion({
         modelConfigId: request.modelConfigId,
         messages: request.messages,
@@ -224,8 +236,19 @@ export class ChatService {
         timeoutSeconds: request.timeoutSeconds,
       });
 
-      if (!response.toolCalls || response.toolCalls.length === 0) {
-        return response;
+      const toolCalls = response.toolCalls?.length
+        ? response.toolCalls
+        : this.parseTextToolCalls(response.content, request.tools);
+
+      if (toolCalls.length === 0) {
+        if (response.content.trim().length > 0) {
+          return response;
+        }
+
+        return {
+          ...response,
+          content: this.formatLatestToolResultAnswer(request.messages),
+        };
       }
 
       if (round >= MAX_TOOL_ROUNDS) {
@@ -239,24 +262,10 @@ export class ChatService {
       request.messages.push({
         role: 'assistant',
         content: response.content,
-        toolCalls: response.toolCalls,
+        toolCalls,
       });
 
-      for (const toolCall of response.toolCalls) {
-        const result = await this.toolsService.executeTool({
-          toolId: toolCall.name,
-          input: this.toToolInput(toolCall.arguments),
-        });
-
-        request.messages.push({
-          role: 'tool',
-          toolCallId: toolCall.id,
-          content: JSON.stringify(result.ok ? result.output ?? null : {
-            errorType: result.errorType,
-            errorMessage: result.errorMessage,
-          }),
-        });
-      }
+      await this.executeToolCallsForCompletion(toolCalls, request.messages);
     }
 
     throw new AppError(
@@ -272,6 +281,244 @@ export class ChatService {
       description: tool.description,
       parameters: tool.inputSchema,
     }));
+  }
+
+  private buildSystemPrompt(systemPrompt: string, tools: LLMToolDefinition[]): string {
+    if (tools.length === 0) {
+      return systemPrompt;
+    }
+
+    const toolDescriptions = tools
+      .map((tool) => {
+        return `- ${tool.name}: ${tool.description}; parameters=${JSON.stringify(tool.parameters)}`;
+      })
+      .join('\n');
+
+    return [
+      systemPrompt,
+      '',
+      '工具调用规则：',
+      '当用户问题需要实时信息、精确计算、当前日期时间或外部查询时，必须使用可用工具，不要猜测。',
+      `如果需要获取当前时间且用户未指定时区，使用 ${DEFAULT_TIMEZONE}。`,
+      '如果模型接口不支持原生工具调用，则只输出下面 JSON，不要输出解释文字：',
+      '```json',
+      '{"name":"tool_id","arguments":{}}',
+      '```',
+      '可用工具：',
+      toolDescriptions,
+      '拿到工具结果后，再基于工具结果用自然语言回答用户。',
+    ].join('\n');
+  }
+
+  private inferToolCallFromUserMessage(
+    message: string,
+    tools: LLMToolDefinition[],
+  ): LLMToolCall | null {
+    const hasCurrentTimeTool = tools.some((tool) => tool.name === 'current_time');
+
+    if (!hasCurrentTimeTool) {
+      return null;
+    }
+
+    if (!/(当前时间|现在几点|现在时间|今天|日期|星期|几点了|time now|current time)/iu.test(message)) {
+      return null;
+    }
+
+    return {
+      id: this.createToolCallId('current_time'),
+      name: 'current_time',
+      arguments: {
+        timezone: this.extractTimezone(message) ?? DEFAULT_TIMEZONE,
+      },
+      rawArguments: '',
+    };
+  }
+
+  private extractTimezone(message: string): string | null {
+    if (/(纽约|New York)/iu.test(message)) {
+      return 'America/New_York';
+    }
+
+    if (/(东京|Tokyo)/iu.test(message)) {
+      return 'Asia/Tokyo';
+    }
+
+    if (/(伦敦|London)/iu.test(message)) {
+      return 'Europe/London';
+    }
+
+    if (/(上海|北京|中国|北京时间|Asia\/Shanghai)/iu.test(message)) {
+      return DEFAULT_TIMEZONE;
+    }
+
+    return null;
+  }
+
+  private parseTextToolCalls(content: string, tools: LLMToolDefinition[]): LLMToolCall[] {
+    if (tools.length === 0 || !content.trim()) {
+      return [];
+    }
+
+    const toolNames = new Set(tools.map((tool) => tool.name));
+    const parsed = this.parseToolCallJson(content);
+
+    if (!parsed || !toolNames.has(parsed.name)) {
+      return [];
+    }
+
+    return [
+      {
+        id: this.createToolCallId(parsed.name),
+        name: parsed.name,
+        arguments: parsed.arguments,
+        rawArguments: JSON.stringify(parsed.arguments),
+      },
+    ];
+  }
+
+  private parseToolCallJson(content: string): {
+    name: string;
+    arguments: Record<string, unknown>;
+  } | null {
+    const candidates = [
+      ...Array.from(content.matchAll(/```(?:json)?\s*([\s\S]*?)```/giu)).map((match) => match[1]),
+      content,
+    ];
+
+    for (const candidate of candidates) {
+      const parsed = this.parseJsonObject(candidate.trim());
+
+      if (
+        parsed &&
+        typeof parsed.name === 'string' &&
+        parsed.arguments &&
+        typeof parsed.arguments === 'object' &&
+        !Array.isArray(parsed.arguments)
+      ) {
+        return {
+          name: parsed.name,
+          arguments: parsed.arguments as Record<string, unknown>,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  private parseJsonObject(value: string): Record<string, unknown> | null {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+        return null;
+      }
+
+      return parsed as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  private async *executeToolCalls(
+    toolCalls: LLMToolCall[],
+    messages: ChatMessage[],
+    agentId: string,
+    signal: AbortSignal | undefined,
+    assistantContent = '',
+  ): AsyncIterable<ChatStreamEvent> {
+    messages.push({
+      role: 'assistant',
+      content: assistantContent,
+      toolCalls,
+    });
+
+    for (const toolCall of toolCalls) {
+      yield {
+        type: 'tool_call',
+        data: {
+          id: toolCall.id,
+          name: toolCall.name,
+          arguments: toolCall.arguments,
+        },
+      };
+
+      const result = await this.toolsService.executeTool({
+        toolId: toolCall.name,
+        input: this.toToolInput(toolCall.arguments),
+        agentId,
+        signal,
+      });
+
+      yield {
+        type: 'tool_result',
+        data: result,
+      };
+
+      messages.push(this.toToolResultMessage(toolCall, result.ok ? result.output ?? null : {
+        errorType: result.errorType,
+        errorMessage: result.errorMessage,
+      }));
+    }
+  }
+
+  private async executeToolCallsForCompletion(
+    toolCalls: LLMToolCall[],
+    messages: ChatMessage[],
+  ): Promise<void> {
+    for (const toolCall of toolCalls) {
+      const result = await this.toolsService.executeTool({
+        toolId: toolCall.name,
+        input: this.toToolInput(toolCall.arguments),
+      });
+
+      messages.push(this.toToolResultMessage(toolCall, result.ok ? result.output ?? null : {
+        errorType: result.errorType,
+        errorMessage: result.errorMessage,
+      }));
+    }
+  }
+
+  private toToolResultMessage(toolCall: LLMToolCall, result: unknown): ChatMessage {
+    return {
+      role: 'tool',
+      toolCallId: toolCall.id,
+      content: JSON.stringify(result),
+    };
+  }
+
+  private createToolCallId(toolName: string): string {
+    return `call_${toolName}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  }
+
+  private formatLatestToolResultAnswer(messages: ChatMessage[]): string {
+    const latestToolMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === 'tool' && typeof message.content === 'string');
+
+    if (!latestToolMessage || typeof latestToolMessage.content !== 'string') {
+      return '';
+    }
+
+    const result = this.parseJsonObject(latestToolMessage.content);
+
+    if (!result) {
+      return latestToolMessage.content;
+    }
+
+    if ('errorType' in result || 'errorMessage' in result) {
+      return `工具调用失败：${String(result.errorMessage || result.errorType || '未知错误')}`;
+    }
+
+    if (typeof result.localTime === 'string') {
+      const timezone = typeof result.timezone === 'string' ? result.timezone : DEFAULT_TIMEZONE;
+      return `当前时间是 ${result.localTime}（${timezone}）。`;
+    }
+
+    if (typeof result.result === 'number') {
+      return `计算结果是 ${result.result}。`;
+    }
+
+    return `工具执行完成：${JSON.stringify(result)}`;
   }
 
   private toToolInput(value: Record<string, unknown>): Record<string, ToolJsonValue> {
