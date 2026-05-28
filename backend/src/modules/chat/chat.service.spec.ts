@@ -238,7 +238,7 @@ export const tests = [
     },
   },
   {
-    name: 'ChatService falls back to current_time tool result when model returns empty content',
+    name: 'ChatService falls back to current_time tool result for US time when model returns empty content',
     run: async () => {
       const agentsService = {
         getAgentRuntimeConfig: async () => ({
@@ -285,9 +285,9 @@ export const tests = [
           toolId: 'current_time',
           ok: true,
           output: {
-            timezone: 'Asia/Shanghai',
+            timezone: 'America/New_York',
             isoTime: '2026-07-14T11:14:00.000Z',
-            localTime: '2026年7月14日星期二 19:14:00 GMT+8',
+            localTime: '2026年7月14日星期二 07:14:00 GMT-4',
             unixMs: 1784027640000,
           },
           elapsedMs: 1,
@@ -302,7 +302,7 @@ export const tests = [
 
       for await (const event of service.streamCompletion({
         agentId: 'agent-id',
-        message: '获取当前时间',
+        message: '获取美国时间',
         history: [],
         images: [],
         files: [],
@@ -315,9 +315,12 @@ export const tests = [
         ['message_start', 'tool_call', 'tool_result', 'token', 'message_end'],
       );
       assert.equal(events[1].data.name, 'current_time');
+      assert.deepEqual(events[1].data.arguments, {
+        timezone: 'America/New_York',
+      });
       assert.equal(
         events[3].data.content,
-        '当前时间是 2026年7月14日星期二 19:14:00 GMT+8（Asia/Shanghai）。',
+        '当前时间是 2026年7月14日星期二 07:14:00 GMT-4（America/New_York）。',
       );
     },
   },

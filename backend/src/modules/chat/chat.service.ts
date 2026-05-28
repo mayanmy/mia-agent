@@ -320,7 +320,7 @@ export class ChatService {
       return null;
     }
 
-    if (!/(当前时间|现在几点|现在时间|今天|日期|星期|几点了|time now|current time)/iu.test(message)) {
+    if (!/(当前时间|现在几点|现在时间|今天|日期|星期|几点了|时间|time now|current time)/iu.test(message)) {
       return null;
     }
 
@@ -335,6 +335,14 @@ export class ChatService {
   }
 
   private extractTimezone(message: string): string | null {
+    if (/(美西|洛杉矶|旧金山|西雅图|Los Angeles|San Francisco|Seattle|Pacific Time|PST|PDT)/iu.test(message)) {
+      return 'America/Los_Angeles';
+    }
+
+    if (/(美国|美东|纽约|华盛顿|New York|Washington|Eastern Time|EST|EDT)/iu.test(message)) {
+      return 'America/New_York';
+    }
+
     if (/(纽约|New York)/iu.test(message)) {
       return 'America/New_York';
     }
