@@ -49,8 +49,23 @@ export const tests = [
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.errorType, 'tool_execution_failed');
-  assert.equal(result.errorMessage, 'division by zero is not allowed');
+  assert.equal(result.errorType, 'invalid_tool_input');
+  assert.equal(result.errorMessage, '计算器参数错误：不允许除以 0');
+    },
+  },
+
+  {
+    name: 'ToolsService returns readable error for missing tools',
+    run: async () => {
+  const service = new ToolsService();
+  const result = await service.executeTool({
+    toolId: 'missing_tool',
+    input: {},
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errorType, 'tool_not_found');
+  assert.equal(result.errorMessage, '工具不存在或已停用');
     },
   },
 
@@ -66,8 +81,25 @@ export const tests = [
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.errorType, 'tool_execution_failed');
-  assert.equal(result.errorMessage, 'url hostname is not allowed');
+  assert.equal(result.errorType, 'invalid_tool_input');
+  assert.equal(result.errorMessage, 'HTTP 请求被安全策略拦截：目标地址不允许访问');
+    },
+  },
+
+  {
+    name: 'ToolsService returns readable error for http_request parameter errors',
+    run: async () => {
+  const service = new ToolsService();
+  const result = await service.executeTool({
+    toolId: 'http_request',
+    input: {
+      method: 'GET',
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errorType, 'invalid_tool_input');
+  assert.equal(result.errorMessage, 'HTTP 请求参数错误：url 不能为空');
     },
   },
 
@@ -102,6 +134,7 @@ export const tests = [
 
     assert.equal(result.ok, false);
     assert.equal(result.errorType, 'canceled');
+    assert.equal(result.errorMessage, '工具调用超时或已取消');
   } finally {
     globalThis.fetch = originalFetch;
   }

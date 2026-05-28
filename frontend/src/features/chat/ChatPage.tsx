@@ -582,7 +582,7 @@ export function ChatPage() {
                               <div className="chatToolEventDetail">
                                 {toolEvent.status === "success"
                                   ? `结果：${formatCompactJson(toolEvent.output)}`
-                                  : `失败：${toolEvent.errorMessage || "工具调用失败"}`}
+                                  : `工具调用失败：${toolEvent.errorMessage || "未知错误"}`}
                               </div>
                             ) : null}
                           </div>
