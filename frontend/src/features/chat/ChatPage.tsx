@@ -83,6 +83,9 @@ export function ChatPage() {
     () => agents.find((agent) => agent.id === selectedAgentId) ?? null,
     [agents, selectedAgentId]
   );
+  const sendButtonDisabled =
+    !sending &&
+    (!selectedAgentId || (!input.trim() && images.length === 0 && files.length === 0));
 
   useEffect(() => {
     void refreshAgents();
@@ -693,10 +696,7 @@ export function ChatPage() {
               />
             </div>
             <Button
-              disabled={
-                !selectedAgentId ||
-                (!sending && !input.trim() && images.length === 0 && files.length === 0)
-              }
+              disabled={sendButtonDisabled}
               danger={sending}
               type="primary"
               onClick={() => {
