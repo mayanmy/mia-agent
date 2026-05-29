@@ -577,16 +577,16 @@ export function ChatPage() {
                             </div>
                             {toolEvent.arguments &&
                             Object.keys(toolEvent.arguments).length > 0 ? (
-                              <div className="chatToolEventDetail">
-                                参数：{formatCompactJson(toolEvent.arguments)}
-                              </div>
+                              <ToolEventDetail label="参数" value={toolEvent.arguments} />
                             ) : null}
                             {toolEvent.status !== "running" ? (
-                              <div className="chatToolEventDetail">
-                                {toolEvent.status === "success"
-                                  ? `结果：${formatCompactJson(toolEvent.output)}`
-                                  : `工具调用失败：${toolEvent.errorMessage || "未知错误"}`}
-                              </div>
+                              toolEvent.status === "success" ? (
+                                <ToolEventDetail label="结果" value={toolEvent.output} />
+                              ) : (
+                                <div className="chatToolEventDetail">
+                                  工具调用失败：{toolEvent.errorMessage || "未知错误"}
+                                </div>
+                              )
                             ) : null}
                           </div>
                         ))}
@@ -798,7 +798,32 @@ function formatToolStatus(toolEvent: ChatToolEvent): string {
   return toolEvent.status === "success" ? `完成${elapsed}` : `失败${elapsed}`;
 }
 
-function formatCompactJson(value: unknown): string {
+function ToolEventDetail({ label, value }: { label: string; value: unknown }) {
+  const text = formatToolJson(value);
+  const shouldCollapse = isLongToolDetail(text);
+  const [expanded, setExpanded] = useState(!shouldCollapse);
+  const visibleText = expanded ? text : getToolDetailPreview(text);
+
+  return (
+    <div className="chatToolEventDetail">
+      <div className="chatToolEventDetailHeader">
+        <span>{label}：</span>
+        {shouldCollapse ? (
+          <button
+            className="chatToolEventToggle"
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? "收起" : "展开"}
+          </button>
+        ) : null}
+      </div>
+      <pre className="chatToolEventJson">{visibleText}</pre>
+    </div>
+  );
+}
+
+function formatToolJson(value: unknown): string {
   if (value === undefined) {
     return "";
   }
@@ -808,11 +833,24 @@ function formatCompactJson(value: unknown): string {
   }
 
   try {
-    const text = JSON.stringify(value);
-    return text.length > 180 ? `${text.slice(0, 180)}...` : text;
+    return JSON.stringify(value, null, 2);
   } catch {
     return String(value);
   }
+}
+
+function isLongToolDetail(text: string): boolean {
+  return text.length > 800 || text.split("\n").length > 16;
+}
+
+function getToolDetailPreview(text: string): string {
+  const lines = text.split("\n");
+
+  if (lines.length > 16) {
+    return `${lines.slice(0, 16).join("\n")}\n...`;
+  }
+
+  return text.length > 800 ? `${text.slice(0, 800)}...` : text;
 }
 
 function isNearScrollBottom(element: HTMLElement): boolean {

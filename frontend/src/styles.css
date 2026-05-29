@@ -415,6 +415,41 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.chatToolEventDetailHeader {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.chatToolEventToggle {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: #2563eb;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  padding: 2px 0;
+}
+
+.chatToolEventJson {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 6px;
+  color: #475569;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .chatMessageMeta {
   display: inline-flex;
   align-items: center;

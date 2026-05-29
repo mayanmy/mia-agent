@@ -183,6 +183,9 @@
     ".mia-agent-tool-event-header{display:flex;align-items:center;justify-content:space-between;gap:10px}" +
     ".mia-agent-tool-event-name{color:#111827;font-weight:700}" +
     ".mia-agent-tool-event-status,.mia-agent-tool-event-detail{color:#64748b;word-break:break-word}" +
+    ".mia-agent-tool-event-detail-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}" +
+    ".mia-agent-tool-event-toggle{appearance:none;border:0;background:transparent;color:#2563eb;cursor:pointer;font:inherit;line-height:1;padding:2px 0}" +
+    ".mia-agent-tool-event-json{margin:0;padding:6px 8px;max-width:100%;overflow-x:auto;border:1px solid rgba(148,163,184,.24);border-radius:6px;background:rgba(255,255,255,.72);color:#475569;font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono',monospace;white-space:pre-wrap;word-break:break-word}" +
     ".mia-agent-message-meta{display:inline-flex;align-items:center;gap:8px;margin-top:4px;color:#94a3b8;font-size:12px}" +
     ".mia-agent-meta-button{width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:#64748b;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:14px}" +
     ".mia-agent-meta-button:disabled{opacity:.35;cursor:not-allowed}" +
@@ -981,27 +984,64 @@
       item.appendChild(header);
 
       if (toolEvent.arguments && Object.keys(toolEvent.arguments).length > 0) {
-        item.appendChild(createToolEventDetail("参数：" + formatCompactJson(toolEvent.arguments)));
+        item.appendChild(createToolEventDetail("参数", toolEvent.arguments));
       }
 
       if (toolEvent.status !== "running") {
-        item.appendChild(
-          createToolEventDetail(
-            toolEvent.status === "success"
-              ? "结果：" + formatCompactJson(toolEvent.output)
-              : "工具调用失败：" + (toolEvent.errorMessage || "未知错误")
-          )
-        );
+        if (toolEvent.status === "success") {
+          item.appendChild(createToolEventDetail("结果", toolEvent.output));
+        } else {
+          item.appendChild(createToolEventTextDetail("工具调用失败：" + (toolEvent.errorMessage || "未知错误")));
+        }
       }
 
       container.appendChild(item);
     });
   }
 
-  function createToolEventDetail(text) {
+  function createToolEventTextDetail(text) {
     var detail = document.createElement("div");
     detail.className = "mia-agent-tool-event-detail";
     detail.textContent = text;
+    return detail;
+  }
+
+  function createToolEventDetail(label, value) {
+    var detail = document.createElement("div");
+    var header = document.createElement("div");
+    var labelEl = document.createElement("span");
+    var pre = document.createElement("pre");
+    var text = formatToolJson(value);
+    var long = isLongToolDetail(text);
+    var expanded = !long;
+
+    detail.className = "mia-agent-tool-event-detail";
+    header.className = "mia-agent-tool-event-detail-header";
+    labelEl.textContent = label + "：";
+    pre.className = "mia-agent-tool-event-json";
+
+    function render() {
+      pre.textContent = expanded ? text : getToolDetailPreview(text);
+    }
+
+    header.appendChild(labelEl);
+
+    if (long) {
+      var toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "mia-agent-tool-event-toggle";
+      toggle.textContent = "展开";
+      toggle.addEventListener("click", function () {
+        expanded = !expanded;
+        toggle.textContent = expanded ? "收起" : "展开";
+        render();
+      });
+      header.appendChild(toggle);
+    }
+
+    render();
+    detail.appendChild(header);
+    detail.appendChild(pre);
     return detail;
   }
 
@@ -1025,7 +1065,7 @@
     return toolEvent.status === "success" ? "完成" + elapsed : "失败" + elapsed;
   }
 
-  function formatCompactJson(value) {
+  function formatToolJson(value) {
     if (value === undefined) {
       return "";
     }
@@ -1035,11 +1075,24 @@
     }
 
     try {
-      var text = JSON.stringify(value);
-      return text.length > 180 ? text.slice(0, 180) + "..." : text;
+      return JSON.stringify(value, null, 2);
     } catch (_error) {
       return String(value);
     }
+  }
+
+  function isLongToolDetail(text) {
+    return text.length > 800 || text.split("\n").length > 16;
+  }
+
+  function getToolDetailPreview(text) {
+    var lines = text.split("\n");
+
+    if (lines.length > 16) {
+      return lines.slice(0, 16).join("\n") + "\n...";
+    }
+
+    return text.length > 800 ? text.slice(0, 800) + "..." : text;
   }
 
   function copyText(value) {
