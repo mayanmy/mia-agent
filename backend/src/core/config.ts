@@ -10,6 +10,7 @@ export type AppConfig = {
   corsOrigins: string[];
   databaseUrl: string | undefined;
   toolsHttpAllowedHosts: string[];
+  toolsHttpAllowLocalhost: boolean;
 };
 
 let envLoaded = false;
@@ -96,6 +97,12 @@ function readToolsHttpAllowedHosts(): string[] {
     .filter(Boolean);
 }
 
+function readBooleanEnv(primaryKey: string, fallbackKey: string): boolean {
+  const value = process.env[primaryKey] ?? process.env[fallbackKey] ?? '';
+
+  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
 export function getConfig(): AppConfig {
   loadEnvFile();
 
@@ -108,5 +115,9 @@ export function getConfig(): AppConfig {
     corsOrigins: readCorsOrigins(),
     databaseUrl: process.env.DATABASE_URL,
     toolsHttpAllowedHosts: readToolsHttpAllowedHosts(),
+    toolsHttpAllowLocalhost: readBooleanEnv(
+      'TOOLS_HTTP_ALLOW_LOCALHOST',
+      'MIA_TOOLS_HTTP_ALLOW_LOCALHOST',
+    ),
   };
 }

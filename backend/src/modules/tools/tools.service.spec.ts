@@ -73,16 +73,27 @@ export const tests = [
     name: 'ToolsService blocks http_request to local addresses',
     run: async () => {
   const service = new ToolsService();
-  const result = await service.executeTool({
-    toolId: 'http_request',
-    input: {
-      url: 'http://127.0.0.1:3000/private',
-    },
-  });
+  const originalAllowLocalhost = process.env.MIA_TOOLS_HTTP_ALLOW_LOCALHOST;
+  process.env.MIA_TOOLS_HTTP_ALLOW_LOCALHOST = 'false';
 
-  assert.equal(result.ok, false);
-  assert.equal(result.errorType, 'invalid_tool_input');
-  assert.equal(result.errorMessage, 'HTTP 请求被安全策略拦截：目标地址不允许访问');
+  try {
+    const result = await service.executeTool({
+      toolId: 'http_request',
+      input: {
+        url: 'http://127.0.0.1:3000/private',
+      },
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.errorType, 'invalid_tool_input');
+    assert.equal(result.errorMessage, 'HTTP 请求被安全策略拦截：目标地址不允许访问');
+  } finally {
+    if (originalAllowLocalhost === undefined) {
+      delete process.env.MIA_TOOLS_HTTP_ALLOW_LOCALHOST;
+    } else {
+      process.env.MIA_TOOLS_HTTP_ALLOW_LOCALHOST = originalAllowLocalhost;
+    }
+  }
     },
   },
 
@@ -172,6 +183,67 @@ export const tests = [
       delete process.env.TOOLS_HTTP_ALLOWED_HOSTS;
     } else {
       process.env.TOOLS_HTTP_ALLOWED_HOSTS = originalAllowedHosts;
+    }
+  }
+    },
+  },
+
+  {
+    name: 'ToolsService allows http_request to localhost when explicitly enabled and allowlisted',
+    run: async () => {
+  const service = new ToolsService();
+  const originalAllowedHosts = process.env.TOOLS_HTTP_ALLOWED_HOSTS;
+  const originalMiaAllowedHosts = process.env.MIA_TOOLS_HTTP_ALLOWED_HOSTS;
+  const originalAllowLocalhost = process.env.MIA_TOOLS_HTTP_ALLOW_LOCALHOST;
+  const originalFetch = globalThis.fetch;
+  delete process.env.TOOLS_HTTP_ALLOWED_HOSTS;
+  process.env.MIA_TOOLS_HTTP_ALLOWED_HOSTS = 'localhost:5174';
+  process.env.MIA_TOOLS_HTTP_ALLOW_LOCALHOST = 'true';
+  globalThis.fetch = (async () => {
+    return new Response(JSON.stringify({ data: [] }), {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+      },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await service.executeTool({
+      toolId: 'http_request',
+      input: {
+        url: 'http://localhost:5174/api/v1/agents?page=1&pageSize=20',
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.ok(result.output && typeof result.output === 'object' && !Array.isArray(result.output));
+    assert.equal(
+      result.output.url,
+      'http://localhost:5174/api/v1/agents?page=1&pageSize=20',
+    );
+    assert.deepEqual(result.output.body, {
+      data: [],
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+
+    if (originalAllowedHosts === undefined) {
+      delete process.env.TOOLS_HTTP_ALLOWED_HOSTS;
+    } else {
+      process.env.TOOLS_HTTP_ALLOWED_HOSTS = originalAllowedHosts;
+    }
+
+    if (originalMiaAllowedHosts === undefined) {
+      delete process.env.MIA_TOOLS_HTTP_ALLOWED_HOSTS;
+    } else {
+      process.env.MIA_TOOLS_HTTP_ALLOWED_HOSTS = originalMiaAllowedHosts;
+    }
+
+    if (originalAllowLocalhost === undefined) {
+      delete process.env.MIA_TOOLS_HTTP_ALLOW_LOCALHOST;
+    } else {
+      process.env.MIA_TOOLS_HTTP_ALLOW_LOCALHOST = originalAllowLocalhost;
     }
   }
     },

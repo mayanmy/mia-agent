@@ -89,30 +89,46 @@ function normalizeUrl(value: ToolJsonValue): string {
     throw new Error('url must use http or https');
   }
 
-  if (blockedHostnames.has(url.hostname.toLowerCase()) || isPrivateIpv4(url.hostname)) {
+  if (isBlockedHost(url)) {
     throw new Error('url hostname is not allowed');
   }
 
-  ensureHostAllowed(url.hostname);
+  ensureHostAllowed(url);
 
   return url.toString();
 }
 
-function ensureHostAllowed(hostname: string): void {
+function isBlockedHost(url: URL): boolean {
+  const hostname = url.hostname.toLowerCase();
+  const config = getConfig();
+
+  if (isLocalhost(hostname)) {
+    return !config.toolsHttpAllowLocalhost;
+  }
+
+  return isPrivateIpv4(hostname);
+}
+
+function isLocalhost(hostname: string): boolean {
+  return blockedHostnames.has(hostname);
+}
+
+function ensureHostAllowed(url: URL): void {
   const allowedHosts = getConfig().toolsHttpAllowedHosts;
 
   if (allowedHosts.length === 0) {
     return;
   }
 
-  const normalizedHostname = hostname.toLowerCase();
+  const normalizedHostname = url.hostname.toLowerCase();
+  const normalizedHost = url.host.toLowerCase();
   const allowed = allowedHosts.some((allowedHost) => {
     if (allowedHost.startsWith('*.')) {
       const suffix = allowedHost.slice(1);
       return normalizedHostname.endsWith(suffix);
     }
 
-    return normalizedHostname === allowedHost;
+    return normalizedHostname === allowedHost || normalizedHost === allowedHost;
   });
 
   if (!allowed) {

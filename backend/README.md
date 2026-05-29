@@ -41,11 +41,21 @@ curl http://127.0.0.1:8000/api/v1/health
 ## Tools
 
 `http_request` blocks localhost and private network addresses by default. To restrict
-the tool to specific public hosts, configure:
+the tool to specific hosts, configure:
 
 ```bash
 TOOLS_HTTP_ALLOWED_HOSTS=api.example.com,*.trusted.example.com
 ```
 
 When this variable is set, `http_request` only allows exact host matches or
-wildcard subdomain matches.
+wildcard subdomain matches. Exact matches may include a port, for example
+`localhost:5174`.
+
+For local development only, localhost can be enabled explicitly:
+
+```bash
+MIA_TOOLS_HTTP_ALLOW_LOCALHOST=true
+MIA_TOOLS_HTTP_ALLOWED_HOSTS=localhost:5174
+```
+
+Private network addresses remain blocked.
