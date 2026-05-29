@@ -153,9 +153,7 @@ export class ChatService {
       }
 
       if (toolCalls.length === 0) {
-        const fallbackAnswer = assistantContent.trim().length === 0
-          ? this.formatLatestToolResultAnswer(messages)
-          : '';
+        const fallbackAnswer = this.getToolResultFallbackAnswer(messages, assistantContent);
 
         if (fallbackAnswer) {
           yield {
@@ -164,15 +162,15 @@ export class ChatService {
               content: fallbackAnswer,
             },
           };
-        }
-
-        for (const token of bufferedTokens) {
-          yield {
-            type: 'token',
-            data: {
-              content: token,
-            },
-          };
+        } else {
+          for (const token of bufferedTokens) {
+            yield {
+              type: 'token',
+              data: {
+                content: token,
+              },
+            };
+          }
         }
 
         yield {
@@ -499,18 +497,10 @@ export class ChatService {
   }
 
   private formatLatestToolResultAnswer(messages: ChatMessage[]): string {
-    const latestToolMessage = [...messages]
-      .reverse()
-      .find((message) => message.role === 'tool' && typeof message.content === 'string');
-
-    if (!latestToolMessage || typeof latestToolMessage.content !== 'string') {
-      return '';
-    }
-
-    const result = this.parseJsonObject(latestToolMessage.content);
+    const result = this.getLatestToolResult(messages);
 
     if (!result) {
-      return latestToolMessage.content;
+      return '';
     }
 
     if ('errorType' in result || 'errorMessage' in result) {
@@ -526,7 +516,61 @@ export class ChatService {
       return `计算结果是 ${result.result}。`;
     }
 
+    if (typeof result.url === 'string' && typeof result.status === 'number') {
+      const method = typeof result.method === 'string' ? result.method : 'GET';
+      const bodyPreview = this.formatToolResultPreview(result.body);
+      return `HTTP 请求完成：${method} ${result.url} 返回 ${result.status}。${bodyPreview}`;
+    }
+
     return `工具执行完成：${JSON.stringify(result)}`;
+  }
+
+  private getToolResultFallbackAnswer(messages: ChatMessage[], assistantContent: string): string {
+    const content = assistantContent.trim();
+
+    if (!content) {
+      return this.formatLatestToolResultAnswer(messages);
+    }
+
+    const latestResult = this.getLatestToolResult(messages);
+
+    if (!latestResult || !('url' in latestResult)) {
+      return '';
+    }
+
+    if (!this.isDistractedToolFollowup(content)) {
+      return '';
+    }
+
+    return this.formatLatestToolResultAnswer(messages);
+  }
+
+  private getLatestToolResult(messages: ChatMessage[]): Record<string, unknown> | null {
+    const latestToolMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === 'tool' && typeof message.content === 'string');
+
+    if (!latestToolMessage || typeof latestToolMessage.content !== 'string') {
+      return null;
+    }
+
+    return this.parseJsonObject(latestToolMessage.content);
+  }
+
+  private isDistractedToolFollowup(content: string): boolean {
+    return /正在(查询|获取|调用)|请稍等|稍等片刻|当前时间|现在时间|now checking|please wait/iu.test(content);
+  }
+
+  private formatToolResultPreview(value: unknown): string {
+    if (value === undefined || value === null || value === '') {
+      return '';
+    }
+
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    const compact = text.replace(/\s+/gu, ' ').trim();
+    const preview = compact.length > 300 ? `${compact.slice(0, 300)}...` : compact;
+
+    return `响应：${preview}`;
   }
 
   private toToolInput(value: Record<string, unknown>): Record<string, ToolJsonValue> {

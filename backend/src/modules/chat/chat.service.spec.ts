@@ -324,4 +324,119 @@ export const tests = [
       );
     },
   },
+  {
+    name: 'ChatService replaces distracted HTTP tool follow-up with the tool result summary',
+    run: async () => {
+      const modelRequests: ChatCompletionRequest[] = [];
+      const agentsService = {
+        getAgentRuntimeConfig: async () => ({
+          agentId: 'agent-id',
+          name: 'HTTP Agent',
+          systemPrompt: 'Use tools when useful.',
+          modelConfigId: 'model-config-id',
+          modelName: 'qwen',
+          providerId: 'provider-id',
+          providerType: ModelProviderType.OPENAI_COMPATIBLE,
+          baseUrl: 'https://example.com/v1',
+          temperature: 0.7,
+          maxTokens: null,
+          timeoutSeconds: 120,
+          historyTurns: 6,
+          generationParams: null,
+          knowledgeBaseIds: [],
+          toolIds: ['http_request'],
+        }),
+      };
+      const modelProvidersService = {
+        streamChatCompletion: (request: ChatCompletionRequest) => {
+          modelRequests.push(request);
+
+          if (modelRequests.length === 1) {
+            return chunks([
+              {
+                type: 'token',
+                content: '```json\n{"name":"http_request","arguments":{"url":"http://localhost:5174/api/v1/agents?page=1&pageSize=20"}}\n```',
+              },
+              {
+                type: 'done',
+              },
+            ]);
+          }
+
+          return chunks([
+            {
+              type: 'token',
+              content: '助手正在查询当前时间。',
+            },
+            {
+              type: 'done',
+            },
+          ]);
+        },
+      };
+      const toolsService = {
+        getToolDefinitions: () => [
+          {
+            id: 'http_request',
+            name: 'HTTP 请求',
+            description: '向指定 HTTP 接口发送请求。',
+            enabled: true,
+            inputSchema: {
+              type: 'object',
+              properties: {},
+              required: [],
+              additionalProperties: false,
+            },
+          },
+        ],
+        executeTool: async () => ({
+          toolId: 'http_request',
+          ok: true,
+          output: {
+            url: 'http://localhost:5174/api/v1/agents?page=1&pageSize=20',
+            method: 'GET',
+            status: 200,
+            ok: true,
+            contentType: 'application/json',
+            elapsedMs: 165,
+            body: {
+              code: 0,
+              data: [
+                {
+                  id: 'agent-1',
+                  name: 'Mia',
+                },
+              ],
+            },
+          },
+          elapsedMs: 165,
+        }),
+      };
+      const service = new ChatService(
+        agentsService as never,
+        modelProvidersService as never,
+        toolsService as never,
+      );
+      const events: ChatStreamEvent[] = [];
+
+      for await (const event of service.streamCompletion({
+        agentId: 'agent-id',
+        message: '用工具调用 调用http://localhost:5174/api/v1/agents?page=1&pageSize=20',
+        history: [],
+        images: [],
+        files: [],
+      })) {
+        events.push(event);
+      }
+
+      assert.deepEqual(
+        events.map((event) => event.type),
+        ['message_start', 'tool_call', 'tool_result', 'token', 'message_end'],
+      );
+      assert.equal(
+        events[3].data.content,
+        'HTTP 请求完成：GET http://localhost:5174/api/v1/agents?page=1&pageSize=20 返回 200。响应：{"code":0,"data":[{"id":"agent-1","name":"Mia"}]}',
+      );
+    },
+  },
 ];

@@ -253,8 +253,10 @@ export const tests = [
     name: 'ToolsService times out http_request',
     run: async () => {
   const service = new ToolsService();
+  const originalAllowedHosts = process.env.TOOLS_HTTP_ALLOWED_HOSTS;
   const originalFetch = globalThis.fetch;
 
+  process.env.TOOLS_HTTP_ALLOWED_HOSTS = 'example.com';
   globalThis.fetch = ((_url: string | URL | Request, init?: RequestInit) => {
     return new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener(
@@ -283,6 +285,12 @@ export const tests = [
     assert.equal(result.errorMessage, '工具调用超时或已取消');
   } finally {
     globalThis.fetch = originalFetch;
+
+    if (originalAllowedHosts === undefined) {
+      delete process.env.TOOLS_HTTP_ALLOWED_HOSTS;
+    } else {
+      process.env.TOOLS_HTTP_ALLOWED_HOSTS = originalAllowedHosts;
+    }
   }
     },
   },
