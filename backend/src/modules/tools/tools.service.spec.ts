@@ -104,6 +104,80 @@ export const tests = [
   },
 
   {
+    name: 'ToolsService blocks http_request hosts outside allowlist',
+    run: async () => {
+  const service = new ToolsService();
+  const originalAllowedHosts = process.env.TOOLS_HTTP_ALLOWED_HOSTS;
+  process.env.TOOLS_HTTP_ALLOWED_HOSTS = 'api.example.com';
+
+  try {
+    const result = await service.executeTool({
+      toolId: 'http_request',
+      input: {
+        url: 'https://blocked.example.com/data',
+      },
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.errorType, 'invalid_tool_input');
+    assert.equal(result.errorMessage, 'HTTP 请求被安全策略拦截：目标地址不在允许列表中');
+  } finally {
+    if (originalAllowedHosts === undefined) {
+      delete process.env.TOOLS_HTTP_ALLOWED_HOSTS;
+    } else {
+      process.env.TOOLS_HTTP_ALLOWED_HOSTS = originalAllowedHosts;
+    }
+  }
+    },
+  },
+
+  {
+    name: 'ToolsService allows http_request hosts in allowlist',
+    run: async () => {
+  const service = new ToolsService();
+  const originalAllowedHosts = process.env.TOOLS_HTTP_ALLOWED_HOSTS;
+  const originalFetch = globalThis.fetch;
+  process.env.TOOLS_HTTP_ALLOWED_HOSTS = 'api.example.com,*.trusted.example.com';
+  globalThis.fetch = (async () => {
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+      },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await service.executeTool({
+      toolId: 'http_request',
+      input: {
+        url: 'https://service.trusted.example.com/data',
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.ok(result.output && typeof result.output === 'object' && !Array.isArray(result.output));
+    assert.equal(result.output.url, 'https://service.trusted.example.com/data');
+    assert.equal(result.output.method, 'GET');
+    assert.equal(result.output.status, 200);
+    assert.equal(result.output.ok, true);
+    assert.equal(result.output.contentType, 'application/json');
+    assert.deepEqual(result.output.body, {
+      ok: true,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+
+    if (originalAllowedHosts === undefined) {
+      delete process.env.TOOLS_HTTP_ALLOWED_HOSTS;
+    } else {
+      process.env.TOOLS_HTTP_ALLOWED_HOSTS = originalAllowedHosts;
+    }
+  }
+    },
+  },
+
+  {
     name: 'ToolsService times out http_request',
     run: async () => {
   const service = new ToolsService();

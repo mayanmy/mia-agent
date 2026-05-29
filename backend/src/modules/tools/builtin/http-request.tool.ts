@@ -1,4 +1,5 @@
 import type { BuiltinTool, ToolExecutionContext } from '../registry';
+import { getConfig } from '../../../core/config';
 import { ToolJsonValue } from '../dto/tool.dto';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -92,7 +93,31 @@ function normalizeUrl(value: ToolJsonValue): string {
     throw new Error('url hostname is not allowed');
   }
 
+  ensureHostAllowed(url.hostname);
+
   return url.toString();
+}
+
+function ensureHostAllowed(hostname: string): void {
+  const allowedHosts = getConfig().toolsHttpAllowedHosts;
+
+  if (allowedHosts.length === 0) {
+    return;
+  }
+
+  const normalizedHostname = hostname.toLowerCase();
+  const allowed = allowedHosts.some((allowedHost) => {
+    if (allowedHost.startsWith('*.')) {
+      const suffix = allowedHost.slice(1);
+      return normalizedHostname.endsWith(suffix);
+    }
+
+    return normalizedHostname === allowedHost;
+  });
+
+  if (!allowed) {
+    throw new Error('url hostname is not in allowlist');
+  }
 }
 
 function normalizeMethod(value: ToolJsonValue): 'GET' | 'POST' {

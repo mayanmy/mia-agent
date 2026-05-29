@@ -9,6 +9,7 @@ export type AppConfig = {
   port: number;
   corsOrigins: string[];
   databaseUrl: string | undefined;
+  toolsHttpAllowedHosts: string[];
 };
 
 let envLoaded = false;
@@ -83,6 +84,18 @@ function readCorsOrigins(): string[] {
     .filter(Boolean);
 }
 
+function readToolsHttpAllowedHosts(): string[] {
+  const value =
+    process.env.TOOLS_HTTP_ALLOWED_HOSTS ??
+    process.env.MIA_TOOLS_HTTP_ALLOWED_HOSTS ??
+    '';
+
+  return value
+    .split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export function getConfig(): AppConfig {
   loadEnvFile();
 
@@ -94,5 +107,6 @@ export function getConfig(): AppConfig {
     port: readPort(),
     corsOrigins: readCorsOrigins(),
     databaseUrl: process.env.DATABASE_URL,
+    toolsHttpAllowedHosts: readToolsHttpAllowedHosts(),
   };
 }

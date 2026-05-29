@@ -125,7 +125,8 @@ export class ToolsService {
       message.includes('is invalid') ||
       message.includes('must be') ||
       message.includes('can only contain') ||
-      message.includes('not allowed')
+      message.includes('not allowed') ||
+      message.includes('not in allowlist')
     ) {
       return 'invalid_tool_input';
     }
@@ -159,6 +160,10 @@ export class ToolsService {
 
     if (message === 'url hostname is not allowed') {
       return 'HTTP 请求被安全策略拦截：目标地址不允许访问';
+    }
+
+    if (message === 'url hostname is not in allowlist') {
+      return 'HTTP 请求被安全策略拦截：目标地址不在允许列表中';
     }
 
     if (message === 'method must be GET or POST') {
