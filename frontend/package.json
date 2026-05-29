@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run build:widget && tsc -b && vite build",
+    "build:widget": "node scripts/build-widget.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b"
   },

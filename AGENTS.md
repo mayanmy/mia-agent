@@ -36,6 +36,7 @@ Mia 是一个面向团队内部使用的 AI Agent 开发平台，目标用户规
 - Frontend: React + TypeScript + Vite。
 - Backend: Node.js + NestJS + TypeScript。
 - 本仓库本地开发和验证默认使用 Node.js 22；运行 `npm`、`node`、前后端 build/test/dev 命令时必须确保使用 Node 22，不使用系统旧版 Node 16。
+- 每次修改 `frontend/public/mia-agent-widget.js` 后，必须同步运行 `npm run build:widget` 生成 `frontend/public/mia-agent-widget.min.js`；生产嵌入优先使用 `.min.js`。
 - Database: PostgreSQL + pgvector。
 - Storage: 本地文件存储，后续可按需要替换为 MinIO。
 - AI: OpenAI-compatible Chat/Embedding API。
