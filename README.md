@@ -66,6 +66,18 @@ Backend:  http://127.0.0.1:8000/api/v1/health
 Frontend: http://127.0.0.1:5173/
 ```
 
+## Agent Widget
+
+Production embed code should use the minified widget:
+
+```html
+<script src="https://your-mia-host/mia-agent-widget.min.js" data-agent-token="YOUR_SHARE_TOKEN" data-api-base="https://your-mia-host" async></script>
+```
+
+Use `frontend/public/mia-agent-widget.js` for development and debugging only.
+After changing it, run `npm run build:widget` in `frontend/` to regenerate
+`frontend/public/mia-agent-widget.min.js`.
+
 ## Checks
 
 ```bash

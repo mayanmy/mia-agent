@@ -55,6 +55,7 @@ type AgentTableItem = AgentListItem & {
 };
 
 type EmbedScenario = "single" | "multi" | "spa" | "inline";
+const widgetScriptName = "mia-agent-widget.min.js";
 
 const defaultFormValues: AgentFormValues = {
   name: "",
@@ -530,7 +531,7 @@ export function AgentsPage() {
     const origin = window.location.origin;
     const nameAttribute = agentName ? ` data-agent-name="${escapeHtmlAttribute(agentName)}"` : "";
 
-    return `<script src="${origin}/mia-agent-widget.js" data-agent-token="${shareToken}" data-api-base="${origin}"${nameAttribute} data-launcher-icon="M" data-launcher-size="56" async></script>`;
+    return `<script src="${origin}/${widgetScriptName}" data-agent-token="${shareToken}" data-api-base="${origin}"${nameAttribute} data-launcher-icon="M" data-launcher-size="56" async></script>`;
   }
 
   function getMultiAgentEmbedCode(shareToken: string): string {
@@ -540,7 +541,7 @@ export function AgentsPage() {
     return [
       "<!-- 同一页面可放多段 script，最终只会显示一个 Mia 入口，聊天框内可切换 Agent。 -->",
       getScriptTag(shareToken, currentName),
-      `<script src="${origin}/mia-agent-widget.js" data-agent-token="另一个 Agent 的 shareToken" data-api-base="${origin}" data-agent-name="另一个 Agent 名称" async></script>`
+      `<script src="${origin}/${widgetScriptName}" data-agent-token="另一个 Agent 的 shareToken" data-api-base="${origin}" data-agent-name="另一个 Agent 名称" async></script>`
     ].join("\n");
   }
 
@@ -559,7 +560,7 @@ function loadMiaAgentWidget(agent) {
   });
 
   var script = document.createElement("script");
-  script.src = "${origin}/mia-agent-widget.js";
+  script.src = "${origin}/${widgetScriptName}";
   script.async = true;
   script.setAttribute("data-mia-widget-loader", "true");
   script.setAttribute("data-api-base", "${origin}");
@@ -587,7 +588,7 @@ loadMiaAgentWidget({
     return [
       '<div id="mia-agent-container" style="height: 600px;"></div>',
       "",
-      `<script src="${origin}/mia-agent-widget.js" data-agent-token="${shareToken}" data-api-base="${origin}" data-agent-name="${escapeHtmlAttribute(currentName)}" data-mode="inline" data-container="#mia-agent-container" async></script>`
+      `<script src="${origin}/${widgetScriptName}" data-agent-token="${shareToken}" data-api-base="${origin}" data-agent-name="${escapeHtmlAttribute(currentName)}" data-mode="inline" data-container="#mia-agent-container" async></script>`
     ].join("\n");
   }
 
