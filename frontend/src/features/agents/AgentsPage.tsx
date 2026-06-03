@@ -1,24 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Button,
-  Checkbox,
-  Dropdown,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Select,
-  Slider,
-  Space,
-  Switch,
-  Table,
-  Tabs,
-  Tag,
-  message
-} from "antd";
-import type { MenuProps, TableProps } from "antd";
-import { MoreOutlined } from "@ant-design/icons";
+import { Button, Form, Modal, Space, message } from "antd";
 
 import { getDefaultModelSettings, listModelConfigs, listProviders } from "../model-providers/api";
 import type { ModelConfigListItem, ProviderListItem } from "../model-providers/api";
@@ -32,76 +14,14 @@ import {
   publishAgent,
   unpublishAgent,
   updateAgent,
-  updateAgentTools,
-  type AgentDetail,
-  type AgentListItem,
-  type AgentPayload
+  updateAgentTools
 } from "./api";
-
-type AgentFormValues = {
-  name: string;
-  description?: string;
-  modelConfigId: string;
-  systemPrompt: string;
-  temperature: number;
-  maxTokens?: number | null;
-  historyTurns: number;
-  enabled: boolean;
-  toolIds: string[];
-};
-
-type AgentTableItem = AgentListItem & {
-  toolCount: number;
-};
-
-type EmbedScenario = "single" | "multi" | "spa" | "inline";
-const widgetScriptName = "mia-agent-widget.min.js";
-
-const defaultFormValues: AgentFormValues = {
-  name: "",
-  description: "",
-  modelConfigId: "",
-  systemPrompt: "",
-  temperature: 0.7,
-  maxTokens: null,
-  historyTurns: 6,
-  enabled: true,
-  toolIds: []
-};
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(new Date(value));
-}
-
-function toPayload(values: AgentFormValues): AgentPayload {
-  return {
-    name: values.name.trim(),
-    description: values.description?.trim() || "",
-    modelConfigId: values.modelConfigId,
-    systemPrompt: values.systemPrompt.trim(),
-    temperature: values.temperature,
-    maxTokens: values.maxTokens ?? null,
-    historyTurns: values.historyTurns,
-    enabled: values.enabled
-  };
-}
-
-function toFormValues(agent: AgentDetail): AgentFormValues {
-  return {
-    name: agent.name,
-    description: agent.description,
-    modelConfigId: agent.modelConfigId,
-    systemPrompt: agent.systemPrompt,
-    temperature: agent.temperature,
-    maxTokens: agent.maxTokens,
-    historyTurns: agent.historyTurns,
-    enabled: agent.enabled,
-    toolIds: agent.toolIds
-  };
-}
+import { AgentEmbedModal } from "./components/AgentEmbedModal";
+import { AgentFormModal } from "./components/AgentFormModal";
+import { AgentTable } from "./components/AgentTable";
+import type { AgentFormValues, AgentTableItem, EmbedScenario } from "./types";
+import { defaultAgentFormValues, toAgentFormValues, toAgentPayload } from "./utils/agent-form";
+import { getEmbedCode, getShareUrl } from "./utils/embed-code";
 
 export function AgentsPage() {
   const navigate = useNavigate();
@@ -137,172 +57,9 @@ export function AgentsPage() {
       .filter((group) => group.options.length > 0);
   }, [modelConfigs, providers]);
 
-  const toolOptions = useMemo(
-    () =>
-      tools.map((tool) => ({
-        label: (
-          <div className="toolOption">
-            <div className="toolOptionName">{tool.name}</div>
-            <div className="toolOptionDescription">{tool.description}</div>
-          </div>
-        ),
-        value: tool.id,
-        disabled: !tool.enabled
-      })),
-    [tools]
-  );
-
-  const columns: TableProps<AgentTableItem>["columns"] = [
-    {
-      title: "名称",
-      dataIndex: "name",
-      key: "name",
-      fixed: "left",
-      width: 180
-    },
-    {
-      title: "关联模型名",
-      dataIndex: "modelName",
-      key: "modelName",
-      width: 180,
-      render: (_, record) => `${record.providerName} / ${record.modelName}`
-    },
-    {
-      title: "工具数量",
-      dataIndex: "toolCount",
-      key: "toolCount",
-      width: 100
-    },
-    {
-      title: "temperature",
-      dataIndex: "temperature",
-      key: "temperature",
-      width: 120
-    },
-    {
-      title: "启用状态",
-      dataIndex: "enabled",
-      key: "enabled",
-      width: 110,
-      render: (enabled: boolean) => (
-        <Tag color={enabled ? "green" : "default"}>{enabled ? "启用" : "停用"}</Tag>
-      )
-    },
-    {
-      title: "发布状态",
-      dataIndex: "published",
-      key: "published",
-      width: 110,
-      render: (published: boolean) => (
-        <Tag color={published ? "blue" : "default"}>{published ? "已发布" : "未发布"}</Tag>
-      )
-    },
-    {
-      title: "创建时间",
-      dataIndex: "createdAt",
-      key: "createdAt",
-      width: 180,
-      render: (createdAt: string) => formatDate(createdAt)
-    },
-    {
-      title: "操作",
-      key: "actions",
-      fixed: "right",
-      width: 160,
-      render: (_, record) => {
-        const menuItems: MenuProps["items"] = [
-          record.published
-            ? {
-                key: "copy",
-                label: "复制链接"
-              }
-            : {
-                key: "publish",
-                label: "发布"
-              },
-          ...(record.published
-            ? [
-                {
-                  key: "embed",
-                  label: "嵌入代码"
-                },
-                {
-                  key: "unpublish",
-                  label: "取消发布"
-                }
-              ]
-            : []),
-          {
-            type: "divider"
-          },
-          {
-            key: "edit",
-            label: "编辑"
-          },
-          {
-            key: "delete",
-            label: "删除",
-            danger: true
-          }
-        ];
-
-        const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
-          if (key === "publish") {
-            confirmPublish(record.id);
-            return;
-          }
-
-          if (key === "copy") {
-            void copyShareLink(record);
-            return;
-          }
-
-          if (key === "embed") {
-            openEmbedDialog(record);
-            return;
-          }
-
-          if (key === "unpublish") {
-            confirmUnpublish(record.id);
-            return;
-          }
-
-          if (key === "edit") {
-            void openEditDialog(record.id);
-            return;
-          }
-
-          if (key === "delete") {
-            confirmDelete(record.id);
-          }
-        };
-
-        return (
-          <Space className="agentActionCell" size={4}>
-            <Button type="link" size="small" onClick={() => navigate(`/chat?agentId=${record.id}`)}>
-              测试对话
-            </Button>
-            <Dropdown menu={{ items: menuItems, onClick: handleMenuClick }} trigger={["click"]}>
-              <Button aria-label="更多操作" icon={<MoreOutlined />} size="small" type="text" />
-            </Dropdown>
-          </Space>
-        );
-      }
-    }
-  ];
-
-  function confirmDelete(id: string) {
-    Modal.confirm({
-      title: "删除 Agent",
-      content: "确认删除这个 Agent？",
-      okText: "删除",
-      okButtonProps: {
-        danger: true
-      },
-      cancelText: "取消",
-      onOk: () => handleDelete(id)
-    });
-  }
+  useEffect(() => {
+    void refresh(1, pagination.pageSize);
+  }, []);
 
   async function refresh(nextPage = pagination.page, nextPageSize = pagination.pageSize) {
     setLoading(true);
@@ -335,15 +92,11 @@ export function AgentsPage() {
     }
   }
 
-  useEffect(() => {
-    void refresh(1, pagination.pageSize);
-  }, []);
-
   function openCreateDialog() {
     setEditingId(null);
     setLoadedToolIds([]);
     form.setFieldsValue({
-      ...defaultFormValues,
+      ...defaultAgentFormValues,
       modelConfigId: resolveDefaultChatModelConfigId()
     });
     setDialogOpen(true);
@@ -372,7 +125,7 @@ export function AgentsPage() {
       setEditingId(agent.id);
       setLoadedToolIds(bindings.toolIds);
       form.setFieldsValue({
-        ...toFormValues(agent),
+        ...toAgentFormValues(agent),
         toolIds: bindings.toolIds
       });
       setDialogOpen(true);
@@ -387,7 +140,7 @@ export function AgentsPage() {
     setSaving(true);
 
     try {
-      const payload = toPayload(values);
+      const payload = toAgentPayload(values);
       let agentId = editingId;
 
       if (editingId) {
@@ -414,6 +167,19 @@ export function AgentsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function confirmDelete(id: string) {
+    Modal.confirm({
+      title: "删除 Agent",
+      content: "确认删除这个 Agent？",
+      okText: "删除",
+      okButtonProps: {
+        danger: true
+      },
+      cancelText: "取消",
+      onOk: () => handleDelete(id)
+    });
   }
 
   async function handleDelete(id: string) {
@@ -449,7 +215,7 @@ export function AgentsPage() {
     try {
       const result = await publishAgent(id);
       message.success("Agent 已发布");
-      await copyText(getShareUrl(result.shareToken));
+      await copyText(getShareUrl(window.location.origin, result.shareToken));
       await refresh();
     } catch (error) {
       message.error(error instanceof Error ? error.message : "发布 Agent 失败");
@@ -486,7 +252,7 @@ export function AgentsPage() {
   }
 
   async function copyShareLink(agent: AgentTableItem) {
-    await copyText(getShareUrl(agent.shareToken));
+    await copyText(getShareUrl(window.location.origin, agent.shareToken));
   }
 
   function openEmbedDialog(agent: AgentTableItem) {
@@ -499,109 +265,15 @@ export function AgentsPage() {
     setEmbedAgent(agent);
   }
 
-  function getShareUrl(shareToken: string | null): string {
-    if (!shareToken) {
-      return "";
-    }
-
-    return `${window.location.origin}/share/agents/${shareToken}`;
-  }
-
-  function getEmbedCode(shareToken: string | null, scenario = embedScenario): string {
-    if (!shareToken) {
-      return "";
-    }
-
-    if (scenario === "multi") {
-      return getMultiAgentEmbedCode(shareToken);
-    }
-
-    if (scenario === "spa") {
-      return getSpaEmbedCode(shareToken);
-    }
-
-    if (scenario === "inline") {
-      return getInlineEmbedCode(shareToken);
-    }
-
-    return getScriptTag(shareToken, embedAgent?.name);
-  }
-
-  function getScriptTag(shareToken: string, agentName?: string): string {
-    const origin = window.location.origin;
-    const nameAttribute = agentName ? ` data-agent-name="${escapeHtmlAttribute(agentName)}"` : "";
-
-    return `<script src="${origin}/${widgetScriptName}" data-agent-token="${shareToken}" data-api-base="${origin}"${nameAttribute} data-launcher-icon="M" data-launcher-size="56" async></script>`;
-  }
-
-  function getMultiAgentEmbedCode(shareToken: string): string {
-    const origin = window.location.origin;
-    const currentName = embedAgent?.name || "当前 Agent";
-
-    return [
-      "<!-- 同一页面可放多段 script，最终只会显示一个 Mia 入口，聊天框内可切换 Agent。 -->",
-      getScriptTag(shareToken, currentName),
-      `<script src="${origin}/${widgetScriptName}" data-agent-token="另一个 Agent 的 shareToken" data-api-base="${origin}" data-agent-name="另一个 Agent 名称" async></script>`
-    ].join("\n");
-  }
-
-  function getSpaEmbedCode(shareToken: string): string {
-    const origin = window.location.origin;
-    const currentName = escapeJsString(embedAgent?.name || "当前 Agent");
-
-    return `<script>
-function loadMiaAgentWidget(agent) {
-  if (window.MiaAgentWidget && window.MiaAgentWidget.destroy) {
-    window.MiaAgentWidget.destroy();
-  }
-
-  document.querySelectorAll("script[data-mia-widget-loader]").forEach(function (element) {
-    element.remove();
-  });
-
-  var script = document.createElement("script");
-  script.src = "${origin}/${widgetScriptName}";
-  script.async = true;
-  script.setAttribute("data-mia-widget-loader", "true");
-  script.setAttribute("data-api-base", "${origin}");
-  script.setAttribute("data-agent-token", agent.token);
-  script.setAttribute("data-agent-name", agent.name);
-  script.setAttribute("data-launcher-icon", agent.icon || "M");
-  script.setAttribute("data-launcher-size", String(agent.iconSize || 56));
-  document.body.appendChild(script);
-}
-
-// 在路由变化时调用，传入当前页面对应的 Agent。
-loadMiaAgentWidget({
-  token: "${shareToken}",
-  name: "${currentName}",
-  icon: "M",
-  iconSize: 56
-});
-</script>`;
-  }
-
-  function getInlineEmbedCode(shareToken: string): string {
-    const origin = window.location.origin;
-    const currentName = embedAgent?.name || "当前 Agent";
-
-    return [
-      '<div id="mia-agent-container" style="height: 600px;"></div>',
-      "",
-      `<script src="${origin}/${widgetScriptName}" data-agent-token="${shareToken}" data-api-base="${origin}" data-agent-name="${escapeHtmlAttribute(currentName)}" data-mode="inline" data-container="#mia-agent-container" async></script>`
-    ].join("\n");
-  }
-
-  function escapeHtmlAttribute(value: string): string {
-    return value
-      .replace(/&/gu, "&amp;")
-      .replace(/"/gu, "&quot;")
-      .replace(/</gu, "&lt;")
-      .replace(/>/gu, "&gt;");
-  }
-
-  function escapeJsString(value: string): string {
-    return value.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"').replace(/\n/gu, "\\n");
+  async function copyEmbedCode() {
+    await copyText(
+      getEmbedCode({
+        origin: window.location.origin,
+        shareToken: embedAgent?.shareToken ?? null,
+        scenario: embedScenario,
+        agentName: embedAgent?.name
+      })
+    );
   }
 
   async function copyText(value: string) {
@@ -648,173 +320,39 @@ loadMiaAgentWidget({
         </Space>
       </header>
 
-      <Table<AgentTableItem>
-        columns={columns}
-        dataSource={agents}
+      <AgentTable
+        agents={agents}
         loading={loading}
-        pagination={{
-          current: pagination.page,
-          pageSize: pagination.pageSize,
-          total: pagination.total,
-          showSizeChanger: true
-        }}
-        rowKey="id"
-        scroll={{ x: 1200 }}
-        onChange={(nextPagination) => {
-          void refresh(nextPagination.current || 1, nextPagination.pageSize || 20);
-        }}
+        pagination={pagination}
+        onCopyLink={(agent) => void copyShareLink(agent)}
+        onDelete={confirmDelete}
+        onEdit={(id) => void openEditDialog(id)}
+        onOpenEmbed={openEmbedDialog}
+        onPageChange={(page, pageSize) => void refresh(page, pageSize)}
+        onPublish={confirmPublish}
+        onTest={(agentId) => navigate(`/chat?agentId=${agentId}`)}
+        onUnpublish={confirmUnpublish}
       />
 
-      <Modal
-        destroyOnHidden
-        confirmLoading={saving}
-        okText={editingId ? "保存" : "创建"}
+      <AgentFormModal
+        editing={Boolean(editingId)}
+        form={form}
+        modelOptions={modelOptions}
         open={dialogOpen}
-        title={editingId ? "编辑 Agent" : "新增 Agent"}
-        width={760}
+        saving={saving}
+        tools={tools}
         onCancel={closeDialog}
-        onOk={() => form.submit()}
-      >
-        <Form<AgentFormValues>
-          form={form}
-          initialValues={defaultFormValues}
-          layout="vertical"
-          onFinish={(values) => void handleSubmit(values)}
-        >
-          <Tabs
-            items={[
-              {
-                key: "basic",
-                label: "基础配置",
-                children: (
-                  <div className="agentFormGrid">
-                    <Form.Item
-                      label="名称"
-                      name="name"
-                      rules={[{ required: true, message: "请输入名称" }]}
-                    >
-                      <Input />
-                    </Form.Item>
-                    <Form.Item
-                      label="模型选择"
-                      name="modelConfigId"
-                      rules={[{ required: true, message: "请选择模型" }]}
-                    >
-                      <Select options={modelOptions} />
-                    </Form.Item>
-                    <Form.Item className="agentFormFull" label="描述" name="description">
-                      <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
-                    </Form.Item>
-                    <Form.Item
-                      className="agentFormFull"
-                      label="System Prompt"
-                      name="systemPrompt"
-                      rules={[{ required: true, message: "请输入 System Prompt" }]}
-                    >
-                      <Input.TextArea autoSize={{ minRows: 6, maxRows: 12 }} />
-                    </Form.Item>
-                    <Form.Item
-                      label="temperature"
-                      name="temperature"
-                      rules={[{ required: true, message: "请选择 temperature" }]}
-                    >
-                      <Slider min={0} max={1} step={0.1} marks={{ 0: "0", 1: "1" }} />
-                    </Form.Item>
-                    <Form.Item label="max_tokens" name="maxTokens">
-                      <InputNumber min={1} precision={0} style={{ width: "100%" }} />
-                    </Form.Item>
-                    <Form.Item
-                      label="max_context_turns"
-                      name="historyTurns"
-                      rules={[{ required: true, message: "请输入 max_context_turns" }]}
-                    >
-                      <InputNumber min={0} max={20} precision={0} style={{ width: "100%" }} />
-                    </Form.Item>
-                    <Form.Item label="启用" name="enabled" valuePropName="checked">
-                      <Switch />
-                    </Form.Item>
-                  </div>
-                )
-              },
-              {
-                key: "tools",
-                label: "工具绑定",
-                children: (
-                  <Form.Item name="toolIds">
-                    <Checkbox.Group className="toolCheckboxGroup" options={toolOptions} />
-                  </Form.Item>
-                )
-              }
-            ]}
-          />
-        </Form>
-      </Modal>
+        onSubmit={(values) => void handleSubmit(values)}
+      />
 
-      <Modal
-        destroyOnHidden
-        okText="复制代码"
-        open={Boolean(embedAgent)}
-        title="嵌入代码"
-        width={720}
+      <AgentEmbedModal
+        agent={embedAgent}
+        origin={window.location.origin}
+        scenario={embedScenario}
         onCancel={() => setEmbedAgent(null)}
-        onOk={() => void copyText(getEmbedCode(embedAgent?.shareToken ?? null))}
-      >
-        <Tabs
-          activeKey={embedScenario}
-          items={[
-            {
-              key: "single",
-              label: "单页面单 Agent",
-              children: (
-                <EmbedCodePanel
-                  code={getEmbedCode(embedAgent?.shareToken ?? null, "single")}
-                  description='适合普通页面：每个页面只嵌入当前这个 Agent，页面右下角出现一个 Mia 聊天入口。可调整 data-launcher-icon 和 data-launcher-size；如果要用图片图标，改用 data-launcher-icon-url="https://..."。'
-                />
-              )
-            },
-            {
-              key: "multi",
-              label: "同页多 Agent",
-              children: (
-                <EmbedCodePanel
-                  code={getEmbedCode(embedAgent?.shareToken ?? null, "multi")}
-                  description="适合同一个页面需要多个 Agent：放多段 script，页面仍然只有一个入口，聊天框顶部用下拉框切换 Agent。"
-                />
-              )
-            },
-            {
-              key: "spa",
-              label: "SPA 路由切换",
-              children: (
-                <EmbedCodePanel
-                  code={getEmbedCode(embedAgent?.shareToken ?? null, "spa")}
-                  description="适合 React/Vue 等单页应用：路由变化时调用 loadMiaAgentWidget，先销毁旧 widget，再加载当前页面对应的 Agent。"
-                />
-              )
-            },
-            {
-              key: "inline",
-              label: "页面内嵌",
-              children: (
-                <EmbedCodePanel
-                  code={getEmbedCode(embedAgent?.shareToken ?? null, "inline")}
-                  description="适合把 Chat 作为页面内容的一部分：指定容器后直接渲染完整聊天框，不显示右下角悬浮按钮，也不支持拖动。"
-                />
-              )
-            }
-          ]}
-          onChange={(key) => setEmbedScenario(key as EmbedScenario)}
-        />
-      </Modal>
+        onCopy={() => void copyEmbedCode()}
+        onScenarioChange={setEmbedScenario}
+      />
     </section>
-  );
-}
-
-function EmbedCodePanel({ code, description }: { code: string; description: string }) {
-  return (
-    <>
-      <p className="embedCodeHint">{description}</p>
-      <Input.TextArea readOnly autoSize={{ minRows: 7, maxRows: 14 }} value={code} />
-    </>
   );
 }
