@@ -38,6 +38,7 @@ import {
   type ProviderListItem,
   type ProviderPayload
 } from "./api";
+import "./providers.css";
 
 const providerTypes: ModelProviderType[] = ["OPENAI_COMPATIBLE", "OLLAMA", "ANTHROPIC", "GEMINI"];
 const modelTypes: ModelConfigType[] = ["CHAT", "EMBEDDING"];

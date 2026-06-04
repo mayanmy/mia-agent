@@ -1,0 +1,95 @@
+.toolOption {
+  display: grid;
+  gap: 4px;
+  line-height: 1.4;
+}
+
+.toolOptionName {
+  color: #111827;
+  font-weight: 600;
+}
+
+.toolOptionDescription {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.sharedAgentWorkspace {
+  display: grid;
+  min-height: calc(100vh - 64px);
+  place-items: center;
+}
+
+.sharedAgentPanel {
+  display: grid;
+  width: min(640px, 100%);
+  gap: 24px;
+  border: 1px solid #dde3eb;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 32px;
+}
+
+.sharedAgentDescription {
+  color: #64748b;
+  font-size: 15px;
+  line-height: 1.7;
+  margin: 16px 0;
+}
+
+.sharedAgentMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.agentFormGrid {
+  display: grid;
+  gap: 0 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.agentFormFull {
+  grid-column: 1 / -1;
+}
+
+.agentActionCell {
+  align-items: center;
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+.agentActionCell .ant-btn-link {
+  padding-inline: 4px;
+}
+
+.agentActionCell .ant-btn-text {
+  height: 28px;
+  min-height: 28px;
+  width: 28px;
+}
+
+.embedCodeHint {
+  margin: 0 0 12px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.toolCheckboxGroup {
+  display: grid;
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .agentFormGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .agentFormFull {
+    grid-column: auto;
+  }
+}
