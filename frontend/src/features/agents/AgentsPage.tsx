@@ -22,7 +22,7 @@ import { AgentTable } from "./components/AgentTable";
 import type { AgentFormValues, AgentTableItem, EmbedScenario } from "./types";
 import { defaultAgentFormValues, toAgentFormValues, toAgentPayload } from "./utils/agent-form";
 import { getEmbedCode, getShareUrl } from "./utils/embed-code";
-import "./agents.css";
+import "./agents.less";
 
 export function AgentsPage() {
   const navigate = useNavigate();

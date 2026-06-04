@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button, Result, Spin, Tag, message } from "antd";
 
 import { getSharedAgent, type SharedAgentDetail } from "./api";
-import "./agents.css";
+import "./agents.less";
 
 export function SharedAgentPage() {
   const navigate = useNavigate();

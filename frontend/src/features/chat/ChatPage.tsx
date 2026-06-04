@@ -15,7 +15,7 @@ import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useChatAttachments } from "./hooks/useChatAttachments";
 import type { ChatToolEvent, ChatUiMessage } from "./types";
 import { createMessageId, findLastToolEventIndex, isLikelyVisionModel } from "./utils";
-import "./chat.css";
+import "./chat.less";
 
 export function ChatPage() {
   const { message: messageApi } = AntdApp.useApp();

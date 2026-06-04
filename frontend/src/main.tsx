@@ -6,7 +6,7 @@ import { BrowserRouter } from "react-router-dom";
 import "antd/dist/reset.css";
 
 import { App } from "./app/App";
-import "./styles.css";
+import "./styles.less";
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
