@@ -55,9 +55,92 @@ Mia 是一个面向团队内部使用的 AI Agent 开发平台，目标用户规
 
 ## 代码组织规范
 
-Mia 后端采用模块化单体架构。代码运行在一个 NestJS 服务内，但内部必须按业务模块隔离，避免全局 service、跨模块随意查表和循环依赖。
+### 前端目录与组件拆分规范
+
+Mia 前端采用 React + TypeScript + Vite。前端代码必须按 feature 组织，页面组件只做路由级编排，复杂 UI、状态副作用和纯工具函数需要拆到明确的组件、hooks 和 utils 中。
+
+推荐目录结构：
+
+```text
+frontend/
+  src/
+    app/
+      App.tsx
+    features/
+      chat/
+        ChatPage.tsx
+        components/
+          ChatHeader.tsx
+          ChatTranscript.tsx
+          ChatMessageItem.tsx
+          ChatComposer.tsx
+          AttachmentPreviewList.tsx
+          ToolEventCard.tsx
+        hooks/
+          useChatStream.ts
+          useAutoScroll.ts
+          useChatAttachments.ts
+        api.ts
+        types.ts
+        utils.ts
+      agents/
+        AgentsPage.tsx
+        components/
+        hooks/
+        api.ts
+        types.ts
+        utils.ts
+      model-providers/
+        ProvidersPage.tsx
+        components/
+        hooks/
+        api.ts
+        types.ts
+        utils.ts
+    shared/
+      api/
+      components/
+      hooks/
+      utils/
+```
+
+拆分规则：
+
+- `*Page.tsx` 只负责路由参数、页面级数据加载、页面级状态协调和主要区域组合，不直接堆叠大量 JSX。
+- `components/` 放 feature 私有组件。组件只接收 props、渲染 UI、触发回调，不直接拼 API 地址，不把无关业务流程塞进组件内部。
+- `hooks/` 放可命名的状态副作用，例如 SSE 流、自动滚动、上传附件、键盘事件、窗口尺寸、轮询。Hook 不返回 JSX。
+- `api.ts` 放该 feature 的 HTTP 调用和 API DTO 类型。页面和组件不允许散落 `fetch('/api/...')`。
+- `types.ts` 放跨多个组件使用的 UI 类型、view model 类型和 feature 内共享类型。
+- `utils.ts` 放无 React 依赖的纯函数，例如格式化、解析、校验、文件读取、列表查找。
+- `shared/` 只放至少两个 feature 已经实际复用的能力；不要为了“未来可能复用”提前放入 shared。
+- 单个页面文件超过约 400 行，或同时包含数据加载、表格列、弹窗表单、上传、滚动、SSE、消息渲染等多种职责时，必须优先拆分。
+
+组件边界判断：
+
+- 路由页面：拥有路由、权限、页面级 loading 和高层编排。
+- 区域组件：拥有一个稳定业务区域，例如 Chat transcript、composer、Agent table、Provider card list。
+- 表单组件：拥有字段展示、校验 UI 和 submit/cancel 事件；保存逻辑由页面或上层容器决定。
+- 弹窗/抽屉组件：拥有弹窗布局和临时 UI 状态；打开关闭、目标实体和持久化由上层决定。
+- 展示组件：只根据 props 渲染，不访问 API，不读写 URL，不管理全局状态。
+- Hook：承载副作用和可复用状态机，例如 `useAutoScroll`、`useChatAttachments`、`useChatStream`。
+
+Vite 分包规则：
+
+- 路由页必须优先使用 `React.lazy` + `Suspense` 做 route-level code splitting，避免所有页面进入首屏入口包。
+- `vite.config.ts` 可以使用 `manualChunks` 拆稳定 vendor 包，例如 `react-vendor`、`antd-vendor`。
+- 大 chunk 警告要先判断来源：业务页面 chunk 大时拆页面/组件；vendor chunk 大时优先接受浏览器缓存，必要时再细分 vendor。
+- 不要为了消除提示而 lazy-load 很小的叶子组件；这会增加复杂度，通常不会改善真实体验。
+- Vite dev 模式下 Network 中的 `antd.js?v=...` 不代表生产体积；生产体积以 `npm run build` 和 `npm run preview` 的产物为准。
+
+前端修改后的验证：
+
+- 修改 React/TypeScript 代码后运行 `npm run typecheck`。
+- 修改构建、路由懒加载、分包或公共依赖后运行 `npm run build`。
+- 修改 `frontend/public/mia-agent-widget.js` 后运行 `npm run build:widget`，并确认 `frontend/public/mia-agent-widget.min.js` 已同步生成。
 
 ### 后端目录结构
+
+Mia 后端采用模块化单体架构。代码运行在一个 NestJS 服务内，但内部必须按业务模块隔离，避免全局 service、跨模块随意查表和循环依赖。
 
 后端代码必须按以下结构组织：
 
