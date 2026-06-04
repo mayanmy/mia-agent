@@ -16,7 +16,18 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "build": "npm run build:api && npm run build:web",
-    "typecheck": "npm run typecheck:api && npm run typecheck:web"
+    "typecheck": "npm run typecheck:api && npm run typecheck:web",
+    "lint": "eslint \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\" \"frontend/scripts/**/*.{js,mjs}\" frontend/vite.config.ts",
+    "lint:fix": "npm run lint -- --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,less,html,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,less,html,yml,yaml}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.5",
+    "typescript-eslint": "^8.45.0"
   }
 }
-

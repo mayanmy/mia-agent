@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+backend/dist
+frontend/dist
+frontend/public/mia-agent-widget.min.js
+*.tsbuildinfo
+package-lock.json
+.DS_Store
