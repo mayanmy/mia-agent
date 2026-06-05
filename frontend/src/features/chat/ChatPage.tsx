@@ -3,11 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { App as AntdApp, Empty, Select, Tag } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
-import {
-  streamChatCompletion,
-  type ChatFileAttachment,
-  type ChatImageAttachment
-} from "./api";
+import { streamChatCompletion } from "./api";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
 import { ChatTranscript } from "./components/ChatTranscript";
@@ -50,8 +46,7 @@ export function ChatPage() {
     [agents, selectedAgentId]
   );
   const sendButtonDisabled =
-    !sending &&
-    (!selectedAgentId || (!input.trim() && images.length === 0 && files.length === 0));
+    !sending && (!selectedAgentId || (!input.trim() && images.length === 0 && files.length === 0));
 
   useEffect(() => {
     void refreshAgents();
@@ -63,7 +58,8 @@ export function ChatPage() {
     try {
       const page = await listAgents(1, 100);
       const enabledAgents = page.list.filter((agent) => agent.enabled);
-      const nextAgentId = searchParams.get("agentId") || selectedAgentId || enabledAgents[0]?.id || "";
+      const nextAgentId =
+        searchParams.get("agentId") || selectedAgentId || enabledAgents[0]?.id || "";
 
       setAgents(enabledAgents);
       setSelectedAgentId(nextAgentId);
