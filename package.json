@@ -16,6 +16,7 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "build": "npm run build:api && npm run build:web",
+    "check": "npm run lint && npm run typecheck",
     "typecheck": "npm run typecheck:api && npm run typecheck:web",
     "lint": "eslint \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\" \"frontend/scripts/**/*.{js,mjs}\" frontend/vite.config.ts",
     "lint:fix": "npm run lint -- --fix",
