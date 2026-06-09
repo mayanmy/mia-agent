@@ -1,10 +1,6 @@
 import { request, type PageResult } from "../../shared/api/client";
 
-export type ModelProviderType =
-  | "OPENAI_COMPATIBLE"
-  | "OLLAMA"
-  | "ANTHROPIC"
-  | "GEMINI";
+export type ModelProviderType = "OPENAI_COMPATIBLE" | "OLLAMA" | "ANTHROPIC" | "GEMINI";
 export type ModelConfigType = "CHAT" | "EMBEDDING";
 
 export type ProviderListItem = {
@@ -98,49 +94,36 @@ export type DefaultModelSettingsPayload = {
   embeddingModelConfigId: string | null;
 };
 
-export function listProviders(
-  page = 1,
-  pageSize = 20,
-): Promise<PageResult<ProviderListItem>> {
+export function listProviders(page = 1, pageSize = 20): Promise<PageResult<ProviderListItem>> {
   return request<PageResult<ProviderListItem>>(
-    `/api/v1/providers?page=${page}&pageSize=${pageSize}`,
+    `/api/v1/providers?page=${page}&pageSize=${pageSize}`
   );
 }
 
-export function createProvider(
-  payload: ProviderPayload,
-): Promise<ProviderDetail> {
+export function createProvider(payload: ProviderPayload): Promise<ProviderDetail> {
   return request<ProviderDetail>("/api/v1/providers", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
 }
 
-export function updateProvider(
-  id: string,
-  payload: ProviderPayload,
-): Promise<ProviderDetail> {
+export function updateProvider(id: string, payload: ProviderPayload): Promise<ProviderDetail> {
   return request<ProviderDetail>(`/api/v1/providers/${id}`, {
     method: "PUT",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
 }
 
 export function deleteProvider(id: string): Promise<null> {
   return request<null>(`/api/v1/providers/${id}`, {
-    method: "DELETE",
+    method: "DELETE"
   });
 }
 
-export function testProviderConnection(
-  id: string,
-): Promise<ProviderTestConnectionResult> {
-  return request<ProviderTestConnectionResult>(
-    `/api/v1/providers/${id}/test-connection`,
-    {
-      method: "POST",
-    },
-  );
+export function testProviderConnection(id: string): Promise<ProviderTestConnectionResult> {
+  return request<ProviderTestConnectionResult>(`/api/v1/providers/${id}/test-connection`, {
+    method: "POST"
+  });
 }
 
 export function listProviderModels(id: string): Promise<ProviderRemoteModel[]> {
@@ -150,53 +133,49 @@ export function listProviderModels(id: string): Promise<ProviderRemoteModel[]> {
 export function listModelConfigs(
   page = 1,
   pageSize = 100,
-  providerId?: string,
+  providerId?: string
 ): Promise<PageResult<ModelConfigListItem>> {
   const params = new URLSearchParams({
     page: String(page),
-    pageSize: String(pageSize),
+    pageSize: String(pageSize)
   });
 
   if (providerId) {
     params.set("providerId", providerId);
   }
 
-  return request<PageResult<ModelConfigListItem>>(
-    `/api/v1/model-configs?${params.toString()}`,
-  );
+  return request<PageResult<ModelConfigListItem>>(`/api/v1/model-configs?${params.toString()}`);
 }
 
-export function createModelConfig(
-  payload: ModelConfigPayload,
-): Promise<ModelConfigDetail> {
+export function createModelConfig(payload: ModelConfigPayload): Promise<ModelConfigDetail> {
   return request<ModelConfigDetail>("/api/v1/model-configs", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
 }
 
 export function updateModelConfig(
   id: string,
-  payload: ModelConfigPayload,
+  payload: ModelConfigPayload
 ): Promise<ModelConfigDetail> {
   return request<ModelConfigDetail>(`/api/v1/model-configs/${id}`, {
     method: "PUT",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
 }
 
 export function checkModelCapability(
-  payload: Pick<ModelConfigPayload, "providerId" | "modelName" | "modelType">,
+  payload: Pick<ModelConfigPayload, "providerId" | "modelName" | "modelType">
 ): Promise<ModelCapabilityCheckResult> {
   return request<ModelCapabilityCheckResult>("/api/v1/model-configs/check-capability", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
 }
 
 export function deleteModelConfig(id: string): Promise<null> {
   return request<null>(`/api/v1/model-configs/${id}`, {
-    method: "DELETE",
+    method: "DELETE"
   });
 }
 
@@ -205,10 +184,10 @@ export function getDefaultModelSettings(): Promise<DefaultModelSettings> {
 }
 
 export function updateDefaultModelSettings(
-  payload: DefaultModelSettingsPayload,
+  payload: DefaultModelSettingsPayload
 ): Promise<DefaultModelSettings> {
   return request<DefaultModelSettings>("/api/v1/model-defaults", {
     method: "PUT",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
 }

@@ -9,9 +9,7 @@ export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @Post("completions")
-  async createCompletion(
-    @Body() payload: ChatCompletionDto,
-  ): Promise<ChatCompletionResult> {
+  async createCompletion(@Body() payload: ChatCompletionDto): Promise<ChatCompletionResult> {
     return this.chatService.createCompletion(payload);
   }
 
@@ -19,7 +17,7 @@ export class ChatController {
   async streamCompletion(
     @Body() payload: ChatCompletionDto,
     @Req() request: IncomingMessage,
-    @Res() response: ServerResponse,
+    @Res() response: ServerResponse
   ): Promise<void> {
     const controller = new AbortController();
     const abort = () => controller.abort();
@@ -37,10 +35,7 @@ export class ChatController {
     }, 15000);
 
     try {
-      for await (const event of this.chatService.streamCompletion(
-        payload,
-        controller.signal,
-      )) {
+      for await (const event of this.chatService.streamCompletion(payload, controller.signal)) {
         response.write(`event: ${event.type}\n`);
         response.write(`data: ${JSON.stringify(event.data)}\n\n`);
       }
@@ -48,9 +43,8 @@ export class ChatController {
       response.write("event: error\n");
       response.write(
         `data: ${JSON.stringify({
-          message:
-            error instanceof Error ? error.message : "chat stream failed",
-        })}\n\n`,
+          message: error instanceof Error ? error.message : "chat stream failed"
+        })}\n\n`
       );
     } finally {
       clearInterval(heartbeat);

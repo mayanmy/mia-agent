@@ -1,16 +1,12 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
-import { ModelConfigType, ModelProvider, ModelProviderType, Prisma } from '@prisma/client';
+import { HttpStatus, Injectable } from "@nestjs/common";
+import { ModelConfigType, ModelProvider, ModelProviderType, Prisma } from "@prisma/client";
 
-import { decryptSecret, encryptSecret } from '../../core/crypto';
-import { AppError, ErrorCodes } from '../../core/errors';
-import { createPageResult, normalizePageQuery } from '../../core/pagination';
-import { PageResult } from '../../core/result';
-import { PrismaService } from '../prisma/prisma.service';
-import {
-  ChatCompletionRequest,
-  ChatCompletionResponse,
-  ChatStreamChunk,
-} from './dto/llm.dto';
+import { decryptSecret, encryptSecret } from "../../core/crypto";
+import { AppError, ErrorCodes } from "../../core/errors";
+import { createPageResult, normalizePageQuery } from "../../core/pagination";
+import { PageResult } from "../../core/result";
+import { PrismaService } from "../prisma/prisma.service";
+import { ChatCompletionRequest, ChatCompletionResponse, ChatStreamChunk } from "./dto/llm.dto";
 import {
   DefaultModelSettings,
   DefaultModelSettingsUpdateDto,
@@ -27,13 +23,13 @@ import {
   ProviderRemoteModel,
   ProviderQueryDto,
   ProviderTestConnectionResult,
-  ProviderUpdateDto,
-} from './dto/model-provider.dto';
-import { ModelProvidersGateway } from './gateway';
+  ProviderUpdateDto
+} from "./dto/model-provider.dto";
+import { ModelProvidersGateway } from "./gateway";
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
 const DEFAULT_CONTEXT_LENGTH = 4096;
-const ANTHROPIC_VERSION = '2023-06-01';
+const ANTHROPIC_VERSION = "2023-06-01";
 
 type ProviderTestRequest = {
   requestUrl: string;
@@ -45,30 +41,30 @@ type ProviderTestRequest = {
 export class ModelProvidersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly gateway: ModelProvidersGateway,
+    private readonly gateway: ModelProvidersGateway
   ) {}
 
   async listProviders(query: ProviderQueryDto): Promise<PageResult<ProviderListItem>> {
     const page = normalizePageQuery(query);
     const where: Prisma.ModelProviderWhereInput = {
-      deletedAt: null,
+      deletedAt: null
     };
 
     const [list, total] = await this.prisma.$transaction([
       this.prisma.modelProvider.findMany({
         where,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         skip: page.skip,
-        take: page.take,
+        take: page.take
       }),
-      this.prisma.modelProvider.count({ where }),
+      this.prisma.modelProvider.count({ where })
     ]);
 
     return createPageResult(
       list.map((provider) => this.toProviderListItem(provider)),
       total,
       page.page,
-      page.pageSize,
+      page.pageSize
     );
   }
 
@@ -82,9 +78,9 @@ export class ModelProvidersService {
         providerType: data.providerType,
         baseUrl: data.baseUrl,
         apiKeyEncrypted: data.apiKey ? encryptSecret(data.apiKey) : null,
-        enabled: data.enabled,
+        enabled: data.enabled
       },
-      include: { modelConfigs: { where: { deletedAt: null } } },
+      include: { modelConfigs: { where: { deletedAt: null } } }
     });
 
     return this.toProviderDetail(provider);
@@ -112,9 +108,9 @@ export class ModelProvidersService {
         ...(data.apiKey !== undefined
           ? { apiKeyEncrypted: data.apiKey ? encryptSecret(data.apiKey) : null }
           : {}),
-        ...(data.enabled !== undefined ? { enabled: data.enabled } : {}),
+        ...(data.enabled !== undefined ? { enabled: data.enabled } : {})
       },
-      include: { modelConfigs: { where: { deletedAt: null } } },
+      include: { modelConfigs: { where: { deletedAt: null } } }
     });
 
     return this.toProviderDetail(provider);
@@ -126,21 +122,21 @@ export class ModelProvidersService {
     const activeModelConfigCount = await this.prisma.modelConfig.count({
       where: {
         providerId: id,
-        deletedAt: null,
-      },
+        deletedAt: null
+      }
     });
 
     if (activeModelConfigCount > 0) {
       throw new AppError(
         ErrorCodes.provider.inUse,
-        'provider has model configs and cannot be deleted',
-        HttpStatus.CONFLICT,
+        "provider has model configs and cannot be deleted",
+        HttpStatus.CONFLICT
       );
     }
 
     await this.prisma.modelProvider.update({
       where: { id },
-      data: { deletedAt: new Date(), enabled: false },
+      data: { deletedAt: new Date(), enabled: false }
     });
   }
 
@@ -152,17 +148,17 @@ export class ModelProvidersService {
 
     try {
       const response = await fetch(testRequest.requestUrl, {
-        method: 'GET',
+        method: "GET",
         headers: testRequest.headers,
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs)
       });
 
       return {
         ok: response.ok,
         status: response.status,
-        statusText: response.statusText || '',
+        statusText: response.statusText || "",
         latencyMs: Date.now() - startedAt,
-        url: testRequest.displayUrl,
+        url: testRequest.displayUrl
       };
     } catch (error) {
       return {
@@ -170,7 +166,7 @@ export class ModelProvidersService {
         status: null,
         statusText: this.formatProviderConnectionError(provider, testRequest.displayUrl, error),
         latencyMs: Date.now() - startedAt,
-        url: testRequest.displayUrl,
+        url: testRequest.displayUrl
       };
     }
   }
@@ -194,24 +190,24 @@ export class ModelProvidersService {
     const where: Prisma.ModelConfigWhereInput = {
       deletedAt: null,
       ...(query.providerId ? { providerId: query.providerId } : {}),
-      ...(query.modelType ? { modelType: query.modelType } : {}),
+      ...(query.modelType ? { modelType: query.modelType } : {})
     };
 
     const [list, total] = await this.prisma.$transaction([
       this.prisma.modelConfig.findMany({
         where,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         skip: page.skip,
-        take: page.take,
+        take: page.take
       }),
-      this.prisma.modelConfig.count({ where }),
+      this.prisma.modelConfig.count({ where })
     ]);
 
     return createPageResult(
       list.map((config) => this.toModelConfigListItem(config)),
       total,
       page.page,
-      page.pageSize,
+      page.pageSize
     );
   }
 
@@ -223,7 +219,7 @@ export class ModelProvidersService {
 
     const config = await this.prisma.modelConfig.create({
       data,
-      include: { provider: true },
+      include: { provider: true }
     });
 
     return this.toModelConfigDetail(config);
@@ -259,7 +255,7 @@ export class ModelProvidersService {
     const config = await this.prisma.modelConfig.update({
       where: { id },
       data,
-      include: { provider: true },
+      include: { provider: true }
     });
 
     return this.toModelConfigDetail(config);
@@ -271,22 +267,20 @@ export class ModelProvidersService {
     await this.prisma.$transaction([
       this.prisma.defaultModelSetting.updateMany({
         where: { chatModelConfigId: id },
-        data: { chatModelConfigId: null },
+        data: { chatModelConfigId: null }
       }),
       this.prisma.defaultModelSetting.updateMany({
         where: { embeddingModelConfigId: id },
-        data: { embeddingModelConfigId: null },
+        data: { embeddingModelConfigId: null }
       }),
       this.prisma.modelConfig.update({
         where: { id },
-        data: { deletedAt: new Date(), enabled: false },
-      }),
+        data: { deletedAt: new Date(), enabled: false }
+      })
     ]);
   }
 
-  async createChatCompletion(
-    request: ChatCompletionRequest,
-  ): Promise<ChatCompletionResponse> {
+  async createChatCompletion(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
     return this.gateway.createChatCompletion(request);
   }
 
@@ -297,16 +291,16 @@ export class ModelProvidersService {
   async checkModelCapability(
     providerId: unknown,
     modelName: unknown,
-    modelType: unknown,
+    modelType: unknown
   ): Promise<ModelCapabilityCheckResult> {
     const provider = await this.ensureProviderExists(
-      this.requireNonEmptyString(providerId, 'providerId'),
+      this.requireNonEmptyString(providerId, "providerId")
     );
 
     return this.resolveModelCapability(
       provider,
-      this.requireNonEmptyString(modelName, 'modelName'),
-      this.requireModelType(modelType),
+      this.requireNonEmptyString(modelName, "modelName"),
+      this.requireModelType(modelType)
     );
   }
 
@@ -321,7 +315,7 @@ export class ModelProvidersService {
   }
 
   async updateDefaultModelSettings(
-    payload: DefaultModelSettingsUpdateDto,
+    payload: DefaultModelSettingsUpdateDto
   ): Promise<DefaultModelSettings> {
     const chatModelConfigId = this.normalizeNullableId(payload.chatModelConfigId);
     const embeddingModelConfigId = this.normalizeNullableId(payload.embeddingModelConfigId);
@@ -335,20 +329,20 @@ export class ModelProvidersService {
     }
 
     const settings = await this.prisma.defaultModelSetting.upsert({
-      where: { id: 'global' },
+      where: { id: "global" },
       create: {
-        id: 'global',
+        id: "global",
         chatModelConfigId,
-        embeddingModelConfigId,
+        embeddingModelConfigId
       },
       update: {
         chatModelConfigId,
-        embeddingModelConfigId,
+        embeddingModelConfigId
       },
       include: {
         chatModelConfig: true,
-        embeddingModelConfig: true,
-      },
+        embeddingModelConfig: true
+      }
     });
 
     return this.toDefaultModelSettings(settings);
@@ -356,50 +350,52 @@ export class ModelProvidersService {
 
   private validateProviderCreate(payload: ProviderCreateDto): Required<ProviderCreateDto> {
     return {
-      name: this.requireNonEmptyString(payload.name, 'name'),
+      name: this.requireNonEmptyString(payload.name, "name"),
       providerType: this.requireProviderType(payload.providerType),
       baseUrl: this.requireUrl(payload.baseUrl),
-      apiKey: payload.apiKey ?? '',
-      enabled: payload.enabled ?? true,
+      apiKey: payload.apiKey ?? "",
+      enabled: payload.enabled ?? true
     };
   }
 
   private validateProviderUpdate(payload: ProviderUpdateDto): ProviderUpdateDto {
     return {
       ...(payload.name !== undefined
-        ? { name: this.requireNonEmptyString(payload.name, 'name') }
+        ? { name: this.requireNonEmptyString(payload.name, "name") }
         : {}),
       ...(payload.providerType !== undefined
         ? { providerType: this.requireProviderType(payload.providerType) }
         : {}),
       ...(payload.baseUrl !== undefined ? { baseUrl: this.requireUrl(payload.baseUrl) } : {}),
       ...(payload.apiKey !== undefined ? { apiKey: payload.apiKey } : {}),
-      ...(payload.enabled !== undefined ? { enabled: Boolean(payload.enabled) } : {}),
+      ...(payload.enabled !== undefined ? { enabled: Boolean(payload.enabled) } : {})
     };
   }
 
   private validateModelConfigCreate(payload: ModelConfigCreateDto): Required<ModelConfigCreateDto> {
     return {
-      providerId: this.requireNonEmptyString(payload.providerId, 'providerId'),
-      modelName: this.requireNonEmptyString(payload.modelName, 'modelName'),
+      providerId: this.requireNonEmptyString(payload.providerId, "providerId"),
+      modelName: this.requireNonEmptyString(payload.modelName, "modelName"),
       modelType: this.requireModelType(payload.modelType),
       credentialName: this.normalizeOptionalString(payload.credentialName),
       contextLength: this.normalizeContextLength(payload.contextLength),
       enabled: payload.enabled ?? true,
       timeoutSeconds: this.normalizeTimeout(payload.timeoutSeconds),
-      maxTokens: this.normalizeMaxTokens(payload.maxTokens),
+      maxTokens: this.normalizeMaxTokens(payload.maxTokens)
     };
   }
 
   private validateModelConfigUpdate(payload: ModelConfigUpdateDto): ModelConfigUpdateDto {
     return {
       ...(payload.providerId !== undefined
-        ? { providerId: this.requireNonEmptyString(payload.providerId, 'providerId') }
+        ? { providerId: this.requireNonEmptyString(payload.providerId, "providerId") }
         : {}),
       ...(payload.modelName !== undefined
-        ? { modelName: this.requireNonEmptyString(payload.modelName, 'modelName') }
+        ? { modelName: this.requireNonEmptyString(payload.modelName, "modelName") }
         : {}),
-      ...(payload.modelType !== undefined ? { modelType: this.requireModelType(payload.modelType) } : {}),
+      ...(payload.modelType !== undefined
+        ? { modelType: this.requireModelType(payload.modelType) }
+        : {}),
       ...(payload.credentialName !== undefined
         ? { credentialName: this.normalizeOptionalString(payload.credentialName) }
         : {}),
@@ -410,12 +406,14 @@ export class ModelProvidersService {
       ...(payload.timeoutSeconds !== undefined
         ? { timeoutSeconds: this.normalizeTimeout(payload.timeoutSeconds) }
         : {}),
-      ...(payload.maxTokens !== undefined ? { maxTokens: this.normalizeMaxTokens(payload.maxTokens) } : {}),
+      ...(payload.maxTokens !== undefined
+        ? { maxTokens: this.normalizeMaxTokens(payload.maxTokens) }
+        : {})
     };
   }
 
   private requireNonEmptyString(value: unknown, field: string): string {
-    if (typeof value !== 'string' || value.trim().length === 0) {
+    if (typeof value !== "string" || value.trim().length === 0) {
       throw new AppError(ErrorCodes.common.badRequest, `${field} is required`);
     }
 
@@ -424,31 +422,31 @@ export class ModelProvidersService {
 
   private normalizeOptionalString(value: unknown): string {
     if (value === undefined || value === null) {
-      return '';
+      return "";
     }
 
-    if (typeof value !== 'string') {
-      throw new AppError(ErrorCodes.common.badRequest, 'credentialName must be a string');
+    if (typeof value !== "string") {
+      throw new AppError(ErrorCodes.common.badRequest, "credentialName must be a string");
     }
 
     return value.trim();
   }
 
   private normalizeNullableId(value: unknown): string | null {
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null || value === "") {
       return null;
     }
 
-    return this.requireNonEmptyString(value, 'modelConfigId');
+    return this.requireNonEmptyString(value, "modelConfigId");
   }
 
   private requireUrl(value: unknown): string {
-    const url = this.requireNonEmptyString(value, 'baseUrl');
+    const url = this.requireNonEmptyString(value, "baseUrl");
 
     try {
-      return new URL(url).toString().replace(/\/$/u, '');
+      return new URL(url).toString().replace(/\/$/u, "");
     } catch {
-      throw new AppError(ErrorCodes.common.badRequest, 'baseUrl must be a valid URL');
+      throw new AppError(ErrorCodes.common.badRequest, "baseUrl must be a valid URL");
     }
   }
 
@@ -462,7 +460,7 @@ export class ModelProvidersService {
       return value;
     }
 
-    throw new AppError(ErrorCodes.common.badRequest, 'providerType is invalid');
+    throw new AppError(ErrorCodes.common.badRequest, "providerType is invalid");
   }
 
   private requireModelType(value: unknown): ModelConfigType {
@@ -470,7 +468,7 @@ export class ModelProvidersService {
       return value;
     }
 
-    throw new AppError(ErrorCodes.common.badRequest, 'modelType is invalid');
+    throw new AppError(ErrorCodes.common.badRequest, "modelType is invalid");
   }
 
   private normalizeTimeout(value: unknown): number {
@@ -483,7 +481,7 @@ export class ModelProvidersService {
     if (!Number.isInteger(timeout) || timeout < 1 || timeout > 300) {
       throw new AppError(
         ErrorCodes.common.badRequest,
-        'timeoutSeconds must be an integer between 1 and 300',
+        "timeoutSeconds must be an integer between 1 and 300"
       );
     }
 
@@ -491,21 +489,21 @@ export class ModelProvidersService {
   }
 
   private normalizeMaxTokens(value: unknown): number | null {
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null || value === "") {
       return null;
     }
 
     const maxTokens = Number(value);
 
     if (!Number.isInteger(maxTokens) || maxTokens < 1) {
-      throw new AppError(ErrorCodes.common.badRequest, 'maxTokens must be a positive integer');
+      throw new AppError(ErrorCodes.common.badRequest, "maxTokens must be a positive integer");
     }
 
     return maxTokens;
   }
 
   private normalizeContextLength(value: unknown): number {
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null || value === "") {
       return DEFAULT_CONTEXT_LENGTH;
     }
 
@@ -514,7 +512,7 @@ export class ModelProvidersService {
     if (!Number.isInteger(contextLength) || contextLength < 1 || contextLength > 1_000_000) {
       throw new AppError(
         ErrorCodes.common.badRequest,
-        'contextLength must be an integer between 1 and 1000000',
+        "contextLength must be an integer between 1 and 1000000"
       );
     }
 
@@ -523,11 +521,11 @@ export class ModelProvidersService {
 
   private async ensureProviderExists(id: string): Promise<ModelProvider> {
     const provider = await this.prisma.modelProvider.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null }
     });
 
     if (!provider) {
-      throw new AppError(ErrorCodes.provider.notFound, 'provider not found', HttpStatus.NOT_FOUND);
+      throw new AppError(ErrorCodes.provider.notFound, "provider not found", HttpStatus.NOT_FOUND);
     }
 
     return provider;
@@ -538,15 +536,15 @@ export class ModelProvidersService {
       where: {
         name,
         deletedAt: null,
-        ...(excludeId ? { id: { not: excludeId } } : {}),
-      },
+        ...(excludeId ? { id: { not: excludeId } } : {})
+      }
     });
 
     if (existing) {
       throw new AppError(
         ErrorCodes.provider.nameExists,
-        'provider name already exists',
-        HttpStatus.CONFLICT,
+        "provider name already exists",
+        HttpStatus.CONFLICT
       );
     }
   }
@@ -554,11 +552,11 @@ export class ModelProvidersService {
   private async findProviderDetail(id: string) {
     const provider = await this.prisma.modelProvider.findFirst({
       where: { id, deletedAt: null },
-      include: { modelConfigs: { where: { deletedAt: null } } },
+      include: { modelConfigs: { where: { deletedAt: null } } }
     });
 
     if (!provider) {
-      throw new AppError(ErrorCodes.provider.notFound, 'provider not found', HttpStatus.NOT_FOUND);
+      throw new AppError(ErrorCodes.provider.notFound, "provider not found", HttpStatus.NOT_FOUND);
     }
 
     return provider;
@@ -568,7 +566,7 @@ export class ModelProvidersService {
     providerId: string,
     modelName: string,
     modelType: ModelConfigType,
-    excludeId?: string,
+    excludeId?: string
   ): Promise<void> {
     const existing = await this.prisma.modelConfig.findFirst({
       where: {
@@ -576,15 +574,15 @@ export class ModelProvidersService {
         modelName,
         modelType,
         deletedAt: null,
-        ...(excludeId ? { id: { not: excludeId } } : {}),
-      },
+        ...(excludeId ? { id: { not: excludeId } } : {})
+      }
     });
 
     if (existing) {
       throw new AppError(
         ErrorCodes.provider.modelConfigExists,
-        'model config already exists',
-        HttpStatus.CONFLICT,
+        "model config already exists",
+        HttpStatus.CONFLICT
       );
     }
   }
@@ -594,7 +592,7 @@ export class ModelProvidersService {
     const response = await this.fetchProviderModels(provider, url, {
       headers: provider.apiKeyEncrypted
         ? { authorization: `Bearer ${decryptSecret(provider.apiKeyEncrypted)}` }
-        : {},
+        : {}
     });
     const data = (await response.json()) as {
       models?: Array<{
@@ -608,23 +606,25 @@ export class ModelProvidersService {
     return this.sortRemoteModels(
       (data.models ?? [])
         .map((model) => {
-          const modelName = model.name ?? model.model ?? '';
+          const modelName = model.name ?? model.model ?? "";
           const capabilities = this.normalizeOllamaCapabilities(model.capabilities ?? []);
 
           return this.toRemoteModel(
             modelName,
-            capabilities.length > 0 ? capabilities : this.inferModelCapabilities(provider.providerType, modelName),
-            model.details?.context_length ?? null,
+            capabilities.length > 0
+              ? capabilities
+              : this.inferModelCapabilities(provider.providerType, modelName),
+            model.details?.context_length ?? null
           );
         })
-        .filter((model) => model.modelName),
+        .filter((model) => model.modelName)
     );
   }
 
   private async listOpenAIStyleModels(provider: ModelProvider): Promise<ProviderRemoteModel[]> {
     const testRequest = this.getProviderTestRequest(provider);
     const response = await this.fetchProviderModels(provider, testRequest.requestUrl, {
-      headers: testRequest.headers,
+      headers: testRequest.headers
     });
     const data = (await response.json()) as {
       data?: Array<{ id?: string }>;
@@ -633,21 +633,21 @@ export class ModelProvidersService {
     return this.sortRemoteModels(
       (data.data ?? [])
         .map((model) => {
-          const modelName = model.id ?? '';
+          const modelName = model.id ?? "";
           return this.toRemoteModel(
             modelName,
             this.inferModelCapabilities(provider.providerType, modelName),
-            null,
+            null
           );
         })
-        .filter((model) => model.modelName),
+        .filter((model) => model.modelName)
     );
   }
 
   private async listGeminiModels(provider: ModelProvider): Promise<ProviderRemoteModel[]> {
     const testRequest = this.getProviderTestRequest(provider);
     const response = await this.fetchProviderModels(provider, testRequest.requestUrl, {
-      headers: testRequest.headers,
+      headers: testRequest.headers
     });
     const data = (await response.json()) as {
       models?: Array<{
@@ -660,33 +660,33 @@ export class ModelProvidersService {
     return this.sortRemoteModels(
       (data.models ?? [])
         .map((model) => {
-          const modelName = model.name?.replace(/^models\//u, '') ?? '';
+          const modelName = model.name?.replace(/^models\//u, "") ?? "";
           return this.toRemoteModel(
             modelName,
             this.normalizeGeminiCapabilities(model.supportedGenerationMethods ?? []),
-            model.inputTokenLimit ?? null,
+            model.inputTokenLimit ?? null
           );
         })
-        .filter((model) => model.modelName),
+        .filter((model) => model.modelName)
     );
   }
 
   private async fetchProviderModels(
     provider: ModelProvider,
     url: string,
-    init: RequestInit,
+    init: RequestInit
   ): Promise<Response> {
     const response = await fetch(url, {
-      method: 'GET',
+      method: "GET",
       ...init,
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(30_000)
     });
 
     if (!response.ok) {
       throw new AppError(
         ErrorCodes.provider.connectionFailed,
         `sync provider models failed with ${response.status} ${response.statusText}`,
-        HttpStatus.BAD_GATEWAY,
+        HttpStatus.BAD_GATEWAY
       );
     }
 
@@ -700,13 +700,15 @@ export class ModelProvidersService {
   private toRemoteModel(
     modelName: string,
     capabilities: ModelCapability[],
-    contextLength: number | null,
+    contextLength: number | null
   ): ProviderRemoteModel {
     return {
       modelName,
       capabilities,
-      suggestedType: capabilities.includes('embedding') ? ModelConfigType.EMBEDDING : ModelConfigType.CHAT,
-      contextLength,
+      suggestedType: capabilities.includes("embedding")
+        ? ModelConfigType.EMBEDDING
+        : ModelConfigType.CHAT,
+      contextLength
     };
   }
 
@@ -718,26 +720,30 @@ export class ModelProvidersService {
     }
 
     return [...unique.values()].sort((left, right) =>
-      left.modelName.localeCompare(right.modelName),
+      left.modelName.localeCompare(right.modelName)
     );
   }
 
   private async ensureModelCapability(
     provider: ModelProvider,
     modelName: string,
-    modelType: ModelConfigType,
+    modelType: ModelConfigType
   ): Promise<void> {
     const result = await this.resolveModelCapability(provider, modelName, modelType);
 
     if (result.verified && !result.supported) {
-      throw new AppError(ErrorCodes.provider.connectionFailed, result.message, HttpStatus.BAD_REQUEST);
+      throw new AppError(
+        ErrorCodes.provider.connectionFailed,
+        result.message,
+        HttpStatus.BAD_REQUEST
+      );
     }
   }
 
   private async resolveModelCapability(
     provider: ModelProvider,
     modelName: string,
-    modelType: ModelConfigType,
+    modelType: ModelConfigType
   ): Promise<ModelCapabilityCheckResult> {
     if (provider.providerType === ModelProviderType.OLLAMA) {
       return this.resolveOllamaModelCapability(provider, modelName, modelType);
@@ -753,39 +759,41 @@ export class ModelProvidersService {
       verified: true,
       capabilities,
       message: supported
-        ? 'model capability matched'
-        : `model ${modelName} does not support ${modelType}`,
+        ? "model capability matched"
+        : `model ${modelName} does not support ${modelType}`
     };
   }
 
   private async resolveOllamaModelCapability(
     provider: ModelProvider,
     modelName: string,
-    modelType: ModelConfigType,
+    modelType: ModelConfigType
   ): Promise<ModelCapabilityCheckResult> {
     const url = `${this.getOllamaServerBaseUrl(provider.baseUrl)}/api/tags`;
 
     try {
       const response = await fetch(url, {
-        method: 'GET',
+        method: "GET",
         headers: provider.apiKeyEncrypted
           ? { authorization: `Bearer ${decryptSecret(provider.apiKeyEncrypted)}` }
           : {},
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(10_000)
       });
 
       if (!response.ok) {
         return this.unverifiedCapabilityResult(
           modelName,
           modelType,
-          `cannot verify model capability: ${response.status} ${response.statusText}`,
+          `cannot verify model capability: ${response.status} ${response.statusText}`
         );
       }
 
       const data = (await response.json()) as {
         models?: Array<{ name?: string; model?: string; capabilities?: string[] }>;
       };
-      const model = data.models?.find((item) => item.name === modelName || item.model === modelName);
+      const model = data.models?.find(
+        (item) => item.name === modelName || item.model === modelName
+      );
 
       if (!model) {
         return {
@@ -794,7 +802,7 @@ export class ModelProvidersService {
           supported: false,
           verified: true,
           capabilities: [],
-          message: `model ${modelName} not found in Ollama`,
+          message: `model ${modelName} not found in Ollama`
         };
       }
 
@@ -808,14 +816,14 @@ export class ModelProvidersService {
         verified: true,
         capabilities,
         message: supported
-          ? 'model capability matched'
-          : `model ${modelName} does not support ${modelType}`,
+          ? "model capability matched"
+          : `model ${modelName} does not support ${modelType}`
       };
     } catch (error) {
       return this.unverifiedCapabilityResult(
         modelName,
         modelType,
-        error instanceof Error ? error.message : 'cannot verify model capability',
+        error instanceof Error ? error.message : "cannot verify model capability"
       );
     }
   }
@@ -823,7 +831,7 @@ export class ModelProvidersService {
   private unverifiedCapabilityResult(
     modelName: string,
     modelType: ModelConfigType,
-    message: string,
+    message: string
   ): ModelCapabilityCheckResult {
     return {
       modelName,
@@ -831,33 +839,33 @@ export class ModelProvidersService {
       supported: true,
       verified: false,
       capabilities: [],
-      message,
+      message
     };
   }
 
   private inferModelCapabilities(
     providerType: ModelProviderType,
-    modelName: string,
+    modelName: string
   ): ModelCapability[] {
     if (providerType === ModelProviderType.ANTHROPIC || providerType === ModelProviderType.GEMINI) {
-      return ['chat'];
+      return ["chat"];
     }
 
     const normalizedName = modelName.toLowerCase();
 
     if (
-      normalizedName.includes('embedding') ||
-      normalizedName.includes('embed') ||
-      normalizedName.includes('text-embedding')
+      normalizedName.includes("embedding") ||
+      normalizedName.includes("embed") ||
+      normalizedName.includes("text-embedding")
     ) {
-      return ['embedding'];
+      return ["embedding"];
     }
 
-    if (normalizedName.includes('rerank')) {
-      return ['rerank'];
+    if (normalizedName.includes("rerank")) {
+      return ["rerank"];
     }
 
-    return ['chat'];
+    return ["chat"];
   }
 
   private normalizeOllamaCapabilities(capabilities: string[]): ModelCapability[] {
@@ -866,12 +874,12 @@ export class ModelProvidersService {
     for (const capability of capabilities) {
       const value = capability.toLowerCase();
 
-      if (value === 'completion' || value === 'chat') {
-        normalized.add('chat');
+      if (value === "completion" || value === "chat") {
+        normalized.add("chat");
       }
 
-      if (value === 'embedding' || value === 'embeddings') {
-        normalized.add('embedding');
+      if (value === "embedding" || value === "embeddings") {
+        normalized.add("embedding");
       }
     }
 
@@ -884,12 +892,12 @@ export class ModelProvidersService {
     for (const method of methods) {
       const value = method.toLowerCase();
 
-      if (value === 'generatecontent' || value === 'streamgeneratecontent') {
-        normalized.add('chat');
+      if (value === "generatecontent" || value === "streamgeneratecontent") {
+        normalized.add("chat");
       }
 
-      if (value === 'embedcontent' || value === 'batchembedcontents') {
-        normalized.add('embedding');
+      if (value === "embedcontent" || value === "batchembedcontents") {
+        normalized.add("embedding");
       }
     }
 
@@ -898,14 +906,14 @@ export class ModelProvidersService {
 
   private hasRequestedCapability(
     capabilities: ModelCapability[],
-    modelType: ModelConfigType,
+    modelType: ModelConfigType
   ): boolean {
     if (modelType === ModelConfigType.CHAT) {
-      return capabilities.includes('chat');
+      return capabilities.includes("chat");
     }
 
     if (modelType === ModelConfigType.EMBEDDING) {
-      return capabilities.includes('embedding');
+      return capabilities.includes("embedding");
     }
 
     return false;
@@ -914,14 +922,14 @@ export class ModelProvidersService {
   private async findModelConfigDetail(id: string) {
     const config = await this.prisma.modelConfig.findFirst({
       where: { id, deletedAt: null },
-      include: { provider: true },
+      include: { provider: true }
     });
 
     if (!config || config.provider.deletedAt) {
       throw new AppError(
         ErrorCodes.provider.modelConfigNotFound,
-        'model config not found',
-        HttpStatus.NOT_FOUND,
+        "model config not found",
+        HttpStatus.NOT_FOUND
       );
     }
 
@@ -930,18 +938,15 @@ export class ModelProvidersService {
 
   private async findDefaultModelSettings() {
     return this.prisma.defaultModelSetting.findUnique({
-      where: { id: 'global' },
+      where: { id: "global" },
       include: {
         chatModelConfig: true,
-        embeddingModelConfig: true,
-      },
+        embeddingModelConfig: true
+      }
     });
   }
 
-  private async ensureDefaultModelConfig(
-    id: string,
-    modelType: ModelConfigType,
-  ): Promise<void> {
+  private async ensureDefaultModelConfig(id: string, modelType: ModelConfigType): Promise<void> {
     const modelConfig = await this.prisma.modelConfig.findFirst({
       where: {
         id,
@@ -950,22 +955,22 @@ export class ModelProvidersService {
         deletedAt: null,
         provider: {
           enabled: true,
-          deletedAt: null,
-        },
-      },
+          deletedAt: null
+        }
+      }
     });
 
     if (!modelConfig) {
       throw new AppError(
         ErrorCodes.provider.modelConfigNotFound,
         `${modelType} default model must reference an enabled ${modelType} model config`,
-        HttpStatus.BAD_REQUEST,
+        HttpStatus.BAD_REQUEST
       );
     }
   }
 
   private getProviderTestRequest(provider: ModelProvider): ProviderTestRequest {
-    const apiKey = provider.apiKeyEncrypted ? decryptSecret(provider.apiKeyEncrypted) : '';
+    const apiKey = provider.apiKeyEncrypted ? decryptSecret(provider.apiKeyEncrypted) : "";
 
     if (provider.providerType === ModelProviderType.OLLAMA) {
       const url = `${this.getOllamaServerBaseUrl(provider.baseUrl)}/api/tags`;
@@ -973,7 +978,7 @@ export class ModelProvidersService {
       return {
         requestUrl: url,
         displayUrl: url,
-        headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
+        headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {}
       };
     }
 
@@ -983,7 +988,7 @@ export class ModelProvidersService {
       return {
         requestUrl: url,
         displayUrl: url,
-        headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
+        headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {}
       };
     }
 
@@ -994,9 +999,9 @@ export class ModelProvidersService {
         requestUrl: url,
         displayUrl: url,
         headers: {
-          ...(apiKey ? { 'x-api-key': apiKey } : {}),
-          'anthropic-version': ANTHROPIC_VERSION,
-        },
+          ...(apiKey ? { "x-api-key": apiKey } : {}),
+          "anthropic-version": ANTHROPIC_VERSION
+        }
       };
     }
 
@@ -1007,58 +1012,58 @@ export class ModelProvidersService {
     return {
       requestUrl: provider.baseUrl,
       displayUrl: provider.baseUrl,
-      headers: {},
+      headers: {}
     };
   }
 
   private getOllamaServerBaseUrl(baseUrl: string): string {
-    return baseUrl.replace(/\/v1$/u, '');
+    return baseUrl.replace(/\/v1$/u, "");
   }
 
   private getGeminiTestRequest(baseUrl: string, apiKey: string): ProviderTestRequest {
     const url = new URL(`${this.normalizeBaseUrl(baseUrl)}/models`);
 
     if (apiKey) {
-      url.searchParams.set('key', apiKey);
+      url.searchParams.set("key", apiKey);
     }
 
     const displayUrl = new URL(url.toString());
 
     if (apiKey) {
-      displayUrl.searchParams.set('key', '***');
+      displayUrl.searchParams.set("key", "***");
     }
 
     return {
       requestUrl: url.toString(),
       displayUrl: displayUrl.toString(),
-      headers: {},
+      headers: {}
     };
   }
 
   private normalizeBaseUrl(baseUrl: string): string {
-    return baseUrl.replace(/\/$/u, '');
+    return baseUrl.replace(/\/$/u, "");
   }
 
   private formatProviderConnectionError(
     provider: ModelProvider,
     url: string,
-    error: unknown,
+    error: unknown
   ): string {
-    const message = error instanceof Error ? error.message : 'connection failed';
+    const message = error instanceof Error ? error.message : "connection failed";
 
     if (provider.providerType !== ModelProviderType.OLLAMA) {
       return [
         message,
         `tested url: ${url}`,
-        '请确认后端进程可以访问该地址；如果需要代理，必须为后端进程配置 HTTP_PROXY/HTTPS_PROXY 或在网关层接入代理 agent',
-      ].join('; ');
+        "请确认后端进程可以访问该地址；如果需要代理，必须为后端进程配置 HTTP_PROXY/HTTPS_PROXY 或在网关层接入代理 agent"
+      ].join("; ");
     }
 
     return [
       message,
       `tested url: ${url}`,
-      'Ollama 本机部署时通常使用 http://127.0.0.1:11434；只有后端运行在 Docker 容器内时才使用 http://host.docker.internal:11434',
-    ].join('; ');
+      "Ollama 本机部署时通常使用 http://127.0.0.1:11434；只有后端运行在 Docker 容器内时才使用 http://host.docker.internal:11434"
+    ].join("; ");
   }
 
   private toProviderListItem(provider: ModelProvider): ProviderListItem {
@@ -1071,36 +1076,36 @@ export class ModelProvidersService {
       apiKeyMasked: this.maskEncryptedSecret(provider.apiKeyEncrypted),
       enabled: provider.enabled,
       createdAt: provider.createdAt,
-      updatedAt: provider.updatedAt,
+      updatedAt: provider.updatedAt
     };
   }
 
   private maskEncryptedSecret(value: string | null): string {
     if (!value) {
-      return '';
+      return "";
     }
 
     try {
       return this.maskSecret(decryptSecret(value));
     } catch {
-      return '********';
+      return "********";
     }
   }
 
   private maskSecret(value: string): string {
     if (value.length <= 6) {
-      return '*'.repeat(value.length);
+      return "*".repeat(value.length);
     }
 
     return `${value.slice(0, 3)}*********${value.slice(-3)}`;
   }
 
   private toProviderDetail(
-    provider: ModelProvider & { modelConfigs: ModelConfigListItem[] },
+    provider: ModelProvider & { modelConfigs: ModelConfigListItem[] }
   ): ProviderDetail {
     return {
       ...this.toProviderListItem(provider),
-      modelConfigs: provider.modelConfigs.map((config) => this.toModelConfigListItem(config)),
+      modelConfigs: provider.modelConfigs.map((config) => this.toModelConfigListItem(config))
     };
   }
 
@@ -1116,21 +1121,21 @@ export class ModelProvidersService {
       timeoutSeconds: config.timeoutSeconds,
       maxTokens: config.maxTokens,
       createdAt: config.createdAt,
-      updatedAt: config.updatedAt,
+      updatedAt: config.updatedAt
     };
   }
 
   private toModelConfigDetail(
-    config: ModelConfigListItem & { provider: ModelProvider },
+    config: ModelConfigListItem & { provider: ModelProvider }
   ): ModelConfigDetail {
     return {
       ...this.toModelConfigListItem(config),
-      provider: this.toProviderListItem(config.provider),
+      provider: this.toProviderListItem(config.provider)
     };
   }
 
   private toDefaultModelSettings(
-    settings: Awaited<ReturnType<ModelProvidersService['findDefaultModelSettings']>>,
+    settings: Awaited<ReturnType<ModelProvidersService["findDefaultModelSettings"]>>
   ): DefaultModelSettings {
     return {
       chatModelConfigId: settings?.chatModelConfigId ?? null,
@@ -1141,7 +1146,7 @@ export class ModelProvidersService {
       embeddingModelConfig: settings?.embeddingModelConfig
         ? this.toModelConfigListItem(settings.embeddingModelConfig)
         : null,
-      updatedAt: settings?.updatedAt ?? null,
+      updatedAt: settings?.updatedAt ?? null
     };
   }
 }

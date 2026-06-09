@@ -1,9 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get } from "@nestjs/common";
 
-import { ToolListItem } from './dto/tool.dto';
-import { ToolsService } from './tools.service';
+import { ToolListItem } from "./dto/tool.dto";
+import { ToolsService } from "./tools.service";
 
-@Controller('tools')
+@Controller("tools")
 export class ToolsController {
   constructor(private readonly toolsService: ToolsService) {}
 

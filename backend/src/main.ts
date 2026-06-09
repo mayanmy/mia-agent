@@ -1,14 +1,14 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory } from "@nestjs/core";
 
-import { AppModule } from './app.module';
-import { AppExceptionFilter } from './core/app-exception.filter';
-import { getConfig } from './core/config';
+import { AppModule } from "./app.module";
+import { AppExceptionFilter } from "./core/app-exception.filter";
+import { getConfig } from "./core/config";
 import {
   requestIdMiddleware,
   RequestWithId,
-  ResponseWithHeader,
-} from './core/request-id.middleware';
-import { ResultInterceptor } from './core/result.interceptor';
+  ResponseWithHeader
+} from "./core/request-id.middleware";
+import { ResultInterceptor } from "./core/result.interceptor";
 
 async function bootstrap() {
   const config = getConfig();
@@ -16,12 +16,12 @@ async function bootstrap() {
 
   app.enableCors({
     origin: config.corsOrigins,
-    credentials: true,
+    credentials: true
   });
   app.use((req: RequestWithId, res: ResponseWithHeader, next: () => void) => {
     requestIdMiddleware(req, res, next);
   });
-  app.setGlobalPrefix(config.apiPrefix.replace(/^\//u, ''));
+  app.setGlobalPrefix(config.apiPrefix.replace(/^\//u, ""));
   app.useGlobalFilters(new AppExceptionFilter());
   app.useGlobalInterceptors(new ResultInterceptor());
 

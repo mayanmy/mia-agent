@@ -106,9 +106,7 @@ export function AgentsPage() {
   function resolveDefaultChatModelConfigId(): string {
     const defaultModelAvailable = modelConfigs.some(
       (config) =>
-        config.id === defaultChatModelConfigId &&
-        config.modelType === "CHAT" &&
-        config.enabled
+        config.id === defaultChatModelConfigId && config.modelType === "CHAT" && config.enabled
     );
 
     if (defaultChatModelConfigId && defaultModelAvailable) {

@@ -1,4 +1,4 @@
-import { HttpStatus } from '@nestjs/common';
+import { HttpStatus } from "@nestjs/common";
 
 export const ErrorCodes = {
   common: {
@@ -7,7 +7,7 @@ export const ErrorCodes = {
     forbidden: 1003,
     notFound: 1004,
     conflict: 1005,
-    internal: 9000,
+    internal: 9000
   },
   provider: {
     notFound: 2001,
@@ -15,24 +15,20 @@ export const ErrorCodes = {
     inUse: 2003,
     connectionFailed: 2004,
     modelConfigNotFound: 2005,
-    modelConfigExists: 2006,
+    modelConfigExists: 2006
   },
   agent: {
     notFound: 3001,
     invalidModelConfig: 3002,
-    invalidTools: 3003,
-  },
+    invalidTools: 3003
+  }
 } as const;
 
 export class AppError extends Error {
   readonly code: number;
   readonly httpStatus: number;
 
-  constructor(
-    code: number,
-    message: string,
-    httpStatus = HttpStatus.BAD_REQUEST,
-  ) {
+  constructor(code: number, message: string, httpStatus = HttpStatus.BAD_REQUEST) {
     super(message);
     this.code = code;
     this.httpStatus = httpStatus;

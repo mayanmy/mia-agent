@@ -1,41 +1,37 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from "@nestjs/common";
 
-import { AppError, ErrorCodes } from '../../core/errors';
-import { AgentsService } from '../agents/agents.service';
-import { ModelProvidersService } from '../model-providers/model-providers.service';
-import {
-  ChatMessage,
-  LLMToolCall,
-  LLMToolDefinition,
-} from '../model-providers/dto/llm.dto';
-import { ToolDefinition, ToolJsonValue } from '../tools/dto/tool.dto';
-import { ToolsService } from '../tools/tools.service';
+import { AppError, ErrorCodes } from "../../core/errors";
+import { AgentsService } from "../agents/agents.service";
+import { ModelProvidersService } from "../model-providers/model-providers.service";
+import { ChatMessage, LLMToolCall, LLMToolDefinition } from "../model-providers/dto/llm.dto";
+import { ToolDefinition, ToolJsonValue } from "../tools/dto/tool.dto";
+import { ToolsService } from "../tools/tools.service";
 import {
   ChatFileAttachmentDto,
   ChatImageAttachmentDto,
   ChatCompletionDto,
   ChatCompletionResult,
   ChatMessageDto,
-  ChatStreamEvent,
-} from './dto/chat.dto';
+  ChatStreamEvent
+} from "./dto/chat.dto";
 
 const MAX_IMAGE_COUNT = 4;
 const MAX_IMAGE_DATA_URL_LENGTH = 7 * 1024 * 1024;
 const MAX_FILE_COUNT = 4;
 const MAX_FILE_CONTENT_LENGTH = 200_000;
 const MAX_TOOL_ROUNDS = 3;
-const DEFAULT_TIMEZONE = 'Asia/Shanghai';
+const DEFAULT_TIMEZONE = "Asia/Shanghai";
 
 @Injectable()
 export class ChatService {
   constructor(
     private readonly agentsService: AgentsService,
     private readonly modelProvidersService: ModelProvidersService,
-    private readonly toolsService: ToolsService,
+    private readonly toolsService: ToolsService
   ) {}
 
   async createCompletion(payload: ChatCompletionDto): Promise<ChatCompletionResult> {
-    const agentId = this.requireNonEmptyString(payload.agentId, 'agentId');
+    const agentId = this.requireNonEmptyString(payload.agentId, "agentId");
     const images = this.normalizeImages(payload.images);
     const files = this.normalizeFiles(payload.files);
     const message = this.normalizeUserMessage(payload.message, images, files);
@@ -45,9 +41,9 @@ export class ChatService {
     const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
     const llmTools = this.toLLMToolDefinitions(toolDefinitions);
     const messages: ChatMessage[] = [
-      { role: 'system', content: this.buildSystemPrompt(agent.systemPrompt, llmTools) },
+      { role: "system", content: this.buildSystemPrompt(agent.systemPrompt, llmTools) },
       ...history,
-      this.buildUserMessage(message, images, files),
+      this.buildUserMessage(message, images, files)
     ];
 
     const response = await this.createCompletionWithTools({
@@ -56,7 +52,7 @@ export class ChatService {
       tools: llmTools,
       temperature: agent.temperature,
       maxTokens: agent.maxTokens,
-      timeoutSeconds: agent.timeoutSeconds,
+      timeoutSeconds: agent.timeoutSeconds
     });
 
     return {
@@ -64,15 +60,15 @@ export class ChatService {
       modelConfigId: agent.modelConfigId,
       modelName: response.model || agent.modelName,
       providerName: agent.providerType,
-      content: response.content,
+      content: response.content
     };
   }
 
   async *streamCompletion(
     payload: ChatCompletionDto,
-    signal?: AbortSignal,
+    signal?: AbortSignal
   ): AsyncIterable<ChatStreamEvent> {
-    const agentId = this.requireNonEmptyString(payload.agentId, 'agentId');
+    const agentId = this.requireNonEmptyString(payload.agentId, "agentId");
     const images = this.normalizeImages(payload.images);
     const files = this.normalizeFiles(payload.files);
     const message = this.normalizeUserMessage(payload.message, images, files);
@@ -82,19 +78,19 @@ export class ChatService {
     const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
     const llmTools = this.toLLMToolDefinitions(toolDefinitions);
     const messages: ChatMessage[] = [
-      { role: 'system', content: this.buildSystemPrompt(agent.systemPrompt, llmTools) },
+      { role: "system", content: this.buildSystemPrompt(agent.systemPrompt, llmTools) },
       ...history,
-      this.buildUserMessage(message, images, files),
+      this.buildUserMessage(message, images, files)
     ];
 
     yield {
-      type: 'message_start',
+      type: "message_start",
       data: {
         agentId: agent.agentId,
         modelConfigId: agent.modelConfigId,
         modelName: agent.modelName,
-        providerName: agent.providerType,
-      },
+        providerName: agent.providerType
+      }
     };
 
     const inferredToolCall = this.inferToolCallFromUserMessage(message, llmTools);
@@ -105,44 +101,44 @@ export class ChatService {
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
       let toolCalls: LLMToolCall[] = [];
-      let assistantContent = '';
+      let assistantContent = "";
       const bufferedTokens: string[] = [];
 
       for await (const chunk of this.modelProvidersService.streamChatCompletion({
         modelConfigId: agent.modelConfigId,
         messages,
         tools: llmTools,
-        toolChoice: llmTools.length > 0 ? 'auto' : undefined,
+        toolChoice: llmTools.length > 0 ? "auto" : undefined,
         temperature: agent.temperature,
         maxTokens: agent.maxTokens,
         timeoutSeconds: agent.timeoutSeconds,
-        signal,
+        signal
       })) {
-        if (chunk.type === 'token' && chunk.content) {
+        if (chunk.type === "token" && chunk.content) {
           assistantContent += chunk.content;
 
           if (llmTools.length > 0) {
             bufferedTokens.push(chunk.content);
           } else {
             yield {
-              type: 'token',
+              type: "token",
               data: {
-                content: chunk.content,
-              },
+                content: chunk.content
+              }
             };
           }
         }
 
-        if (chunk.type === 'tool_call') {
+        if (chunk.type === "tool_call") {
           toolCalls.push(chunk.toolCall);
         }
 
-        if (chunk.type === 'error') {
+        if (chunk.type === "error") {
           yield {
-            type: 'error',
+            type: "error",
             data: {
-              message: chunk.errorMessage || 'model stream failed',
-            },
+              message: chunk.errorMessage || "model stream failed"
+            }
           };
           return;
         }
@@ -157,35 +153,35 @@ export class ChatService {
 
         if (fallbackAnswer) {
           yield {
-            type: 'token',
+            type: "token",
             data: {
-              content: fallbackAnswer,
-            },
+              content: fallbackAnswer
+            }
           };
         } else {
           for (const token of bufferedTokens) {
             yield {
-              type: 'token',
+              type: "token",
               data: {
-                content: token,
-              },
+                content: token
+              }
             };
           }
         }
 
         yield {
-          type: 'message_end',
-          data: {},
+          type: "message_end",
+          data: {}
         };
         return;
       }
 
       if (round >= MAX_TOOL_ROUNDS) {
         yield {
-          type: 'error',
+          type: "error",
           data: {
-            message: 'tool call rounds exceeded',
-          },
+            message: "tool call rounds exceeded"
+          }
         };
         return;
       }
@@ -194,10 +190,10 @@ export class ChatService {
     }
 
     yield {
-      type: 'error',
+      type: "error",
       data: {
-        message: 'tool call rounds exceeded',
-      },
+        message: "tool call rounds exceeded"
+      }
     };
   }
 
@@ -215,10 +211,13 @@ export class ChatService {
     providerType: string;
   }> {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
-      const latestUserMessage = [...request.messages].reverse().find((message) => message.role === 'user');
-      const inferredToolCall = round === 0 && typeof latestUserMessage?.content === 'string'
-        ? this.inferToolCallFromUserMessage(latestUserMessage.content, request.tools)
-        : null;
+      const latestUserMessage = [...request.messages]
+        .reverse()
+        .find((message) => message.role === "user");
+      const inferredToolCall =
+        round === 0 && typeof latestUserMessage?.content === "string"
+          ? this.inferToolCallFromUserMessage(latestUserMessage.content, request.tools)
+          : null;
 
       if (inferredToolCall) {
         await this.executeToolCallsForCompletion([inferredToolCall], request.messages);
@@ -228,10 +227,10 @@ export class ChatService {
         modelConfigId: request.modelConfigId,
         messages: request.messages,
         tools: request.tools,
-        toolChoice: request.tools.length > 0 ? 'auto' : undefined,
+        toolChoice: request.tools.length > 0 ? "auto" : undefined,
         temperature: request.temperature,
         maxTokens: request.maxTokens,
-        timeoutSeconds: request.timeoutSeconds,
+        timeoutSeconds: request.timeoutSeconds
       });
 
       const toolCalls = response.toolCalls?.length
@@ -245,22 +244,22 @@ export class ChatService {
 
         return {
           ...response,
-          content: this.formatLatestToolResultAnswer(request.messages),
+          content: this.formatLatestToolResultAnswer(request.messages)
         };
       }
 
       if (round >= MAX_TOOL_ROUNDS) {
         throw new AppError(
           ErrorCodes.common.badRequest,
-          'tool call rounds exceeded',
-          HttpStatus.BAD_REQUEST,
+          "tool call rounds exceeded",
+          HttpStatus.BAD_REQUEST
         );
       }
 
       request.messages.push({
-        role: 'assistant',
+        role: "assistant",
         content: response.content,
-        toolCalls,
+        toolCalls
       });
 
       await this.executeToolCallsForCompletion(toolCalls, request.messages);
@@ -268,8 +267,8 @@ export class ChatService {
 
     throw new AppError(
       ErrorCodes.common.badRequest,
-      'tool call rounds exceeded',
-      HttpStatus.BAD_REQUEST,
+      "tool call rounds exceeded",
+      HttpStatus.BAD_REQUEST
     );
   }
 
@@ -277,7 +276,7 @@ export class ChatService {
     return tools.map((tool) => ({
       name: tool.id,
       description: tool.description,
-      parameters: tool.inputSchema,
+      parameters: tool.inputSchema
     }));
   }
 
@@ -290,67 +289,75 @@ export class ChatService {
       .map((tool) => {
         return `- ${tool.name}: ${tool.description}; parameters=${JSON.stringify(tool.parameters)}`;
       })
-      .join('\n');
+      .join("\n");
 
     return [
       systemPrompt,
-      '',
-      '工具调用规则：',
-      '当用户问题需要实时信息、精确计算、当前日期时间或外部查询时，必须使用可用工具，不要猜测。',
+      "",
+      "工具调用规则：",
+      "当用户问题需要实时信息、精确计算、当前日期时间或外部查询时，必须使用可用工具，不要猜测。",
       `如果需要获取当前时间且用户未指定时区，使用 ${DEFAULT_TIMEZONE}。`,
-      '如果模型接口不支持原生工具调用，则只输出下面 JSON，不要输出解释文字：',
-      '```json',
+      "如果模型接口不支持原生工具调用，则只输出下面 JSON，不要输出解释文字：",
+      "```json",
       '{"name":"tool_id","arguments":{}}',
-      '```',
-      '可用工具：',
+      "```",
+      "可用工具：",
       toolDescriptions,
-      '拿到工具结果后，再基于工具结果用自然语言回答用户。',
-    ].join('\n');
+      "拿到工具结果后，再基于工具结果用自然语言回答用户。"
+    ].join("\n");
   }
 
   private inferToolCallFromUserMessage(
     message: string,
-    tools: LLMToolDefinition[],
+    tools: LLMToolDefinition[]
   ): LLMToolCall | null {
-    const hasCurrentTimeTool = tools.some((tool) => tool.name === 'current_time');
+    const hasCurrentTimeTool = tools.some((tool) => tool.name === "current_time");
 
     if (!hasCurrentTimeTool) {
       return null;
     }
 
-    if (!/(当前时间|现在几点|现在时间|今天|日期|星期|几点了|时间|time now|current time)/iu.test(message)) {
+    if (
+      !/(当前时间|现在几点|现在时间|今天|日期|星期|几点了|时间|time now|current time)/iu.test(
+        message
+      )
+    ) {
       return null;
     }
 
     return {
-      id: this.createToolCallId('current_time'),
-      name: 'current_time',
+      id: this.createToolCallId("current_time"),
+      name: "current_time",
       arguments: {
-        timezone: this.extractTimezone(message) ?? DEFAULT_TIMEZONE,
+        timezone: this.extractTimezone(message) ?? DEFAULT_TIMEZONE
       },
-      rawArguments: '',
+      rawArguments: ""
     };
   }
 
   private extractTimezone(message: string): string | null {
-    if (/(美西|洛杉矶|旧金山|西雅图|Los Angeles|San Francisco|Seattle|Pacific Time|PST|PDT)/iu.test(message)) {
-      return 'America/Los_Angeles';
+    if (
+      /(美西|洛杉矶|旧金山|西雅图|Los Angeles|San Francisco|Seattle|Pacific Time|PST|PDT)/iu.test(
+        message
+      )
+    ) {
+      return "America/Los_Angeles";
     }
 
     if (/(美国|美东|纽约|华盛顿|New York|Washington|Eastern Time|EST|EDT)/iu.test(message)) {
-      return 'America/New_York';
+      return "America/New_York";
     }
 
     if (/(纽约|New York)/iu.test(message)) {
-      return 'America/New_York';
+      return "America/New_York";
     }
 
     if (/(东京|Tokyo)/iu.test(message)) {
-      return 'Asia/Tokyo';
+      return "Asia/Tokyo";
     }
 
     if (/(伦敦|London)/iu.test(message)) {
-      return 'Europe/London';
+      return "Europe/London";
     }
 
     if (/(上海|北京|中国|北京时间|Asia\/Shanghai)/iu.test(message)) {
@@ -377,8 +384,8 @@ export class ChatService {
         id: this.createToolCallId(parsed.name),
         name: parsed.name,
         arguments: parsed.arguments,
-        rawArguments: JSON.stringify(parsed.arguments),
-      },
+        rawArguments: JSON.stringify(parsed.arguments)
+      }
     ];
   }
 
@@ -388,7 +395,7 @@ export class ChatService {
   } | null {
     const candidates = [
       ...Array.from(content.matchAll(/```(?:json)?\s*([\s\S]*?)```/giu)).map((match) => match[1]),
-      content,
+      content
     ];
 
     for (const candidate of candidates) {
@@ -396,14 +403,14 @@ export class ChatService {
 
       if (
         parsed &&
-        typeof parsed.name === 'string' &&
+        typeof parsed.name === "string" &&
         parsed.arguments &&
-        typeof parsed.arguments === 'object' &&
+        typeof parsed.arguments === "object" &&
         !Array.isArray(parsed.arguments)
       ) {
         return {
           name: parsed.name,
-          arguments: parsed.arguments as Record<string, unknown>,
+          arguments: parsed.arguments as Record<string, unknown>
         };
       }
     }
@@ -415,7 +422,7 @@ export class ChatService {
     try {
       const parsed = JSON.parse(value) as unknown;
 
-      if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
         return null;
       }
 
@@ -430,65 +437,79 @@ export class ChatService {
     messages: ChatMessage[],
     agentId: string,
     signal: AbortSignal | undefined,
-    assistantContent = '',
+    assistantContent = ""
   ): AsyncIterable<ChatStreamEvent> {
     messages.push({
-      role: 'assistant',
+      role: "assistant",
       content: assistantContent,
-      toolCalls,
+      toolCalls
     });
 
     for (const toolCall of toolCalls) {
       yield {
-        type: 'tool_call',
+        type: "tool_call",
         data: {
           id: toolCall.id,
           name: toolCall.name,
-          arguments: toolCall.arguments,
-        },
+          arguments: toolCall.arguments
+        }
       };
 
       const result = await this.toolsService.executeTool({
         toolId: toolCall.name,
         input: this.toToolInput(toolCall.arguments),
         agentId,
-        signal,
+        signal
       });
 
       yield {
-        type: 'tool_result',
-        data: result,
+        type: "tool_result",
+        data: result
       };
 
-      messages.push(this.toToolResultMessage(toolCall, result.ok ? result.output ?? null : {
-        errorType: result.errorType,
-        errorMessage: result.errorMessage,
-      }));
+      messages.push(
+        this.toToolResultMessage(
+          toolCall,
+          result.ok
+            ? (result.output ?? null)
+            : {
+                errorType: result.errorType,
+                errorMessage: result.errorMessage
+              }
+        )
+      );
     }
   }
 
   private async executeToolCallsForCompletion(
     toolCalls: LLMToolCall[],
-    messages: ChatMessage[],
+    messages: ChatMessage[]
   ): Promise<void> {
     for (const toolCall of toolCalls) {
       const result = await this.toolsService.executeTool({
         toolId: toolCall.name,
-        input: this.toToolInput(toolCall.arguments),
+        input: this.toToolInput(toolCall.arguments)
       });
 
-      messages.push(this.toToolResultMessage(toolCall, result.ok ? result.output ?? null : {
-        errorType: result.errorType,
-        errorMessage: result.errorMessage,
-      }));
+      messages.push(
+        this.toToolResultMessage(
+          toolCall,
+          result.ok
+            ? (result.output ?? null)
+            : {
+                errorType: result.errorType,
+                errorMessage: result.errorMessage
+              }
+        )
+      );
     }
   }
 
   private toToolResultMessage(toolCall: LLMToolCall, result: unknown): ChatMessage {
     return {
-      role: 'tool',
+      role: "tool",
       toolCallId: toolCall.id,
-      content: JSON.stringify(result),
+      content: JSON.stringify(result)
     };
   }
 
@@ -500,24 +521,24 @@ export class ChatService {
     const result = this.getLatestToolResult(messages);
 
     if (!result) {
-      return '';
+      return "";
     }
 
-    if ('errorType' in result || 'errorMessage' in result) {
-      return `工具调用失败：${String(result.errorMessage || result.errorType || '未知错误')}`;
+    if ("errorType" in result || "errorMessage" in result) {
+      return `工具调用失败：${String(result.errorMessage || result.errorType || "未知错误")}`;
     }
 
-    if (typeof result.localTime === 'string') {
-      const timezone = typeof result.timezone === 'string' ? result.timezone : DEFAULT_TIMEZONE;
+    if (typeof result.localTime === "string") {
+      const timezone = typeof result.timezone === "string" ? result.timezone : DEFAULT_TIMEZONE;
       return `当前时间是 ${result.localTime}（${timezone}）。`;
     }
 
-    if (typeof result.result === 'number') {
+    if (typeof result.result === "number") {
       return `计算结果是 ${result.result}。`;
     }
 
-    if (typeof result.url === 'string' && typeof result.status === 'number') {
-      const method = typeof result.method === 'string' ? result.method : 'GET';
+    if (typeof result.url === "string" && typeof result.status === "number") {
+      const method = typeof result.method === "string" ? result.method : "GET";
       const bodyPreview = this.formatToolResultPreview(result.body);
       return `HTTP 请求完成：${method} ${result.url} 返回 ${result.status}。${bodyPreview}`;
     }
@@ -534,12 +555,12 @@ export class ChatService {
 
     const latestResult = this.getLatestToolResult(messages);
 
-    if (!latestResult || !('url' in latestResult)) {
-      return '';
+    if (!latestResult || !("url" in latestResult)) {
+      return "";
     }
 
     if (!this.isDistractedToolFollowup(content)) {
-      return '';
+      return "";
     }
 
     return this.formatLatestToolResultAnswer(messages);
@@ -548,9 +569,9 @@ export class ChatService {
   private getLatestToolResult(messages: ChatMessage[]): Record<string, unknown> | null {
     const latestToolMessage = [...messages]
       .reverse()
-      .find((message) => message.role === 'tool' && typeof message.content === 'string');
+      .find((message) => message.role === "tool" && typeof message.content === "string");
 
-    if (!latestToolMessage || typeof latestToolMessage.content !== 'string') {
+    if (!latestToolMessage || typeof latestToolMessage.content !== "string") {
       return null;
     }
 
@@ -558,16 +579,18 @@ export class ChatService {
   }
 
   private isDistractedToolFollowup(content: string): boolean {
-    return /正在(查询|获取|调用)|请稍等|稍等片刻|当前时间|现在时间|now checking|please wait/iu.test(content);
+    return /正在(查询|获取|调用)|请稍等|稍等片刻|当前时间|现在时间|now checking|please wait/iu.test(
+      content
+    );
   }
 
   private formatToolResultPreview(value: unknown): string {
-    if (value === undefined || value === null || value === '') {
-      return '';
+    if (value === undefined || value === null || value === "") {
+      return "";
     }
 
-    const text = typeof value === 'string' ? value : JSON.stringify(value);
-    const compact = text.replace(/\s+/gu, ' ').trim();
+    const text = typeof value === "string" ? value : JSON.stringify(value);
+    const compact = text.replace(/\s+/gu, " ").trim();
     const preview = compact.length > 300 ? `${compact.slice(0, 300)}...` : compact;
 
     return `响应：${preview}`;
@@ -586,9 +609,9 @@ export class ChatService {
   private toToolJsonValue(value: unknown): ToolJsonValue {
     if (
       value === null ||
-      typeof value === 'string' ||
-      typeof value === 'number' ||
-      typeof value === 'boolean'
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
     ) {
       return value;
     }
@@ -597,7 +620,7 @@ export class ChatService {
       return value.map((item) => this.toToolJsonValue(item));
     }
 
-    if (value && typeof value === 'object') {
+    if (value && typeof value === "object") {
       return this.toToolInput(value as Record<string, unknown>);
     }
 
@@ -611,20 +634,17 @@ export class ChatService {
 
     const normalized = history.flatMap((item): ChatMessage[] => {
       const role = item?.role;
-      const content = typeof item?.content === 'string' ? item.content.trim() : '';
+      const content = typeof item?.content === "string" ? item.content.trim() : "";
 
-      if (
-        (role !== 'user' && role !== 'assistant') ||
-        content.length === 0
-      ) {
+      if ((role !== "user" && role !== "assistant") || content.length === 0) {
         return [];
       }
 
       return [
         {
           role,
-          content,
-        },
+          content
+        }
       ];
     });
 
@@ -632,11 +652,11 @@ export class ChatService {
   }
 
   private requireNonEmptyString(value: unknown, fieldName: string): string {
-    if (typeof value !== 'string' || value.trim().length === 0) {
+    if (typeof value !== "string" || value.trim().length === 0) {
       throw new AppError(
         ErrorCodes.common.badRequest,
         `${fieldName} is required`,
-        HttpStatus.BAD_REQUEST,
+        HttpStatus.BAD_REQUEST
       );
     }
 
@@ -646,24 +666,24 @@ export class ChatService {
   private normalizeUserMessage(
     value: unknown,
     images: ChatImageAttachmentDto[],
-    files: ChatFileAttachmentDto[],
+    files: ChatFileAttachmentDto[]
   ): string {
-    if (typeof value === 'string' && value.trim().length > 0) {
+    if (typeof value === "string" && value.trim().length > 0) {
       return value.trim();
     }
 
     if (images.length > 0) {
-      return '请分析这张图片。';
+      return "请分析这张图片。";
     }
 
     if (files.length > 0) {
-      return '请阅读并分析这些文件内容。';
+      return "请阅读并分析这些文件内容。";
     }
 
     throw new AppError(
       ErrorCodes.common.badRequest,
-      'message or images is required',
-      HttpStatus.BAD_REQUEST,
+      "message or images is required",
+      HttpStatus.BAD_REQUEST
     );
   }
 
@@ -673,33 +693,37 @@ export class ChatService {
     }
 
     if (!Array.isArray(value)) {
-      throw new AppError(ErrorCodes.common.badRequest, 'images must be an array');
+      throw new AppError(ErrorCodes.common.badRequest, "images must be an array");
     }
 
     if (value.length > MAX_IMAGE_COUNT) {
       throw new AppError(
         ErrorCodes.common.badRequest,
-        `images cannot exceed ${MAX_IMAGE_COUNT} items`,
+        `images cannot exceed ${MAX_IMAGE_COUNT} items`
       );
     }
 
     return value.map((item) => {
-      const name = typeof item?.name === 'string' ? item.name.trim() : '';
-      const mimeType = typeof item?.mimeType === 'string' ? item.mimeType.trim() : '';
-      const dataUrl = typeof item?.dataUrl === 'string' ? item.dataUrl.trim() : '';
+      const name = typeof item?.name === "string" ? item.name.trim() : "";
+      const mimeType = typeof item?.mimeType === "string" ? item.mimeType.trim() : "";
+      const dataUrl = typeof item?.dataUrl === "string" ? item.dataUrl.trim() : "";
 
-      if (!name || !mimeType.startsWith('image/') || !dataUrl.startsWith(`data:${mimeType};base64,`)) {
-        throw new AppError(ErrorCodes.common.badRequest, 'images is invalid');
+      if (
+        !name ||
+        !mimeType.startsWith("image/") ||
+        !dataUrl.startsWith(`data:${mimeType};base64,`)
+      ) {
+        throw new AppError(ErrorCodes.common.badRequest, "images is invalid");
       }
 
       if (dataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) {
-        throw new AppError(ErrorCodes.common.badRequest, 'image is too large');
+        throw new AppError(ErrorCodes.common.badRequest, "image is too large");
       }
 
       return {
         name,
         mimeType,
-        dataUrl,
+        dataUrl
       };
     });
   }
@@ -710,35 +734,35 @@ export class ChatService {
     }
 
     if (!Array.isArray(value)) {
-      throw new AppError(ErrorCodes.common.badRequest, 'files must be an array');
+      throw new AppError(ErrorCodes.common.badRequest, "files must be an array");
     }
 
     if (value.length > MAX_FILE_COUNT) {
       throw new AppError(
         ErrorCodes.common.badRequest,
-        `files cannot exceed ${MAX_FILE_COUNT} items`,
+        `files cannot exceed ${MAX_FILE_COUNT} items`
       );
     }
 
     return value.map((item) => {
-      const name = typeof item?.name === 'string' ? item.name.trim() : '';
-      const mimeType = typeof item?.mimeType === 'string' ? item.mimeType.trim() : '';
+      const name = typeof item?.name === "string" ? item.name.trim() : "";
+      const mimeType = typeof item?.mimeType === "string" ? item.mimeType.trim() : "";
       const size = Number(item?.size);
-      const content = typeof item?.content === 'string' ? item.content : '';
+      const content = typeof item?.content === "string" ? item.content : "";
 
       if (!name || !Number.isFinite(size) || size < 0 || content.trim().length === 0) {
-        throw new AppError(ErrorCodes.common.badRequest, 'files is invalid');
+        throw new AppError(ErrorCodes.common.badRequest, "files is invalid");
       }
 
       if (content.length > MAX_FILE_CONTENT_LENGTH) {
-        throw new AppError(ErrorCodes.common.badRequest, 'file content is too large');
+        throw new AppError(ErrorCodes.common.badRequest, "file content is too large");
       }
 
       return {
         name,
         mimeType,
         size,
-        content,
+        content
       };
     });
   }
@@ -746,31 +770,31 @@ export class ChatService {
   private buildUserMessage(
     content: string,
     images: ChatImageAttachmentDto[],
-    files: ChatFileAttachmentDto[],
+    files: ChatFileAttachmentDto[]
   ): ChatMessage {
     const textContent = this.appendFileContext(content, files);
 
     if (images.length === 0) {
       return {
-        role: 'user',
-        content: textContent,
+        role: "user",
+        content: textContent
       };
     }
 
     return {
-      role: 'user',
+      role: "user",
       content: [
         {
-          type: 'text',
-          text: textContent,
+          type: "text",
+          text: textContent
         },
         ...images.map((image) => ({
-          type: 'image_url' as const,
+          type: "image_url" as const,
           image_url: {
-            url: image.dataUrl,
-          },
-        })),
-      ],
+            url: image.dataUrl
+          }
+        }))
+      ]
     };
   }
 
@@ -783,14 +807,14 @@ export class ChatService {
       .map((file, index) => {
         return [
           `文件 ${index + 1}: ${file.name}`,
-          `MIME: ${file.mimeType || 'text/plain'}`,
-          '内容:',
-          '```',
+          `MIME: ${file.mimeType || "text/plain"}`,
+          "内容:",
+          "```",
           file.content,
-          '```',
-        ].join('\n');
+          "```"
+        ].join("\n");
       })
-      .join('\n\n');
+      .join("\n\n");
 
     return `${content}\n\n以下是用户上传的文件内容，请作为上下文参考：\n\n${fileContext}`;
   }
@@ -807,22 +831,22 @@ export class ChatService {
     throw new AppError(
       ErrorCodes.common.badRequest,
       `当前模型 ${modelName} 不支持图片输入，请切换到视觉模型，例如 qwen-vl-max、qwen2.5-vl 或其他支持 image input 的模型。`,
-      HttpStatus.BAD_REQUEST,
+      HttpStatus.BAD_REQUEST
     );
   }
 
   private isLikelyVisionModel(modelName: string): boolean {
     const normalized = modelName.toLowerCase();
     const visionModelKeywords = [
-      'vl',
-      'vision',
-      'omni',
-      'qvq',
-      'gpt-4o',
-      'gpt-4.1',
-      'gemini',
-      'claude-3',
-      'claude-4',
+      "vl",
+      "vision",
+      "omni",
+      "qvq",
+      "gpt-4o",
+      "gpt-4.1",
+      "gemini",
+      "claude-3",
+      "claude-4"
     ];
 
     return visionModelKeywords.some((keyword) => normalized.includes(keyword));

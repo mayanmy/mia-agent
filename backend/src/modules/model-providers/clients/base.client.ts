@@ -2,17 +2,17 @@ import {
   ChatCompletionResponse,
   ChatStreamChunk,
   ProviderChatRequest,
-  ProviderRuntimeConfig,
-} from '../dto/llm.dto';
+  ProviderRuntimeConfig
+} from "../dto/llm.dto";
 
 export interface ProviderClient {
   createChatCompletion(
     config: ProviderRuntimeConfig,
-    request: ProviderChatRequest,
+    request: ProviderChatRequest
   ): Promise<ChatCompletionResponse>;
 
   streamChatCompletion(
     config: ProviderRuntimeConfig,
-    request: ProviderChatRequest,
+    request: ProviderChatRequest
   ): AsyncIterable<ChatStreamChunk>;
 }

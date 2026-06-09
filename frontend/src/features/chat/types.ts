@@ -1,8 +1,4 @@
-import type {
-  ChatFileAttachment,
-  ChatImageAttachment,
-  ChatMessage
-} from "./api";
+import type { ChatFileAttachment, ChatImageAttachment, ChatMessage } from "./api";
 
 export type ChatToolEvent = {
   id: string;

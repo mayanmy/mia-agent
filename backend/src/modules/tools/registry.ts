@@ -1,33 +1,23 @@
-import {
-  ToolDefinition,
-  ToolExecutionRequest,
-  ToolJsonValue,
-} from './dto/tool.dto';
-import { calculatorTool } from './builtin/calculator.tool';
-import { currentTimeTool } from './builtin/current-time.tool';
-import { httpRequestTool } from './builtin/http-request.tool';
+import { ToolDefinition, ToolExecutionRequest, ToolJsonValue } from "./dto/tool.dto";
+import { calculatorTool } from "./builtin/calculator.tool";
+import { currentTimeTool } from "./builtin/current-time.tool";
+import { httpRequestTool } from "./builtin/http-request.tool";
 
 export type ToolExecutionContext = Pick<
   ToolExecutionRequest,
-  'requestId' | 'userId' | 'agentId' | 'signal'
+  "requestId" | "userId" | "agentId" | "signal"
 >;
 
 export type BuiltinTool = ToolDefinition & {
   execute(
     input: Record<string, ToolJsonValue>,
-    context: ToolExecutionContext,
+    context: ToolExecutionContext
   ): Promise<ToolJsonValue>;
 };
 
-const builtinTools: BuiltinTool[] = [
-  httpRequestTool,
-  calculatorTool,
-  currentTimeTool,
-];
+const builtinTools: BuiltinTool[] = [httpRequestTool, calculatorTool, currentTimeTool];
 
-const builtinToolMap = new Map(
-  builtinTools.map((tool) => [tool.id, tool]),
-);
+const builtinToolMap = new Map(builtinTools.map((tool) => [tool.id, tool]));
 
 export function listBuiltinTools(): ToolDefinition[] {
   return builtinTools.map(toToolDefinition);
@@ -55,6 +45,6 @@ function toToolDefinition(tool: BuiltinTool): ToolDefinition {
     name: tool.name,
     description: tool.description,
     enabled: tool.enabled,
-    inputSchema: tool.inputSchema,
+    inputSchema: tool.inputSchema
   };
 }

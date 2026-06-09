@@ -1,5 +1,5 @@
 export type ChatMessageDto = {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   images?: ChatImageAttachmentDto[];
   files?: ChatFileAttachmentDto[];
@@ -35,13 +35,7 @@ export type ChatCompletionResult = {
 };
 
 export type ChatStreamEventType =
-  | 'message_start'
-  | 'token'
-  | 'tool_call'
-  | 'tool_result'
-  | 'message_end'
-  | 'error'
-  | 'ping';
+  "message_start" | "token" | "tool_call" | "tool_result" | "message_end" | "error" | "ping";
 
 export type ChatStreamEvent = {
   type: ChatStreamEventType;

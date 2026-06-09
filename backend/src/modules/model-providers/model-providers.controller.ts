@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from "@nestjs/common";
 
-import { PageResult } from '../../core/result';
+import { PageResult } from "../../core/result";
 import {
   ProviderCreateDto,
   ProviderDetail,
@@ -8,11 +8,11 @@ import {
   ProviderRemoteModel,
   ProviderQueryDto,
   ProviderTestConnectionResult,
-  ProviderUpdateDto,
-} from './dto/model-provider.dto';
-import { ModelProvidersService } from './model-providers.service';
+  ProviderUpdateDto
+} from "./dto/model-provider.dto";
+import { ModelProvidersService } from "./model-providers.service";
 
-@Controller('providers')
+@Controller("providers")
 export class ModelProvidersController {
   constructor(private readonly modelProvidersService: ModelProvidersService) {}
 
@@ -26,32 +26,32 @@ export class ModelProvidersController {
     return this.modelProvidersService.createProvider(payload);
   }
 
-  @Get(':id/models')
-  async listProviderModels(@Param('id') id: string): Promise<ProviderRemoteModel[]> {
+  @Get(":id/models")
+  async listProviderModels(@Param("id") id: string): Promise<ProviderRemoteModel[]> {
     return this.modelProvidersService.listProviderModels(id);
   }
 
-  @Get(':id')
-  async getProvider(@Param('id') id: string): Promise<ProviderDetail> {
+  @Get(":id")
+  async getProvider(@Param("id") id: string): Promise<ProviderDetail> {
     return this.modelProvidersService.getProvider(id);
   }
 
-  @Put(':id')
+  @Put(":id")
   async updateProvider(
-    @Param('id') id: string,
-    @Body() payload: ProviderUpdateDto,
+    @Param("id") id: string,
+    @Body() payload: ProviderUpdateDto
   ): Promise<ProviderDetail> {
     return this.modelProvidersService.updateProvider(id, payload);
   }
 
-  @Delete(':id')
-  async deleteProvider(@Param('id') id: string): Promise<null> {
+  @Delete(":id")
+  async deleteProvider(@Param("id") id: string): Promise<null> {
     await this.modelProvidersService.deleteProvider(id);
     return null;
   }
 
-  @Post(':id/test-connection')
-  async testConnection(@Param('id') id: string): Promise<ProviderTestConnectionResult> {
+  @Post(":id/test-connection")
+  async testConnection(@Param("id") id: string): Promise<ProviderTestConnectionResult> {
     return this.modelProvidersService.testProviderConnection(id);
   }
 }

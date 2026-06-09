@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from "@nestjs/common";
 
-import { PageResult } from '../../core/result';
+import { PageResult } from "../../core/result";
 import {
   AgentCreateDto,
   AgentDetail,
@@ -10,11 +10,11 @@ import {
   SharedAgentDetail,
   AgentToolBindingDto,
   AgentToolBindingResult,
-  AgentUpdateDto,
-} from './dto/agent.dto';
-import { AgentsService } from './agents.service';
+  AgentUpdateDto
+} from "./dto/agent.dto";
+import { AgentsService } from "./agents.service";
 
-@Controller('agents')
+@Controller("agents")
 export class AgentsController {
   constructor(private readonly agentsService: AgentsService) {}
 
@@ -28,49 +28,49 @@ export class AgentsController {
     return this.agentsService.createAgent(payload);
   }
 
-  @Get('shared/:token')
-  async getSharedAgent(@Param('token') token: string): Promise<SharedAgentDetail> {
+  @Get("shared/:token")
+  async getSharedAgent(@Param("token") token: string): Promise<SharedAgentDetail> {
     return this.agentsService.getSharedAgent(token);
   }
 
-  @Get(':id')
-  async getAgent(@Param('id') id: string): Promise<AgentDetail> {
+  @Get(":id")
+  async getAgent(@Param("id") id: string): Promise<AgentDetail> {
     return this.agentsService.getAgent(id);
   }
 
-  @Put(':id')
+  @Put(":id")
   async updateAgent(
-    @Param('id') id: string,
-    @Body() payload: AgentUpdateDto,
+    @Param("id") id: string,
+    @Body() payload: AgentUpdateDto
   ): Promise<AgentDetail> {
     return this.agentsService.updateAgent(id, payload);
   }
 
-  @Delete(':id')
-  async deleteAgent(@Param('id') id: string): Promise<null> {
+  @Delete(":id")
+  async deleteAgent(@Param("id") id: string): Promise<null> {
     await this.agentsService.deleteAgent(id);
     return null;
   }
 
-  @Post(':id/publish')
-  async publishAgent(@Param('id') id: string): Promise<AgentPublishResult> {
+  @Post(":id/publish")
+  async publishAgent(@Param("id") id: string): Promise<AgentPublishResult> {
     return this.agentsService.publishAgent(id);
   }
 
-  @Delete(':id/publish')
-  async unpublishAgent(@Param('id') id: string): Promise<AgentPublishResult> {
+  @Delete(":id/publish")
+  async unpublishAgent(@Param("id") id: string): Promise<AgentPublishResult> {
     return this.agentsService.unpublishAgent(id);
   }
 
-  @Get(':id/tools')
-  async getAgentTools(@Param('id') id: string): Promise<AgentToolBindingResult> {
+  @Get(":id/tools")
+  async getAgentTools(@Param("id") id: string): Promise<AgentToolBindingResult> {
     return this.agentsService.getAgentTools(id);
   }
 
-  @Put(':id/tools')
+  @Put(":id/tools")
   async updateAgentTools(
-    @Param('id') id: string,
-    @Body() payload: AgentToolBindingDto,
+    @Param("id") id: string,
+    @Body() payload: AgentToolBindingDto
   ): Promise<AgentToolBindingResult> {
     return this.agentsService.updateAgentTools(id, payload);
   }

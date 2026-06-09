@@ -1,4 +1,4 @@
-import { ModelConfigType, ModelProviderType } from '@prisma/client';
+import { ModelConfigType, ModelProviderType } from "@prisma/client";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];

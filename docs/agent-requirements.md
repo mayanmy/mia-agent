@@ -109,18 +109,18 @@ Mia v0.1 中，Agent 先聚焦于：
 
 ## 6. 配置项
 
-| 配置项 | 必填 | 说明 |
-| --- | --- | --- |
-| name | 是 | Agent 名称 |
-| description | 否 | Agent 描述，空值返回空字符串 |
-| systemPrompt | 是 | 系统 Prompt，定义 Agent 角色、任务和边界 |
-| modelConfigId | 是 | 绑定的 Chat Model |
-| temperature | 否 | 模型发散程度，默认 0.70 |
-| maxTokens | 否 | 最大输出 token，可为空 |
-| timeoutSeconds | 否 | 模型调用超时，默认 120 |
-| historyTurns | 否 | 保留历史对话轮数，默认 6 |
-| generationParams | 否 | 模型特有扩展参数，可为空 |
-| enabled | 否 | 是否启用，默认 true |
+| 配置项           | 必填 | 说明                                     |
+| ---------------- | ---- | ---------------------------------------- |
+| name             | 是   | Agent 名称                               |
+| description      | 否   | Agent 描述，空值返回空字符串             |
+| systemPrompt     | 是   | 系统 Prompt，定义 Agent 角色、任务和边界 |
+| modelConfigId    | 是   | 绑定的 Chat Model                        |
+| temperature      | 否   | 模型发散程度，默认 0.70                  |
+| maxTokens        | 否   | 最大输出 token，可为空                   |
+| timeoutSeconds   | 否   | 模型调用超时，默认 120                   |
+| historyTurns     | 否   | 保留历史对话轮数，默认 6                 |
+| generationParams | 否   | 模型特有扩展参数，可为空                 |
+| enabled          | 否   | 是否启用，默认 true                      |
 
 ## 7. 业务规则
 
@@ -174,4 +174,3 @@ npm run prisma:deploy
 npm run dev:api
 npm run dev:web
 ```
-

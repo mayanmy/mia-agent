@@ -150,7 +150,7 @@ backend/src/modules/agents/
 需要在 `backend/src/app.module.ts` 注册：
 
 ```typescript
-imports: [PrismaModule, HealthModule, ModelProvidersModule, AgentsModule]
+imports: [PrismaModule, HealthModule, ModelProvidersModule, AgentsModule];
 ```
 
 ## 5. DTO 设计
@@ -260,16 +260,16 @@ GET /api/v1/agents?page=1&pageSize=20
 
 可选参数：
 
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| page | number string | 页码，从 1 开始 |
-| pageSize | number string | 默认 20，最大 100 |
-| enabled | string | 可选，`true` / `false` |
+| 参数     | 类型          | 说明                   |
+| -------- | ------------- | ---------------------- |
+| page     | number string | 页码，从 1 开始        |
+| pageSize | number string | 默认 20，最大 100      |
+| enabled  | string        | 可选，`true` / `false` |
 
 响应：
 
 ```typescript
-Result<PageResult<AgentListItem>>
+Result<PageResult<AgentListItem>>;
 ```
 
 ### 6.2 创建 Agent
@@ -298,7 +298,7 @@ POST /api/v1/agents
 响应：
 
 ```typescript
-Result<AgentDetail>
+Result<AgentDetail>;
 ```
 
 ### 6.3 Agent 详情
@@ -310,7 +310,7 @@ GET /api/v1/agents/{id}
 响应：
 
 ```typescript
-Result<AgentDetail>
+Result<AgentDetail>;
 ```
 
 ### 6.4 更新 Agent
@@ -322,13 +322,13 @@ PUT /api/v1/agents/{id}
 请求体：
 
 ```typescript
-AgentUpdateDto
+AgentUpdateDto;
 ```
 
 响应：
 
 ```typescript
-Result<AgentDetail>
+Result<AgentDetail>;
 ```
 
 ### 6.5 删除 Agent
@@ -340,7 +340,7 @@ DELETE /api/v1/agents/{id}
 响应：
 
 ```typescript
-Result<null>
+Result<null>;
 ```
 
 ## 7. 业务校验规则
@@ -483,11 +483,11 @@ frontend/src/features/agents/
 ### 10.2 前端 API
 
 ```typescript
-listAgents(page, pageSize)
-createAgent(payload)
-getAgent(id)
-updateAgent(id, payload)
-deleteAgent(id)
+listAgents(page, pageSize);
+createAgent(payload);
+getAgent(id);
+updateAgent(id, payload);
+deleteAgent(id);
 ```
 
 页面不直接写 `fetch`，统一通过 `features/agents/api.ts` 调用。
@@ -564,4 +564,3 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/agents \
 - Agent 删除必须软删除。
 - 当前不做 Agent name 唯一。
 - 后续 Auth/User 完成后，再补 `created_by`、`updated_by` 和同一创建者下 name 唯一。
-

@@ -1,13 +1,7 @@
-import {
-  ArgumentsHost,
-  Catch,
-  ExceptionFilter,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from "@nestjs/common";
 
-import { AppError, ErrorCodes } from './errors';
-import { failure } from './result';
+import { AppError, ErrorCodes } from "./errors";
+import { failure } from "./result";
 
 type HttpExceptionResponse = {
   message?: string | string[];
@@ -23,10 +17,10 @@ type JsonResponse = {
 
 function normalizeMessage(message: unknown, fallback: string): string {
   if (Array.isArray(message)) {
-    return message.join('; ');
+    return message.join("; ");
   }
 
-  if (typeof message === 'string' && message.length > 0) {
+  if (typeof message === "string" && message.length > 0) {
     return message;
   }
 
@@ -39,9 +33,7 @@ export class AppExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<JsonResponse>();
 
     if (exception instanceof AppError) {
-      response
-        .status(exception.httpStatus)
-        .json(failure(exception.code, exception.message));
+      response.status(exception.httpStatus).json(failure(exception.code, exception.message));
       return;
     }
 
@@ -49,28 +41,26 @@ export class AppExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 
-      if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+      if (typeof exceptionResponse === "object" && exceptionResponse !== null) {
         const body = exceptionResponse as HttpExceptionResponse;
         response
           .status(status)
           .json(
             failure(
               body.code ?? this.mapHttpStatusToCode(status),
-              normalizeMessage(body.message, exception.message),
-            ),
+              normalizeMessage(body.message, exception.message)
+            )
           );
         return;
       }
 
-      response
-        .status(status)
-        .json(failure(this.mapHttpStatusToCode(status), exception.message));
+      response.status(status).json(failure(this.mapHttpStatusToCode(status), exception.message));
       return;
     }
 
     response
       .status(HttpStatus.INTERNAL_SERVER_ERROR)
-      .json(failure(ErrorCodes.common.internal, 'internal server error'));
+      .json(failure(ErrorCodes.common.internal, "internal server error"));
   }
 
   private mapHttpStatusToCode(status: number): number {

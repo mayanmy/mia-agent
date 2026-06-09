@@ -224,16 +224,16 @@ backend/
 
 每个模块最多使用以下文件类型。不要发明新的层名，除非该模块已有明确复杂度需要拆分。
 
-| 文件 | 职责 | 可以依赖 | 禁止做什么 |
-| --- | --- | --- | --- |
-| `*.module.ts` | 声明 NestJS 模块、controller、provider 和导出项 | 本模块 controller/service、允许依赖的模块 | 不写业务逻辑；不直接查库 |
-| `*.controller.ts` | 定义 HTTP 路由、解析请求、声明鉴权、返回 DTO | 本模块 `dto/`、`*.service.ts`，`core` 鉴权依赖 | 不写业务逻辑；不直接操作数据库；不直接调用外部 LLM；不拼 RAG Prompt |
-| `dto/` | 定义请求、响应、跨模块 DTO 类型 | TypeScript 类型、class DTO | 不访问数据库；不调用 service；不包含业务流程 |
-| `*.service.ts` | 实现本模块业务逻辑和对外公开用例 | 本模块文件、允许依赖的其他模块 service、`core` | 不处理 HTTP 细节；不直接读取环境变量 |
-| `clients/` | 封装外部服务客户端，例如模型服务客户端 | `core/config`、具体 SDK | 不写业务编排；不访问业务表 |
-| `parsing.ts` / `chunking.ts` | 文档解析、切分等纯处理逻辑 | 标准库、第三方解析库、本模块 DTO | 不访问数据库；不调用 LLM；不写任务状态 |
-| `sse.ts` | 封装 SSE 事件格式、心跳、流式响应辅助 | `chat/dto`、`core/errors` | 不加载 Agent；不检索知识库；不直接查库 |
-| `registry.ts` | 注册和查找工具、Provider 等可插拔对象 | 本模块 DTO、具体实现 | 不执行跨模块业务流程 |
+| 文件                         | 职责                                            | 可以依赖                                       | 禁止做什么                                                          |
+| ---------------------------- | ----------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
+| `*.module.ts`                | 声明 NestJS 模块、controller、provider 和导出项 | 本模块 controller/service、允许依赖的模块      | 不写业务逻辑；不直接查库                                            |
+| `*.controller.ts`            | 定义 HTTP 路由、解析请求、声明鉴权、返回 DTO    | 本模块 `dto/`、`*.service.ts`，`core` 鉴权依赖 | 不写业务逻辑；不直接操作数据库；不直接调用外部 LLM；不拼 RAG Prompt |
+| `dto/`                       | 定义请求、响应、跨模块 DTO 类型                 | TypeScript 类型、class DTO                     | 不访问数据库；不调用 service；不包含业务流程                        |
+| `*.service.ts`               | 实现本模块业务逻辑和对外公开用例                | 本模块文件、允许依赖的其他模块 service、`core` | 不处理 HTTP 细节；不直接读取环境变量                                |
+| `clients/`                   | 封装外部服务客户端，例如模型服务客户端          | `core/config`、具体 SDK                        | 不写业务编排；不访问业务表                                          |
+| `parsing.ts` / `chunking.ts` | 文档解析、切分等纯处理逻辑                      | 标准库、第三方解析库、本模块 DTO               | 不访问数据库；不调用 LLM；不写任务状态                              |
+| `sse.ts`                     | 封装 SSE 事件格式、心跳、流式响应辅助           | `chat/dto`、`core/errors`                      | 不加载 Agent；不检索知识库；不直接查库                              |
+| `registry.ts`                | 注册和查找工具、Provider 等可插拔对象           | 本模块 DTO、具体实现                           | 不执行跨模块业务流程                                                |
 
 ### 每一层必须遵守的职责边界
 
@@ -312,24 +312,24 @@ jobs -> knowledge, retrieval, logs
 
 允许的跨模块调用：
 
-| 调用方 | 允许调用 |
-| --- | --- |
-| `auth` | `users.service` |
-| `agents` | `knowledge.service`、`model_providers.service` |
-| `retrieval` | `knowledge.service`、`model_providers.service` |
-| `chat` | `agents.service`、`retrieval.service`、`model_providers.service`、`tools.service`、`logs.service` |
-| `jobs` | `knowledge.service`、`retrieval.service`、`logs.service` |
+| 调用方      | 允许调用                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------- |
+| `auth`      | `users.service`                                                                                   |
+| `agents`    | `knowledge.service`、`model_providers.service`                                                    |
+| `retrieval` | `knowledge.service`、`model_providers.service`                                                    |
+| `chat`      | `agents.service`、`retrieval.service`、`model_providers.service`、`tools.service`、`logs.service` |
+| `jobs`      | `knowledge.service`、`retrieval.service`、`logs.service`                                          |
 
 禁止的跨模块调用：
 
-| 禁止关系 | 原因 |
-| --- | --- |
-| `knowledge -> retrieval` | 避免文档模块和检索模块循环依赖 |
-| `agents -> chat` | Agent 配置不能依赖会话实现 |
-| `logs -> chat` | 日志模块不能反向读取对话模块 |
-| `model_providers -> retrieval` | 模型配置不能知道检索业务 |
-| `tools -> chat` | 工具只返回结果，不能操作会话 |
-| `users -> agents/chat/logs` | 用户模块必须保持底层稳定 |
+| 禁止关系                       | 原因                           |
+| ------------------------------ | ------------------------------ |
+| `knowledge -> retrieval`       | 避免文档模块和检索模块循环依赖 |
+| `agents -> chat`               | Agent 配置不能依赖会话实现     |
+| `logs -> chat`                 | 日志模块不能反向读取对话模块   |
+| `model_providers -> retrieval` | 模型配置不能知道检索业务       |
+| `tools -> chat`                | 工具只返回结果，不能操作会话   |
+| `users -> agents/chat/logs`    | 用户模块必须保持底层稳定       |
 
 ### 跨模块数据访问规则
 
@@ -404,18 +404,18 @@ Mia 一期采用模块化单体，不提前拆微服务。但代码必须为未�
 
 ### 当前必须遵守的准备项
 
-| 准备项 | 当前做法 | 未来拆服务时的收益 |
-| --- | --- | --- |
-| 跨模块只通过 service 调用 | 调用其他模块时只依赖对方 module 导出的 service 方法 | 可替换为 HTTP/gRPC client |
-| 不跨模块传 ORM model | service 入参和返回值使用 ID、基础类型、TypeScript DTO | DTO 可直接变成远程 API schema |
-| 不跨模块直接查表 | 每个模块只查询自己的表 | 数据库可按服务拆分 |
-| 定义运行时配置 DTO | 如 `AgentRuntimeConfig`、`ModelRuntimeConfig`、`RetrievalContext` | 高频配置读取可远程化和缓存 |
-| 统一 request_id | 每次请求进入系统时生成并贯穿日志、SSE、任务 | 未来跨服务链路追踪 |
-| 统一错误模型 | 业务错误使用 `core.errors`，对外返回固定错误结构 | 未来跨服务错误可映射 |
-| 隔离外部 SDK | OpenAI-compatible、文件存储等只放在 `integrations/` 或对应 provider | 替换供应商或拆服务时不影响业务模块 |
-| 抽象文件存储 | 文件读写必须通过 storage service，不直接散落使用本地路径 | 本地 volume 可切换 MinIO/S3 |
-| 后台任务独立编排 | 文档索引、Embedding、重建索引用 `jobs/` 编排 | 未来可迁移到独立 worker 服务 |
-| 日志写入弱依赖 | 主流程调用日志失败不能导致对话失败 | 日志服务可异步化或独立部署 |
+| 准备项                    | 当前做法                                                            | 未来拆服务时的收益                 |
+| ------------------------- | ------------------------------------------------------------------- | ---------------------------------- |
+| 跨模块只通过 service 调用 | 调用其他模块时只依赖对方 module 导出的 service 方法                 | 可替换为 HTTP/gRPC client          |
+| 不跨模块传 ORM model      | service 入参和返回值使用 ID、基础类型、TypeScript DTO               | DTO 可直接变成远程 API schema      |
+| 不跨模块直接查表          | 每个模块只查询自己的表                                              | 数据库可按服务拆分                 |
+| 定义运行时配置 DTO        | 如 `AgentRuntimeConfig`、`ModelRuntimeConfig`、`RetrievalContext`   | 高频配置读取可远程化和缓存         |
+| 统一 request_id           | 每次请求进入系统时生成并贯穿日志、SSE、任务                         | 未来跨服务链路追踪                 |
+| 统一错误模型              | 业务错误使用 `core.errors`，对外返回固定错误结构                    | 未来跨服务错误可映射               |
+| 隔离外部 SDK              | OpenAI-compatible、文件存储等只放在 `integrations/` 或对应 provider | 替换供应商或拆服务时不影响业务模块 |
+| 抽象文件存储              | 文件读写必须通过 storage service，不直接散落使用本地路径            | 本地 volume 可切换 MinIO/S3        |
+| 后台任务独立编排          | 文档索引、Embedding、重建索引用 `jobs/` 编排                        | 未来可迁移到独立 worker 服务       |
+| 日志写入弱依赖            | 主流程调用日志失败不能导致对话失败                                  | 日志服务可异步化或独立部署         |
 
 ### DTO 要求
 
@@ -491,16 +491,16 @@ async def get_agent_runtime_config(
 
 未来拆服务时，数据表会跟随模块迁移。因此当前必须明确表归属：
 
-| 数据 | 所属模块 |
-| --- | --- |
-| 用户、角色、禁用状态 | `users` |
-| 登录凭证、token/session | `auth` |
-| 模型供应商、模型配置 | `model_providers` |
-| Agent 配置、Prompt、知识库绑定、工具绑定 | `agents` |
-| 知识库、文档、chunk、文档状态 | `knowledge` |
-| embedding、向量索引相关数据 | `retrieval` |
-| 会话、消息、SSE 状态 | `chat` |
-| 对话日志、错误日志、用量事件 | `logs` |
+| 数据                                     | 所属模块          |
+| ---------------------------------------- | ----------------- |
+| 用户、角色、禁用状态                     | `users`           |
+| 登录凭证、token/session                  | `auth`            |
+| 模型供应商、模型配置                     | `model_providers` |
+| Agent 配置、Prompt、知识库绑定、工具绑定 | `agents`          |
+| 知识库、文档、chunk、文档状态            | `knowledge`       |
+| embedding、向量索引相关数据              | `retrieval`       |
+| 会话、消息、SSE 状态                     | `chat`            |
+| 对话日志、错误日志、用量事件             | `logs`            |
 
 规则：
 
@@ -660,17 +660,17 @@ LLM 调用必须分层设置超时，禁止只设置一个总 timeout。
 
 推荐默认值：
 
-| 阶段 | 默认值 |
-| --- | --- |
-| 获取并发槽位 | 5-10 秒 |
-| 建立连接 | 5-10 秒 |
-| 请求写入 | 10 秒 |
-| 首 token 等待 | 15-30 秒 |
-| token 间隔空闲 | 30-60 秒 |
-| 流式 Chat 总时长 | 120-180 秒 |
-| 非流式 Chat 总时长 | 60-120 秒 |
-| Embedding 请求 | 30-60 秒 |
-| Ollama 本地模型 | 180-300 秒 |
+| 阶段               | 默认值     |
+| ------------------ | ---------- |
+| 获取并发槽位       | 5-10 秒    |
+| 建立连接           | 5-10 秒    |
+| 请求写入           | 10 秒      |
+| 首 token 等待      | 15-30 秒   |
+| token 间隔空闲     | 30-60 秒   |
+| 流式 Chat 总时长   | 120-180 秒 |
+| 非流式 Chat 总时长 | 60-120 秒  |
+| Embedding 请求     | 30-60 秒   |
+| Ollama 本地模型    | 180-300 秒 |
 
 配置优先级：
 
@@ -688,30 +688,30 @@ SSE 心跳建议每 15-30 秒发送一次 `ping` 事件。
 
 模型调用错误必须分类，禁止统一吞成 `LLM failed`。
 
-| 错误类型 | 是否重试 | 处理方式 |
-| --- | --- | --- |
-| 网络连接失败 | 可重试 | 记录 provider/network 错误 |
-| 读超时 | 可重试 | 流式已输出 token 后不重试 |
-| 429 rate limit | 可重试 | 尊重 `Retry-After`，并做退避 |
-| 500/502/503/504 | 可重试 | 指数退避后重试 |
-| 400 参数错误 | 不重试 | 返回配置或请求错误 |
-| 401/403 鉴权失败 | 不重试 | 标记 provider 配置异常 |
-| 上下文超长 | 不重试 | 触发上下文裁剪或返回明确错误 |
-| 用户取消 | 不重试 | 记录 canceled |
-| 内容安全拦截 | 不重试 | 返回安全拦截原因 |
+| 错误类型         | 是否重试 | 处理方式                     |
+| ---------------- | -------- | ---------------------------- |
+| 网络连接失败     | 可重试   | 记录 provider/network 错误   |
+| 读超时           | 可重试   | 流式已输出 token 后不重试    |
+| 429 rate limit   | 可重试   | 尊重 `Retry-After`，并做退避 |
+| 500/502/503/504  | 可重试   | 指数退避后重试               |
+| 400 参数错误     | 不重试   | 返回配置或请求错误           |
+| 401/403 鉴权失败 | 不重试   | 标记 provider 配置异常       |
+| 上下文超长       | 不重试   | 触发上下文裁剪或返回明确错误 |
+| 用户取消         | 不重试   | 记录 canceled                |
+| 内容安全拦截     | 不重试   | 返回安全拦截原因             |
 
 ### 重试策略
 
 重试必须按调用类型区分：
 
-| 调用类型 | 重试规则 |
-| --- | --- |
-| Embedding | 可重试 2-3 次 |
-| 非流式 Chat | 首次失败且未返回内容时可重试 1-2 次 |
-| 流式 Chat 首 token 前失败 | 可重试 1-2 次 |
-| 流式 Chat 已输出 token 后失败 | 不重试 |
-| 工具调用后的 LLM 继续生成 | 谨慎重试，避免重复执行工具 |
-| 400/401/403/上下文超长/用户取消 | 不重试 |
+| 调用类型                        | 重试规则                            |
+| ------------------------------- | ----------------------------------- |
+| Embedding                       | 可重试 2-3 次                       |
+| 非流式 Chat                     | 首次失败且未返回内容时可重试 1-2 次 |
+| 流式 Chat 首 token 前失败       | 可重试 1-2 次                       |
+| 流式 Chat 已输出 token 后失败   | 不重试                              |
+| 工具调用后的 LLM 继续生成       | 谨慎重试，避免重复执行工具          |
+| 400/401/403/上下文超长/用户取消 | 不重试                              |
 
 退避策略必须使用指数退避 + jitter：
 
@@ -1043,14 +1043,14 @@ background_jobs
 
 以下表会最先变大，建表时必须按大表处理：
 
-| 表 | 增长来源 | 风险 |
-| --- | --- | --- |
-| `chat_messages` | 每轮对话至少 2 条消息 | 会话历史查询变慢 |
-| `llm_call_logs` | 每次模型调用 1 条或多条 | 日志统计变慢 |
-| `error_logs` | 失败、超时、重试、任务错误 | 排障查询变慢 |
-| `knowledge_chunks` | 文档切分后大量 chunk | RAG 检索和文档管理变慢 |
-| `knowledge_embeddings` | 每个 chunk 对应 embedding | 向量检索和存储压力 |
-| `background_jobs` | 文档处理、重建索引任务 | 状态轮询变慢 |
+| 表                     | 增长来源                   | 风险                   |
+| ---------------------- | -------------------------- | ---------------------- |
+| `chat_messages`        | 每轮对话至少 2 条消息      | 会话历史查询变慢       |
+| `llm_call_logs`        | 每次模型调用 1 条或多条    | 日志统计变慢           |
+| `error_logs`           | 失败、超时、重试、任务错误 | 排障查询变慢           |
+| `knowledge_chunks`     | 文档切分后大量 chunk       | RAG 检索和文档管理变慢 |
+| `knowledge_embeddings` | 每个 chunk 对应 embedding  | 向量检索和存储压力     |
+| `background_jobs`      | 文档处理、重建索引任务     | 状态轮询变慢           |
 
 ### 大表应对策略
 
@@ -1105,14 +1105,14 @@ background_jobs > 200,000
 
 分页方式：
 
-| 场景 | 分页方式 |
-| --- | --- |
-| 小表管理页 | offset pagination 可接受 |
-| 大表日志页 | cursor pagination |
-| chat messages | cursor pagination |
-| llm_call_logs | cursor pagination |
-| error_logs | cursor pagination |
-| knowledge_chunks | cursor pagination |
+| 场景             | 分页方式                 |
+| ---------------- | ------------------------ |
+| 小表管理页       | offset pagination 可接受 |
+| 大表日志页       | cursor pagination        |
+| chat messages    | cursor pagination        |
+| llm_call_logs    | cursor pagination        |
+| error_logs       | cursor pagination        |
+| knowledge_chunks | cursor pagination        |
 
 大表禁止深分页：
 

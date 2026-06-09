@@ -1,12 +1,9 @@
-import { Body, Controller, Get, Put } from '@nestjs/common';
+import { Body, Controller, Get, Put } from "@nestjs/common";
 
-import {
-  DefaultModelSettings,
-  DefaultModelSettingsUpdateDto,
-} from './dto/model-provider.dto';
-import { ModelProvidersService } from './model-providers.service';
+import { DefaultModelSettings, DefaultModelSettingsUpdateDto } from "./dto/model-provider.dto";
+import { ModelProvidersService } from "./model-providers.service";
 
-@Controller('model-defaults')
+@Controller("model-defaults")
 export class ModelDefaultsController {
   constructor(private readonly modelProvidersService: ModelProvidersService) {}
 
@@ -17,7 +14,7 @@ export class ModelDefaultsController {
 
   @Put()
   async updateDefaultModelSettings(
-    @Body() payload: DefaultModelSettingsUpdateDto,
+    @Body() payload: DefaultModelSettingsUpdateDto
   ): Promise<DefaultModelSettings> {
     return this.modelProvidersService.updateDefaultModelSettings(payload);
   }

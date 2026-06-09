@@ -11,11 +11,11 @@ export type PageResult<T> = {
   pageSize: number;
 };
 
-export function success<T>(data: T | null = null, message = 'success'): Result<T> {
+export function success<T>(data: T | null = null, message = "success"): Result<T> {
   return {
     code: 200,
     message,
-    data,
+    data
   };
 }
 
@@ -23,6 +23,6 @@ export function failure(code: number, message: string): Result<null> {
   return {
     code,
     message,
-    data: null,
+    data: null
   };
 }

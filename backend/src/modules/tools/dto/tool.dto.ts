@@ -7,7 +7,7 @@ export type ToolJsonValue =
     };
 
 export type ToolInputSchema = {
-  type: 'object';
+  type: "object";
   properties?: Record<string, unknown>;
   required?: string[];
   additionalProperties?: boolean;
@@ -21,10 +21,7 @@ export type ToolDefinition = {
   inputSchema: ToolInputSchema;
 };
 
-export type ToolListItem = Pick<
-  ToolDefinition,
-  'id' | 'name' | 'description' | 'enabled'
->;
+export type ToolListItem = Pick<ToolDefinition, "id" | "name" | "description" | "enabled">;
 
 export type ToolExecutionRequest = {
   toolId: string;

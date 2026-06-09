@@ -119,10 +119,7 @@ export function getAgentTools(id: string): Promise<AgentToolBindingResult> {
   return request<AgentToolBindingResult>(`/api/v1/agents/${id}/tools`);
 }
 
-export function updateAgentTools(
-  id: string,
-  toolIds: string[]
-): Promise<AgentToolBindingResult> {
+export function updateAgentTools(id: string, toolIds: string[]): Promise<AgentToolBindingResult> {
   return request<AgentToolBindingResult>(`/api/v1/agents/${id}/tools`, {
     method: "PUT",
     body: JSON.stringify({ toolIds })

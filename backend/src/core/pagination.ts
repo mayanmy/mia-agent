@@ -1,5 +1,5 @@
-import { AppError, ErrorCodes } from './errors';
-import { PageResult } from './result';
+import { AppError, ErrorCodes } from "./errors";
+import { PageResult } from "./result";
 
 export const DEFAULT_PAGE = 1;
 export const DEFAULT_PAGE_SIZE = 20;
@@ -18,14 +18,14 @@ export type NormalizedPageQuery = {
 };
 
 function parsePositiveInteger(value: number | string | undefined, fallback: number): number {
-  if (value === undefined || value === '') {
+  if (value === undefined || value === "") {
     return fallback;
   }
 
   const parsed = Number(value);
 
   if (!Number.isInteger(parsed) || parsed < 1) {
-    throw new AppError(ErrorCodes.common.badRequest, 'invalid pagination parameter');
+    throw new AppError(ErrorCodes.common.badRequest, "invalid pagination parameter");
   }
 
   return parsed;
@@ -36,14 +36,14 @@ export function normalizePageQuery(query: PageQuery): NormalizedPageQuery {
   const pageSize = parsePositiveInteger(query.pageSize, DEFAULT_PAGE_SIZE);
 
   if (pageSize > MAX_PAGE_SIZE) {
-    throw new AppError(ErrorCodes.common.badRequest, 'pageSize must be less than or equal to 100');
+    throw new AppError(ErrorCodes.common.badRequest, "pageSize must be less than or equal to 100");
   }
 
   return {
     page,
     pageSize,
     skip: (page - 1) * pageSize,
-    take: pageSize,
+    take: pageSize
   };
 }
 
@@ -51,12 +51,12 @@ export function createPageResult<T>(
   list: T[],
   total: number,
   page: number,
-  pageSize: number,
+  pageSize: number
 ): PageResult<T> {
   return {
     list,
     total,
     page,
-    pageSize,
+    pageSize
   };
 }

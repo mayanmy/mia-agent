@@ -45,7 +45,11 @@ export function SharedAgentPage() {
   if (!agent) {
     return (
       <section className="workspace sharedAgentWorkspace">
-        <Result status="404" title="分享链接不可用" subTitle="这个 Agent 未发布、已停用或链接不存在。" />
+        <Result
+          status="404"
+          title="分享链接不可用"
+          subTitle="这个 Agent 未发布、已停用或链接不存在。"
+        />
       </section>
     );
   }

@@ -65,33 +65,33 @@ frontend/src/features/agents/AgentsPage.tsx
 
 ```html
 <script>
-function loadMiaAgentWidget(agent) {
-  if (window.MiaAgentWidget && window.MiaAgentWidget.destroy) {
-    window.MiaAgentWidget.destroy();
+  function loadMiaAgentWidget(agent) {
+    if (window.MiaAgentWidget && window.MiaAgentWidget.destroy) {
+      window.MiaAgentWidget.destroy();
+    }
+
+    document.querySelectorAll("script[data-mia-widget-loader]").forEach(function (element) {
+      element.remove();
+    });
+
+    var script = document.createElement("script");
+    script.src = "http://localhost:5173/mia-agent-widget.js";
+    script.async = true;
+    script.setAttribute("data-mia-widget-loader", "true");
+    script.setAttribute("data-api-base", "http://localhost:5173");
+    script.setAttribute("data-agent-token", agent.token);
+    script.setAttribute("data-agent-name", agent.name);
+    script.setAttribute("data-launcher-icon", agent.icon || "M");
+    script.setAttribute("data-launcher-size", String(agent.iconSize || 56));
+    document.body.appendChild(script);
   }
 
-  document.querySelectorAll("script[data-mia-widget-loader]").forEach(function (element) {
-    element.remove();
+  loadMiaAgentWidget({
+    token: "AGENT_SHARE_TOKEN",
+    name: "当前页面 Agent",
+    icon: "M",
+    iconSize: 56
   });
-
-  var script = document.createElement("script");
-  script.src = "http://localhost:5173/mia-agent-widget.js";
-  script.async = true;
-  script.setAttribute("data-mia-widget-loader", "true");
-  script.setAttribute("data-api-base", "http://localhost:5173");
-  script.setAttribute("data-agent-token", agent.token);
-  script.setAttribute("data-agent-name", agent.name);
-  script.setAttribute("data-launcher-icon", agent.icon || "M");
-  script.setAttribute("data-launcher-size", String(agent.iconSize || 56));
-  document.body.appendChild(script);
-}
-
-loadMiaAgentWidget({
-  token: "AGENT_SHARE_TOKEN",
-  name: "当前页面 Agent",
-  icon: "M",
-  iconSize: 56
-});
 </script>
 ```
 
@@ -115,17 +115,17 @@ loadMiaAgentWidget({
 
 ## Script 参数
 
-| 参数 | 必填 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `src` | 是 | 无 | Widget 脚本地址，通常是 Mia 前端服务下的 `/mia-agent-widget.js` |
-| `data-agent-token` | 是 | 无 | Agent 发布后生成的 share token |
-| `data-api-base` | 否 | script 所在 origin | API 请求基地址 |
-| `data-agent-name` | 否 | 后端 Agent 名称或 `Mia` | Agent 初始显示名称 |
-| `data-mode` | 否 | `floating` | `floating` 或 `inline` |
-| `data-container` | inline 必填 | 无 | inline 模式的挂载容器选择器 |
-| `data-launcher-icon` | 否 | `M` | 浮窗入口文字或 emoji |
-| `data-launcher-icon-url` | 否 | 无 | 浮窗入口图片 URL，优先级高于 `data-launcher-icon` |
-| `data-launcher-size` | 否 | `56` | 浮窗入口尺寸，范围限制为 40-96 |
+| 参数                     | 必填        | 默认值                  | 说明                                                            |
+| ------------------------ | ----------- | ----------------------- | --------------------------------------------------------------- |
+| `src`                    | 是          | 无                      | Widget 脚本地址，通常是 Mia 前端服务下的 `/mia-agent-widget.js` |
+| `data-agent-token`       | 是          | 无                      | Agent 发布后生成的 share token                                  |
+| `data-api-base`          | 否          | script 所在 origin      | API 请求基地址                                                  |
+| `data-agent-name`        | 否          | 后端 Agent 名称或 `Mia` | Agent 初始显示名称                                              |
+| `data-mode`              | 否          | `floating`              | `floating` 或 `inline`                                          |
+| `data-container`         | inline 必填 | 无                      | inline 模式的挂载容器选择器                                     |
+| `data-launcher-icon`     | 否          | `M`                     | 浮窗入口文字或 emoji                                            |
+| `data-launcher-icon-url` | 否          | 无                      | 浮窗入口图片 URL，优先级高于 `data-launcher-icon`               |
+| `data-launcher-size`     | 否          | `56`                    | 浮窗入口尺寸，范围限制为 40-96                                  |
 
 ## 运行机制
 
@@ -216,11 +216,11 @@ Widget 使用 `fetch + ReadableStream` 读取 SSE，不使用 `EventSource`。�
 
 当前处理的 SSE 事件：
 
-| 事件 | 行为 |
-| --- | --- |
-| `token` | 追加到 assistant 气泡 |
-| `error` | 显示错误 |
-| 其他事件 | 解析但暂不展示 |
+| 事件     | 行为                  |
+| -------- | --------------------- |
+| `token`  | 追加到 assistant 气泡 |
+| `error`  | 显示错误              |
+| 其他事件 | 解析但暂不展示        |
 
 ## 流式输出与停止
 
@@ -353,7 +353,7 @@ Widget 会向页面注入一个 `<style id="mia-agent-widget-style">`。
 全局暴露：
 
 ```javascript
-window.MiaAgentWidget.destroy()
+window.MiaAgentWidget.destroy();
 ```
 
 当前行为：
@@ -368,24 +368,24 @@ window.MiaAgentWidget.destroy()
 
 ## 当前能力对齐状态
 
-| 能力 | 主 Chat | Widget |
-| --- | --- | --- |
-| SSE 流式输出 | 支持 | 支持 |
-| 停止生成 | 支持 | 支持 |
-| 上传图片 | 支持 | 支持 |
-| 粘贴图片 | 支持 | 支持 |
-| 上传文本文件 | 支持 | 支持 |
-| 图片模型校验 | 支持 | 支持 |
-| 文件类型/大小/数量校验 | 支持 | 支持 |
-| 流式中锁定输入和附件按钮 | 支持 | 支持 |
-| 复制消息 | 支持 | 支持 |
-| 复制成功提示 | 支持 | 支持 |
-| Agent 刷新按钮 | 支持 | 不支持 |
-| URL 参数选择 Agent | 支持 | 不支持 |
-| 浮窗拖拽 | 不支持 | 支持 |
-| Inline 内嵌 | 不支持 | 支持 |
-| 同页多 Agent 单入口 | 不支持 | 支持 |
-| 全屏/退出全屏 | 不支持 | 支持 |
+| 能力                     | 主 Chat | Widget |
+| ------------------------ | ------- | ------ |
+| SSE 流式输出             | 支持    | 支持   |
+| 停止生成                 | 支持    | 支持   |
+| 上传图片                 | 支持    | 支持   |
+| 粘贴图片                 | 支持    | 支持   |
+| 上传文本文件             | 支持    | 支持   |
+| 图片模型校验             | 支持    | 支持   |
+| 文件类型/大小/数量校验   | 支持    | 支持   |
+| 流式中锁定输入和附件按钮 | 支持    | 支持   |
+| 复制消息                 | 支持    | 支持   |
+| 复制成功提示             | 支持    | 支持   |
+| Agent 刷新按钮           | 支持    | 不支持 |
+| URL 参数选择 Agent       | 支持    | 不支持 |
+| 浮窗拖拽                 | 不支持  | 支持   |
+| Inline 内嵌              | 不支持  | 支持   |
+| 同页多 Agent 单入口      | 不支持  | 支持   |
+| 全屏/退出全屏            | 不支持  | 支持   |
 
 ## 当前限制
 

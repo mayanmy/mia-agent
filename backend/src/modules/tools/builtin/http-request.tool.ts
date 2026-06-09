@@ -1,47 +1,42 @@
-import type { BuiltinTool, ToolExecutionContext } from '../registry';
-import { getConfig } from '../../../core/config';
-import { ToolJsonValue } from '../dto/tool.dto';
+import type { BuiltinTool, ToolExecutionContext } from "../registry";
+import { getConfig } from "../../../core/config";
+import { ToolJsonValue } from "../dto/tool.dto";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 1_000_000;
-const allowedMethods = new Set(['GET', 'POST']);
-const blockedHostnames = new Set([
-  'localhost',
-  '127.0.0.1',
-  '0.0.0.0',
-  '::1',
-]);
+const allowedMethods = new Set(["GET", "POST"]);
+const blockedHostnames = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
 
 export const httpRequestTool: BuiltinTool = {
-  id: 'http_request',
-  name: 'HTTP 请求',
-  description: '向指定 HTTP 接口发送请求，适合调用内部系统或外部 API。',
+  id: "http_request",
+  name: "HTTP 请求",
+  description: "向指定 HTTP 接口发送请求，适合调用内部系统或外部 API。",
   enabled: true,
   inputSchema: {
-    type: 'object',
+    type: "object",
     properties: {
       url: {
-        type: 'string',
-        description: '要请求的 HTTP 或 HTTPS 地址。',
+        type: "string",
+        description: "要请求的 HTTP 或 HTTPS 地址。"
       },
       method: {
-        type: 'string',
+        type: "string",
         enum: [...allowedMethods],
-        description: '请求方法，仅支持 GET 或 POST。',
+        description: "请求方法，仅支持 GET 或 POST。"
       },
       body: {
-        type: 'object',
-        description: 'POST 请求的 JSON body。',
+        type: "object",
+        description: "POST 请求的 JSON body。"
       },
       timeoutMs: {
-        type: 'number',
+        type: "number",
         minimum: 1,
         maximum: 30_000,
-        description: '请求超时时间，单位毫秒，最大 30000。',
-      },
+        description: "请求超时时间，单位毫秒，最大 30000。"
+      }
     },
-    required: ['url'],
-    additionalProperties: false,
+    required: ["url"],
+    additionalProperties: false
   },
   async execute(input, context) {
     const url = normalizeUrl(input.url);
@@ -52,11 +47,11 @@ export const httpRequestTool: BuiltinTool = {
     const response = await fetch(url, {
       method,
       headers: {
-        accept: 'application/json, text/plain;q=0.9, */*;q=0.8',
-        ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
+        accept: "application/json, text/plain;q=0.9, */*;q=0.8",
+        ...(method === "POST" ? { "content-type": "application/json" } : {})
       },
-      body: method === 'POST' && body !== undefined ? JSON.stringify(body) : undefined,
-      signal: buildTimeoutSignal(context, timeoutMs),
+      body: method === "POST" && body !== undefined ? JSON.stringify(body) : undefined,
+      signal: buildTimeoutSignal(context, timeoutMs)
     });
     const text = await readLimitedResponse(response);
 
@@ -65,16 +60,16 @@ export const httpRequestTool: BuiltinTool = {
       method,
       status: response.status,
       ok: response.ok,
-      contentType: response.headers.get('content-type') ?? '',
+      contentType: response.headers.get("content-type") ?? "",
       elapsedMs: Date.now() - startedAt,
-      body: parseResponseBody(text),
+      body: parseResponseBody(text)
     };
-  },
+  }
 };
 
 function normalizeUrl(value: ToolJsonValue): string {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error('url is required');
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error("url is required");
   }
 
   let url: URL;
@@ -82,15 +77,15 @@ function normalizeUrl(value: ToolJsonValue): string {
   try {
     url = new URL(value.trim());
   } catch {
-    throw new Error('url is invalid');
+    throw new Error("url is invalid");
   }
 
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('url must use http or https');
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("url must use http or https");
   }
 
   if (isBlockedHost(url)) {
-    throw new Error('url hostname is not allowed');
+    throw new Error("url hostname is not allowed");
   }
 
   ensureHostAllowed(url);
@@ -123,7 +118,7 @@ function ensureHostAllowed(url: URL): void {
   const normalizedHostname = url.hostname.toLowerCase();
   const normalizedHost = url.host.toLowerCase();
   const allowed = allowedHosts.some((allowedHost) => {
-    if (allowedHost.startsWith('*.')) {
+    if (allowedHost.startsWith("*.")) {
       const suffix = allowedHost.slice(1);
       return normalizedHostname.endsWith(suffix);
     }
@@ -132,26 +127,26 @@ function ensureHostAllowed(url: URL): void {
   });
 
   if (!allowed) {
-    throw new Error('url hostname is not in allowlist');
+    throw new Error("url hostname is not in allowlist");
   }
 }
 
-function normalizeMethod(value: ToolJsonValue): 'GET' | 'POST' {
-  if (value === undefined || value === null || value === '') {
-    return 'GET';
+function normalizeMethod(value: ToolJsonValue): "GET" | "POST" {
+  if (value === undefined || value === null || value === "") {
+    return "GET";
   }
 
-  if (typeof value !== 'string') {
-    throw new Error('method must be a string');
+  if (typeof value !== "string") {
+    throw new Error("method must be a string");
   }
 
   const method = value.toUpperCase();
 
   if (!allowedMethods.has(method)) {
-    throw new Error('method must be GET or POST');
+    throw new Error("method must be GET or POST");
   }
 
-  return method as 'GET' | 'POST';
+  return method as "GET" | "POST";
 }
 
 function normalizeBody(value: ToolJsonValue): ToolJsonValue | undefined {
@@ -159,24 +154,24 @@ function normalizeBody(value: ToolJsonValue): ToolJsonValue | undefined {
     return undefined;
   }
 
-  if (Array.isArray(value) || typeof value !== 'object') {
-    throw new Error('body must be an object');
+  if (Array.isArray(value) || typeof value !== "object") {
+    throw new Error("body must be an object");
   }
 
   return value;
 }
 
 function normalizeTimeoutMs(value: ToolJsonValue): number {
-  if (value === undefined || value === null || value === '') {
+  if (value === undefined || value === null || value === "") {
     return DEFAULT_TIMEOUT_MS;
   }
 
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error('timeoutMs must be a number');
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error("timeoutMs must be a number");
   }
 
   if (value < 1 || value > 30_000) {
-    throw new Error('timeoutMs must be between 1 and 30000');
+    throw new Error("timeoutMs must be between 1 and 30000");
   }
 
   return value;
@@ -193,15 +188,15 @@ function buildTimeoutSignal(context: ToolExecutionContext, timeoutMs: number): A
   }
 
   context.signal?.addEventListener(
-    'abort',
+    "abort",
     () => {
       clearTimeout(timeout);
       controller.abort();
     },
-    { once: true },
+    { once: true }
   );
 
-  controller.signal.addEventListener('abort', () => clearTimeout(timeout), { once: true });
+  controller.signal.addEventListener("abort", () => clearTimeout(timeout), { once: true });
 
   return controller.signal;
 }
@@ -210,7 +205,7 @@ async function readLimitedResponse(response: Response): Promise<string> {
   const reader = response.body?.getReader();
 
   if (!reader) {
-    return '';
+    return "";
   }
 
   const chunks: Uint8Array[] = [];
@@ -227,7 +222,7 @@ async function readLimitedResponse(response: Response): Promise<string> {
 
     if (size > MAX_RESPONSE_BYTES) {
       await reader.cancel();
-      throw new Error('response body is too large');
+      throw new Error("response body is too large");
     }
 
     chunks.push(value);
@@ -238,7 +233,7 @@ async function readLimitedResponse(response: Response): Promise<string> {
 
 function parseResponseBody(text: string): ToolJsonValue {
   if (!text) {
-    return '';
+    return "";
   }
 
   try {
@@ -249,7 +244,7 @@ function parseResponseBody(text: string): ToolJsonValue {
 }
 
 function isPrivateIpv4(hostname: string): boolean {
-  const parts = hostname.split('.');
+  const parts = hostname.split(".");
 
   if (parts.length !== 4) {
     return false;

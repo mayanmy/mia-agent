@@ -10,4 +10,3 @@ export type HealthData = {
 export function getHealth(): Promise<HealthData> {
   return request<HealthData>("/api/v1/health");
 }
-

@@ -1,17 +1,13 @@
-import { tests as agentTests } from '../modules/agents/agents.service.spec';
-import { tests as chatTests } from '../modules/chat/chat.service.spec';
-import { tests as toolTests } from '../modules/tools/tools.service.spec';
+import { tests as agentTests } from "../modules/agents/agents.service.spec";
+import { tests as chatTests } from "../modules/chat/chat.service.spec";
+import { tests as toolTests } from "../modules/tools/tools.service.spec";
 
 type TestCase = {
   name: string;
   run: () => void | Promise<void>;
 };
 
-const tests: TestCase[] = [
-  ...toolTests,
-  ...agentTests,
-  ...chatTests,
-];
+const tests: TestCase[] = [...toolTests, ...agentTests, ...chatTests];
 
 async function main(): Promise<void> {
   let passed = 0;

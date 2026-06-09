@@ -40,9 +40,7 @@ function formatToolStatus(toolEvent: ChatToolEvent): string {
     return "调用中";
   }
 
-  const elapsed = Number.isFinite(toolEvent.elapsedMs)
-    ? ` · ${toolEvent.elapsedMs}ms`
-    : "";
+  const elapsed = Number.isFinite(toolEvent.elapsedMs) ? ` · ${toolEvent.elapsedMs}ms` : "";
 
   return toolEvent.status === "success" ? `完成${elapsed}` : `失败${elapsed}`;
 }

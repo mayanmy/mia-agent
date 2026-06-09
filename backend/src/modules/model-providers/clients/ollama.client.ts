@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable } from "@nestjs/common";
 
-import { ProviderRuntimeConfig } from '../dto/llm.dto';
-import { OpenAICompatibleClient } from './openai-compatible.client';
+import { ProviderRuntimeConfig } from "../dto/llm.dto";
+import { OpenAICompatibleClient } from "./openai-compatible.client";
 
 @Injectable()
 export class OllamaClient extends OpenAICompatibleClient {
@@ -10,9 +10,9 @@ export class OllamaClient extends OpenAICompatibleClient {
   }
 
   private getOllamaOpenAIBaseUrl(baseUrl: string): string {
-    const normalized = baseUrl.replace(/\/$/u, '');
+    const normalized = baseUrl.replace(/\/$/u, "");
 
-    if (normalized.endsWith('/v1')) {
+    if (normalized.endsWith("/v1")) {
       return normalized;
     }
 
@@ -21,8 +21,8 @@ export class OllamaClient extends OpenAICompatibleClient {
 
   protected override buildHeaders(config: ProviderRuntimeConfig): HeadersInit {
     return {
-      'content-type': 'application/json',
-      ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
+      "content-type": "application/json",
+      ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {})
     };
   }
 }

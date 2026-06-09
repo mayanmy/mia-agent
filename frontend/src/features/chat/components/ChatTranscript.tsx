@@ -29,12 +29,7 @@ export function ChatTranscript({
           <Empty description="发送一条消息测试 Agent" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
           messages.map((item) => (
-            <ChatMessageItem
-              item={item}
-              key={item.id}
-              sending={sending}
-              onCopy={onCopyMessage}
-            />
+            <ChatMessageItem item={item} key={item.id} sending={sending} onCopy={onCopyMessage} />
           ))
         )}
       </div>

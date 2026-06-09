@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable } from "@nestjs/common";
 
-import { getConfig } from '../../core/config';
-import { PrismaService } from '../prisma/prisma.service';
+import { getConfig } from "../../core/config";
+import { PrismaService } from "../prisma/prisma.service";
 
 export type HealthResponse = {
   status: string;
@@ -20,12 +20,11 @@ export class HealthService {
     const databaseOk = await this.prisma.checkDatabase();
 
     return {
-      status: databaseOk ? 'ok' : 'degraded',
+      status: databaseOk ? "ok" : "degraded",
       appName: config.appName,
       version: config.appVersion,
       environment: config.environment,
-      database: databaseOk ? 'ok' : 'unavailable',
+      database: databaseOk ? "ok" : "unavailable"
     };
   }
 }
-

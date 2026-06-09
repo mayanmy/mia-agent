@@ -1,14 +1,14 @@
-import { ModelProviderType } from '@prisma/client';
+import { ModelProviderType } from "@prisma/client";
 
-export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
+export type ChatRole = "system" | "user" | "assistant" | "tool";
 
 export type ChatContentPart =
   | {
-      type: 'text';
+      type: "text";
       text: string;
     }
   | {
-      type: 'image_url';
+      type: "image_url";
       image_url: {
         url: string;
       };
@@ -41,7 +41,7 @@ export type ChatCompletionRequest = {
   maxTokens?: number | null;
   timeoutSeconds?: number;
   tools?: LLMToolDefinition[];
-  toolChoice?: 'auto' | 'none';
+  toolChoice?: "auto" | "none";
   signal?: AbortSignal;
 };
 
@@ -60,18 +60,18 @@ export type ChatCompletionResponse = {
 
 export type ChatStreamChunk =
   | {
-      type: 'token';
+      type: "token";
       content: string;
     }
   | {
-      type: 'tool_call';
+      type: "tool_call";
       toolCall: LLMToolCall;
     }
   | {
-      type: 'done';
+      type: "done";
     }
   | {
-      type: 'error';
+      type: "error";
       errorMessage?: string;
     };
 
@@ -90,7 +90,7 @@ export type ProviderChatRequest = {
   temperature?: number;
   maxTokens?: number | null;
   tools?: LLMToolDefinition[];
-  toolChoice?: 'auto' | 'none';
+  toolChoice?: "auto" | "none";
   signal: AbortSignal;
 };
 

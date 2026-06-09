@@ -17,7 +17,8 @@
   var eventName = "mia-agent-widget:agents-changed";
   var styleId = "mia-agent-widget-style";
   var rootId = isInline
-    ? "mia-agent-widget-inline-" + createSafeId(apiBase + "-" + token + "-" + (containerSelector || "body"))
+    ? "mia-agent-widget-inline-" +
+      createSafeId(apiBase + "-" + token + "-" + (containerSelector || "body"))
     : "mia-agent-widget-root";
   var inlineAgents = [];
   var maxAttachmentCount = 4;
@@ -127,7 +128,7 @@
     '<select class="mia-agent-selector" aria-label="选择 Agent"></select>' +
     '<button class="mia-agent-fullscreen" type="button" aria-label="全屏">⛶</button>' +
     '<button class="mia-agent-close" type="button" aria-label="关闭">×</button>' +
-    '</header>' +
+    "</header>" +
     '<main class="mia-agent-messages"></main>' +
     '<button class="mia-agent-scroll-bottom mia-agent-hidden" type="button" aria-label="回到底部">↓</button>' +
     '<footer class="mia-agent-composer">' +
@@ -135,15 +136,15 @@
     '<div class="mia-agent-toolbar">' +
     '<button class="mia-agent-tool-button mia-agent-image-button" type="button">图片</button>' +
     '<button class="mia-agent-tool-button mia-agent-file-button" type="button">文件</button>' +
-    '</div>' +
+    "</div>" +
     '<div class="mia-agent-composer-row">' +
     '<textarea class="mia-agent-input" rows="2" placeholder="输入消息，或直接粘贴图片..."></textarea>' +
     '<button class="mia-agent-send" type="button">发送</button>' +
-    '</div>' +
+    "</div>" +
     '<input class="mia-agent-image-input" type="file" accept="image/*" multiple hidden />' +
     '<input class="mia-agent-file-input" type="file" multiple hidden />' +
-    '</footer>' +
-    '</section>' +
+    "</footer>" +
+    "</section>" +
     '<div class="mia-agent-toast" role="status" aria-live="polite"></div>';
 
   var style = document.createElement("style");
@@ -500,7 +501,10 @@
       return;
     }
 
-    appendMessage("assistant", "您好，我是 " + (entry.agent.name || "Mia") + "，请问有什么可以帮您？");
+    appendMessage(
+      "assistant",
+      "您好，我是 " + (entry.agent.name || "Mia") + "，请问有什么可以帮您？"
+    );
   }
 
   function sendMessage() {
@@ -639,7 +643,9 @@
 
   function isAbortError(error) {
     return (
-      (typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError") ||
+      (typeof DOMException !== "undefined" &&
+        error instanceof DOMException &&
+        error.name === "AbortError") ||
       (error && error.name === "AbortError")
     );
   }
@@ -684,17 +690,19 @@
         return;
       }
 
-      readFileAsDataUrl(file).then(function (dataUrl) {
-        state.images.push({
-          id: createId(),
-          name: file.name || "image",
-          mimeType: file.type || "image/png",
-          dataUrl: dataUrl
+      readFileAsDataUrl(file)
+        .then(function (dataUrl) {
+          state.images.push({
+            id: createId(),
+            name: file.name || "image",
+            mimeType: file.type || "image/png",
+            dataUrl: dataUrl
+          });
+          renderAttachments();
+        })
+        .catch(function () {
+          showToast("图片读取失败", "error");
         });
-        renderAttachments();
-      }).catch(function () {
-        showToast("图片读取失败", "error");
-      });
     });
   }
 
@@ -719,18 +727,20 @@
         return;
       }
 
-      readFileAsText(file).then(function (content) {
-        state.files.push({
-          id: createId(),
-          name: file.name || "file",
-          mimeType: file.type || "text/plain",
-          size: file.size || content.length,
-          content: content
+      readFileAsText(file)
+        .then(function (content) {
+          state.files.push({
+            id: createId(),
+            name: file.name || "file",
+            mimeType: file.type || "text/plain",
+            size: file.size || content.length,
+            content: content
+          });
+          renderAttachments();
+        })
+        .catch(function () {
+          showToast("文件读取失败", "error");
         });
-        renderAttachments();
-      }).catch(function () {
-        showToast("文件读取失败", "error");
-      });
     });
   }
 
@@ -939,7 +949,10 @@
     var index = -1;
 
     for (var currentIndex = toolEvents.length - 1; currentIndex >= 0; currentIndex -= 1) {
-      if (toolEvents[currentIndex].name === data.toolId && toolEvents[currentIndex].status === "running") {
+      if (
+        toolEvents[currentIndex].name === data.toolId &&
+        toolEvents[currentIndex].status === "running"
+      ) {
         index = currentIndex;
         break;
       }
@@ -991,7 +1004,9 @@
         if (toolEvent.status === "success") {
           item.appendChild(createToolEventDetail("结果", toolEvent.output));
         } else {
-          item.appendChild(createToolEventTextDetail("工具调用失败：" + (toolEvent.errorMessage || "未知错误")));
+          item.appendChild(
+            createToolEventTextDetail("工具调用失败：" + (toolEvent.errorMessage || "未知错误"))
+          );
         }
       }
 
@@ -1100,11 +1115,14 @@
       return;
     }
 
-    navigator.clipboard.writeText(value).then(function () {
-      showToast("已复制", "success");
-    }).catch(function () {
-      showToast("复制失败", "error");
-    });
+    navigator.clipboard
+      .writeText(value)
+      .then(function () {
+        showToast("已复制", "success");
+      })
+      .catch(function () {
+        showToast("复制失败", "error");
+      });
   }
 
   function showToast(message, type) {
@@ -1117,7 +1135,8 @@
     }
 
     toastEl.textContent = message;
-    toastEl.className = "mia-agent-toast mia-agent-toast-" + (type || "success") + " mia-agent-toast-visible";
+    toastEl.className =
+      "mia-agent-toast mia-agent-toast-" + (type || "success") + " mia-agent-toast-visible";
     state.toastTimer = setTimeout(function () {
       toastEl.className = "mia-agent-toast mia-agent-toast-" + (type || "success");
       state.toastTimer = null;
@@ -1412,9 +1431,7 @@
 
   function isInteractiveElement(target) {
     return Boolean(
-      target &&
-        target.closest &&
-        target.closest("button,select,textarea,input,a,label")
+      target && target.closest && target.closest("button,select,textarea,input,a,label")
     );
   }
 

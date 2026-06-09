@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from "node:crypto";
 
-export const REQUEST_ID_HEADER = 'x-request-id';
+export const REQUEST_ID_HEADER = "x-request-id";
 
 export type RequestWithId = {
   headers: Record<string, string | string[] | undefined>;
@@ -16,7 +16,7 @@ function getIncomingRequestId(value: string | string[] | undefined): string | un
     return value.find((item) => item.trim().length > 0);
   }
 
-  if (typeof value === 'string' && value.trim().length > 0) {
+  if (typeof value === "string" && value.trim().length > 0) {
     return value;
   }
 
@@ -26,7 +26,7 @@ function getIncomingRequestId(value: string | string[] | undefined): string | un
 export function requestIdMiddleware(
   req: RequestWithId,
   res: ResponseWithHeader,
-  next: () => void,
+  next: () => void
 ): void {
   const requestId = getIncomingRequestId(req.headers[REQUEST_ID_HEADER]) ?? randomUUID();
 
