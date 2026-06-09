@@ -1,16 +1,7 @@
-import {
-  AutoComplete,
-  Button,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Select,
-  Switch,
-  type FormInstance
-} from "antd";
+import { AutoComplete, Button, Form, Input, InputNumber, Modal, Select, Switch } from "antd";
+import { useEffect } from "react";
 
-import type { ProviderListItem } from "../api";
+import type { ProviderListItem, ProviderRemoteModel } from "../api";
 import type { ModelFormValues } from "../types";
 import {
   getProviderAccent,
@@ -21,43 +12,81 @@ import {
 } from "../utils";
 
 type ModelConfigModalProps = {
-  form: FormInstance<ModelFormValues>;
+  initialValues: ModelFormValues;
   open: boolean;
   saving: boolean;
   editingModelId: string | null;
+  providers: ProviderListItem[];
   providerOptions: { label: string; value: string }[];
-  modelProvider?: ProviderListItem;
+  remoteModels: ProviderRemoteModel[];
   remoteModelOptions: { label: string; value: string }[];
   syncingModels: boolean;
   onCancel: () => void;
   onSubmit: (values: ModelFormValues) => void;
   onModelProviderChange: (providerId: string) => void;
-  onSyncProviderModels: () => void;
-  onRemoteModelChange: (modelName: string) => void;
+  onSyncProviderModels: (providerId?: string) => void;
 };
 
-export function ModelConfigModal({
-  form,
-  open,
+export function ModelConfigModal(props: ModelConfigModalProps) {
+  if (!props.open) {
+    return null;
+  }
+
+  return <OpenModelConfigModal {...props} />;
+}
+
+function OpenModelConfigModal({
+  initialValues,
   saving,
   editingModelId,
+  providers,
   providerOptions,
-  modelProvider,
+  remoteModels,
   remoteModelOptions,
   syncingModels,
   onCancel,
   onSubmit,
   onModelProviderChange,
-  onSyncProviderModels,
-  onRemoteModelChange
+  onSyncProviderModels
 }: ModelConfigModalProps) {
+  const [form] = Form.useForm<ModelFormValues>();
+  const selectedProviderId = Form.useWatch("providerId", form);
+  const modelProvider = providers.find((provider) => provider.id === selectedProviderId);
+
+  useEffect(() => {
+    form.setFieldsValue(initialValues);
+  }, [form, initialValues]);
+
+  function handleProviderChange(providerId: string) {
+    const provider = providers.find((item) => item.id === providerId);
+    form.setFieldsValue({
+      baseUrl: provider?.baseUrl ?? "",
+      credentialName: provider ? `${provider.name} 默认凭据` : ""
+    });
+    onModelProviderChange(providerId);
+  }
+
+  function handleRemoteModelChange(modelName: string) {
+    const remoteModel = remoteModels.find((item) => item.modelName === modelName);
+
+    if (!remoteModel) {
+      form.setFieldsValue({ modelName });
+      return;
+    }
+
+    form.setFieldsValue({
+      modelName: remoteModel.modelName,
+      modelType: remoteModel.suggestedType,
+      contextLength: remoteModel.contextLength ?? form.getFieldValue("contextLength") ?? 4096
+    });
+  }
+
   return (
     <Modal
       destroyOnHidden
-      forceRender
       confirmLoading={saving}
       okText={editingModelId ? "保存" : "添加"}
-      open={open}
+      open
       title={editingModelId ? "配置模型" : "添加模型"}
       width={620}
       onCancel={onCancel}
@@ -74,7 +103,7 @@ export function ModelConfigModal({
           name="providerId"
           rules={[{ required: true, message: "请选择供应商" }]}
         >
-          <Select options={providerOptions} onChange={onModelProviderChange} />
+          <Select options={providerOptions} onChange={handleProviderChange} />
         </Form.Item>
         {modelProvider && (
           <div className="modelProviderIdentity">
@@ -98,7 +127,7 @@ export function ModelConfigModal({
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  onSyncProviderModels();
+                  onSyncProviderModels(form.getFieldValue("providerId"));
                 }}
               >
                 同步模型列表
@@ -111,7 +140,7 @@ export function ModelConfigModal({
           <AutoComplete
             options={remoteModelOptions}
             placeholder="qwen2.5"
-            onChange={onRemoteModelChange}
+            onChange={handleRemoteModelChange}
           />
         </Form.Item>
         <Form.Item

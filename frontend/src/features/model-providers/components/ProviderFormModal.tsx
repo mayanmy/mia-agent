@@ -1,10 +1,11 @@
-import { Form, Input, Modal, Select, Switch, type FormInstance } from "antd";
+import { Form, Input, Modal, Select, Switch } from "antd";
+import { useEffect } from "react";
 
 import type { ProviderFormValues } from "../types";
 import { providerDefaults, providerTypeLabels, providerTypes } from "../utils";
 
 type ProviderFormModalProps = {
-  form: FormInstance<ProviderFormValues>;
+  initialValues: ProviderFormValues;
   open: boolean;
   saving: boolean;
   editingProviderId: string | null;
@@ -13,22 +14,34 @@ type ProviderFormModalProps = {
   onSubmit: (values: ProviderFormValues) => void;
 };
 
-export function ProviderFormModal({
-  form,
-  open,
+export function ProviderFormModal(props: ProviderFormModalProps) {
+  if (!props.open) {
+    return null;
+  }
+
+  return <OpenProviderFormModal {...props} />;
+}
+
+function OpenProviderFormModal({
+  initialValues,
   saving,
   editingProviderId,
   editingProviderApiKeyMasked,
   onCancel,
   onSubmit
 }: ProviderFormModalProps) {
+  const [form] = Form.useForm<ProviderFormValues>();
+
+  useEffect(() => {
+    form.setFieldsValue(initialValues);
+  }, [form, initialValues]);
+
   return (
     <Modal
       destroyOnHidden
-      forceRender
       confirmLoading={saving}
       okText={editingProviderId ? "保存" : "安装"}
-      open={open}
+      open
       title={editingProviderId ? "编辑模型供应商" : "安装模型供应商"}
       width={620}
       onCancel={onCancel}

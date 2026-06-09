@@ -1,9 +1,10 @@
 import { Form, Modal, Select } from "antd";
-import { FormInstance } from "antd/lib/form";
-import { DefaultModelFormValues } from "../types";
+import { useEffect } from "react";
+
+import type { DefaultModelFormValues } from "../types";
 
 type DefaultModelSettingsModalProps = {
-  form: FormInstance<DefaultModelFormValues>;
+  initialValues: DefaultModelFormValues;
   saving: boolean;
   open: boolean;
   chatModelOptions: { label: string; options: { label: string; value: string }[] }[];
@@ -12,22 +13,34 @@ type DefaultModelSettingsModalProps = {
   onSubmit: (values: DefaultModelFormValues) => void;
 };
 
-export function DefaultModelSettingsModal({
-  form,
+export function DefaultModelSettingsModal(props: DefaultModelSettingsModalProps) {
+  if (!props.open) {
+    return null;
+  }
+
+  return <OpenDefaultModelSettingsModal {...props} />;
+}
+
+function OpenDefaultModelSettingsModal({
+  initialValues,
   saving,
-  open,
   chatModelOptions,
   embeddingModelOptions,
   onCancel,
   onSubmit
 }: DefaultModelSettingsModalProps) {
+  const [form] = Form.useForm<DefaultModelFormValues>();
+
+  useEffect(() => {
+    form.setFieldsValue(initialValues);
+  }, [form, initialValues]);
+
   return (
     <Modal
       destroyOnHidden
-      forceRender
       confirmLoading={saving}
       okText="保存"
-      open={open}
+      open
       title="默认模型设置"
       width={620}
       onCancel={onCancel}

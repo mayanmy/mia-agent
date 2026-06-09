@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { App as AntdApp, Button, Card, Empty, Form, Input } from "antd";
+import { App as AntdApp, Button, Card, Empty, Input } from "antd";
 import {
   checkModelCapability,
   createModelConfig,
@@ -42,9 +42,6 @@ import "./providers.less";
 
 export function ProvidersPage() {
   const { message: messageApi } = AntdApp.useApp();
-  const [providerForm] = Form.useForm<ProviderFormValues>();
-  const [modelForm] = Form.useForm<ModelFormValues>();
-  const [defaultModelForm] = Form.useForm<DefaultModelFormValues>();
   const [providers, setProviders] = useState<ProviderListItem[]>([]);
   const [modelConfigs, setModelConfigs] = useState<ModelConfigListItem[]>([]);
   const [search, setSearch] = useState("");
@@ -58,6 +55,11 @@ export function ProvidersPage() {
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [editingProviderApiKeyMasked, setEditingProviderApiKeyMasked] = useState("");
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [providerInitialValues, setProviderInitialValues] =
+    useState<ProviderFormValues>(providerDefaults);
+  const [modelInitialValues, setModelInitialValues] = useState<ModelFormValues>(modelDefaults);
+  const [defaultModelInitialValues, setDefaultModelInitialValues] =
+    useState<DefaultModelFormValues>({});
   const [expandedProviderIds, setExpandedProviderIds] = useState<Set<string>>(() => new Set());
 
   const providerOptions = useMemo(
@@ -84,12 +86,6 @@ export function ProvidersPage() {
         value: model.modelName
       })),
     [remoteModels]
-  );
-
-  const selectedModelProvider = Form.useWatch("providerId", modelForm);
-  const modelProvider = useMemo(
-    () => providers.find((provider) => provider.id === selectedModelProvider),
-    [providers, selectedModelProvider]
   );
 
   const filteredProviders = useMemo(() => {
@@ -133,7 +129,7 @@ export function ProvidersPage() {
   function openCreateProvider(template?: ProviderTemplate) {
     setEditingProviderId(null);
     setEditingProviderApiKeyMasked("");
-    providerForm.setFieldsValue(
+    setProviderInitialValues(
       template
         ? {
             name: template.name,
@@ -150,7 +146,7 @@ export function ProvidersPage() {
   function openEditProvider(provider: ProviderListItem) {
     setEditingProviderId(provider.id);
     setEditingProviderApiKeyMasked(provider.apiKeyMasked);
-    providerForm.setFieldsValue({
+    setProviderInitialValues({
       name: provider.name,
       providerType: provider.providerType,
       baseUrl: provider.baseUrl,
@@ -164,7 +160,7 @@ export function ProvidersPage() {
     const provider = providers.find((item) => item.id === providerId);
     setEditingModelId(null);
     setRemoteModels([]);
-    modelForm.setFieldsValue({
+    setModelInitialValues({
       ...modelDefaults,
       providerId,
       credentialName: provider ? `${provider.name} 默认凭据` : "",
@@ -178,7 +174,7 @@ export function ProvidersPage() {
     const provider = providers.find((item) => item.id === config.providerId);
     setEditingModelId(config.id);
     setRemoteModels([]);
-    modelForm.setFieldsValue({
+    setModelInitialValues({
       providerId: config.providerId,
       modelName: config.modelName,
       modelType: config.modelType,
@@ -198,7 +194,7 @@ export function ProvidersPage() {
 
     try {
       const settings = await getDefaultModelSettings();
-      defaultModelForm.setFieldsValue({
+      setDefaultModelInitialValues({
         chatModelConfigId: settings.chatModelConfigId,
         embeddingModelConfigId: settings.embeddingModelConfigId
       });
@@ -237,7 +233,6 @@ export function ProvidersPage() {
         messageApi.success("供应商已安装");
       }
       setProviderDialogOpen(false);
-      providerForm.resetFields();
       await refresh();
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "保存供应商失败");
@@ -288,7 +283,6 @@ export function ProvidersPage() {
         messageApi.success("模型已添加");
       }
       setModelDialogOpen(false);
-      modelForm.resetFields();
       await refresh();
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "保存模型失败");
@@ -307,7 +301,6 @@ export function ProvidersPage() {
       });
       messageApi.success("默认模型设置已保存");
       setDefaultModelDialogOpen(false);
-      defaultModelForm.resetFields();
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "保存默认模型设置失败");
     } finally {
@@ -358,19 +351,12 @@ export function ProvidersPage() {
     }
   }
 
-  function handleModelProviderChange(providerId: string) {
-    const provider = providers.find((item) => item.id === providerId);
+  function handleModelProviderChange() {
     setRemoteModels([]);
-    modelForm.setFieldsValue({
-      baseUrl: provider?.baseUrl ?? "",
-      credentialName: provider ? `${provider.name} 默认凭据` : ""
-    });
   }
 
   async function syncProviderModels(providerId?: string) {
-    const targetProviderId = providerId || modelForm.getFieldValue("providerId");
-
-    if (!targetProviderId) {
+    if (!providerId) {
       messageApi.warning("请先选择供应商");
       return;
     }
@@ -378,7 +364,7 @@ export function ProvidersPage() {
     setSyncingModels(true);
 
     try {
-      const models = await listProviderModels(targetProviderId);
+      const models = await listProviderModels(providerId);
       setRemoteModels(models);
       messageApi.success(`已同步 ${models.length} 个模型`);
     } catch (error) {
@@ -386,21 +372,6 @@ export function ProvidersPage() {
     } finally {
       setSyncingModels(false);
     }
-  }
-
-  function handleRemoteModelChange(modelName: string) {
-    const remoteModel = remoteModels.find((item) => item.modelName === modelName);
-
-    if (!remoteModel) {
-      modelForm.setFieldsValue({ modelName });
-      return;
-    }
-
-    modelForm.setFieldsValue({
-      modelName: remoteModel.modelName,
-      modelType: remoteModel.suggestedType,
-      contextLength: remoteModel.contextLength ?? modelForm.getFieldValue("contextLength") ?? 4096
-    });
   }
 
   return (
@@ -457,20 +428,17 @@ export function ProvidersPage() {
       <ProviderMarketplace templates={providerTemplates} onCreateProvider={openCreateProvider} />
 
       <DefaultModelSettingsModal
-        form={defaultModelForm}
+        initialValues={defaultModelInitialValues}
         saving={saving}
         open={defaultModelDialogOpen}
         chatModelOptions={chatModelOptions}
         embeddingModelOptions={embeddingModelOptions}
-        onCancel={() => {
-          setDefaultModelDialogOpen(false);
-          defaultModelForm.resetFields();
-        }}
+        onCancel={() => setDefaultModelDialogOpen(false)}
         onSubmit={(values) => void submitDefaultModelSettings(values)}
       />
 
       <ProviderFormModal
-        form={providerForm}
+        initialValues={providerInitialValues}
         saving={saving}
         editingProviderId={editingProviderId}
         open={providerDialogOpen}
@@ -483,19 +451,19 @@ export function ProvidersPage() {
       />
 
       <ModelConfigModal
-        form={modelForm}
+        initialValues={modelInitialValues}
         saving={saving}
         open={modelDialogOpen}
         editingModelId={editingModelId}
+        providers={providers}
         providerOptions={providerOptions}
+        remoteModels={remoteModels}
         remoteModelOptions={remoteModelOptions}
-        modelProvider={modelProvider}
         syncingModels={syncingModels}
         onCancel={() => setModelDialogOpen(false)}
         onModelProviderChange={handleModelProviderChange}
-        onRemoteModelChange={handleRemoteModelChange}
         onSubmit={(values) => void submitModel(values)}
-        onSyncProviderModels={() => void syncProviderModels()}
+        onSyncProviderModels={(providerId) => void syncProviderModels(providerId)}
       />
     </section>
   );
