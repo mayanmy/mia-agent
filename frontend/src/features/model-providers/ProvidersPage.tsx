@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Empty, Form, Input, message } from "antd";
+import { App as AntdApp, Button, Card, Empty, Form, Input } from "antd";
 import {
   checkModelCapability,
   createModelConfig,
@@ -41,6 +41,7 @@ import {
 import "./providers.less";
 
 export function ProvidersPage() {
+  const { message: messageApi } = AntdApp.useApp();
   const [providerForm] = Form.useForm<ProviderFormValues>();
   const [modelForm] = Form.useForm<ModelFormValues>();
   const [defaultModelForm] = Form.useForm<DefaultModelFormValues>();
@@ -119,7 +120,7 @@ export function ProvidersPage() {
       setProviders(providerPage.list);
       setModelConfigs(modelConfigPage.list);
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "加载模型供应商失败");
+      messageApi.error(error instanceof Error ? error.message : "加载模型供应商失败");
     } finally {
       setLoading(false);
     }
@@ -203,7 +204,7 @@ export function ProvidersPage() {
       });
       setDefaultModelDialogOpen(true);
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "加载默认模型设置失败");
+      messageApi.error(error instanceof Error ? error.message : "加载默认模型设置失败");
     } finally {
       setLoading(false);
     }
@@ -230,16 +231,16 @@ export function ProvidersPage() {
       const payload = toProviderPayload(values, Boolean(editingProviderId));
       if (editingProviderId) {
         await updateProvider(editingProviderId, payload);
-        message.success("供应商已更新");
+        messageApi.success("供应商已更新");
       } else {
         await createProvider(payload);
-        message.success("供应商已安装");
+        messageApi.success("供应商已安装");
       }
       setProviderDialogOpen(false);
       providerForm.resetFields();
       await refresh();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "保存供应商失败");
+      messageApi.error(error instanceof Error ? error.message : "保存供应商失败");
     } finally {
       setSaving(false);
     }
@@ -271,26 +272,26 @@ export function ProvidersPage() {
       });
 
       if (capability.verified && !capability.supported) {
-        message.error(capability.message);
+        messageApi.error(capability.message);
         return;
       }
 
       if (!capability.verified) {
-        message.warning(`模型能力未确认：${capability.message}`);
+        messageApi.warning(`模型能力未确认：${capability.message}`);
       }
 
       if (editingModelId) {
         await updateModelConfig(editingModelId, payload);
-        message.success("模型已更新");
+        messageApi.success("模型已更新");
       } else {
         await createModelConfig(payload);
-        message.success("模型已添加");
+        messageApi.success("模型已添加");
       }
       setModelDialogOpen(false);
       modelForm.resetFields();
       await refresh();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "保存模型失败");
+      messageApi.error(error instanceof Error ? error.message : "保存模型失败");
     } finally {
       setSaving(false);
     }
@@ -304,11 +305,11 @@ export function ProvidersPage() {
         chatModelConfigId: values.chatModelConfigId ?? null,
         embeddingModelConfigId: values.embeddingModelConfigId ?? null
       });
-      message.success("默认模型设置已保存");
+      messageApi.success("默认模型设置已保存");
       setDefaultModelDialogOpen(false);
       defaultModelForm.resetFields();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "保存默认模型设置失败");
+      messageApi.error(error instanceof Error ? error.message : "保存默认模型设置失败");
     } finally {
       setSaving(false);
     }
@@ -319,11 +320,11 @@ export function ProvidersPage() {
 
     try {
       const result = await testProviderConnection(providerId);
-      message[result.ok ? "success" : "error"](
+      messageApi[result.ok ? "success" : "error"](
         result.ok ? `连接正常，耗时 ${result.latencyMs}ms` : `连接失败：${result.statusText}`
       );
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "测试连接失败");
+      messageApi.error(error instanceof Error ? error.message : "测试连接失败");
     } finally {
       setLoading(false);
     }
@@ -334,10 +335,10 @@ export function ProvidersPage() {
 
     try {
       await deleteProvider(providerId);
-      message.success("供应商已删除");
+      messageApi.success("供应商已删除");
       await refresh();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "删除供应商失败");
+      messageApi.error(error instanceof Error ? error.message : "删除供应商失败");
     } finally {
       setLoading(false);
     }
@@ -348,10 +349,10 @@ export function ProvidersPage() {
 
     try {
       await deleteModelConfig(modelId);
-      message.success("模型已删除");
+      messageApi.success("模型已删除");
       await refresh();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "删除模型失败");
+      messageApi.error(error instanceof Error ? error.message : "删除模型失败");
     } finally {
       setLoading(false);
     }
@@ -370,7 +371,7 @@ export function ProvidersPage() {
     const targetProviderId = providerId || modelForm.getFieldValue("providerId");
 
     if (!targetProviderId) {
-      message.warning("请先选择供应商");
+      messageApi.warning("请先选择供应商");
       return;
     }
 
@@ -379,9 +380,9 @@ export function ProvidersPage() {
     try {
       const models = await listProviderModels(targetProviderId);
       setRemoteModels(models);
-      message.success(`已同步 ${models.length} 个模型`);
+      messageApi.success(`已同步 ${models.length} 个模型`);
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "同步模型列表失败");
+      messageApi.error(error instanceof Error ? error.message : "同步模型列表失败");
     } finally {
       setSyncingModels(false);
     }
@@ -432,6 +433,7 @@ export function ProvidersPage() {
       <div className="providerInstalledList" aria-busy={loading}>
         {filteredProviders.map((provider) => (
           <ProviderCard
+            key={provider.id}
             provider={provider}
             modelConfigs={modelConfigs}
             expandedProviderIds={expandedProviderIds}

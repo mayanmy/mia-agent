@@ -54,6 +54,7 @@ export function ModelConfigModal({
   return (
     <Modal
       destroyOnHidden
+      forceRender
       confirmLoading={saving}
       okText={editingModelId ? "保存" : "添加"}
       open={open}

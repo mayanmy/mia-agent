@@ -24,6 +24,7 @@ export function DefaultModelSettingsModal({
   return (
     <Modal
       destroyOnHidden
+      forceRender
       confirmLoading={saving}
       okText="保存"
       open={open}

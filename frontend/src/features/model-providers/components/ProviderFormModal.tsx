@@ -25,6 +25,7 @@ export function ProviderFormModal({
   return (
     <Modal
       destroyOnHidden
+      forceRender
       confirmLoading={saving}
       okText={editingProviderId ? "保存" : "安装"}
       open={open}
