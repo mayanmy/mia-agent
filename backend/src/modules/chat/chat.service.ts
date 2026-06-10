@@ -176,8 +176,7 @@ export class ChatService {
 
       if (toolCalls.length === 0) {
         if (llmTools.length > 0) {
-          // The agent had tools available, but the model chose to answer without calling one.
-          // This is the key breadcrumb for investigating "why did it not use a tool?" cases.
+          // Agent 有可用工具，但模型选择直接回答；这条日志用于排查“为什么没走工具”。
           await this.recordToolCallLog({
             requestId,
             agentId: agent.agentId,
@@ -359,8 +358,7 @@ export class ChatService {
   }): Promise<void> {
     const enabledToolIds = request.toolDefinitions.map((tool) => tool.id);
 
-    // Snapshot tool availability at chat start so later execution logs can be
-    // interpreted against what the agent actually had bound and enabled.
+    // 对话开始时记录工具可用性，后续排查时能知道 Agent 当时实际绑定并启用了哪些工具。
     if (request.toolIds.length === 0) {
       await this.recordToolCallLog({
         requestId: request.requestId,
@@ -407,7 +405,7 @@ export class ChatService {
     const logger = (this.toolsService as Partial<ToolsService>).recordToolCallLog;
 
     if (typeof logger !== "function") {
-      // Some unit tests use narrow ToolsService mocks; logging is optional there.
+      // 部分单测使用精简的 ToolsService mock，此时日志能力是可选的。
       return;
     }
 
@@ -584,8 +582,7 @@ export class ChatService {
     });
 
     for (const toolCall of toolCalls) {
-      // Record the model decision before executing; ToolsService records the paired
-      // completed/failed result with the same requestId + toolCallId.
+      // 执行前先记录模型已请求工具；ToolsService 会用同一组 requestId + toolCallId 记录执行结果。
       await this.recordToolCallLog({
         requestId: context.requestId,
         agentId: context.agentId,
@@ -643,8 +640,7 @@ export class ChatService {
     }
   ): Promise<void> {
     for (const toolCall of toolCalls) {
-      // Non-streaming completions use the same requested -> completed/failed log pair
-      // as SSE streaming so both paths can be queried consistently.
+      // 非流式调用也使用 requested -> completed/failed 的日志配对，方便和 SSE 路径统一查询。
       await this.recordToolCallLog({
         requestId: context.requestId,
         agentId: context.agentId,

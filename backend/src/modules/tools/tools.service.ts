@@ -115,7 +115,7 @@ export class ToolsService {
         `
       );
     } catch {
-      // Tool logs are diagnostic only; logging failures must not break chat generation.
+      // 工具日志只用于排查问题，写日志失败不能影响对话生成。
     }
   }
 
@@ -124,8 +124,7 @@ export class ToolsService {
     toolId: string;
     result: ToolExecutionResult;
   }): Promise<Record<string, never>> {
-    // Keep execution outcome logging in ToolsService so every caller gets the same
-    // completed/failed record, including non-chat callers and missing-tool failures.
+    // 执行结果统一在 ToolsService 记录，确保非 chat 调用和工具不存在场景也能落 completed/failed。
     await this.recordToolCallLog({
       requestId: request.request.requestId,
       userId: request.request.userId,
