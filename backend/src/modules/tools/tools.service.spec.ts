@@ -37,6 +37,37 @@ export const tests = [
   },
 
   {
+    name: "ToolsService logs tool execution results when prisma is available",
+    run: async () => {
+      const queries: Array<{ values?: unknown[] }> = [];
+      const service = new ToolsService({
+        $executeRaw: async (query: { values?: unknown[] }) => {
+          queries.push(query);
+          return 1;
+        }
+      } as never);
+      const result = await service.executeTool({
+        toolCallId: "call-1",
+        toolId: "calculator",
+        requestId: "request-1",
+        agentId: "agent-1",
+        input: {
+          operation: "add",
+          operands: [1, 2]
+        }
+      });
+
+      assert.equal(result.ok, true);
+      assert.equal(queries.length, 1);
+      assert.ok(queries[0].values?.includes("request-1"));
+      assert.ok(queries[0].values?.includes("agent-1"));
+      assert.ok(queries[0].values?.includes("call-1"));
+      assert.ok(queries[0].values?.includes("calculator"));
+      assert.ok(queries[0].values?.includes("completed"));
+    }
+  },
+
+  {
     name: "ToolsService wraps calculator failures",
     run: async () => {
       const service = new ToolsService();

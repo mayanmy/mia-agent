@@ -26,6 +26,7 @@ export type ToolListItem = Pick<ToolDefinition, "id" | "name" | "description" | 
 export type ToolExecutionRequest = {
   toolId: string;
   input: Record<string, ToolJsonValue>;
+  toolCallId?: string;
   requestId?: string;
   userId?: string;
   agentId?: string;
@@ -39,4 +40,27 @@ export type ToolExecutionResult = {
   errorType?: string;
   errorMessage?: string;
   elapsedMs: number;
+};
+
+export type ToolCallLogStatus =
+  | "available"
+  | "skipped"
+  | "requested"
+  | "completed"
+  | "failed";
+
+export type ToolCallLogRecord = {
+  requestId?: string;
+  agentId?: string;
+  userId?: string;
+  toolCallId?: string;
+  toolId?: string;
+  status: ToolCallLogStatus;
+  source?: string;
+  reason?: string;
+  input?: ToolJsonValue;
+  output?: ToolJsonValue;
+  errorType?: string;
+  errorMessage?: string;
+  elapsedMs?: number;
 };

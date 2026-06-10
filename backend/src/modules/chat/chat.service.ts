@@ -1,10 +1,11 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 
 import { AppError, ErrorCodes } from "../../core/errors";
 import { AgentsService } from "../agents/agents.service";
 import { ModelProvidersService } from "../model-providers/model-providers.service";
 import { ChatMessage, LLMToolCall, LLMToolDefinition } from "../model-providers/dto/llm.dto";
-import { ToolDefinition, ToolJsonValue } from "../tools/dto/tool.dto";
+import { ToolCallLogRecord, ToolDefinition, ToolJsonValue } from "../tools/dto/tool.dto";
 import { ToolsService } from "../tools/tools.service";
 import {
   ChatFileAttachmentDto,
@@ -36,10 +37,17 @@ export class ChatService {
     const files = this.normalizeFiles(payload.files);
     const message = this.normalizeUserMessage(payload.message, images, files);
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
+    const requestId = randomUUID();
     this.ensureImageInputSupported(agent.modelName, images);
     const history = this.normalizeHistory(payload.history, agent.historyTurns);
     const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
     const llmTools = this.toLLMToolDefinitions(toolDefinitions);
+    await this.recordToolAvailability({
+      requestId,
+      agentId: agent.agentId,
+      toolIds: agent.toolIds,
+      toolDefinitions
+    });
     const messages: ChatMessage[] = [
       { role: "system", content: this.buildSystemPrompt(agent.systemPrompt, llmTools) },
       ...history,
@@ -52,7 +60,9 @@ export class ChatService {
       tools: llmTools,
       temperature: agent.temperature,
       maxTokens: agent.maxTokens,
-      timeoutSeconds: agent.timeoutSeconds
+      timeoutSeconds: agent.timeoutSeconds,
+      requestId,
+      agentId: agent.agentId
     });
 
     return {
@@ -73,10 +83,17 @@ export class ChatService {
     const files = this.normalizeFiles(payload.files);
     const message = this.normalizeUserMessage(payload.message, images, files);
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
+    const requestId = randomUUID();
     this.ensureImageInputSupported(agent.modelName, images);
     const history = this.normalizeHistory(payload.history, agent.historyTurns);
     const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
     const llmTools = this.toLLMToolDefinitions(toolDefinitions);
+    await this.recordToolAvailability({
+      requestId,
+      agentId: agent.agentId,
+      toolIds: agent.toolIds,
+      toolDefinitions
+    });
     const messages: ChatMessage[] = [
       { role: "system", content: this.buildSystemPrompt(agent.systemPrompt, llmTools) },
       ...history,
@@ -96,11 +113,17 @@ export class ChatService {
     const inferredToolCall = this.inferToolCallFromUserMessage(message, llmTools);
 
     if (inferredToolCall) {
-      yield* this.executeToolCalls([inferredToolCall], messages, agent.agentId, signal);
+      yield* this.executeToolCalls([inferredToolCall], messages, {
+        agentId: agent.agentId,
+        requestId,
+        signal,
+        source: "inferred"
+      });
     }
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
       let toolCalls: LLMToolCall[] = [];
+      let toolCallSource = "model_native";
       let assistantContent = "";
       const bufferedTokens: string[] = [];
 
@@ -146,9 +169,27 @@ export class ChatService {
 
       if (toolCalls.length === 0) {
         toolCalls = this.parseTextToolCalls(assistantContent, llmTools);
+        if (toolCalls.length > 0) {
+          toolCallSource = "text_json";
+        }
       }
 
       if (toolCalls.length === 0) {
+        if (llmTools.length > 0) {
+          // The agent had tools available, but the model chose to answer without calling one.
+          // This is the key breadcrumb for investigating "why did it not use a tool?" cases.
+          await this.recordToolCallLog({
+            requestId,
+            agentId: agent.agentId,
+            status: "skipped",
+            source: "model_response",
+            reason: "model_returned_no_tool_call",
+            output: {
+              assistantContentPreview: assistantContent.slice(0, 500)
+            }
+          });
+        }
+
         const fallbackAnswer = this.getToolResultFallbackAnswer(messages, assistantContent);
 
         if (fallbackAnswer) {
@@ -186,7 +227,13 @@ export class ChatService {
         return;
       }
 
-      yield* this.executeToolCalls(toolCalls, messages, agent.agentId, signal, assistantContent);
+      yield* this.executeToolCalls(toolCalls, messages, {
+        agentId: agent.agentId,
+        requestId,
+        signal,
+        source: toolCallSource,
+        assistantContent
+      });
     }
 
     yield {
@@ -204,6 +251,8 @@ export class ChatService {
     temperature: number;
     maxTokens: number | null;
     timeoutSeconds: number;
+    requestId: string;
+    agentId: string;
   }): Promise<{
     content: string;
     model: string;
@@ -220,7 +269,11 @@ export class ChatService {
           : null;
 
       if (inferredToolCall) {
-        await this.executeToolCallsForCompletion([inferredToolCall], request.messages);
+        await this.executeToolCallsForCompletion([inferredToolCall], request.messages, {
+          requestId: request.requestId,
+          agentId: request.agentId,
+          source: "inferred"
+        });
       }
 
       const response = await this.modelProvidersService.createChatCompletion({
@@ -236,8 +289,22 @@ export class ChatService {
       const toolCalls = response.toolCalls?.length
         ? response.toolCalls
         : this.parseTextToolCalls(response.content, request.tools);
+      const toolCallSource = response.toolCalls?.length ? "model_native" : "text_json";
 
       if (toolCalls.length === 0) {
+        if (request.tools.length > 0) {
+          await this.recordToolCallLog({
+            requestId: request.requestId,
+            agentId: request.agentId,
+            status: "skipped",
+            source: "model_response",
+            reason: "model_returned_no_tool_call",
+            output: {
+              assistantContentPreview: response.content.slice(0, 500)
+            }
+          });
+        }
+
         if (response.content.trim().length > 0) {
           return response;
         }
@@ -262,7 +329,11 @@ export class ChatService {
         toolCalls
       });
 
-      await this.executeToolCallsForCompletion(toolCalls, request.messages);
+      await this.executeToolCallsForCompletion(toolCalls, request.messages, {
+        requestId: request.requestId,
+        agentId: request.agentId,
+        source: toolCallSource
+      });
     }
 
     throw new AppError(
@@ -278,6 +349,69 @@ export class ChatService {
       description: tool.description,
       parameters: tool.inputSchema
     }));
+  }
+
+  private async recordToolAvailability(request: {
+    requestId: string;
+    agentId: string;
+    toolIds: string[];
+    toolDefinitions: ToolDefinition[];
+  }): Promise<void> {
+    const enabledToolIds = request.toolDefinitions.map((tool) => tool.id);
+
+    // Snapshot tool availability at chat start so later execution logs can be
+    // interpreted against what the agent actually had bound and enabled.
+    if (request.toolIds.length === 0) {
+      await this.recordToolCallLog({
+        requestId: request.requestId,
+        agentId: request.agentId,
+        status: "skipped",
+        source: "chat_start",
+        reason: "agent_has_no_bound_tools",
+        output: {
+          boundToolIds: [],
+          enabledToolIds
+        }
+      });
+      return;
+    }
+
+    if (enabledToolIds.length === 0) {
+      await this.recordToolCallLog({
+        requestId: request.requestId,
+        agentId: request.agentId,
+        status: "skipped",
+        source: "chat_start",
+        reason: "bound_tools_not_available",
+        output: {
+          boundToolIds: request.toolIds,
+          enabledToolIds
+        }
+      });
+      return;
+    }
+
+    await this.recordToolCallLog({
+      requestId: request.requestId,
+      agentId: request.agentId,
+      status: "available",
+      source: "chat_start",
+      output: {
+        boundToolIds: request.toolIds,
+        enabledToolIds
+      }
+    });
+  }
+
+  private async recordToolCallLog(record: ToolCallLogRecord): Promise<void> {
+    const logger = (this.toolsService as Partial<ToolsService>).recordToolCallLog;
+
+    if (typeof logger !== "function") {
+      // Some unit tests use narrow ToolsService mocks; logging is optional there.
+      return;
+    }
+
+    await logger.call(this.toolsService, record);
   }
 
   private buildSystemPrompt(systemPrompt: string, tools: LLMToolDefinition[]): string {
@@ -435,17 +569,33 @@ export class ChatService {
   private async *executeToolCalls(
     toolCalls: LLMToolCall[],
     messages: ChatMessage[],
-    agentId: string,
-    signal: AbortSignal | undefined,
-    assistantContent = ""
+    context: {
+      agentId: string;
+      requestId: string;
+      signal?: AbortSignal;
+      source: string;
+      assistantContent?: string;
+    }
   ): AsyncIterable<ChatStreamEvent> {
     messages.push({
       role: "assistant",
-      content: assistantContent,
+      content: context.assistantContent ?? "",
       toolCalls
     });
 
     for (const toolCall of toolCalls) {
+      // Record the model decision before executing; ToolsService records the paired
+      // completed/failed result with the same requestId + toolCallId.
+      await this.recordToolCallLog({
+        requestId: context.requestId,
+        agentId: context.agentId,
+        toolCallId: toolCall.id,
+        toolId: toolCall.name,
+        status: "requested",
+        source: context.source,
+        input: this.toToolInput(toolCall.arguments)
+      });
+
       yield {
         type: "tool_call",
         data: {
@@ -458,8 +608,10 @@ export class ChatService {
       const result = await this.toolsService.executeTool({
         toolId: toolCall.name,
         input: this.toToolInput(toolCall.arguments),
-        agentId,
-        signal
+        toolCallId: toolCall.id,
+        requestId: context.requestId,
+        agentId: context.agentId,
+        signal: context.signal
       });
 
       yield {
@@ -483,12 +635,32 @@ export class ChatService {
 
   private async executeToolCallsForCompletion(
     toolCalls: LLMToolCall[],
-    messages: ChatMessage[]
+    messages: ChatMessage[],
+    context: {
+      requestId: string;
+      agentId: string;
+      source: string;
+    }
   ): Promise<void> {
     for (const toolCall of toolCalls) {
+      // Non-streaming completions use the same requested -> completed/failed log pair
+      // as SSE streaming so both paths can be queried consistently.
+      await this.recordToolCallLog({
+        requestId: context.requestId,
+        agentId: context.agentId,
+        toolCallId: toolCall.id,
+        toolId: toolCall.name,
+        status: "requested",
+        source: context.source,
+        input: this.toToolInput(toolCall.arguments)
+      });
+
       const result = await this.toolsService.executeTool({
         toolId: toolCall.name,
-        input: this.toToolInput(toolCall.arguments)
+        input: this.toToolInput(toolCall.arguments),
+        toolCallId: toolCall.id,
+        requestId: context.requestId,
+        agentId: context.agentId
       });
 
       messages.push(

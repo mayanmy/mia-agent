@@ -70,6 +70,7 @@ export const tests = [
           ]);
         }
       };
+      const toolLogs: Array<Record<string, unknown>> = [];
       const toolsService = {
         getToolDefinitions: () => [
           {
@@ -94,7 +95,10 @@ export const tests = [
             result: 5
           },
           elapsedMs: 1
-        })
+        }),
+        recordToolCallLog: async (record: Record<string, unknown>) => {
+          toolLogs.push(record);
+        }
       };
       const service = new ChatService(
         agentsService as never,
@@ -130,6 +134,14 @@ export const tests = [
       assert.equal(modelRequests.length, 2);
       assert.equal(modelRequests[0].tools?.[0]?.name, "calculator");
       assert.ok(modelRequests[1].messages.some((message) => message.role === "tool"));
+      assert.deepEqual(
+        toolLogs.map((log) => log.status),
+        ["available", "requested", "skipped"]
+      );
+      assert.equal(toolLogs[1].toolCallId, "call-1");
+      assert.equal(toolLogs[1].toolId, "calculator");
+      assert.equal(toolLogs[1].source, "model_native");
+      assert.equal(toolLogs[2].reason, "model_returned_no_tool_call");
     }
   },
   {

@@ -116,3 +116,28 @@ model AgentTool {
   @@index([toolId], map: "idx_agent_tools_tool_id")
   @@map("agent_tools")
 }
+
+model ToolCallLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  requestId    String?  @map("request_id")
+  agentId      String?  @map("agent_id")
+  userId       String?  @map("user_id")
+  toolCallId   String?  @map("tool_call_id")
+  toolId       String?  @map("tool_id")
+  status       String
+  source       String?
+  reason       String?
+  input        Json?    @db.JsonB
+  output       Json?    @db.JsonB
+  errorType    String?  @map("error_type")
+  errorMessage String?  @map("error_message") @db.Text
+  elapsedMs    Int?     @map("elapsed_ms")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([createdAt(sort: Desc)], map: "idx_tool_call_logs_created_at")
+  @@index([requestId], map: "idx_tool_call_logs_request_id")
+  @@index([agentId, createdAt(sort: Desc)], map: "idx_tool_call_logs_agent_id_created_at")
+  @@index([toolId, createdAt(sort: Desc)], map: "idx_tool_call_logs_tool_id_created_at")
+  @@index([status, createdAt(sort: Desc)], map: "idx_tool_call_logs_status_created_at")
+  @@map("tool_call_logs")
+}

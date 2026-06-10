@@ -1,6 +1,9 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 
+import { PrismaService } from "../prisma/prisma.service";
 import {
+  ToolCallLogRecord,
   ToolDefinition,
   ToolExecutionRequest,
   ToolExecutionResult,
@@ -11,6 +14,8 @@ import { getBuiltinTool, getBuiltinToolDefinitions, listEnabledBuiltinTools } fr
 
 @Injectable()
 export class ToolsService {
+  constructor(@Optional() private readonly prismaService?: PrismaService) {}
+
   listTools(): ToolListItem[] {
     return listEnabledBuiltinTools().map((tool) => ({
       id: tool.id,
@@ -31,7 +36,14 @@ export class ToolsService {
     const tool = getBuiltinTool(toolId);
 
     if (!tool || !tool.enabled) {
-      return this.toFailureResult(toolId, "tool_not_found", "工具不存在或已停用", startedAt);
+      const result = this.toFailureResult(
+        toolId,
+        "tool_not_found",
+        "工具不存在或已停用",
+        startedAt
+      );
+      await this.recordExecutionResult({ request, toolId, result });
+      return result;
     }
 
     try {
@@ -42,20 +54,93 @@ export class ToolsService {
         signal: request.signal
       });
 
-      return {
+      const result: ToolExecutionResult = {
         toolId,
         ok: true,
         output,
         elapsedMs: Date.now() - startedAt
       };
+      await this.recordExecutionResult({ request, toolId, result });
+      return result;
     } catch (error) {
-      return this.toFailureResult(
+      const result = this.toFailureResult(
         toolId,
         this.getErrorType(error),
         this.getErrorMessage(error),
         startedAt
       );
+      await this.recordExecutionResult({ request, toolId, result });
+      return result;
     }
+  }
+
+  async recordToolCallLog(record: ToolCallLogRecord): Promise<void> {
+    if (!this.prismaService) {
+      return;
+    }
+
+    try {
+      await this.prismaService.$executeRaw(
+        Prisma.sql`
+          INSERT INTO "tool_call_logs" (
+            "request_id",
+            "agent_id",
+            "user_id",
+            "tool_call_id",
+            "tool_id",
+            "status",
+            "source",
+            "reason",
+            "input",
+            "output",
+            "error_type",
+            "error_message",
+            "elapsed_ms"
+          )
+          VALUES (
+            ${record.requestId ?? null},
+            ${record.agentId ?? null},
+            ${record.userId ?? null},
+            ${record.toolCallId ?? null},
+            ${record.toolId ?? null},
+            ${record.status},
+            ${record.source ?? null},
+            ${record.reason ?? null},
+            ${this.toJsonSql(record.input)},
+            ${this.toJsonSql(record.output)},
+            ${record.errorType ?? null},
+            ${record.errorMessage ?? null},
+            ${record.elapsedMs ?? null}
+          )
+        `
+      );
+    } catch {
+      // Tool logs are diagnostic only; logging failures must not break chat generation.
+    }
+  }
+
+  private async recordExecutionResult(request: {
+    request: ToolExecutionRequest;
+    toolId: string;
+    result: ToolExecutionResult;
+  }): Promise<Record<string, never>> {
+    // Keep execution outcome logging in ToolsService so every caller gets the same
+    // completed/failed record, including non-chat callers and missing-tool failures.
+    await this.recordToolCallLog({
+      requestId: request.request.requestId,
+      userId: request.request.userId,
+      agentId: request.request.agentId,
+      toolCallId: request.request.toolCallId,
+      toolId: request.toolId,
+      status: request.result.ok ? "completed" : "failed",
+      input: request.request.input,
+      output: request.result.output,
+      errorType: request.result.errorType,
+      errorMessage: request.result.errorMessage,
+      elapsedMs: request.result.elapsedMs
+    });
+
+    return {};
   }
 
   private normalizeToolIds(value: unknown): string[] {
@@ -188,5 +273,13 @@ export class ToolsService {
     }
 
     return "";
+  }
+
+  private toJsonSql(value: ToolJsonValue | undefined): Prisma.Sql {
+    if (value === undefined) {
+      return Prisma.sql`NULL`;
+    }
+
+    return Prisma.sql`CAST(${JSON.stringify(value)} AS JSONB)`;
   }
 }
