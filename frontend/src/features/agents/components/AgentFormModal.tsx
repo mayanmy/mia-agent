@@ -25,6 +25,8 @@ export function AgentFormModal({
   onCancel: () => void;
   onSubmit: (values: AgentFormValues) => void;
 }) {
+  const selectedToolIds = Form.useWatch("toolIds", form) ?? [];
+
   return (
     <Modal
       destroyOnHidden
@@ -99,9 +101,9 @@ export function AgentFormModal({
             },
             {
               key: "tools",
-              label: "工具绑定",
+              label: `工具绑定 (${selectedToolIds.length})`,
               children: (
-                <Form.Item name="toolIds">
+                <Form.Item className="agentFormFull" name="toolIds">
                   <AgentToolSelector tools={tools} />
                 </Form.Item>
               )
