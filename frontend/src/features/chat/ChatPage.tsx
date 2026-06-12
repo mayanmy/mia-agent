@@ -173,6 +173,7 @@ export function ChatPage() {
                 toolId: event.data.toolId || "",
                 ok: Boolean(event.data.ok),
                 output: event.data.output,
+                errorType: event.data.errorType,
                 errorMessage: event.data.errorMessage,
                 elapsedMs: event.data.elapsedMs
               });
@@ -229,6 +230,7 @@ export function ChatPage() {
       toolId: string;
       ok: boolean;
       output?: unknown;
+      errorType?: string;
       errorMessage?: string;
       elapsedMs?: number;
     }
@@ -253,6 +255,7 @@ export function ChatPage() {
                   ...toolEvent,
                   status: result.ok ? "success" : "error",
                   output: result.output,
+                  errorType: result.errorType,
                   errorMessage: result.errorMessage,
                   elapsedMs: result.elapsedMs
                 }

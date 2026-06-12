@@ -6,6 +6,7 @@ export type ChatToolEvent = {
   arguments?: Record<string, unknown>;
   status: "running" | "success" | "error";
   output?: unknown;
+  errorType?: string;
   errorMessage?: string;
   elapsedMs?: number;
 };

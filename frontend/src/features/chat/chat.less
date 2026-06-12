@@ -223,6 +223,51 @@
   word-break: break-word;
 }
 
+.chatToolFailure {
+  display: grid;
+  gap: 8px;
+}
+
+.chatToolFailureReason {
+  background: rgba(254, 242, 242, 0.86);
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 6px;
+  color: #991b1b;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  padding: 7px 8px;
+}
+
+.chatToolFailureGrid {
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  border-radius: 6px;
+  display: grid;
+  overflow: hidden;
+}
+
+.chatToolFailureRow {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 72px minmax(0, 1fr);
+  padding: 6px 8px;
+}
+
+.chatToolFailureRow + .chatToolFailureRow {
+  border-top: 1px solid rgba(248, 113, 113, 0.16);
+}
+
+.chatToolFailureLabel {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.chatToolFailureValue {
+  color: #475569;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .chatMessageMeta {
   display: inline-flex;
   align-items: center;
