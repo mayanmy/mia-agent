@@ -1,0 +1,74 @@
+.logsWorkspace {
+  display: grid;
+  gap: 18px;
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.logsFilterPanel {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  min-width: 0;
+  padding: 16px;
+}
+
+.logsFilterPanel .ant-input,
+.logsFilterPanel .ant-picker,
+.logsFilterPanel .ant-select {
+  min-width: 0;
+  width: 100%;
+}
+
+.logsFilterActions {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
+.logsTablePanel {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.logsTablePanel .ant-table-wrapper,
+.logsTablePanel .ant-spin-nested-loading,
+.logsTablePanel .ant-spin-container,
+.logsTablePanel .ant-table,
+.logsTablePanel .ant-table-container {
+  min-width: 0;
+}
+
+.logsTablePanel .ant-table-content {
+  overflow-x: auto !important;
+}
+
+.logMonoText {
+  max-width: 180px;
+}
+
+.logMonoText .ant-typography {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.logErrorMessage {
+  display: inline-block;
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .logsFilterPanel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .logsFilterPanel {
+    grid-template-columns: 1fr;
+  }
+}

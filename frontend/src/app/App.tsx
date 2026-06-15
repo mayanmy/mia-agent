@@ -20,6 +20,9 @@ const ProvidersPage = lazy(() =>
 const HealthPage = lazy(() =>
   import("../pages/HealthPage").then((module) => ({ default: module.HealthPage }))
 );
+const LogsPage = lazy(() =>
+  import("../features/logs/LogsPage").then((module) => ({ default: module.LogsPage }))
+);
 
 const navItems = ["providers", "agents", "knowledge", "chat", "logs"] as const;
 
@@ -82,7 +85,7 @@ export function App() {
             />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/share/agents/:token" element={<SharedAgentPage />} />
-            <Route path="/logs" element={<PlaceholderPage title={navConfig.logs.label} />} />
+            <Route path="/logs" element={<LogsPage />} />
             <Route path="*" element={<Navigate replace to="/agents" />} />
           </Routes>
         </Suspense>
