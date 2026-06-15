@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button, DatePicker, Input, Select, Space, Table, Tag, Typography, message } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import type { TableProps } from "antd";
 import type { Dayjs } from "dayjs";
 
@@ -165,11 +166,18 @@ export function LogsPage() {
 
   return (
     <section className="workspace logsWorkspace">
-      <header className="pageHeader">
+      <header className="compactPageHeader">
         <div>
-          <p className="eyebrow">日志</p>
-          <h1>日志</h1>
+          <h1>工具调用日志</h1>
+          <p>查看工具选择、执行结果和失败原因。</p>
         </div>
+        <Button
+          icon={<ReloadOutlined />}
+          loading={loading}
+          onClick={() => void refresh(pagination.page, pagination.pageSize)}
+        >
+          刷新
+        </Button>
       </header>
 
       <section className="panel logsFilterPanel">

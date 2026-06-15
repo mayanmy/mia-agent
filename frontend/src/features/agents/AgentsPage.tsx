@@ -304,10 +304,10 @@ export function AgentsPage() {
 
   return (
     <section className="workspace">
-      <header className="pageHeader">
+      <header className="compactPageHeader">
         <div>
-          <p className="eyebrow">Agent</p>
           <h1>Agent 管理</h1>
+          <p>创建、配置和发布团队内部 AI 助手。</p>
         </div>
         <Space>
           <Button disabled={loading} onClick={() => void refresh()}>

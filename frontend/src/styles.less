@@ -122,6 +122,29 @@ a {
   margin-bottom: 24px;
 }
 
+.compactPageHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  min-width: 0;
+}
+
+.compactPageHeader h1 {
+  font-size: 28px;
+  line-height: 1.15;
+  margin-bottom: 6px;
+}
+
+.compactPageHeader p {
+  color: #667085;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  margin: 0;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   color: #64748b;
@@ -418,6 +441,11 @@ td {
 
   .pageHeader {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .compactPageHeader {
+    align-items: stretch;
     flex-direction: column;
   }
 

@@ -97,9 +97,8 @@ export function App() {
 function RouteLoading() {
   return (
     <section className="workspace">
-      <header className="pageHeader">
+      <header className="compactPageHeader">
         <div>
-          <p className="eyebrow">加载中</p>
           <h1>正在加载页面</h1>
         </div>
       </header>
@@ -110,10 +109,10 @@ function RouteLoading() {
 function PlaceholderPage({ title }: { title: string }) {
   return (
     <section className="workspace">
-      <header className="pageHeader">
+      <header className="compactPageHeader">
         <div>
-          <p className="eyebrow">{title}</p>
           <h1>{title}</h1>
+          <p>该模块正在建设中。</p>
         </div>
       </header>
     </section>
