@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react";
-import { Button, DatePicker, Input, Select, Space, Table, Tag, Typography, message } from "antd";
+import {
+  Button,
+  DatePicker,
+  Drawer,
+  Input,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message
+} from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import type { TableProps } from "antd";
 import type { Dayjs } from "dayjs";
@@ -26,6 +37,7 @@ export function LogsPage() {
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<LogFilters>({});
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
+  const [detailLog, setDetailLog] = useState<ToolCallLogListItem | null>(null);
 
   useEffect(() => {
     void refresh(1, pagination.pageSize);
@@ -71,6 +83,21 @@ export function LogsPage() {
   }
 
   const columns: TableProps<ToolCallLogListItem>["columns"] = [
+    {
+      title: "Agent ID",
+      dataIndex: "agentId",
+      key: "agentId",
+      fixed: "left",
+      width: 220,
+      render: (agentId: string | null) =>
+        agentId ? (
+          <Typography.Text copyable className="logMonoText">
+            {agentId}
+          </Typography.Text>
+        ) : (
+          "-"
+        )
+    },
     {
       title: "时间",
       dataIndex: "createdAt",
@@ -149,18 +176,15 @@ export function LogsPage() {
         )
     },
     {
-      title: "Agent ID",
-      dataIndex: "agentId",
-      key: "agentId",
-      width: 220,
-      render: (agentId: string | null) =>
-        agentId ? (
-          <Typography.Text copyable className="logMonoText">
-            {agentId}
-          </Typography.Text>
-        ) : (
-          "-"
-        )
+      title: "操作",
+      key: "actions",
+      fixed: "right",
+      width: 100,
+      render: (_, record) => (
+        <Button size="small" type="link" onClick={() => setDetailLog(record)}>
+          查看详情
+        </Button>
+      )
     }
   ];
 
@@ -233,14 +257,63 @@ export function LogsPage() {
             showSizeChanger: true
           }}
           rowKey="id"
-          scroll={{ x: 1730 }}
+          scroll={{ x: 1830 }}
           tableLayout="fixed"
           onChange={(nextPagination) => {
             void refresh(nextPagination.current || 1, nextPagination.pageSize || 20);
           }}
         />
       </section>
+
+      <Drawer
+        destroyOnClose
+        open={Boolean(detailLog)}
+        title="工具调用详情"
+        width={640}
+        onClose={() => setDetailLog(null)}
+      >
+        {detailLog ? <ToolCallLogDetail log={detailLog} /> : null}
+      </Drawer>
     </section>
+  );
+}
+
+function ToolCallLogDetail({ log }: { log: ToolCallLogListItem }) {
+  const rows = [
+    ["Agent ID", log.agentId],
+    ["Request ID", log.requestId],
+    ["Tool Call ID", log.toolCallId],
+    ["工具 ID", log.toolId],
+    ["状态", formatStatus(log.status)],
+    ["来源", formatSource(log.source)],
+    ["原因", log.reason],
+    ["错误类型", log.errorType],
+    ["错误信息", log.errorMessage],
+    ["耗时", log.elapsedMs === null ? null : `${log.elapsedMs}ms`],
+    ["创建时间", formatDate(log.createdAt)]
+  ];
+
+  return (
+    <div className="logDetail">
+      <div className="logDetailGrid">
+        {rows.map(([label, value]) => (
+          <div className="logDetailRow" key={label}>
+            <span className="logDetailLabel">{label}</span>
+            <span className="logDetailValue">{value || "-"}</span>
+          </div>
+        ))}
+      </div>
+
+      <section className="logDetailSection">
+        <h2>输入参数</h2>
+        <pre>{formatJson(log.input)}</pre>
+      </section>
+
+      <section className="logDetailSection">
+        <h2>输出结果</h2>
+        <pre>{formatJson(log.output)}</pre>
+      </section>
+    </div>
   );
 }
 
@@ -300,4 +373,20 @@ function formatSource(source: string | null): string {
   };
 
   return labels[source] ?? source;
+}
+
+function formatJson(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 }

@@ -92,6 +92,65 @@
   white-space: nowrap;
 }
 
+.logDetail {
+  display: grid;
+  gap: 18px;
+}
+
+.logDetailGrid {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.logDetailRow {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 120px minmax(0, 1fr);
+  padding: 10px 12px;
+}
+
+.logDetailRow + .logDetailRow {
+  border-top: 1px solid #eef2f7;
+}
+
+.logDetailLabel {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.logDetailValue {
+  color: #111827;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.logDetailSection {
+  display: grid;
+  gap: 8px;
+}
+
+.logDetailSection h2 {
+  font-size: 15px;
+}
+
+.logDetailSection pre {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #334155;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 @media (max-width: 1180px) {
   .logsFilterPanel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
