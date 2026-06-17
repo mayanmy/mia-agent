@@ -23,6 +23,11 @@ const HealthPage = lazy(() =>
 const LogsPage = lazy(() =>
   import("../features/logs/LogsPage").then((module) => ({ default: module.LogsPage }))
 );
+const KnowledgePage = lazy(() =>
+  import("../features/knowledge/KnowledgePage").then((module) => ({
+    default: module.KnowledgePage
+  }))
+);
 
 const navItems = ["providers", "agents", "knowledge", "chat", "logs"] as const;
 
@@ -79,10 +84,7 @@ export function App() {
               }
             />
             <Route path="/agents" element={<AgentsPage />} />
-            <Route
-              path="/knowledge"
-              element={<PlaceholderPage title={navConfig.knowledge.label} />}
-            />
+            <Route path="/knowledge" element={<KnowledgePage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/share/agents/:token" element={<SharedAgentPage />} />
             <Route path="/logs" element={<LogsPage />} />
@@ -100,19 +102,6 @@ function RouteLoading() {
       <header className="compactPageHeader">
         <div>
           <h1>正在加载页面</h1>
-        </div>
-      </header>
-    </section>
-  );
-}
-
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <section className="workspace">
-      <header className="compactPageHeader">
-        <div>
-          <h1>{title}</h1>
-          <p>该模块正在建设中。</p>
         </div>
       </header>
     </section>

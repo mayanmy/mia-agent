@@ -21,6 +21,11 @@ export const ErrorCodes = {
     notFound: 3001,
     invalidModelConfig: 3002,
     invalidTools: 3003
+  },
+  knowledge: {
+    notFound: 4001,
+    nameExists: 4002,
+    invalidEmbeddingModel: 4003
   }
 } as const;
 

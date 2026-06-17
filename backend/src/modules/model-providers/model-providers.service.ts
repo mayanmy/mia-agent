@@ -314,6 +314,32 @@ export class ModelProvidersService {
     return settings?.chatModelConfigId ?? null;
   }
 
+  async ensureEnabledModelConfig(id: string, modelType: ModelConfigType): Promise<void> {
+    const config = await this.prisma.modelConfig.findFirst({
+      where: {
+        id,
+        modelType,
+        enabled: true,
+        deletedAt: null,
+        provider: {
+          enabled: true,
+          deletedAt: null
+        }
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!config) {
+      throw new AppError(
+        ErrorCodes.provider.modelConfigNotFound,
+        "model config not found or unavailable",
+        HttpStatus.NOT_FOUND
+      );
+    }
+  }
+
   async updateDefaultModelSettings(
     payload: DefaultModelSettingsUpdateDto
   ): Promise<DefaultModelSettings> {

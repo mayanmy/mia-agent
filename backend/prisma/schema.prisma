@@ -41,20 +41,22 @@ model ModelProvider {
 }
 
 model ModelConfig {
-  id             String          @id @default(uuid()) @db.Uuid
-  providerId     String          @map("provider_id") @db.Uuid
-  modelName      String          @map("model_name")
-  modelType      ModelConfigType @map("model_type")
-  credentialName String          @default("") @map("credential_name")
-  contextLength  Int             @default(4096) @map("context_length")
-  enabled        Boolean         @default(true)
-  timeoutSeconds Int             @default(120) @map("timeout_seconds")
-  maxTokens      Int?            @map("max_tokens")
-  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt      DateTime?       @map("deleted_at") @db.Timestamptz(6)
-  provider       ModelProvider   @relation(fields: [providerId], references: [id])
-  agents         Agent[]
+  id                       String                @id @default(uuid()) @db.Uuid
+  providerId               String                @map("provider_id") @db.Uuid
+  modelName                String                @map("model_name")
+  modelType                ModelConfigType       @map("model_type")
+  credentialName           String                @default("") @map("credential_name")
+  contextLength            Int                   @default(4096) @map("context_length")
+  enabled                  Boolean               @default(true)
+  timeoutSeconds           Int                   @default(120) @map("timeout_seconds")
+  maxTokens                Int?                  @map("max_tokens")
+  createdAt                DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                DateTime?             @map("deleted_at") @db.Timestamptz(6)
+  provider                 ModelProvider         @relation(fields: [providerId], references: [id])
+  agents                   Agent[]
+  knowledgeBases           KnowledgeBase[]
+  knowledgeEmbeddings      KnowledgeEmbedding[]
   defaultChatSettings      DefaultModelSetting[] @relation("DefaultChatModel")
   defaultEmbeddingSettings DefaultModelSetting[] @relation("DefaultEmbeddingModel")
 
@@ -79,25 +81,26 @@ model DefaultModelSetting {
 }
 
 model Agent {
-  id               String      @id @default(uuid()) @db.Uuid
-  name             String
-  description      String      @default("")
-  systemPrompt     String      @map("system_prompt") @db.Text
-  modelConfigId    String      @map("model_config_id") @db.Uuid
-  temperature      Decimal     @default(0.70) @db.Decimal(3, 2)
-  maxTokens        Int?        @map("max_tokens")
-  timeoutSeconds   Int         @default(120) @map("timeout_seconds")
-  historyTurns     Int         @default(6) @map("history_turns")
-  generationParams Json?       @map("generation_params") @db.JsonB
-  enabled          Boolean     @default(true)
-  published        Boolean     @default(false)
-  publishedAt      DateTime?   @map("published_at") @db.Timestamptz(6)
-  shareToken       String?     @unique(map: "uq_agents_share_token") @map("share_token")
-  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt        DateTime?   @map("deleted_at") @db.Timestamptz(6)
-  modelConfig      ModelConfig @relation(fields: [modelConfigId], references: [id])
-  agentTools       AgentTool[]
+  id                  String               @id @default(uuid()) @db.Uuid
+  name                String
+  description         String               @default("")
+  systemPrompt        String               @map("system_prompt") @db.Text
+  modelConfigId       String               @map("model_config_id") @db.Uuid
+  temperature         Decimal              @default(0.70) @db.Decimal(3, 2)
+  maxTokens           Int?                 @map("max_tokens")
+  timeoutSeconds      Int                  @default(120) @map("timeout_seconds")
+  historyTurns        Int                  @default(6) @map("history_turns")
+  generationParams    Json?                @map("generation_params") @db.JsonB
+  enabled             Boolean              @default(true)
+  published           Boolean              @default(false)
+  publishedAt         DateTime?            @map("published_at") @db.Timestamptz(6)
+  shareToken          String?              @unique(map: "uq_agents_share_token") @map("share_token")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime?            @map("deleted_at") @db.Timestamptz(6)
+  modelConfig         ModelConfig          @relation(fields: [modelConfigId], references: [id])
+  agentTools          AgentTool[]
+  agentKnowledgeBases AgentKnowledgeBase[]
 
   @@index([createdAt(sort: Desc)], map: "idx_agents_created_at")
   @@index([modelConfigId], map: "idx_agents_model_config_id")
@@ -140,4 +143,94 @@ model ToolCallLog {
   @@index([toolId, createdAt(sort: Desc)], map: "idx_tool_call_logs_tool_id_created_at")
   @@index([status, createdAt(sort: Desc)], map: "idx_tool_call_logs_status_created_at")
   @@map("tool_call_logs")
+}
+
+model KnowledgeBase {
+  id                     String               @id @default(uuid()) @db.Uuid
+  name                   String
+  description            String               @default("")
+  embeddingModelConfigId String               @map("embedding_model_config_id") @db.Uuid
+  enabled                Boolean              @default(true)
+  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt              DateTime?            @map("deleted_at") @db.Timestamptz(6)
+  embeddingModelConfig   ModelConfig          @relation(fields: [embeddingModelConfigId], references: [id])
+  documents              KnowledgeDocument[]
+  chunks                 KnowledgeChunk[]
+  agentKnowledgeBases    AgentKnowledgeBase[]
+
+  @@index([createdAt(sort: Desc)], map: "idx_knowledge_bases_created_at")
+  @@index([embeddingModelConfigId], map: "idx_knowledge_bases_embedding_model_config_id")
+  @@index([enabled, createdAt(sort: Desc)], map: "idx_knowledge_bases_enabled_created_at")
+  @@map("knowledge_bases")
+}
+
+model KnowledgeDocument {
+  id               String           @id @default(uuid()) @db.Uuid
+  knowledgeBaseId  String           @map("knowledge_base_id") @db.Uuid
+  filename         String
+  originalFilename String           @map("original_filename")
+  mimeType         String           @map("mime_type")
+  fileSize         BigInt           @map("file_size")
+  fileHash         String           @map("file_hash")
+  storagePath      String           @map("storage_path")
+  status           String
+  errorMessage     String?          @map("error_message") @db.Text
+  chunkCount       Int              @default(0) @map("chunk_count")
+  indexedAt        DateTime?        @map("indexed_at") @db.Timestamptz(6)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz(6)
+  knowledgeBase    KnowledgeBase    @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunks           KnowledgeChunk[]
+
+  @@index([knowledgeBaseId, createdAt(sort: Desc)], map: "idx_knowledge_documents_knowledge_base_id_created_at")
+  @@index([knowledgeBaseId, status, createdAt(sort: Desc)], map: "idx_knowledge_documents_knowledge_base_id_status_created_at")
+  @@index([fileHash], map: "idx_knowledge_documents_file_hash")
+  @@map("knowledge_documents")
+}
+
+model KnowledgeChunk {
+  id              String              @id @default(uuid()) @db.Uuid
+  knowledgeBaseId String              @map("knowledge_base_id") @db.Uuid
+  documentId      String              @map("document_id") @db.Uuid
+  chunkIndex      Int                 @map("chunk_index")
+  content         String              @db.Text
+  tokenCount      Int?                @map("token_count")
+  metadata        Json?               @db.JsonB
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt       DateTime?           @map("deleted_at") @db.Timestamptz(6)
+  knowledgeBase   KnowledgeBase       @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  document        KnowledgeDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  embedding       KnowledgeEmbedding?
+
+  @@index([documentId, chunkIndex], map: "idx_knowledge_chunks_document_id_chunk_index")
+  @@index([knowledgeBaseId, createdAt(sort: Desc)], map: "idx_knowledge_chunks_knowledge_base_id_created_at")
+  @@map("knowledge_chunks")
+}
+
+model KnowledgeEmbedding {
+  id                     String                @id @default(uuid()) @db.Uuid
+  knowledgeBaseId        String                @map("knowledge_base_id") @db.Uuid
+  chunkId                String                @unique(map: "uq_knowledge_embeddings_chunk_id") @map("chunk_id") @db.Uuid
+  embeddingModelConfigId String                @map("embedding_model_config_id") @db.Uuid
+  embedding              Unsupported("vector")
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  chunk                  KnowledgeChunk        @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  embeddingModelConfig   ModelConfig           @relation(fields: [embeddingModelConfigId], references: [id])
+
+  @@index([knowledgeBaseId, embeddingModelConfigId], map: "idx_knowledge_embeddings_kb_model")
+  @@map("knowledge_embeddings")
+}
+
+model AgentKnowledgeBase {
+  agentId         String        @map("agent_id") @db.Uuid
+  knowledgeBaseId String        @map("knowledge_base_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  agent           Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+
+  @@id([agentId, knowledgeBaseId])
+  @@index([knowledgeBaseId], map: "idx_agent_knowledge_bases_knowledge_base_id")
+  @@map("agent_knowledge_bases")
 }
