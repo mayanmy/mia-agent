@@ -13,6 +13,12 @@ export type KnowledgeBaseQueryDto = {
   enabled?: string;
 };
 
+export type KnowledgeDocumentQueryDto = {
+  page?: string;
+  pageSize?: string;
+  status?: string;
+};
+
 export type KnowledgeBaseListItem = {
   id: string;
   name: string;
@@ -29,3 +35,25 @@ export type KnowledgeBaseListItem = {
 };
 
 export type KnowledgeBaseDetail = KnowledgeBaseListItem;
+
+export type KnowledgeDocumentListItem = {
+  id: string;
+  knowledgeBaseId: string;
+  filename: string;
+  originalFilename: string;
+  mimeType: string;
+  fileSize: string;
+  status: string;
+  errorMessage: string | null;
+  chunkCount: number;
+  indexedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type UploadedKnowledgeFile = {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer?: Buffer;
+};

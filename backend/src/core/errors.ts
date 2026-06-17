@@ -26,7 +26,9 @@ export const ErrorCodes = {
   knowledge: {
     notFound: 4001,
     nameExists: 4002,
-    invalidEmbeddingModel: 4003
+    invalidEmbeddingModel: 4003,
+    invalidDocument: 4004,
+    documentNotFound: 4005
   }
 } as const;
 

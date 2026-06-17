@@ -9,6 +9,7 @@ export type AppConfig = {
   port: number;
   corsOrigins: string[];
   databaseUrl: string | undefined;
+  knowledgeStorageDir: string;
   toolsHttpAllowedHosts: string[];
   toolsHttpAllowLocalhost: boolean;
 };
@@ -111,6 +112,10 @@ export function getConfig(): AppConfig {
     port: readPort(),
     corsOrigins: readCorsOrigins(),
     databaseUrl: process.env.DATABASE_URL,
+    knowledgeStorageDir: resolve(
+      process.cwd(),
+      process.env.MIA_KNOWLEDGE_STORAGE_DIR ?? "storage/knowledge"
+    ),
     toolsHttpAllowedHosts: readToolsHttpAllowedHosts(),
     toolsHttpAllowLocalhost: readBooleanEnv(
       "TOOLS_HTTP_ALLOW_LOCALHOST",

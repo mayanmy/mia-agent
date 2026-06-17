@@ -9,7 +9,8 @@ export function KnowledgeBaseTable({
   pagination,
   onPageChange,
   onEdit,
-  onDelete
+  onDelete,
+  onOpenDocuments
 }: {
   knowledgeBases: KnowledgeBaseTableItem[];
   loading: boolean;
@@ -17,6 +18,7 @@ export function KnowledgeBaseTable({
   onPageChange: (page: number, pageSize: number) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onOpenDocuments: (knowledgeBase: KnowledgeBaseTableItem) => void;
 }) {
   const columns: TableProps<KnowledgeBaseTableItem>["columns"] = [
     {
@@ -73,9 +75,12 @@ export function KnowledgeBaseTable({
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 140,
+      width: 180,
       render: (_, record) => (
         <Space size={4}>
+          <Button size="small" type="link" onClick={() => onOpenDocuments(record)}>
+            文档
+          </Button>
           <Button size="small" type="link" onClick={() => onEdit(record.id)}>
             编辑
           </Button>

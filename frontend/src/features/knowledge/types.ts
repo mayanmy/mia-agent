@@ -1,4 +1,4 @@
-import type { KnowledgeBaseListItem } from "./api";
+import type { KnowledgeBaseListItem, KnowledgeDocumentListItem } from "./api";
 
 export type KnowledgeBaseFormValues = {
   name: string;
@@ -8,3 +8,5 @@ export type KnowledgeBaseFormValues = {
 };
 
 export type KnowledgeBaseTableItem = KnowledgeBaseListItem;
+
+export type KnowledgeDocumentTableItem = KnowledgeDocumentListItem;

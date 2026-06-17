@@ -14,10 +14,11 @@ export type PageResult<T> = {
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const isFormData = init?.body instanceof FormData;
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...init?.headers
     }
   });

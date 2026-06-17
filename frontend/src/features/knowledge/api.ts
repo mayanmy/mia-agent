@@ -17,6 +17,21 @@ export type KnowledgeBaseListItem = {
 
 export type KnowledgeBaseDetail = KnowledgeBaseListItem;
 
+export type KnowledgeDocumentListItem = {
+  id: string;
+  knowledgeBaseId: string;
+  filename: string;
+  originalFilename: string;
+  mimeType: string;
+  fileSize: string;
+  status: string;
+  errorMessage: string | null;
+  chunkCount: number;
+  indexedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type KnowledgeBasePayload = {
   name: string;
   description: string;
@@ -56,6 +71,38 @@ export function updateKnowledgeBase(
 
 export function deleteKnowledgeBase(id: string): Promise<null> {
   return request<null>(`/api/v1/knowledge-bases/${id}`, {
+    method: "DELETE"
+  });
+}
+
+export function listKnowledgeDocuments(
+  knowledgeBaseId: string,
+  page = 1,
+  pageSize = 20
+): Promise<PageResult<KnowledgeDocumentListItem>> {
+  return request<PageResult<KnowledgeDocumentListItem>>(
+    `/api/v1/knowledge-bases/${knowledgeBaseId}/documents?page=${page}&pageSize=${pageSize}`
+  );
+}
+
+export function uploadKnowledgeDocument(
+  knowledgeBaseId: string,
+  file: File
+): Promise<KnowledgeDocumentListItem> {
+  const body = new FormData();
+  body.append("file", file);
+
+  return request<KnowledgeDocumentListItem>(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents`, {
+    method: "POST",
+    body
+  });
+}
+
+export function deleteKnowledgeDocument(
+  knowledgeBaseId: string,
+  documentId: string
+): Promise<null> {
+  return request<null>(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents/${documentId}`, {
     method: "DELETE"
   });
 }

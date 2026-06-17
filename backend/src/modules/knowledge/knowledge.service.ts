@@ -1,6 +1,10 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { ModelConfigType, Prisma } from "@prisma/client";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { basename, extname, join } from "node:path";
 
+import { getConfig } from "../../core/config";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PageResult } from "../../core/result";
@@ -11,8 +15,22 @@ import {
   KnowledgeBaseDetail,
   KnowledgeBaseListItem,
   KnowledgeBaseQueryDto,
-  KnowledgeBaseUpdateDto
+  KnowledgeBaseUpdateDto,
+  KnowledgeDocumentListItem,
+  KnowledgeDocumentQueryDto,
+  UploadedKnowledgeFile
 } from "./dto/knowledge.dto";
+
+const MAX_DOCUMENT_FILE_SIZE = 20 * 1024 * 1024;
+const ALLOWED_DOCUMENT_EXTENSIONS = new Set([
+  ".txt",
+  ".md",
+  ".markdown",
+  ".pdf",
+  ".docx",
+  ".csv",
+  ".json"
+]);
 
 type KnowledgeBaseWithStats = Prisma.KnowledgeBaseGetPayload<{
   include: {
@@ -149,6 +167,118 @@ export class KnowledgeService {
     });
   }
 
+  async listKnowledgeDocuments(
+    knowledgeBaseId: string,
+    query: KnowledgeDocumentQueryDto
+  ): Promise<PageResult<KnowledgeDocumentListItem>> {
+    await this.ensureKnowledgeBaseExists(knowledgeBaseId);
+    const page = normalizePageQuery(query);
+    const where: Prisma.KnowledgeDocumentWhereInput = {
+      knowledgeBaseId,
+      deletedAt: null,
+      ...(query.status ? { status: this.normalizeDocumentStatus(query.status) } : {})
+    };
+
+    const [documents, total] = await this.prisma.$transaction([
+      this.prisma.knowledgeDocument.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: page.skip,
+        take: page.take
+      }),
+      this.prisma.knowledgeDocument.count({ where })
+    ]);
+
+    return createPageResult(
+      documents.map((document) => this.toKnowledgeDocumentListItem(document)),
+      total,
+      page.page,
+      page.pageSize
+    );
+  }
+
+  async uploadKnowledgeDocument(
+    knowledgeBaseId: string,
+    file: UploadedKnowledgeFile | undefined
+  ): Promise<KnowledgeDocumentListItem> {
+    await this.ensureKnowledgeBaseExists(knowledgeBaseId);
+    const normalizedFile = this.validateUploadedDocument(file);
+    const documentId = randomUUID();
+    const originalFilename = basename(normalizedFile.originalname);
+    const filename = this.createStoredFilename(documentId, originalFilename);
+    const storagePath = join(getConfig().knowledgeStorageDir, knowledgeBaseId, filename);
+    const fileHash = createHash("sha256").update(normalizedFile.buffer).digest("hex");
+
+    await mkdir(join(getConfig().knowledgeStorageDir, knowledgeBaseId), { recursive: true });
+    await writeFile(storagePath, normalizedFile.buffer);
+
+    try {
+      const document = await this.prisma.knowledgeDocument.create({
+        data: {
+          id: documentId,
+          knowledgeBaseId,
+          filename,
+          originalFilename,
+          mimeType: normalizedFile.mimetype || "application/octet-stream",
+          fileSize: normalizedFile.size,
+          fileHash,
+          storagePath,
+          status: "uploaded"
+        }
+      });
+
+      return this.toKnowledgeDocumentListItem(document);
+    } catch (error) {
+      await unlink(storagePath).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async deleteKnowledgeDocument(knowledgeBaseId: string, documentId: string): Promise<void> {
+    await this.ensureKnowledgeBaseExists(knowledgeBaseId);
+    const existing = await this.prisma.knowledgeDocument.findFirst({
+      where: {
+        id: documentId,
+        knowledgeBaseId,
+        deletedAt: null
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!existing) {
+      throw new AppError(
+        ErrorCodes.knowledge.documentNotFound,
+        "knowledge document not found",
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    const deletedAt = new Date();
+
+    await this.prisma.$transaction([
+      this.prisma.knowledgeDocument.update({
+        where: {
+          id: documentId
+        },
+        data: {
+          deletedAt,
+          status: "deleted"
+        }
+      }),
+      this.prisma.knowledgeChunk.updateMany({
+        where: {
+          documentId,
+          deletedAt: null
+        },
+        data: {
+          deletedAt
+        }
+      })
+    ]);
+  }
+
   async ensureKnowledgeBaseIdsExist(ids: string[]): Promise<void> {
     if (ids.length === 0) {
       return;
@@ -239,6 +369,53 @@ export class KnowledgeService {
     }
 
     throw new AppError(ErrorCodes.common.badRequest, "enabled must be true or false");
+  }
+
+  private normalizeDocumentStatus(value: string): string {
+    const status = value.trim();
+
+    if (!["uploaded", "pending", "processing", "indexed", "failed", "deleted"].includes(status)) {
+      throw new AppError(ErrorCodes.common.badRequest, "status is invalid");
+    }
+
+    return status;
+  }
+
+  private validateUploadedDocument(file: UploadedKnowledgeFile | undefined): Required<UploadedKnowledgeFile> {
+    if (!file || !file.buffer || file.buffer.length === 0) {
+      throw new AppError(ErrorCodes.knowledge.invalidDocument, "file is required");
+    }
+
+    if (file.size > MAX_DOCUMENT_FILE_SIZE) {
+      throw new AppError(
+        ErrorCodes.knowledge.invalidDocument,
+        "file size cannot exceed 20MB"
+      );
+    }
+
+    const extension = extname(file.originalname).toLowerCase();
+
+    if (!ALLOWED_DOCUMENT_EXTENSIONS.has(extension)) {
+      throw new AppError(
+        ErrorCodes.knowledge.invalidDocument,
+        "only txt, md, pdf, docx, csv, and json files are supported"
+      );
+    }
+
+    return {
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      buffer: file.buffer
+    };
+  }
+
+  private createStoredFilename(documentId: string, originalFilename: string): string {
+    const extension = extname(originalFilename).toLowerCase() || ".bin";
+    const safeBaseName =
+      basename(originalFilename, extension).replace(/[^a-zA-Z0-9._-]/gu, "_") || "document";
+
+    return `${documentId}-${safeBaseName}${extension}`;
   }
 
   private async ensureNameAvailable(name: string, excludeId?: string): Promise<void> {
@@ -364,6 +541,25 @@ export class KnowledgeService {
       enabled: knowledgeBase.enabled,
       createdAt: knowledgeBase.createdAt,
       updatedAt: knowledgeBase.updatedAt
+    };
+  }
+
+  private toKnowledgeDocumentListItem(
+    document: Prisma.KnowledgeDocumentGetPayload<object>
+  ): KnowledgeDocumentListItem {
+    return {
+      id: document.id,
+      knowledgeBaseId: document.knowledgeBaseId,
+      filename: document.filename,
+      originalFilename: document.originalFilename,
+      mimeType: document.mimeType,
+      fileSize: document.fileSize.toString(),
+      status: document.status,
+      errorMessage: document.errorMessage,
+      chunkCount: document.chunkCount,
+      indexedAt: document.indexedAt,
+      createdAt: document.createdAt,
+      updatedAt: document.updatedAt
     };
   }
 }

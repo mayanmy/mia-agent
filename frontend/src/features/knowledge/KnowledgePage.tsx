@@ -6,13 +6,21 @@ import type { ModelConfigListItem } from "../model-providers/api";
 import {
   createKnowledgeBase,
   deleteKnowledgeBase,
+  deleteKnowledgeDocument,
   getKnowledgeBase,
+  listKnowledgeDocuments,
   listKnowledgeBases,
-  updateKnowledgeBase
+  updateKnowledgeBase,
+  uploadKnowledgeDocument
 } from "./api";
 import { KnowledgeBaseFormModal } from "./components/KnowledgeBaseFormModal";
 import { KnowledgeBaseTable } from "./components/KnowledgeBaseTable";
-import type { KnowledgeBaseFormValues, KnowledgeBaseTableItem } from "./types";
+import { KnowledgeDocumentDrawer } from "./components/KnowledgeDocumentDrawer";
+import type {
+  KnowledgeBaseFormValues,
+  KnowledgeBaseTableItem,
+  KnowledgeDocumentTableItem
+} from "./types";
 import "./knowledge.less";
 
 export function KnowledgePage() {
@@ -22,9 +30,21 @@ export function KnowledgePage() {
   const [modelConfigs, setModelConfigs] = useState<ModelConfigListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [documentLoading, setDocumentLoading] = useState(false);
+  const [documentUploading, setDocumentUploading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [documentDrawerOpen, setDocumentDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [activeKnowledgeBase, setActiveKnowledgeBase] = useState<KnowledgeBaseTableItem | null>(
+    null
+  );
+  const [documents, setDocuments] = useState<KnowledgeDocumentTableItem[]>([]);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
+  const [documentPagination, setDocumentPagination] = useState({
+    page: 1,
+    pageSize: 20,
+    total: 0
+  });
 
   const embeddingModelOptions = useMemo(
     () =>
@@ -148,10 +168,96 @@ export function KnowledgePage() {
     }
   }
 
+  async function openDocumentDrawer(knowledgeBase: KnowledgeBaseTableItem) {
+    setActiveKnowledgeBase(knowledgeBase);
+    setDocumentDrawerOpen(true);
+    await refreshDocuments(knowledgeBase.id, 1, documentPagination.pageSize);
+  }
+
+  async function refreshDocuments(
+    knowledgeBaseId = activeKnowledgeBase?.id,
+    nextPage = documentPagination.page,
+    nextPageSize = documentPagination.pageSize
+  ) {
+    if (!knowledgeBaseId) {
+      return;
+    }
+
+    setDocumentLoading(true);
+
+    try {
+      const documentPage = await listKnowledgeDocuments(knowledgeBaseId, nextPage, nextPageSize);
+      setDocuments(documentPage.list);
+      setDocumentPagination({
+        page: documentPage.page,
+        pageSize: documentPage.pageSize,
+        total: documentPage.total
+      });
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载文档失败");
+    } finally {
+      setDocumentLoading(false);
+    }
+  }
+
+  async function handleDocumentUpload(file: File) {
+    if (!activeKnowledgeBase) {
+      return;
+    }
+
+    setDocumentUploading(true);
+
+    try {
+      await uploadKnowledgeDocument(activeKnowledgeBase.id, file);
+      message.success("文档已上传");
+      await Promise.all([
+        refreshDocuments(activeKnowledgeBase.id, 1, documentPagination.pageSize),
+        refresh(pagination.page, pagination.pageSize)
+      ]);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "上传文档失败");
+      throw error;
+    } finally {
+      setDocumentUploading(false);
+    }
+  }
+
+  async function handleDocumentDelete(documentId: string) {
+    if (!activeKnowledgeBase) {
+      return;
+    }
+
+    setDocumentLoading(true);
+
+    try {
+      await deleteKnowledgeDocument(activeKnowledgeBase.id, documentId);
+      message.success("文档已删除");
+      await Promise.all([
+        refreshDocuments(activeKnowledgeBase.id, documentPagination.page, documentPagination.pageSize),
+        refresh(pagination.page, pagination.pageSize)
+      ]);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "删除文档失败");
+    } finally {
+      setDocumentLoading(false);
+    }
+  }
+
   function closeDialog() {
     setDialogOpen(false);
     setEditingId(null);
     form.resetFields();
+  }
+
+  function closeDocumentDrawer() {
+    setDocumentDrawerOpen(false);
+    setActiveKnowledgeBase(null);
+    setDocuments([]);
+    setDocumentPagination({
+      page: 1,
+      pageSize: 20,
+      total: 0
+    });
   }
 
   return (
@@ -182,6 +288,7 @@ export function KnowledgePage() {
           pagination={pagination}
           onDelete={confirmDelete}
           onEdit={(id) => void openEditDialog(id)}
+          onOpenDocuments={(knowledgeBase) => void openDocumentDrawer(knowledgeBase)}
           onPageChange={(page, pageSize) => void refresh(page, pageSize)}
         />
       </section>
@@ -194,6 +301,20 @@ export function KnowledgePage() {
         saving={saving}
         onCancel={closeDialog}
         onSubmit={(values) => void handleSubmit(values)}
+      />
+
+      <KnowledgeDocumentDrawer
+        documents={documents}
+        knowledgeBase={activeKnowledgeBase}
+        loading={documentLoading}
+        open={documentDrawerOpen}
+        pagination={documentPagination}
+        uploading={documentUploading}
+        onClose={closeDocumentDrawer}
+        onDelete={(documentId) => void handleDocumentDelete(documentId)}
+        onPageChange={(page, pageSize) => void refreshDocuments(undefined, page, pageSize)}
+        onRefresh={() => void refreshDocuments()}
+        onUpload={handleDocumentUpload}
       />
     </section>
   );
