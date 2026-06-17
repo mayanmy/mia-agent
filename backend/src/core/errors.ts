@@ -20,7 +20,8 @@ export const ErrorCodes = {
   agent: {
     notFound: 3001,
     invalidModelConfig: 3002,
-    invalidTools: 3003
+    invalidTools: 3003,
+    invalidKnowledgeBases: 3004
   },
   knowledge: {
     notFound: 4001,

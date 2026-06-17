@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Form, Modal, Space, message } from "antd";
 
+import { listKnowledgeBases, type KnowledgeBaseListItem } from "../knowledge/api";
 import { getDefaultModelSettings, listModelConfigs, listProviders } from "../model-providers/api";
 import type { ModelConfigListItem, ProviderListItem } from "../model-providers/api";
 import { listTools, type ToolListItem } from "../tools/api";
@@ -9,11 +10,13 @@ import {
   createAgent,
   deleteAgent,
   getAgent,
+  getAgentKnowledgeBases,
   getAgentTools,
   listAgents,
   publishAgent,
   unpublishAgent,
   updateAgent,
+  updateAgentKnowledgeBases,
   updateAgentTools
 } from "./api";
 import { AgentEmbedModal } from "./components/AgentEmbedModal";
@@ -31,6 +34,7 @@ export function AgentsPage() {
   const [providers, setProviders] = useState<ProviderListItem[]>([]);
   const [modelConfigs, setModelConfigs] = useState<ModelConfigListItem[]>([]);
   const [tools, setTools] = useState<ToolListItem[]>([]);
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseListItem[]>([]);
   const [defaultChatModelConfigId, setDefaultChatModelConfigId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -39,6 +43,7 @@ export function AgentsPage() {
   const [embedScenario, setEmbedScenario] = useState<EmbedScenario>("single");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loadedToolIds, setLoadedToolIds] = useState<string[]>([]);
+  const [loadedKnowledgeBaseIds, setLoadedKnowledgeBaseIds] = useState<string[]>([]);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
 
   const modelOptions = useMemo(() => {
@@ -66,10 +71,11 @@ export function AgentsPage() {
     setLoading(true);
 
     try {
-      const [agentPage, providerPage, modelConfigPage] = await Promise.all([
+      const [agentPage, providerPage, modelConfigPage, knowledgeBasePage] = await Promise.all([
         listAgents(nextPage, nextPageSize),
         listProviders(1, 100),
-        listModelConfigs(1, 100)
+        listModelConfigs(1, 100),
+        listKnowledgeBases(1, 100)
       ]);
       const [defaultSettings, toolList] = await Promise.all([
         getDefaultModelSettings().catch(() => null),
@@ -79,6 +85,7 @@ export function AgentsPage() {
       setAgents(agentPage.list);
       setProviders(providerPage.list);
       setModelConfigs(modelConfigPage.list);
+      setKnowledgeBases(knowledgeBasePage.list);
       setTools(toolList);
       setDefaultChatModelConfigId(defaultSettings?.chatModelConfigId ?? null);
       setPagination({
@@ -96,6 +103,7 @@ export function AgentsPage() {
   function openCreateDialog() {
     setEditingId(null);
     setLoadedToolIds([]);
+    setLoadedKnowledgeBaseIds([]);
     form.setFieldsValue({
       ...defaultAgentFormValues,
       modelConfigId: resolveDefaultChatModelConfigId()
@@ -120,12 +128,18 @@ export function AgentsPage() {
     setLoading(true);
 
     try {
-      const [agent, bindings] = await Promise.all([getAgent(id), getAgentTools(id)]);
+      const [agent, toolBindings, knowledgeBaseBindings] = await Promise.all([
+        getAgent(id),
+        getAgentTools(id),
+        getAgentKnowledgeBases(id)
+      ]);
       setEditingId(agent.id);
-      setLoadedToolIds(bindings.toolIds);
+      setLoadedToolIds(toolBindings.toolIds);
+      setLoadedKnowledgeBaseIds(knowledgeBaseBindings.knowledgeBaseIds);
       form.setFieldsValue({
         ...toAgentFormValues(agent),
-        toolIds: bindings.toolIds
+        toolIds: toolBindings.toolIds,
+        knowledgeBaseIds: knowledgeBaseBindings.knowledgeBaseIds
       });
       setDialogOpen(true);
     } catch (error) {
@@ -153,12 +167,19 @@ export function AgentsPage() {
       }
 
       if (agentId) {
-        await updateAgentTools(agentId, resolveSubmittedToolIds(values.toolIds));
+        await Promise.all([
+          updateAgentTools(agentId, resolveSubmittedToolIds(values.toolIds)),
+          updateAgentKnowledgeBases(
+            agentId,
+            resolveSubmittedKnowledgeBaseIds(values.knowledgeBaseIds)
+          )
+        ]);
       }
 
       setDialogOpen(false);
       setEditingId(null);
       setLoadedToolIds([]);
+      setLoadedKnowledgeBaseIds([]);
       form.resetFields();
       await refresh();
     } catch (error) {
@@ -289,6 +310,7 @@ export function AgentsPage() {
     setDialogOpen(false);
     setEditingId(null);
     setLoadedToolIds([]);
+    setLoadedKnowledgeBaseIds([]);
     form.resetFields();
   }
 
@@ -300,6 +322,18 @@ export function AgentsPage() {
     }
 
     return editingId ? loadedToolIds : [];
+  }
+
+  function resolveSubmittedKnowledgeBaseIds(
+    value: AgentFormValues["knowledgeBaseIds"] | undefined
+  ): string[] {
+    const fieldValue = value ?? form.getFieldValue("knowledgeBaseIds");
+
+    if (Array.isArray(fieldValue)) {
+      return fieldValue;
+    }
+
+    return editingId ? loadedKnowledgeBaseIds : [];
   }
 
   return (
@@ -337,6 +371,7 @@ export function AgentsPage() {
         editing={Boolean(editingId)}
         form={form}
         modelOptions={modelOptions}
+        knowledgeBases={knowledgeBases}
         open={dialogOpen}
         saving={saving}
         tools={tools}

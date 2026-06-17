@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PageResult } from "../../core/result";
+import { KnowledgeService } from "../knowledge/knowledge.service";
 import { ModelProvidersService } from "../model-providers/model-providers.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ToolsService } from "../tools/tools.service";
@@ -12,6 +13,8 @@ import {
   AgentCreateDto,
   AgentDetail,
   AgentGenerationParams,
+  AgentKnowledgeBaseBindingDto,
+  AgentKnowledgeBaseBindingResult,
   AgentListItem,
   AgentModelConfigSummary,
   AgentPublishResult,
@@ -35,6 +38,7 @@ type AgentWithModelConfig = Prisma.AgentGetPayload<{
       };
     };
     agentTools: true;
+    agentKnowledgeBases: true;
     _count: {
       select: {
         agentTools: true;
@@ -65,7 +69,8 @@ export class AgentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly modelProvidersService: ModelProvidersService,
-    private readonly toolsService: ToolsService
+    private readonly toolsService: ToolsService,
+    private readonly knowledgeService: KnowledgeService
   ) {}
 
   async listAgents(query: AgentQueryDto): Promise<PageResult<AgentListItem>> {
@@ -85,6 +90,7 @@ export class AgentsService {
             }
           },
           agentTools: true,
+          agentKnowledgeBases: true,
           _count: {
             select: {
               agentTools: true
@@ -133,6 +139,7 @@ export class AgentsService {
           }
         },
         agentTools: true,
+        agentKnowledgeBases: true,
         _count: {
           select: {
             agentTools: true
@@ -186,6 +193,7 @@ export class AgentsService {
           }
         },
         agentTools: true,
+        agentKnowledgeBases: true,
         _count: {
           select: {
             agentTools: true
@@ -319,7 +327,9 @@ export class AgentsService {
       timeoutSeconds: agent.timeoutSeconds,
       historyTurns: agent.historyTurns,
       generationParams: this.toGenerationParams(agent.generationParams),
-      knowledgeBaseIds: [],
+      knowledgeBaseIds: agent.agentKnowledgeBases.map(
+        (knowledgeBase) => knowledgeBase.knowledgeBaseId
+      ),
       toolIds: agent.agentTools.map((tool) => tool.toolId)
     };
   }
@@ -371,6 +381,56 @@ export class AgentsService {
     return {
       agentId: id,
       toolIds
+    };
+  }
+
+  async getAgentKnowledgeBases(id: string): Promise<AgentKnowledgeBaseBindingResult> {
+    await this.ensureAgentExists(id);
+
+    const knowledgeBases = await this.prisma.agentKnowledgeBase.findMany({
+      where: {
+        agentId: id
+      },
+      orderBy: {
+        createdAt: "asc"
+      }
+    });
+
+    return {
+      agentId: id,
+      knowledgeBaseIds: knowledgeBases.map((knowledgeBase) => knowledgeBase.knowledgeBaseId)
+    };
+  }
+
+  async updateAgentKnowledgeBases(
+    id: string,
+    payload: AgentKnowledgeBaseBindingDto
+  ): Promise<AgentKnowledgeBaseBindingResult> {
+    await this.ensureAgentExists(id);
+    const knowledgeBaseIds = this.normalizeKnowledgeBaseIds(payload.knowledgeBaseIds);
+    await this.knowledgeService.ensureKnowledgeBaseIdsExist(knowledgeBaseIds);
+
+    await this.prisma.$transaction([
+      this.prisma.agentKnowledgeBase.deleteMany({
+        where: {
+          agentId: id
+        }
+      }),
+      ...(knowledgeBaseIds.length > 0
+        ? [
+            this.prisma.agentKnowledgeBase.createMany({
+              data: knowledgeBaseIds.map((knowledgeBaseId) => ({
+                agentId: id,
+                knowledgeBaseId
+              }))
+            })
+          ]
+        : [])
+    ]);
+
+    return {
+      agentId: id,
+      knowledgeBaseIds
     };
   }
 
@@ -554,6 +614,39 @@ export class AgentsService {
     return [...new Set(toolIds)];
   }
 
+  private normalizeKnowledgeBaseIds(value: unknown): string[] {
+    if (value === undefined || value === null) {
+      return [];
+    }
+
+    if (!Array.isArray(value)) {
+      throw new AppError(
+        ErrorCodes.agent.invalidKnowledgeBases,
+        "knowledgeBaseIds must be an array"
+      );
+    }
+
+    const knowledgeBaseIds = value.map((item) => {
+      if (typeof item !== "string" || item.trim().length === 0) {
+        throw new AppError(
+          ErrorCodes.agent.invalidKnowledgeBases,
+          "knowledgeBaseIds must contain non-empty strings"
+        );
+      }
+
+      return item.trim();
+    });
+
+    if (knowledgeBaseIds.length > 50) {
+      throw new AppError(
+        ErrorCodes.agent.invalidKnowledgeBases,
+        "knowledgeBaseIds cannot exceed 50 items"
+      );
+    }
+
+    return [...new Set(knowledgeBaseIds)];
+  }
+
   private ensureToolIdsExist(toolIds: string[]): void {
     if (toolIds.length === 0) {
       return;
@@ -659,6 +752,7 @@ export class AgentsService {
           }
         },
         agentTools: true,
+        agentKnowledgeBases: true,
         _count: {
           select: {
             agentTools: true
@@ -702,6 +796,9 @@ export class AgentsService {
       historyTurns: agent.historyTurns,
       generationParams: this.toGenerationParams(agent.generationParams),
       toolIds: agent.agentTools.map((tool) => tool.toolId),
+      knowledgeBaseIds: agent.agentKnowledgeBases.map(
+        (knowledgeBase) => knowledgeBase.knowledgeBaseId
+      ),
       modelConfig: this.toModelConfigSummary(agent)
     };
   }

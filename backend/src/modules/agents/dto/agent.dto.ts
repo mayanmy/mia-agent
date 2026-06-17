@@ -60,6 +60,7 @@ export type AgentDetail = AgentListItem & {
   historyTurns: number;
   generationParams: AgentGenerationParams | null;
   toolIds: string[];
+  knowledgeBaseIds: string[];
   modelConfig: AgentModelConfigSummary;
 };
 
@@ -70,6 +71,15 @@ export type AgentToolBindingDto = {
 export type AgentToolBindingResult = {
   agentId: string;
   toolIds: string[];
+};
+
+export type AgentKnowledgeBaseBindingDto = {
+  knowledgeBaseIds?: string[];
+};
+
+export type AgentKnowledgeBaseBindingResult = {
+  agentId: string;
+  knowledgeBaseIds: string[];
 };
 
 export type AgentPublishResult = {

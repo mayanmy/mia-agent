@@ -10,6 +10,7 @@ export type AgentFormValues = {
   historyTurns: number;
   enabled: boolean;
   toolIds: string[];
+  knowledgeBaseIds: string[];
 };
 
 export type AgentTableItem = AgentListItem & {

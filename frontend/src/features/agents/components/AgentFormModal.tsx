@@ -1,9 +1,11 @@
 import { Form, Input, InputNumber, Modal, Select, Slider, Switch, Tabs } from "antd";
 import type { FormInstance } from "antd";
 
+import type { KnowledgeBaseListItem } from "../../knowledge/api";
 import type { ToolListItem } from "../../tools/api";
 import type { AgentFormValues } from "../types";
 import { defaultAgentFormValues } from "../utils/agent-form";
+import { AgentKnowledgeBaseSelector } from "./AgentKnowledgeBaseSelector";
 import { AgentToolSelector } from "./AgentToolSelector";
 
 export function AgentFormModal({
@@ -13,6 +15,7 @@ export function AgentFormModal({
   saving,
   modelOptions,
   tools,
+  knowledgeBases,
   onCancel,
   onSubmit
 }: {
@@ -22,10 +25,12 @@ export function AgentFormModal({
   saving: boolean;
   modelOptions: Array<{ label: string; options: Array<{ label: string; value: string }> }>;
   tools: ToolListItem[];
+  knowledgeBases: KnowledgeBaseListItem[];
   onCancel: () => void;
   onSubmit: (values: AgentFormValues) => void;
 }) {
   const selectedToolIds = Form.useWatch("toolIds", form) ?? [];
+  const selectedKnowledgeBaseIds = Form.useWatch("knowledgeBaseIds", form) ?? [];
 
   return (
     <Modal
@@ -97,6 +102,15 @@ export function AgentFormModal({
                     <Switch />
                   </Form.Item>
                 </div>
+              )
+            },
+            {
+              key: "knowledge",
+              label: `知识库绑定 (${selectedKnowledgeBaseIds.length})`,
+              children: (
+                <Form.Item className="agentFormFull" name="knowledgeBaseIds">
+                  <AgentKnowledgeBaseSelector knowledgeBases={knowledgeBases} />
+                </Form.Item>
               )
             },
             {

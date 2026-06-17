@@ -149,6 +149,34 @@ export class KnowledgeService {
     });
   }
 
+  async ensureKnowledgeBaseIdsExist(ids: string[]): Promise<void> {
+    if (ids.length === 0) {
+      return;
+    }
+
+    const existing = await this.prisma.knowledgeBase.findMany({
+      where: {
+        id: {
+          in: ids
+        },
+        enabled: true,
+        deletedAt: null
+      },
+      select: {
+        id: true
+      }
+    });
+    const existingIds = new Set(existing.map((item) => item.id));
+    const missingIds = ids.filter((id) => !existingIds.has(id));
+
+    if (missingIds.length > 0) {
+      throw new AppError(
+        ErrorCodes.agent.invalidKnowledgeBases,
+        `unknown or disabled knowledgeBaseIds: ${missingIds.join(", ")}`
+      );
+    }
+  }
+
   private validateCreate(payload: KnowledgeBaseCreateDto): KnowledgeBaseCreateData {
     return {
       name: this.requireNonEmptyString(payload.name, "name"),

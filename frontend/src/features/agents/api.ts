@@ -37,6 +37,7 @@ export type AgentDetail = AgentListItem & {
   historyTurns: number;
   generationParams: AgentGenerationParams | null;
   toolIds: string[];
+  knowledgeBaseIds: string[];
   modelConfig: AgentModelConfigSummary;
 };
 
@@ -123,5 +124,24 @@ export function updateAgentTools(id: string, toolIds: string[]): Promise<AgentTo
   return request<AgentToolBindingResult>(`/api/v1/agents/${id}/tools`, {
     method: "PUT",
     body: JSON.stringify({ toolIds })
+  });
+}
+
+export type AgentKnowledgeBaseBindingResult = {
+  agentId: string;
+  knowledgeBaseIds: string[];
+};
+
+export function getAgentKnowledgeBases(id: string): Promise<AgentKnowledgeBaseBindingResult> {
+  return request<AgentKnowledgeBaseBindingResult>(`/api/v1/agents/${id}/knowledge-bases`);
+}
+
+export function updateAgentKnowledgeBases(
+  id: string,
+  knowledgeBaseIds: string[]
+): Promise<AgentKnowledgeBaseBindingResult> {
+  return request<AgentKnowledgeBaseBindingResult>(`/api/v1/agents/${id}/knowledge-bases`, {
+    method: "PUT",
+    body: JSON.stringify({ knowledgeBaseIds })
   });
 }

@@ -10,7 +10,8 @@ export const defaultAgentFormValues: AgentFormValues = {
   maxTokens: null,
   historyTurns: 6,
   enabled: true,
-  toolIds: []
+  toolIds: [],
+  knowledgeBaseIds: []
 };
 
 export function toAgentPayload(values: AgentFormValues): AgentPayload {
@@ -36,6 +37,7 @@ export function toAgentFormValues(agent: AgentDetail): AgentFormValues {
     maxTokens: agent.maxTokens,
     historyTurns: agent.historyTurns,
     enabled: agent.enabled,
-    toolIds: agent.toolIds
+    toolIds: agent.toolIds,
+    knowledgeBaseIds: agent.knowledgeBaseIds
   };
 }

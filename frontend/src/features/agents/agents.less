@@ -63,12 +63,14 @@
   line-height: 1.6;
 }
 
-.toolSelector {
+.toolSelector,
+.knowledgeSelector {
   display: grid;
   gap: 12px;
 }
 
-.toolSelectorSummary {
+.toolSelectorSummary,
+.knowledgeSelectorSummary {
   align-items: center;
   color: #64748b;
   display: flex;
@@ -78,18 +80,21 @@
   justify-content: space-between;
 }
 
-.toolSelectorEmpty {
+.toolSelectorEmpty,
+.knowledgeSelectorEmpty {
   border: 1px dashed #d8dee8;
   border-radius: 8px;
   padding: 16px;
 }
 
-.toolCheckboxGroup {
+.toolCheckboxGroup,
+.knowledgeCheckboxGroup {
   display: grid;
   gap: 12px;
 }
 
-.toolOptionCard {
+.toolOptionCard,
+.knowledgeOptionCard {
   align-items: flex-start;
   border: 1px solid #d8dee8;
   border-radius: 8px;
@@ -101,45 +106,55 @@
     background 0.2s ease;
 }
 
-.toolOptionCard:hover {
+.toolOptionCard:hover,
+.knowledgeOptionCard:hover {
   border-color: #9db7e8;
 }
 
-.toolOptionCard.ant-checkbox-wrapper-checked {
+.toolOptionCard.ant-checkbox-wrapper-checked,
+.knowledgeOptionCard.ant-checkbox-wrapper-checked {
   background: #f6fbff;
   border-color: #1677ff;
 }
 
-.toolOptionCard .ant-checkbox {
+.toolOptionCard .ant-checkbox,
+.knowledgeOptionCard .ant-checkbox {
   margin-block-start: 3px;
 }
 
-.toolOption {
+.toolOption,
+.knowledgeOption {
   display: grid;
   gap: 6px;
   line-height: 1.4;
   min-width: 0;
 }
 
-.toolOptionHeader {
+.toolOptionHeader,
+.knowledgeOptionHeader {
   align-items: flex-start;
   display: flex;
   gap: 12px;
   justify-content: space-between;
 }
 
-.toolOptionName {
+.toolOptionName,
+.knowledgeOptionName {
   color: #111827;
   font-weight: 600;
 }
 
 .toolOptionId,
-.toolOptionDescription {
+.toolOptionDescription,
+.knowledgeOptionMeta,
+.knowledgeOptionDescription,
+.knowledgeOptionStats {
   color: #64748b;
   font-size: 12px;
 }
 
-.toolOptionDescription {
+.toolOptionDescription,
+.knowledgeOptionDescription {
   line-height: 1.6;
 }
 

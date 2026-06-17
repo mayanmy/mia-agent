@@ -4,6 +4,8 @@ import { PageResult } from "../../core/result";
 import {
   AgentCreateDto,
   AgentDetail,
+  AgentKnowledgeBaseBindingDto,
+  AgentKnowledgeBaseBindingResult,
   AgentListItem,
   AgentPublishResult,
   AgentQueryDto,
@@ -73,5 +75,20 @@ export class AgentsController {
     @Body() payload: AgentToolBindingDto
   ): Promise<AgentToolBindingResult> {
     return this.agentsService.updateAgentTools(id, payload);
+  }
+
+  @Get(":id/knowledge-bases")
+  async getAgentKnowledgeBases(
+    @Param("id") id: string
+  ): Promise<AgentKnowledgeBaseBindingResult> {
+    return this.agentsService.getAgentKnowledgeBases(id);
+  }
+
+  @Put(":id/knowledge-bases")
+  async updateAgentKnowledgeBases(
+    @Param("id") id: string,
+    @Body() payload: AgentKnowledgeBaseBindingDto
+  ): Promise<AgentKnowledgeBaseBindingResult> {
+    return this.agentsService.updateAgentKnowledgeBases(id, payload);
   }
 }
