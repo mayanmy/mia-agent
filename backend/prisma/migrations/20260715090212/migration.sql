@@ -1,1 +1,2 @@
+-- AlterTable
 ALTER TABLE "tool_call_logs" ALTER COLUMN "id" DROP DEFAULT;
