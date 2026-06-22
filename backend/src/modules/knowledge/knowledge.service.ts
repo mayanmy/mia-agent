@@ -328,6 +328,7 @@ export class KnowledgeService {
       }
     });
 
+    // 重新索引前先删除旧 embedding，避免旧向量继续参与后续检索。
     await this.prisma.knowledgeEmbedding.deleteMany({
       where: {
         chunk: {
@@ -436,6 +437,7 @@ export class KnowledgeService {
       input: chunks.map((chunk) => chunk.content)
     });
 
+    // embedding 必须和 chunk 顺序一一对应，后续写入时按同一索引绑定 chunkId。
     if (response.embeddings.length !== chunks.length) {
       throw new Error("embedding response count does not match chunk count");
     }
@@ -487,6 +489,7 @@ export class KnowledgeService {
   }): Promise<void> {
     const embeddingLiteral = `[${embedding.join(",")}]`;
 
+    // Prisma 不能直接写 Unsupported("vector") 字段，这里用参数化 raw SQL 写入 pgvector。
     await this.prisma.$executeRawUnsafe(
       `INSERT INTO "knowledge_embeddings" (
         "id",
@@ -504,6 +507,7 @@ export class KnowledgeService {
   }
 
   private async cleanupDocumentIndex(documentId: string): Promise<void> {
+    // 索引失败时清理半成品，保证 failed 文档不会留下可检索的脏 chunk/embedding。
     await this.prisma.knowledgeEmbedding.deleteMany({
       where: {
         chunk: {
