@@ -12,6 +12,8 @@ import {
   ChatCompletionResponse,
   ChatMessage,
   ChatStreamChunk,
+  EmbeddingRequest,
+  EmbeddingResponse,
   ProviderRuntimeConfig
 } from "./dto/llm.dto";
 
@@ -45,6 +47,26 @@ export class ModelProvidersGateway {
         maxTokens: request.maxTokens ?? config.maxTokens,
         tools: this.normalizeTools(request.tools),
         toolChoice: request.toolChoice,
+        signal: controller.signal
+      });
+    } catch (error) {
+      throw this.normalizeProviderError(error);
+    } finally {
+      clearTimeout(timeout);
+      request.signal?.removeEventListener("abort", abort);
+    }
+  }
+
+  async createEmbedding(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+    const { config, input, timeoutMs } = await this.prepareEmbeddingCall(request);
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    request.signal?.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await this.getClient(config.providerType).createEmbedding(config, {
+        input,
         signal: controller.signal
       });
     } catch (error) {
@@ -104,6 +126,31 @@ export class ModelProvidersGateway {
     };
   }
 
+  private async prepareEmbeddingCall(request: EmbeddingRequest): Promise<{
+    config: ProviderRuntimeConfig;
+    input: string | string[];
+    timeoutMs: number;
+  }> {
+    const modelConfig = await this.findModelConfig(request.modelConfigId);
+    const timeoutSeconds = request.timeoutSeconds ?? modelConfig.timeoutSeconds;
+
+    return {
+      config: {
+        providerId: modelConfig.provider.id,
+        providerType: modelConfig.provider.providerType,
+        baseUrl: modelConfig.provider.baseUrl,
+        apiKey: modelConfig.provider.apiKeyEncrypted
+          ? decryptSecret(modelConfig.provider.apiKeyEncrypted)
+          : "",
+        modelName: modelConfig.modelName,
+        timeoutSeconds,
+        maxTokens: modelConfig.maxTokens
+      },
+      input: this.requireEmbeddingInput(request.input),
+      timeoutMs: timeoutSeconds * 1000
+    };
+  }
+
   private async findModelConfig(id: string): Promise<ModelConfigWithProvider> {
     const modelConfig = await this.prisma.modelConfig.findFirst({
       where: {
@@ -158,6 +205,30 @@ export class ModelProvidersGateway {
         ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
         ...(message.toolCalls ? { toolCalls: message.toolCalls } : {})
       };
+    });
+  }
+
+  private requireEmbeddingInput(input: string | string[]): string | string[] {
+    if (typeof input === "string") {
+      const value = input.trim();
+
+      if (!value) {
+        throw new AppError(ErrorCodes.common.badRequest, "embedding input is required");
+      }
+
+      return value;
+    }
+
+    if (!Array.isArray(input) || input.length === 0) {
+      throw new AppError(ErrorCodes.common.badRequest, "embedding input is required");
+    }
+
+    return input.map((item) => {
+      if (typeof item !== "string" || item.trim().length === 0) {
+        throw new AppError(ErrorCodes.common.badRequest, "embedding input is invalid");
+      }
+
+      return item.trim();
     });
   }
 

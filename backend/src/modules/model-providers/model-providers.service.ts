@@ -6,7 +6,13 @@ import { AppError, ErrorCodes } from "../../core/errors";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PageResult } from "../../core/result";
 import { PrismaService } from "../prisma/prisma.service";
-import { ChatCompletionRequest, ChatCompletionResponse, ChatStreamChunk } from "./dto/llm.dto";
+import {
+  ChatCompletionRequest,
+  ChatCompletionResponse,
+  ChatStreamChunk,
+  EmbeddingRequest,
+  EmbeddingResponse
+} from "./dto/llm.dto";
 import {
   DefaultModelSettings,
   DefaultModelSettingsUpdateDto,
@@ -282,6 +288,10 @@ export class ModelProvidersService {
 
   async createChatCompletion(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
     return this.gateway.createChatCompletion(request);
+  }
+
+  async createEmbedding(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+    return this.gateway.createEmbedding(request);
   }
 
   streamChatCompletion(request: ChatCompletionRequest): AsyncIterable<ChatStreamChunk> {

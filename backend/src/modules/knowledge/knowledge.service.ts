@@ -274,6 +274,13 @@ export class KnowledgeService {
           status: "deleted"
         }
       }),
+      this.prisma.knowledgeEmbedding.deleteMany({
+        where: {
+          chunk: {
+            documentId
+          }
+        }
+      }),
       this.prisma.knowledgeChunk.updateMany({
         where: {
           documentId,
@@ -321,6 +328,14 @@ export class KnowledgeService {
       }
     });
 
+    await this.prisma.knowledgeEmbedding.deleteMany({
+      where: {
+        chunk: {
+          documentId: document.id
+        }
+      }
+    });
+
     return this.indexTextDocument(processingDocument, buffer);
   }
 
@@ -337,7 +352,7 @@ export class KnowledgeService {
       }
 
       // 文本解析和 chunk 写入必须在同一个事务中完成，避免文档显示已索引但 chunks 缺失。
-      const [, indexedDocument] = await this.prisma.$transaction([
+      await this.prisma.$transaction([
         this.prisma.knowledgeChunk.createMany({
           data: chunks.map((chunk) => ({
             knowledgeBaseId: document.knowledgeBaseId,
@@ -356,16 +371,40 @@ export class KnowledgeService {
             id: document.id
           },
           data: {
-            status: "indexed",
+            status: "processing",
             errorMessage: null,
             chunkCount: chunks.length,
-            indexedAt: new Date()
+            indexedAt: null
           }
         })
       ]);
 
+      const storedChunks = await this.prisma.knowledgeChunk.findMany({
+        where: {
+          documentId: document.id,
+          deletedAt: null
+        },
+        orderBy: {
+          chunkIndex: "asc"
+        }
+      });
+      await this.createEmbeddingsForChunks(document.knowledgeBaseId, storedChunks);
+
+      const indexedDocument = await this.prisma.knowledgeDocument.update({
+        where: {
+          id: document.id
+        },
+        data: {
+          status: "indexed",
+          errorMessage: null,
+          chunkCount: storedChunks.length,
+          indexedAt: new Date()
+        }
+      });
+
       return this.toKnowledgeDocumentListItem(indexedDocument);
     } catch (error) {
+      await this.cleanupDocumentIndex(document.id);
       const failedDocument = await this.prisma.knowledgeDocument.update({
         where: {
           id: document.id
@@ -380,6 +419,107 @@ export class KnowledgeService {
 
       return this.toKnowledgeDocumentListItem(failedDocument);
     }
+  }
+
+  private async createEmbeddingsForChunks(
+    knowledgeBaseId: string,
+    chunks: Array<Prisma.KnowledgeChunkGetPayload<object>>
+  ): Promise<void> {
+    if (chunks.length === 0) {
+      return;
+    }
+
+    const embeddingModelConfigId =
+      await this.getKnowledgeBaseEmbeddingModelConfigId(knowledgeBaseId);
+    const response = await this.modelProvidersService.createEmbedding({
+      modelConfigId: embeddingModelConfigId,
+      input: chunks.map((chunk) => chunk.content)
+    });
+
+    if (response.embeddings.length !== chunks.length) {
+      throw new Error("embedding response count does not match chunk count");
+    }
+
+    for (const [index, embedding] of response.embeddings.entries()) {
+      const chunk = chunks[index];
+
+      await this.insertKnowledgeEmbedding({
+        knowledgeBaseId,
+        chunkId: chunk.id,
+        embeddingModelConfigId,
+        embedding
+      });
+    }
+  }
+
+  private async getKnowledgeBaseEmbeddingModelConfigId(knowledgeBaseId: string): Promise<string> {
+    const knowledgeBase = await this.prisma.knowledgeBase.findFirst({
+      where: {
+        id: knowledgeBaseId,
+        deletedAt: null
+      },
+      select: {
+        embeddingModelConfigId: true
+      }
+    });
+
+    if (!knowledgeBase) {
+      throw new AppError(
+        ErrorCodes.knowledge.notFound,
+        "knowledge base not found",
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    return knowledgeBase.embeddingModelConfigId;
+  }
+
+  private async insertKnowledgeEmbedding({
+    knowledgeBaseId,
+    chunkId,
+    embeddingModelConfigId,
+    embedding
+  }: {
+    knowledgeBaseId: string;
+    chunkId: string;
+    embeddingModelConfigId: string;
+    embedding: number[];
+  }): Promise<void> {
+    const embeddingLiteral = `[${embedding.join(",")}]`;
+
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "knowledge_embeddings" (
+        "id",
+        "knowledge_base_id",
+        "chunk_id",
+        "embedding_model_config_id",
+        "embedding"
+      ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::vector)`,
+      randomUUID(),
+      knowledgeBaseId,
+      chunkId,
+      embeddingModelConfigId,
+      embeddingLiteral
+    );
+  }
+
+  private async cleanupDocumentIndex(documentId: string): Promise<void> {
+    await this.prisma.knowledgeEmbedding.deleteMany({
+      where: {
+        chunk: {
+          documentId
+        }
+      }
+    });
+    await this.prisma.knowledgeChunk.updateMany({
+      where: {
+        documentId,
+        deletedAt: null
+      },
+      data: {
+        deletedAt: new Date()
+      }
+    });
   }
 
   private async findKnowledgeDocument(

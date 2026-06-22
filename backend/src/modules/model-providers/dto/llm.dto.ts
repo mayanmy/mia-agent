@@ -45,6 +45,24 @@ export type ChatCompletionRequest = {
   signal?: AbortSignal;
 };
 
+export type EmbeddingRequest = {
+  modelConfigId: string;
+  input: string | string[];
+  timeoutSeconds?: number;
+  signal?: AbortSignal;
+};
+
+export type EmbeddingResponse = {
+  embeddings: number[][];
+  model: string;
+  providerId: string;
+  providerType: ModelProviderType;
+  usage?: {
+    promptTokens?: number;
+    totalTokens?: number;
+  };
+};
+
 export type ChatCompletionResponse = {
   content: string;
   model: string;
@@ -91,6 +109,11 @@ export type ProviderChatRequest = {
   maxTokens?: number | null;
   tools?: LLMToolDefinition[];
   toolChoice?: "auto" | "none";
+  signal: AbortSignal;
+};
+
+export type ProviderEmbeddingRequest = {
+  input: string | string[];
   signal: AbortSignal;
 };
 

@@ -4,9 +4,11 @@ import { AppError, ErrorCodes } from "../../../core/errors";
 import {
   ChatMessage,
   ChatCompletionResponse,
+  EmbeddingResponse,
   ChatStreamChunk,
   LLMToolCall,
   ProviderChatRequest,
+  ProviderEmbeddingRequest,
   ProviderRuntimeConfig
 } from "../dto/llm.dto";
 import { ProviderClient } from "./base.client";
@@ -52,6 +54,18 @@ type OpenAIChatResponse = {
   };
 };
 
+type OpenAIEmbeddingResponse = {
+  model?: string;
+  data?: Array<{
+    embedding?: number[];
+    index?: number;
+  }>;
+  usage?: {
+    prompt_tokens?: number;
+    total_tokens?: number;
+  };
+};
+
 @Injectable()
 export class OpenAICompatibleClient implements ProviderClient {
   async createChatCompletion(
@@ -84,6 +98,52 @@ export class OpenAICompatibleClient implements ProviderClient {
         ? {
             promptTokens: data.usage.prompt_tokens,
             completionTokens: data.usage.completion_tokens,
+            totalTokens: data.usage.total_tokens
+          }
+        : undefined
+    };
+  }
+
+  async createEmbedding(
+    config: ProviderRuntimeConfig,
+    request: ProviderEmbeddingRequest
+  ): Promise<EmbeddingResponse> {
+    const response = await fetch(this.getEmbeddingsUrl(config.baseUrl), {
+      method: "POST",
+      headers: this.buildHeaders(config),
+      body: JSON.stringify({
+        model: config.modelName,
+        input: request.input
+      }),
+      signal: request.signal
+    });
+
+    if (!response.ok) {
+      throw await this.toProviderError(response);
+    }
+
+    const data = (await response.json()) as OpenAIEmbeddingResponse;
+    const embeddings = [...(data.data ?? [])]
+      .sort((left, right) => (left.index ?? 0) - (right.index ?? 0))
+      .map((item) => item.embedding)
+      .filter((embedding): embedding is number[] => Array.isArray(embedding));
+
+    if (embeddings.length === 0) {
+      throw new AppError(
+        ErrorCodes.provider.connectionFailed,
+        "provider embedding response is empty",
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+
+    return {
+      embeddings,
+      model: data.model ?? config.modelName,
+      providerId: config.providerId,
+      providerType: config.providerType,
+      usage: data.usage
+        ? {
+            promptTokens: data.usage.prompt_tokens,
             totalTokens: data.usage.total_tokens
           }
         : undefined
@@ -174,6 +234,10 @@ export class OpenAICompatibleClient implements ProviderClient {
 
   protected getChatCompletionsUrl(baseUrl: string): string {
     return `${baseUrl.replace(/\/$/u, "")}/chat/completions`;
+  }
+
+  protected getEmbeddingsUrl(baseUrl: string): string {
+    return `${baseUrl.replace(/\/$/u, "")}/embeddings`;
   }
 
   protected buildHeaders(config: ProviderRuntimeConfig): HeadersInit {

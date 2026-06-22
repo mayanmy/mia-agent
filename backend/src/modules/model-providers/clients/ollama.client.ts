@@ -9,6 +9,10 @@ export class OllamaClient extends OpenAICompatibleClient {
     return `${this.getOllamaOpenAIBaseUrl(baseUrl)}/chat/completions`;
   }
 
+  protected override getEmbeddingsUrl(baseUrl: string): string {
+    return `${this.getOllamaOpenAIBaseUrl(baseUrl)}/embeddings`;
+  }
+
   private getOllamaOpenAIBaseUrl(baseUrl: string): string {
     const normalized = baseUrl.replace(/\/$/u, "");
 
