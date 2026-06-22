@@ -20,6 +20,8 @@ import {
   KnowledgeDocumentQueryDto,
   UploadedKnowledgeFile
 } from "./dto/knowledge.dto";
+import { chunkText } from "./chunking";
+import { isTextDocument, parseTextDocument } from "./parsing";
 
 const MAX_DOCUMENT_FILE_SIZE = 20 * 1024 * 1024;
 const ALLOWED_DOCUMENT_EXTENSIONS = new Set([
@@ -208,6 +210,7 @@ export class KnowledgeService {
     const filename = this.createStoredFilename(documentId, originalFilename);
     const storagePath = join(getConfig().knowledgeStorageDir, knowledgeBaseId, filename);
     const fileHash = createHash("sha256").update(normalizedFile.buffer).digest("hex");
+    const shouldIndexText = isTextDocument(originalFilename);
 
     await mkdir(join(getConfig().knowledgeStorageDir, knowledgeBaseId), { recursive: true });
     await writeFile(storagePath, normalizedFile.buffer);
@@ -223,9 +226,13 @@ export class KnowledgeService {
           fileSize: normalizedFile.size,
           fileHash,
           storagePath,
-          status: "uploaded"
+          status: shouldIndexText ? "processing" : "uploaded"
         }
       });
+
+      if (shouldIndexText) {
+        return this.indexTextDocument(document, normalizedFile.buffer);
+      }
 
       return this.toKnowledgeDocumentListItem(document);
     } catch (error) {
@@ -277,6 +284,64 @@ export class KnowledgeService {
         }
       })
     ]);
+  }
+
+  private async indexTextDocument(
+    document: Prisma.KnowledgeDocumentGetPayload<object>,
+    buffer: Buffer
+  ): Promise<KnowledgeDocumentListItem> {
+    try {
+      const text = parseTextDocument(document.originalFilename, buffer);
+      const chunks = chunkText(text);
+
+      if (chunks.length === 0) {
+        throw new Error("document text is empty");
+      }
+
+      // 文本解析和 chunk 写入必须在同一个事务中完成，避免文档显示已索引但 chunks 缺失。
+      const [, indexedDocument] = await this.prisma.$transaction([
+        this.prisma.knowledgeChunk.createMany({
+          data: chunks.map((chunk) => ({
+            knowledgeBaseId: document.knowledgeBaseId,
+            documentId: document.id,
+            chunkIndex: chunk.chunkIndex,
+            content: chunk.content,
+            tokenCount: chunk.tokenCount,
+            metadata: this.toPrismaJson({
+              parser: "text",
+              source: document.originalFilename
+            })
+          }))
+        }),
+        this.prisma.knowledgeDocument.update({
+          where: {
+            id: document.id
+          },
+          data: {
+            status: "indexed",
+            errorMessage: null,
+            chunkCount: chunks.length,
+            indexedAt: new Date()
+          }
+        })
+      ]);
+
+      return this.toKnowledgeDocumentListItem(indexedDocument);
+    } catch (error) {
+      const failedDocument = await this.prisma.knowledgeDocument.update({
+        where: {
+          id: document.id
+        },
+        data: {
+          status: "failed",
+          errorMessage: error instanceof Error ? error.message : "document indexing failed",
+          chunkCount: 0,
+          indexedAt: null
+        }
+      });
+
+      return this.toKnowledgeDocumentListItem(failedDocument);
+    }
   }
 
   async ensureKnowledgeBaseIdsExist(ids: string[]): Promise<void> {
@@ -561,5 +626,9 @@ export class KnowledgeService {
       createdAt: document.createdAt,
       updatedAt: document.updatedAt
     };
+  }
+
+  private toPrismaJson(value: Record<string, string>): Prisma.InputJsonValue {
+    return value;
   }
 }
