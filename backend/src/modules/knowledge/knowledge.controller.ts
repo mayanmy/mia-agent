@@ -73,6 +73,14 @@ export class KnowledgeController {
     return this.knowledgeService.uploadKnowledgeDocument(id, file);
   }
 
+  @Post(":id/documents/:documentId/reindex")
+  async reindexKnowledgeDocument(
+    @Param("id") id: string,
+    @Param("documentId") documentId: string
+  ): Promise<KnowledgeDocumentListItem> {
+    return this.knowledgeService.reindexKnowledgeDocument(id, documentId);
+  }
+
   @Delete(":id/documents/:documentId")
   async deleteKnowledgeDocument(
     @Param("id") id: string,

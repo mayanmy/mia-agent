@@ -10,6 +10,7 @@ import {
   getKnowledgeBase,
   listKnowledgeDocuments,
   listKnowledgeBases,
+  reindexKnowledgeDocument,
   updateKnowledgeBase,
   uploadKnowledgeDocument
 } from "./api";
@@ -243,6 +244,27 @@ export function KnowledgePage() {
     }
   }
 
+  async function handleDocumentReindex(documentId: string) {
+    if (!activeKnowledgeBase) {
+      return;
+    }
+
+    setDocumentLoading(true);
+
+    try {
+      await reindexKnowledgeDocument(activeKnowledgeBase.id, documentId);
+      message.success("文档已重新索引");
+      await Promise.all([
+        refreshDocuments(activeKnowledgeBase.id, documentPagination.page, documentPagination.pageSize),
+        refresh(pagination.page, pagination.pageSize)
+      ]);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "重新索引失败");
+    } finally {
+      setDocumentLoading(false);
+    }
+  }
+
   function closeDialog() {
     setDialogOpen(false);
     setEditingId(null);
@@ -313,6 +335,7 @@ export function KnowledgePage() {
         onClose={closeDocumentDrawer}
         onDelete={(documentId) => void handleDocumentDelete(documentId)}
         onPageChange={(page, pageSize) => void refreshDocuments(undefined, page, pageSize)}
+        onReindex={(documentId) => void handleDocumentReindex(documentId)}
         onRefresh={() => void refreshDocuments()}
         onUpload={handleDocumentUpload}
       />

@@ -19,6 +19,7 @@ export function KnowledgeDocumentDrawer({
   onClose,
   onDelete,
   onPageChange,
+  onReindex,
   onRefresh,
   onUpload
 }: {
@@ -31,6 +32,7 @@ export function KnowledgeDocumentDrawer({
   onClose: () => void;
   onDelete: (documentId: string) => void;
   onPageChange: (page: number, pageSize: number) => void;
+  onReindex: (documentId: string) => void;
   onRefresh: () => void;
   onUpload: (file: File) => Promise<void>;
 }) {
@@ -81,19 +83,24 @@ export function KnowledgeDocumentDrawer({
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 90,
+      width: 150,
       render: (_, record) => (
-        <Popconfirm
-          cancelText="取消"
-          okButtonProps={{ danger: true }}
-          okText="删除"
-          title="删除这个文档？"
-          onConfirm={() => onDelete(record.id)}
-        >
-          <Button danger size="small" type="link">
-            删除
+        <Space size={2}>
+          <Button size="small" type="link" onClick={() => onReindex(record.id)}>
+            重建
           </Button>
-        </Popconfirm>
+          <Popconfirm
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            okText="删除"
+            title="删除这个文档？"
+            onConfirm={() => onDelete(record.id)}
+          >
+            <Button danger size="small" type="link">
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
       )
     }
   ];
@@ -135,7 +142,7 @@ export function KnowledgeDocumentDrawer({
           showSizeChanger: true
         }}
         rowKey="id"
-        scroll={{ x: 1030 }}
+        scroll={{ x: 1090 }}
         onChange={(nextPagination) => {
           onPageChange(nextPagination.current || 1, nextPagination.pageSize || 20);
         }}

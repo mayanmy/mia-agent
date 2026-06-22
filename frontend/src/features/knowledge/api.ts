@@ -98,6 +98,18 @@ export function uploadKnowledgeDocument(
   });
 }
 
+export function reindexKnowledgeDocument(
+  knowledgeBaseId: string,
+  documentId: string
+): Promise<KnowledgeDocumentListItem> {
+  return request<KnowledgeDocumentListItem>(
+    `/api/v1/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/reindex`,
+    {
+      method: "POST"
+    }
+  );
+}
+
 export function deleteKnowledgeDocument(
   knowledgeBaseId: string,
   documentId: string

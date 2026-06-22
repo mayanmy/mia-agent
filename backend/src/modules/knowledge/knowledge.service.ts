@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { ModelConfigType, Prisma } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 
 import { getConfig } from "../../core/config";
@@ -286,6 +286,44 @@ export class KnowledgeService {
     ]);
   }
 
+  async reindexKnowledgeDocument(
+    knowledgeBaseId: string,
+    documentId: string
+  ): Promise<KnowledgeDocumentListItem> {
+    await this.ensureKnowledgeBaseExists(knowledgeBaseId);
+    const document = await this.findKnowledgeDocument(knowledgeBaseId, documentId);
+
+    if (!isTextDocument(document.originalFilename)) {
+      throw new AppError(
+        ErrorCodes.knowledge.invalidDocument,
+        "only text documents can be reindexed now"
+      );
+    }
+
+    const buffer = await readFile(document.storagePath);
+    const processingDocument = await this.prisma.knowledgeDocument.update({
+      where: {
+        id: document.id
+      },
+      data: {
+        status: "processing",
+        errorMessage: null
+      }
+    });
+
+    await this.prisma.knowledgeChunk.updateMany({
+      where: {
+        documentId: document.id,
+        deletedAt: null
+      },
+      data: {
+        deletedAt: new Date()
+      }
+    });
+
+    return this.indexTextDocument(processingDocument, buffer);
+  }
+
   private async indexTextDocument(
     document: Prisma.KnowledgeDocumentGetPayload<object>,
     buffer: Buffer
@@ -342,6 +380,29 @@ export class KnowledgeService {
 
       return this.toKnowledgeDocumentListItem(failedDocument);
     }
+  }
+
+  private async findKnowledgeDocument(
+    knowledgeBaseId: string,
+    documentId: string
+  ): Promise<Prisma.KnowledgeDocumentGetPayload<object>> {
+    const document = await this.prisma.knowledgeDocument.findFirst({
+      where: {
+        id: documentId,
+        knowledgeBaseId,
+        deletedAt: null
+      }
+    });
+
+    if (!document) {
+      throw new AppError(
+        ErrorCodes.knowledge.documentNotFound,
+        "knowledge document not found",
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    return document;
   }
 
   async ensureKnowledgeBaseIdsExist(ids: string[]): Promise<void> {
