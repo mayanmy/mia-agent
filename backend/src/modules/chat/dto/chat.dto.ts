@@ -35,7 +35,15 @@ export type ChatCompletionResult = {
 };
 
 export type ChatStreamEventType =
-  "message_start" | "token" | "tool_call" | "tool_result" | "message_end" | "error" | "ping";
+  | "message_start"
+  | "retrieval_start"
+  | "retrieval_result"
+  | "token"
+  | "tool_call"
+  | "tool_result"
+  | "message_end"
+  | "error"
+  | "ping";
 
 export type ChatStreamEvent = {
   type: ChatStreamEventType;

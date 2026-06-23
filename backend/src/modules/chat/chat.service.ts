@@ -5,6 +5,8 @@ import { AppError, ErrorCodes } from "../../core/errors";
 import { AgentsService } from "../agents/agents.service";
 import { ModelProvidersService } from "../model-providers/model-providers.service";
 import { ChatMessage, LLMToolCall, LLMToolDefinition } from "../model-providers/dto/llm.dto";
+import { RetrievalContext } from "../retrieval/dto/retrieval.dto";
+import { RetrievalService } from "../retrieval/retrieval.service";
 import { ToolCallLogRecord, ToolDefinition, ToolJsonValue } from "../tools/dto/tool.dto";
 import { ToolsService } from "../tools/tools.service";
 import {
@@ -28,7 +30,8 @@ export class ChatService {
   constructor(
     private readonly agentsService: AgentsService,
     private readonly modelProvidersService: ModelProvidersService,
-    private readonly toolsService: ToolsService
+    private readonly toolsService: ToolsService,
+    private readonly retrievalService: RetrievalService
   ) {}
 
   async createCompletion(payload: ChatCompletionDto): Promise<ChatCompletionResult> {
@@ -42,6 +45,7 @@ export class ChatService {
     const history = this.normalizeHistory(payload.history, agent.historyTurns);
     const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
     const llmTools = this.toLLMToolDefinitions(toolDefinitions);
+    const retrievalContext = await this.retrieveKnowledgeContext(message, agent.knowledgeBaseIds);
     await this.recordToolAvailability({
       requestId,
       agentId: agent.agentId,
@@ -49,7 +53,10 @@ export class ChatService {
       toolDefinitions
     });
     const messages: ChatMessage[] = [
-      { role: "system", content: this.buildSystemPrompt(agent.systemPrompt, llmTools) },
+      {
+        role: "system",
+        content: this.buildSystemPrompt(agent.systemPrompt, llmTools, retrievalContext)
+      },
       ...history,
       this.buildUserMessage(message, images, files)
     ];
@@ -94,12 +101,6 @@ export class ChatService {
       toolIds: agent.toolIds,
       toolDefinitions
     });
-    const messages: ChatMessage[] = [
-      { role: "system", content: this.buildSystemPrompt(agent.systemPrompt, llmTools) },
-      ...history,
-      this.buildUserMessage(message, images, files)
-    ];
-
     yield {
       type: "message_start",
       data: {
@@ -109,6 +110,46 @@ export class ChatService {
         providerName: agent.providerType
       }
     };
+
+    let retrievalContext: RetrievalContext | null = null;
+
+    if (agent.knowledgeBaseIds.length > 0) {
+      yield {
+        type: "retrieval_start",
+        data: {
+          knowledgeBaseIds: agent.knowledgeBaseIds
+        }
+      };
+      const retrievedContext = await this.retrievalService.retrieveKnowledgeContext({
+        query: message,
+        knowledgeBaseIds: agent.knowledgeBaseIds
+      });
+      retrievalContext = retrievedContext;
+      yield {
+        type: "retrieval_result",
+        data: {
+          elapsedMs: retrievedContext.elapsedMs,
+          // SSE 只返回来源元数据，正文只进入模型上下文，避免前端消息被长文本撑爆。
+          sources: retrievedContext.sources.map((source) => ({
+            knowledgeBaseId: source.knowledgeBaseId,
+            documentId: source.documentId,
+            documentName: source.documentName,
+            chunkId: source.chunkId,
+            chunkIndex: source.chunkIndex,
+            score: source.score
+          }))
+        }
+      };
+    }
+
+    const messages: ChatMessage[] = [
+      {
+        role: "system",
+        content: this.buildSystemPrompt(agent.systemPrompt, llmTools, retrievalContext)
+      },
+      ...history,
+      this.buildUserMessage(message, images, files)
+    ];
 
     const inferredToolCall = this.inferToolCallFromUserMessage(message, llmTools);
 
@@ -412,9 +453,35 @@ export class ChatService {
     await logger.call(this.toolsService, record);
   }
 
-  private buildSystemPrompt(systemPrompt: string, tools: LLMToolDefinition[]): string {
+  private async retrieveKnowledgeContext(
+    message: string,
+    knowledgeBaseIds: string[]
+  ): Promise<RetrievalContext | null> {
+    if (knowledgeBaseIds.length === 0) {
+      return null;
+    }
+
+    return this.retrievalService.retrieveKnowledgeContext({
+      query: message,
+      knowledgeBaseIds
+    });
+  }
+
+  private buildSystemPrompt(
+    systemPrompt: string,
+    tools: LLMToolDefinition[],
+    retrievalContext: RetrievalContext | null
+  ): string {
+    const sections = [systemPrompt];
+
+    if (retrievalContext && retrievalContext.sources.length > 0) {
+      // 知识库内容只注入系统提示词，不直接作为用户消息，避免污染用户原始问题。
+      sections.push("", "知识库检索结果：", this.formatRetrievalContext(retrievalContext));
+      sections.push("回答时优先基于知识库检索结果；如果资料不足，明确说明缺少依据。");
+    }
+
     if (tools.length === 0) {
-      return systemPrompt;
+      return sections.join("\n");
     }
 
     const toolDescriptions = tools
@@ -423,8 +490,7 @@ export class ChatService {
       })
       .join("\n");
 
-    return [
-      systemPrompt,
+    sections.push(
       "",
       "工具调用规则：",
       "当用户问题需要实时信息、精确计算、当前日期时间或外部查询时，必须使用可用工具，不要猜测。",
@@ -436,7 +502,20 @@ export class ChatService {
       "可用工具：",
       toolDescriptions,
       "拿到工具结果后，再基于工具结果用自然语言回答用户。"
-    ].join("\n");
+    );
+
+    return sections.join("\n");
+  }
+
+  private formatRetrievalContext(context: RetrievalContext): string {
+    return context.sources
+      .map((source, index) => {
+        return [
+          `[${index + 1}] ${source.documentName} #${source.chunkIndex} score=${source.score.toFixed(4)}`,
+          source.content
+        ].join("\n");
+      })
+      .join("\n\n");
   }
 
   private inferToolCallFromUserMessage(

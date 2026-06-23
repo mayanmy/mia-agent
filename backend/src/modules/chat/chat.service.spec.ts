@@ -11,6 +11,14 @@ async function* chunks(items: ChatStreamChunk[]): AsyncIterable<ChatStreamChunk>
   }
 }
 
+function createEmptyRetrievalService() {
+  return {
+    retrieveKnowledgeContext: async () => {
+      throw new Error("不应在未绑定知识库时触发检索");
+    }
+  };
+}
+
 export const tests = [
   {
     name: "ChatService streams tool_call, tool_result, then final answer",
@@ -103,7 +111,8 @@ export const tests = [
       const service = new ChatService(
         agentsService as never,
         modelProvidersService as never,
-        toolsService as never
+        toolsService as never,
+        createEmptyRetrievalService() as never
       );
       const events: ChatStreamEvent[] = [];
 
@@ -224,7 +233,8 @@ export const tests = [
       const service = new ChatService(
         agentsService as never,
         modelProvidersService as never,
-        toolsService as never
+        toolsService as never,
+        createEmptyRetrievalService() as never
       );
       const events: ChatStreamEvent[] = [];
 
@@ -310,7 +320,8 @@ export const tests = [
       const service = new ChatService(
         agentsService as never,
         modelProvidersService as never,
-        toolsService as never
+        toolsService as never,
+        createEmptyRetrievalService() as never
       );
       const events: ChatStreamEvent[] = [];
 
@@ -430,7 +441,8 @@ export const tests = [
       const service = new ChatService(
         agentsService as never,
         modelProvidersService as never,
-        toolsService as never
+        toolsService as never,
+        createEmptyRetrievalService() as never
       );
       const events: ChatStreamEvent[] = [];
 
@@ -452,6 +464,109 @@ export const tests = [
         events[3].data.content,
         'HTTP 请求完成：GET http://localhost:5174/api/v1/agents?page=1&pageSize=20 返回 200。响应：{"code":0,"data":[{"id":"agent-1","name":"Mia"}]}'
       );
+    }
+  },
+  {
+    name: "ChatService injects retrieved knowledge into the system prompt",
+    run: async () => {
+      const modelRequests: ChatCompletionRequest[] = [];
+      const agentsService = {
+        getAgentRuntimeConfig: async () => ({
+          agentId: "agent-id",
+          name: "Knowledge Agent",
+          systemPrompt: "Answer with internal knowledge.",
+          modelConfigId: "model-config-id",
+          modelName: "gpt-compatible",
+          providerId: "provider-id",
+          providerType: ModelProviderType.OPENAI_COMPATIBLE,
+          baseUrl: "https://example.com/v1",
+          temperature: 0.7,
+          maxTokens: null,
+          timeoutSeconds: 120,
+          historyTurns: 6,
+          generationParams: null,
+          knowledgeBaseIds: ["kb-1"],
+          toolIds: []
+        })
+      };
+      const modelProvidersService = {
+        streamChatCompletion: (request: ChatCompletionRequest) => {
+          modelRequests.push(request);
+
+          return chunks([
+            {
+              type: "token",
+              content: "基于知识库回答。"
+            },
+            {
+              type: "done"
+            }
+          ]);
+        }
+      };
+      const toolsService = {
+        getToolDefinitions: () => []
+      };
+      const retrievalService = {
+        retrieveKnowledgeContext: async () => ({
+          query: "Mia 支持什么？",
+          elapsedMs: 12,
+          sources: [
+            {
+              knowledgeBaseId: "kb-1",
+              documentId: "doc-1",
+              documentName: "mia-guide.md",
+              chunkId: "chunk-1",
+              chunkIndex: 3,
+              content: "Mia 支持知识库检索。",
+              score: 0.91
+            }
+          ]
+        })
+      };
+      const service = new ChatService(
+        agentsService as never,
+        modelProvidersService as never,
+        toolsService as never,
+        retrievalService as never
+      );
+      const events: ChatStreamEvent[] = [];
+
+      for await (const event of service.streamCompletion({
+        agentId: "agent-id",
+        message: "Mia 支持什么？",
+        history: [],
+        images: [],
+        files: []
+      })) {
+        events.push(event);
+      }
+
+      assert.deepEqual(
+        events.map((event) => event.type),
+        ["message_start", "retrieval_start", "retrieval_result", "token", "message_end"]
+      );
+      assert.deepEqual(events[1].data, {
+        knowledgeBaseIds: ["kb-1"]
+      });
+      assert.equal(events[2].data.elapsedMs, 12);
+      assert.deepEqual(events[2].data.sources, [
+        {
+          knowledgeBaseId: "kb-1",
+          documentId: "doc-1",
+          documentName: "mia-guide.md",
+          chunkId: "chunk-1",
+          chunkIndex: 3,
+          score: 0.91
+        }
+      ]);
+      assert.equal(events[3].data.content, "基于知识库回答。");
+      assert.equal(modelRequests.length, 1);
+      assert.equal(modelRequests[0].messages[0].role, "system");
+      const systemContent = modelRequests[0].messages[0].content;
+      assert.ok(typeof systemContent === "string");
+      assert.ok(systemContent.includes("知识库检索结果"));
+      assert.ok(systemContent.includes("Mia 支持知识库检索。"));
     }
   }
 ];
