@@ -51,6 +51,11 @@ export type KnowledgeDocumentListItem = {
   updatedAt: Date;
 };
 
+export type KnowledgeBaseRetrievalConfig = {
+  id: string;
+  embeddingModelConfigId: string;
+};
+
 export type UploadedKnowledgeFile = {
   originalname: string;
   mimetype: string;

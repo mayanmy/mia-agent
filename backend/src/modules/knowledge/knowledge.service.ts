@@ -16,6 +16,7 @@ import {
   KnowledgeBaseListItem,
   KnowledgeBaseQueryDto,
   KnowledgeBaseUpdateDto,
+  KnowledgeBaseRetrievalConfig,
   KnowledgeDocumentListItem,
   KnowledgeDocumentQueryDto,
   UploadedKnowledgeFile
@@ -575,6 +576,26 @@ export class KnowledgeService {
         `unknown or disabled knowledgeBaseIds: ${missingIds.join(", ")}`
       );
     }
+  }
+
+  async getRetrievalConfigs(ids: string[]): Promise<KnowledgeBaseRetrievalConfig[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    return this.prisma.knowledgeBase.findMany({
+      where: {
+        id: {
+          in: ids
+        },
+        enabled: true,
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        embeddingModelConfigId: true
+      }
+    });
   }
 
   private validateCreate(payload: KnowledgeBaseCreateDto): KnowledgeBaseCreateData {

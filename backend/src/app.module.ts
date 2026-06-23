@@ -7,6 +7,7 @@ import { KnowledgeModule } from "./modules/knowledge/knowledge.module";
 import { LogsModule } from "./modules/logs/logs.module";
 import { ModelProvidersModule } from "./modules/model-providers/model-providers.module";
 import { PrismaModule } from "./modules/prisma/prisma.module";
+import { RetrievalModule } from "./modules/retrieval/retrieval.module";
 import { ToolsModule } from "./modules/tools/tools.module";
 
 @Module({
@@ -18,7 +19,8 @@ import { ToolsModule } from "./modules/tools/tools.module";
     ChatModule,
     ToolsModule,
     LogsModule,
-    KnowledgeModule
+    KnowledgeModule,
+    RetrievalModule
   ]
 })
 export class AppModule {}
