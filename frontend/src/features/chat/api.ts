@@ -40,12 +40,31 @@ export type ChatCompletionResult = {
   content: string;
 };
 
+export type ChatRetrievalSource = {
+  knowledgeBaseId: string;
+  documentId: string;
+  documentName: string;
+  chunkId: string;
+  chunkIndex: number;
+  score: number;
+};
+
 export type ChatStreamEventType =
-  "message_start" | "token" | "tool_call" | "tool_result" | "message_end" | "error" | "ping";
+  | "message_start"
+  | "retrieval_start"
+  | "retrieval_result"
+  | "token"
+  | "tool_call"
+  | "tool_result"
+  | "message_end"
+  | "error"
+  | "ping";
 
 export type ChatStreamEvent = {
   type: ChatStreamEventType;
   data: {
+    knowledgeBaseIds?: string[];
+    sources?: ChatRetrievalSource[];
     id?: string;
     name?: string;
     arguments?: Record<string, unknown>;

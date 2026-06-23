@@ -1,4 +1,9 @@
-import type { ChatFileAttachment, ChatImageAttachment, ChatMessage } from "./api";
+import type {
+  ChatFileAttachment,
+  ChatImageAttachment,
+  ChatMessage,
+  ChatRetrievalSource
+} from "./api";
 
 export type ChatToolEvent = {
   id: string;
@@ -11,9 +16,18 @@ export type ChatToolEvent = {
   elapsedMs?: number;
 };
 
+export type ChatRetrievalEvent = {
+  id: string;
+  knowledgeBaseIds: string[];
+  status: "running" | "success";
+  sources: ChatRetrievalSource[];
+  elapsedMs?: number;
+};
+
 export type ChatUiMessage = ChatMessage & {
   id: string;
   createdAt: number;
+  retrievalEvents?: ChatRetrievalEvent[];
   toolEvents?: ChatToolEvent[];
   images?: ChatImageAttachment[];
   files?: ChatFileAttachment[];

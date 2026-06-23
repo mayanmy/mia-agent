@@ -136,11 +136,75 @@
   overflow-wrap: anywhere;
 }
 
+.chatRetrievalEvents,
 .chatToolEvents {
   display: grid;
   gap: 8px;
   margin-bottom: 10px;
   white-space: normal;
+}
+
+.chatRetrievalEvent {
+  border: 1px solid #dbe7f6;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #334155;
+  display: grid;
+  gap: 7px;
+  max-width: 520px;
+  padding: 8px 10px;
+}
+
+.chatRetrievalEvent.success {
+  border-color: #c9ddf5;
+  background: #f7fbff;
+}
+
+.chatRetrievalEventHeader {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.chatRetrievalEventName {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chatRetrievalEventStatus,
+.chatRetrievalEventHint,
+.chatRetrievalSourceMeta {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.chatRetrievalSources {
+  display: grid;
+  gap: 5px;
+}
+
+.chatRetrievalSource {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 6px 8px;
+}
+
+.chatRetrievalSourceName {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chatToolEvent {

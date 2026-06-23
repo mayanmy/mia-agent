@@ -9,7 +9,7 @@ import { ChatHeader } from "./components/ChatHeader";
 import { ChatTranscript } from "./components/ChatTranscript";
 import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useChatAttachments } from "./hooks/useChatAttachments";
-import type { ChatToolEvent, ChatUiMessage } from "./types";
+import type { ChatRetrievalEvent, ChatToolEvent, ChatUiMessage } from "./types";
 import { createMessageId, findLastToolEventIndex, isLikelyVisionModel } from "./utils";
 import "./chat.less";
 
@@ -159,6 +159,22 @@ export function ChatPage() {
               appendAssistantToken(assistantMessageId, event.data.content);
             }
 
+            if (event.type === "retrieval_start") {
+              appendRetrievalEvent(assistantMessageId, {
+                id: createMessageId(),
+                knowledgeBaseIds: event.data.knowledgeBaseIds ?? [],
+                status: "running",
+                sources: []
+              });
+            }
+
+            if (event.type === "retrieval_result") {
+              updateRetrievalResult(assistantMessageId, {
+                elapsedMs: event.data.elapsedMs,
+                sources: event.data.sources ?? []
+              });
+            }
+
             if (event.type === "tool_call") {
               appendToolCall(assistantMessageId, {
                 id: event.data.id || createMessageId(),
@@ -208,6 +224,49 @@ export function ChatPage() {
             }
           : item
       )
+    );
+  }
+
+  function appendRetrievalEvent(messageId: string, retrievalEvent: ChatRetrievalEvent) {
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === messageId
+          ? {
+              ...item,
+              retrievalEvents: [...(item.retrievalEvents ?? []), retrievalEvent]
+            }
+          : item
+      )
+    );
+  }
+
+  function updateRetrievalResult(
+    messageId: string,
+    result: Pick<ChatRetrievalEvent, "elapsedMs" | "sources">
+  ) {
+    setMessages((current) =>
+      current.map((item) => {
+        if (item.id !== messageId || !item.retrievalEvents?.length) {
+          return item;
+        }
+
+        // 每轮对话只有一个检索事件，仍按最后一个更新，便于后续支持多次检索。
+        const lastIndex = item.retrievalEvents.length - 1;
+
+        return {
+          ...item,
+          retrievalEvents: item.retrievalEvents.map((retrievalEvent, index) =>
+            index === lastIndex
+              ? {
+                  ...retrievalEvent,
+                  status: "success",
+                  sources: result.sources,
+                  elapsedMs: result.elapsedMs
+                }
+              : retrievalEvent
+          )
+        };
+      })
     );
   }
 
@@ -268,7 +327,13 @@ export function ChatPage() {
 
   function removeAssistantMessageIfEmpty(messageId: string) {
     setMessages((current) =>
-      current.filter((item) => item.id !== messageId || item.content.trim().length > 0)
+      current.filter(
+        (item) =>
+          item.id !== messageId ||
+          item.content.trim().length > 0 ||
+          Boolean(item.retrievalEvents?.length) ||
+          Boolean(item.toolEvents?.length)
+      )
     );
   }
 

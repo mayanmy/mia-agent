@@ -3,6 +3,7 @@ import { CopyOutlined } from "@ant-design/icons";
 
 import type { ChatUiMessage } from "../types";
 import { formatMessageTime } from "../utils";
+import { RetrievalEventCard } from "./RetrievalEventCard";
 import { ToolEventCard } from "./ToolEventCard";
 
 export function ChatMessageItem({
@@ -36,6 +37,13 @@ export function ChatMessageItem({
               <div className="chatFileChip" key={file.id ?? `${file.name}-${index}`}>
                 {file.name}
               </div>
+            ))}
+          </div>
+        ) : null}
+        {item.retrievalEvents?.length ? (
+          <div className="chatRetrievalEvents">
+            {item.retrievalEvents.map((retrievalEvent) => (
+              <RetrievalEventCard key={retrievalEvent.id} retrievalEvent={retrievalEvent} />
             ))}
           </div>
         ) : null}
