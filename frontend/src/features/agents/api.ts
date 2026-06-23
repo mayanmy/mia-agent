@@ -11,6 +11,7 @@ export type AgentListItem = {
   modelName: string;
   providerName: string;
   toolCount: number;
+  knowledgeBaseCount: number;
   temperature: number;
   enabled: boolean;
   published: boolean;

@@ -42,6 +42,7 @@ type AgentWithModelConfig = Prisma.AgentGetPayload<{
     _count: {
       select: {
         agentTools: true;
+        agentKnowledgeBases: true;
       };
     };
   };
@@ -93,7 +94,8 @@ export class AgentsService {
           agentKnowledgeBases: true,
           _count: {
             select: {
-              agentTools: true
+              agentTools: true,
+              agentKnowledgeBases: true
             }
           }
         },
@@ -142,7 +144,8 @@ export class AgentsService {
         agentKnowledgeBases: true,
         _count: {
           select: {
-            agentTools: true
+            agentTools: true,
+            agentKnowledgeBases: true
           }
         }
       }
@@ -196,7 +199,8 @@ export class AgentsService {
         agentKnowledgeBases: true,
         _count: {
           select: {
-            agentTools: true
+            agentTools: true,
+            agentKnowledgeBases: true
           }
         }
       }
@@ -755,7 +759,8 @@ export class AgentsService {
         agentKnowledgeBases: true,
         _count: {
           select: {
-            agentTools: true
+            agentTools: true,
+            agentKnowledgeBases: true
           }
         }
       }
@@ -777,6 +782,7 @@ export class AgentsService {
       modelName: agent.modelConfig.modelName,
       providerName: agent.modelConfig.provider.name,
       toolCount: agent._count.agentTools,
+      knowledgeBaseCount: agent._count.agentKnowledgeBases,
       temperature: Number(agent.temperature),
       enabled: agent.enabled,
       published: agent.published,

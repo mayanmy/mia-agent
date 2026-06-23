@@ -51,6 +51,12 @@ export function AgentTable({
       width: 100
     },
     {
+      title: "知识库数量",
+      dataIndex: "knowledgeBaseCount",
+      key: "knowledgeBaseCount",
+      width: 120
+    },
+    {
       title: "temperature",
       dataIndex: "temperature",
       key: "temperature",
@@ -180,7 +186,7 @@ export function AgentTable({
         showSizeChanger: true
       }}
       rowKey="id"
-      scroll={{ x: 1200 }}
+      scroll={{ x: 1320 }}
       onChange={(nextPagination) => {
         onPageChange(nextPagination.current || 1, nextPagination.pageSize || 20);
       }}
