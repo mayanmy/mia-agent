@@ -557,7 +557,8 @@ export const tests = [
           documentName: "mia-guide.md",
           chunkId: "chunk-1",
           chunkIndex: 3,
-          score: 0.91
+          score: 0.91,
+          contentPreview: "Mia 支持知识库检索。"
         }
       ]);
       assert.equal(events[3].data.content, "基于知识库回答。");

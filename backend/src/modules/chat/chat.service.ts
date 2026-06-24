@@ -24,6 +24,7 @@ const MAX_FILE_COUNT = 4;
 const MAX_FILE_CONTENT_LENGTH = 200_000;
 const MAX_TOOL_ROUNDS = 3;
 const DEFAULT_TIMEZONE = "Asia/Shanghai";
+const RETRIEVAL_SOURCE_PREVIEW_LENGTH = 500;
 
 @Injectable()
 export class ChatService {
@@ -136,7 +137,8 @@ export class ChatService {
             documentName: source.documentName,
             chunkId: source.chunkId,
             chunkIndex: source.chunkIndex,
-            score: source.score
+            score: source.score,
+            contentPreview: this.formatRetrievalSourcePreview(source.content)
           }))
         }
       };
@@ -516,6 +518,17 @@ export class ChatService {
         ].join("\n");
       })
       .join("\n\n");
+  }
+
+  private formatRetrievalSourcePreview(content: string): string {
+    const normalized = content.replace(/\s+/gu, " ").trim();
+
+    if (normalized.length <= RETRIEVAL_SOURCE_PREVIEW_LENGTH) {
+      return normalized;
+    }
+
+    // 检索来源预览只用于前端排查和引用展示，限制长度避免 SSE 消息过大。
+    return `${normalized.slice(0, RETRIEVAL_SOURCE_PREVIEW_LENGTH)}...`;
   }
 
   private inferToolCallFromUserMessage(
