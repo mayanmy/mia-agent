@@ -377,6 +377,10 @@ export function ChatPage() {
                 <div className="chatAgentModel">
                   {selectedAgent.providerName} / {selectedAgent.modelName}
                 </div>
+                <div className="chatAgentBindings">
+                  <span>知识库 {selectedAgent.knowledgeBaseCount}</span>
+                  <span>工具 {selectedAgent.toolCount}</span>
+                </div>
                 <Tag color="green">已启用</Tag>
               </div>
             ) : (
