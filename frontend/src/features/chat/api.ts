@@ -47,6 +47,7 @@ export type ChatRetrievalSource = {
   chunkId: string;
   chunkIndex: number;
   score: number;
+  contentPreview?: string;
 };
 
 export type ChatStreamEventType =
