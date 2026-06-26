@@ -168,6 +168,9 @@ function renderStatus(status: string) {
     uploaded: { color: "blue", label: "已上传" },
     pending: { color: "gold", label: "待处理" },
     processing: { color: "processing", label: "处理中" },
+    parsing: { color: "processing", label: "解析中" },
+    chunking: { color: "processing", label: "切分中" },
+    embedding: { color: "processing", label: "向量化中" },
     indexed: { color: "green", label: "已索引" },
     failed: { color: "red", label: "失败" },
     deleted: { color: "default", label: "已删除" }

@@ -17,6 +17,7 @@ import {
   KnowledgeBaseQueryDto,
   KnowledgeBaseUpdateDto,
   KnowledgeBaseRetrievalConfig,
+  KnowledgeDocumentStatus,
   KnowledgeDocumentListItem,
   KnowledgeDocumentQueryDto,
   UploadedKnowledgeFile
@@ -34,6 +35,18 @@ const ALLOWED_DOCUMENT_EXTENSIONS = new Set([
   ".csv",
   ".json"
 ]);
+
+const KNOWLEDGE_DOCUMENT_STATUSES: KnowledgeDocumentStatus[] = [
+  "uploaded",
+  "pending",
+  "processing",
+  "parsing",
+  "chunking",
+  "embedding",
+  "indexed",
+  "failed",
+  "deleted"
+];
 
 type KnowledgeBaseWithStats = Prisma.KnowledgeBaseGetPayload<{
   include: {
@@ -227,7 +240,7 @@ export class KnowledgeService {
           fileSize: normalizedFile.size,
           fileHash,
           storagePath,
-          status: shouldIndexText ? "processing" : "uploaded"
+          status: shouldIndexText ? "pending" : "uploaded"
         }
       });
 
@@ -314,7 +327,7 @@ export class KnowledgeService {
         id: document.id
       },
       data: {
-        status: "processing",
+        status: "pending",
         errorMessage: null
       }
     });
@@ -346,7 +359,9 @@ export class KnowledgeService {
     buffer: Buffer
   ): Promise<KnowledgeDocumentListItem> {
     try {
+      await this.updateDocumentIndexStatus(document.id, "parsing");
       const text = parseTextDocument(document.originalFilename, buffer);
+      await this.updateDocumentIndexStatus(document.id, "chunking");
       const chunks = chunkText(text);
 
       if (chunks.length === 0) {
@@ -373,7 +388,7 @@ export class KnowledgeService {
             id: document.id
           },
           data: {
-            status: "processing",
+            status: "chunking",
             errorMessage: null,
             chunkCount: chunks.length,
             indexedAt: null
@@ -390,6 +405,7 @@ export class KnowledgeService {
           chunkIndex: "asc"
         }
       });
+      await this.updateDocumentIndexStatus(document.id, "embedding");
       await this.createEmbeddingsForChunks(document.knowledgeBaseId, storedChunks);
 
       const indexedDocument = await this.prisma.knowledgeDocument.update({
@@ -453,6 +469,21 @@ export class KnowledgeService {
         embedding
       });
     }
+  }
+
+  private async updateDocumentIndexStatus(
+    documentId: string,
+    status: KnowledgeDocumentStatus
+  ): Promise<void> {
+    // 文档索引仍是同步执行，但细分状态便于后续异步任务和前端排查卡在哪个阶段。
+    await this.prisma.knowledgeDocument.update({
+      where: {
+        id: documentId
+      },
+      data: {
+        status
+      }
+    });
   }
 
   private async getKnowledgeBaseEmbeddingModelConfigId(knowledgeBaseId: string): Promise<string> {
@@ -665,7 +696,7 @@ export class KnowledgeService {
   private normalizeDocumentStatus(value: string): string {
     const status = value.trim();
 
-    if (!["uploaded", "pending", "processing", "indexed", "failed", "deleted"].includes(status)) {
+    if (!KNOWLEDGE_DOCUMENT_STATUSES.includes(status as KnowledgeDocumentStatus)) {
       throw new AppError(ErrorCodes.common.badRequest, "status is invalid");
     }
 
@@ -845,7 +876,7 @@ export class KnowledgeService {
       originalFilename: document.originalFilename,
       mimeType: document.mimeType,
       fileSize: document.fileSize.toString(),
-      status: document.status,
+      status: this.toKnowledgeDocumentStatus(document.status),
       errorMessage: document.errorMessage,
       chunkCount: document.chunkCount,
       indexedAt: document.indexedAt,
@@ -856,5 +887,13 @@ export class KnowledgeService {
 
   private toPrismaJson(value: Record<string, string>): Prisma.InputJsonValue {
     return value;
+  }
+
+  private toKnowledgeDocumentStatus(status: string): KnowledgeDocumentStatus {
+    if (KNOWLEDGE_DOCUMENT_STATUSES.includes(status as KnowledgeDocumentStatus)) {
+      return status as KnowledgeDocumentStatus;
+    }
+
+    return "failed";
   }
 }

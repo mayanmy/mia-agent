@@ -19,6 +19,17 @@ export type KnowledgeDocumentQueryDto = {
   status?: string;
 };
 
+export type KnowledgeDocumentStatus =
+  | "uploaded"
+  | "pending"
+  | "processing"
+  | "parsing"
+  | "chunking"
+  | "embedding"
+  | "indexed"
+  | "failed"
+  | "deleted";
+
 export type KnowledgeBaseListItem = {
   id: string;
   name: string;
@@ -43,7 +54,7 @@ export type KnowledgeDocumentListItem = {
   originalFilename: string;
   mimeType: string;
   fileSize: string;
-  status: string;
+  status: KnowledgeDocumentStatus;
   errorMessage: string | null;
   chunkCount: number;
   indexedAt: Date | null;

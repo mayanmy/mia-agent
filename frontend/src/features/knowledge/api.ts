@@ -17,6 +17,17 @@ export type KnowledgeBaseListItem = {
 
 export type KnowledgeBaseDetail = KnowledgeBaseListItem;
 
+export type KnowledgeDocumentStatus =
+  | "uploaded"
+  | "pending"
+  | "processing"
+  | "parsing"
+  | "chunking"
+  | "embedding"
+  | "indexed"
+  | "failed"
+  | "deleted";
+
 export type KnowledgeDocumentListItem = {
   id: string;
   knowledgeBaseId: string;
@@ -24,7 +35,7 @@ export type KnowledgeDocumentListItem = {
   originalFilename: string;
   mimeType: string;
   fileSize: string;
-  status: string;
+  status: KnowledgeDocumentStatus;
   errorMessage: string | null;
   chunkCount: number;
   indexedAt: string | null;
