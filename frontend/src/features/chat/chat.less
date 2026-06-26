@@ -253,6 +253,54 @@
   white-space: pre-wrap;
 }
 
+.chatCitationSources {
+  border-top: 1px solid #e5e7eb;
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  white-space: normal;
+}
+
+.chatCitationTitle {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chatCitationList {
+  display: grid;
+  gap: 5px;
+}
+
+.chatCitationItem {
+  align-items: center;
+  color: #64748b;
+  display: grid;
+  font-size: 12px;
+  gap: 6px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  line-height: 1.45;
+}
+
+.chatCitationIndex {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.chatCitationName {
+  color: #334155;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatCitationMeta {
+  color: #94a3b8;
+}
+
 .chatToolEvent {
   border: 1px solid #dfe6ef;
   border-radius: 8px;
