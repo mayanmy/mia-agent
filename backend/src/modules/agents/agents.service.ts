@@ -38,7 +38,16 @@ type AgentWithModelConfig = Prisma.AgentGetPayload<{
       };
     };
     agentTools: true;
-    agentKnowledgeBases: true;
+    agentKnowledgeBases: {
+      include: {
+        knowledgeBase: {
+          select: {
+            enabled: true;
+            deletedAt: true;
+          };
+        };
+      };
+    };
     _count: {
       select: {
         agentTools: true;
@@ -91,7 +100,7 @@ export class AgentsService {
             }
           },
           agentTools: true,
-          agentKnowledgeBases: true,
+          agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
           _count: {
             select: {
               agentTools: true,
@@ -141,7 +150,7 @@ export class AgentsService {
           }
         },
         agentTools: true,
-        agentKnowledgeBases: true,
+        agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
         _count: {
           select: {
             agentTools: true,
@@ -196,7 +205,7 @@ export class AgentsService {
           }
         },
         agentTools: true,
-        agentKnowledgeBases: true,
+        agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
         _count: {
           select: {
             agentTools: true,
@@ -331,9 +340,9 @@ export class AgentsService {
       timeoutSeconds: agent.timeoutSeconds,
       historyTurns: agent.historyTurns,
       generationParams: this.toGenerationParams(agent.generationParams),
-      knowledgeBaseIds: agent.agentKnowledgeBases.map(
-        (knowledgeBase) => knowledgeBase.knowledgeBaseId
-      ),
+      knowledgeBaseIds: agent.agentKnowledgeBases
+        .filter((knowledgeBase) => this.isActiveAgentKnowledgeBase(knowledgeBase))
+        .map((knowledgeBase) => knowledgeBase.knowledgeBaseId),
       toolIds: agent.agentTools.map((tool) => tool.toolId)
     };
   }
@@ -743,6 +752,25 @@ export class AgentsService {
     }
   }
 
+  private getAgentKnowledgeBaseInclude() {
+    return {
+      include: {
+        knowledgeBase: {
+          select: {
+            enabled: true,
+            deletedAt: true
+          }
+        }
+      }
+    } satisfies Prisma.AgentKnowledgeBaseDefaultArgs;
+  }
+
+  private isActiveAgentKnowledgeBase(
+    knowledgeBase: AgentWithModelConfig["agentKnowledgeBases"][number]
+  ): boolean {
+    return knowledgeBase.knowledgeBase.enabled && !knowledgeBase.knowledgeBase.deletedAt;
+  }
+
   private async findAgentDetail(id: string): Promise<AgentWithModelConfig> {
     const agent = await this.prisma.agent.findFirst({
       where: {
@@ -756,7 +784,7 @@ export class AgentsService {
           }
         },
         agentTools: true,
-        agentKnowledgeBases: true,
+        agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
         _count: {
           select: {
             agentTools: true,
@@ -782,7 +810,9 @@ export class AgentsService {
       modelName: agent.modelConfig.modelName,
       providerName: agent.modelConfig.provider.name,
       toolCount: agent._count.agentTools,
-      knowledgeBaseCount: agent._count.agentKnowledgeBases,
+      knowledgeBaseCount: agent.agentKnowledgeBases.filter((knowledgeBase) =>
+        this.isActiveAgentKnowledgeBase(knowledgeBase)
+      ).length,
       temperature: Number(agent.temperature),
       enabled: agent.enabled,
       published: agent.published,

@@ -1,4 +1,4 @@
-import { Checkbox, Empty, Tag } from "antd";
+import { Alert, Checkbox, Empty, Tag } from "antd";
 
 import type { KnowledgeBaseListItem } from "../../knowledge/api";
 
@@ -14,6 +14,23 @@ export function AgentKnowledgeBaseSelector({
   onChange
 }: AgentKnowledgeBaseSelectorProps) {
   const enabledKnowledgeBases = knowledgeBases.filter((knowledgeBase) => knowledgeBase.enabled);
+  const selectedKnowledgeBases = knowledgeBases.filter((knowledgeBase) =>
+    value.includes(knowledgeBase.id)
+  );
+  const selectedDisabledKnowledgeBases = selectedKnowledgeBases.filter(
+    (knowledgeBase) => !knowledgeBase.enabled
+  );
+  const selectedEmbeddingModelNames = [
+    ...new Set(
+      selectedKnowledgeBases
+        .filter((knowledgeBase) => knowledgeBase.enabled)
+        .map(
+          (knowledgeBase) =>
+            `${knowledgeBase.embeddingProviderName} / ${knowledgeBase.embeddingModelName}`
+        )
+    )
+  ];
+  const hasMixedEmbeddingModels = selectedEmbeddingModelNames.length > 1;
 
   if (knowledgeBases.length === 0) {
     return (
@@ -31,6 +48,22 @@ export function AgentKnowledgeBaseSelector({
           可用 {enabledKnowledgeBases.length} / 全部 {knowledgeBases.length}
         </span>
       </div>
+      {hasMixedEmbeddingModels ? (
+        <Alert
+          className="knowledgeSelectorAlert"
+          message="已选择多个 Embedding 模型的知识库。当前检索会优先使用同一向量空间的知识库，部分知识库可能不会参与本次检索。"
+          showIcon
+          type="warning"
+        />
+      ) : null}
+      {selectedDisabledKnowledgeBases.length > 0 ? (
+        <Alert
+          className="knowledgeSelectorAlert"
+          message={`已绑定 ${selectedDisabledKnowledgeBases.length} 个停用知识库。停用知识库不会参与检索，保存前请取消绑定或重新启用。`}
+          showIcon
+          type="error"
+        />
+      ) : null}
       <Checkbox.Group
         className="knowledgeCheckboxGroup"
         value={value}

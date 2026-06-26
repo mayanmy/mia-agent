@@ -183,7 +183,7 @@ export function AgentsPage() {
       form.resetFields();
       await refresh();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "保存 Agent 失败");
+      message.error(formatAgentSaveError(error));
     } finally {
       setSaving(false);
     }
@@ -304,6 +304,19 @@ export function AgentsPage() {
 
     await navigator.clipboard.writeText(value);
     message.success("分享链接已复制");
+  }
+
+  function formatAgentSaveError(error: unknown): string {
+    const messageText = error instanceof Error ? error.message : "";
+
+    if (
+      messageText.includes("unknown or disabled knowledgeBaseIds") ||
+      messageText.includes("invalidKnowledgeBases")
+    ) {
+      return "保存失败：部分绑定知识库已停用、删除或不存在，请在知识库绑定页取消后再保存。";
+    }
+
+    return messageText || "保存 Agent 失败";
   }
 
   function closeDialog() {
