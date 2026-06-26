@@ -1,4 +1,4 @@
-import { Button, Drawer, Popconfirm, Space, Table, Tag, Upload } from "antd";
+import { Alert, Button, Drawer, Popconfirm, Space, Table, Tag, Tooltip, Upload } from "antd";
 import type { TableProps } from "antd";
 
 import type { KnowledgeBaseTableItem, KnowledgeDocumentTableItem } from "../types";
@@ -36,6 +36,7 @@ export function KnowledgeDocumentDrawer({
   onRefresh: () => void;
   onUpload: (file: File) => Promise<void>;
 }) {
+  const failedCount = documents.filter((document) => document.status === "failed").length;
   const columns: TableProps<KnowledgeDocumentTableItem>["columns"] = [
     {
       title: "文件名",
@@ -68,9 +69,16 @@ export function KnowledgeDocumentDrawer({
       title: "错误",
       dataIndex: "errorMessage",
       key: "errorMessage",
-      width: 220,
-      ellipsis: true,
-      render: (message: string | null) => message || "-"
+      width: 260,
+      render: (message: string | null, record) =>
+        message ? <ErrorMessageCell message={message} status={record.status} /> : "-"
+    },
+    {
+      title: "索引时间",
+      dataIndex: "indexedAt",
+      key: "indexedAt",
+      width: 180,
+      render: (indexedAt: string | null) => (indexedAt ? formatDate(indexedAt) : "-")
     },
     {
       title: "上传时间",
@@ -84,24 +92,35 @@ export function KnowledgeDocumentDrawer({
       key: "actions",
       fixed: "right",
       width: 150,
-      render: (_, record) => (
-        <Space size={2}>
-          <Button size="small" type="link" onClick={() => onReindex(record.id)}>
-            重建
-          </Button>
-          <Popconfirm
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-            okText="删除"
-            title="删除这个文档？"
-            onConfirm={() => onDelete(record.id)}
-          >
-            <Button danger size="small" type="link">
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      )
+      render: (_, record) => {
+        const indexing = isIndexingStatus(record.status);
+
+        return (
+          <Space size={2}>
+            <Popconfirm
+              cancelText="取消"
+              okText={record.status === "failed" ? "重试" : "重建"}
+              title={record.status === "failed" ? "重试索引这个失败文档？" : "重建这个文档索引？"}
+              onConfirm={() => onReindex(record.id)}
+            >
+              <Button disabled={indexing} size="small" type="link">
+                {record.status === "failed" ? "重试" : "重建"}
+              </Button>
+            </Popconfirm>
+            <Popconfirm
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              okText="删除"
+              title="删除这个文档？"
+              onConfirm={() => onDelete(record.id)}
+            >
+              <Button danger size="small" type="link">
+                删除
+              </Button>
+            </Popconfirm>
+          </Space>
+        );
+      }
     }
   ];
 
@@ -131,6 +150,14 @@ export function KnowledgeDocumentDrawer({
       width={960}
       onClose={onClose}
     >
+      {failedCount > 0 ? (
+        <Alert
+          className="knowledgeDocumentAlert"
+          message={`有 ${failedCount} 个文档索引失败，可查看失败原因后点击“重试”。`}
+          showIcon
+          type="warning"
+        />
+      ) : null}
       <Table<KnowledgeDocumentTableItem>
         columns={columns}
         dataSource={documents}
@@ -142,7 +169,7 @@ export function KnowledgeDocumentDrawer({
           showSizeChanger: true
         }}
         rowKey="id"
-        scroll={{ x: 1090 }}
+        scroll={{ x: 1270 }}
         onChange={(nextPagination) => {
           onPageChange(nextPagination.current || 1, nextPagination.pageSize || 20);
         }}
@@ -163,6 +190,16 @@ async function handleUpload(
   }
 }
 
+function ErrorMessageCell({ message, status }: { message: string; status: string }) {
+  const text = getReadableErrorMessage(message);
+
+  return (
+    <Tooltip title={text}>
+      <span className={status === "failed" ? "knowledgeDocumentError" : undefined}>{text}</span>
+    </Tooltip>
+  );
+}
+
 function renderStatus(status: string) {
   const statusMap: Record<string, { color: string; label: string }> = {
     uploaded: { color: "blue", label: "已上传" },
@@ -178,6 +215,26 @@ function renderStatus(status: string) {
   const item = statusMap[status] ?? { color: "default", label: status };
 
   return <Tag color={item.color}>{item.label}</Tag>;
+}
+
+function isIndexingStatus(status: string): boolean {
+  return ["pending", "processing", "parsing", "chunking", "embedding"].includes(status);
+}
+
+function getReadableErrorMessage(message: string): string {
+  if (message.includes("document text is empty")) {
+    return "文档内容为空，无法生成索引";
+  }
+
+  if (message.includes("embedding response count does not match chunk count")) {
+    return "向量化结果数量异常，请重试索引";
+  }
+
+  if (message.includes("only text documents")) {
+    return "当前仅支持文本类文档重建索引";
+  }
+
+  return message;
 }
 
 function formatFileSize(value: number): string {
