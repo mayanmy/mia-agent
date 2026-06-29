@@ -50,7 +50,11 @@ export function KnowledgeBaseFormModal({
           name="embeddingModelConfigId"
           rules={[{ required: true, message: "请选择 Embedding 模型" }]}
         >
-          <Select options={embeddingModelOptions} placeholder="请选择 Embedding 模型" />
+          <Select
+            notFoundContent="暂无可用 Embedding 模型"
+            options={embeddingModelOptions}
+            placeholder="请选择 Embedding 模型"
+          />
         </Form.Item>
         <Form.Item label="描述" name="description">
           <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />

@@ -86,6 +86,10 @@ export function KnowledgePage() {
   }
 
   function openCreateDialog() {
+    if (embeddingModelOptions.length === 0) {
+      message.warning("请先在模型供应商中配置并启用 Embedding 模型，再创建知识库。");
+    }
+
     setEditingId(null);
     form.setFieldsValue({
       name: "",
@@ -293,11 +297,7 @@ export function KnowledgePage() {
           <Button disabled={loading} onClick={() => void refresh()}>
             刷新
           </Button>
-          <Button
-            disabled={embeddingModelOptions.length === 0}
-            type="primary"
-            onClick={openCreateDialog}
-          >
+          <Button type="primary" onClick={openCreateDialog}>
             新增知识库
           </Button>
         </div>
