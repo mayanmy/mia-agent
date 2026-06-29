@@ -26,6 +26,8 @@ import { chunkText } from "./chunking";
 import { isTextDocument, parseTextDocument } from "./parsing";
 
 const MAX_DOCUMENT_FILE_SIZE = 20 * 1024 * 1024;
+// 当前 pgvector 表结构固定为 vector(1536)，入库前先校验，避免把底层 SQL 错误暴露给前端。
+const KNOWLEDGE_EMBEDDING_DIMENSION = 1536;
 const ALLOWED_DOCUMENT_EXTENSIONS = new Set([
   ".txt",
   ".md",
@@ -459,6 +461,17 @@ export class KnowledgeService {
       throw new Error("embedding response count does not match chunk count");
     }
 
+    // Embedding 模型维度一旦和数据库列不一致，后续检索也无法混用，因此索引阶段直接失败并提示配置问题。
+    const invalidEmbedding = response.embeddings.find(
+      (embedding) => embedding.length !== KNOWLEDGE_EMBEDDING_DIMENSION
+    );
+
+    if (invalidEmbedding) {
+      throw new Error(
+        `Embedding 向量维度不匹配：当前数据库需要 ${KNOWLEDGE_EMBEDDING_DIMENSION} 维，但模型返回 ${invalidEmbedding.length} 维。请为知识库选择 ${KNOWLEDGE_EMBEDDING_DIMENSION} 维 Embedding 模型，或迁移向量表维度后重试。`
+      );
+    }
+
     for (const [index, embedding] of response.embeddings.entries()) {
       const chunk = chunks[index];
 
@@ -522,20 +535,37 @@ export class KnowledgeService {
     const embeddingLiteral = `[${embedding.join(",")}]`;
 
     // Prisma 不能直接写 Unsupported("vector") 字段，这里用参数化 raw SQL 写入 pgvector。
-    await this.prisma.$executeRawUnsafe(
-      `INSERT INTO "knowledge_embeddings" (
-        "id",
-        "knowledge_base_id",
-        "chunk_id",
-        "embedding_model_config_id",
-        "embedding"
-      ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::vector)`,
-      randomUUID(),
-      knowledgeBaseId,
-      chunkId,
-      embeddingModelConfigId,
-      embeddingLiteral
-    );
+    try {
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO "knowledge_embeddings" (
+          "id",
+          "knowledge_base_id",
+          "chunk_id",
+          "embedding_model_config_id",
+          "embedding"
+        ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::vector)`,
+        randomUUID(),
+        knowledgeBaseId,
+        chunkId,
+        embeddingModelConfigId,
+        embeddingLiteral
+      );
+    } catch (error) {
+      throw this.toReadableEmbeddingError(error);
+    }
+  }
+
+  private toReadableEmbeddingError(error: unknown): Error {
+    const message = error instanceof Error ? error.message : String(error);
+    const dimensionMatch = message.match(/expected\s+(\d+)\s+dimensions,\s+not\s+(\d+)/iu);
+
+    if (dimensionMatch) {
+      return new Error(
+        `Embedding 向量维度不匹配：当前数据库需要 ${dimensionMatch[1]} 维，但模型返回 ${dimensionMatch[2]} 维。请更换匹配维度的 Embedding 模型，或迁移向量表维度后重试。`
+      );
+    }
+
+    return error instanceof Error ? error : new Error(message);
   }
 
   private async cleanupDocumentIndex(documentId: string): Promise<void> {

@@ -7,6 +7,8 @@ import { RetrievalContext, RetrievalSource } from "./dto/retrieval.dto";
 
 const DEFAULT_TOP_K = 5;
 const MAX_TOP_K = 12;
+// 查询向量必须和入库向量维度一致，否则 pgvector 会在相似度计算时抛出底层错误。
+const KNOWLEDGE_EMBEDDING_DIMENSION = 1536;
 
 type RetrievalRow = {
   knowledge_base_id: string;
@@ -73,6 +75,12 @@ export class RetrievalService {
         sources: [],
         elapsedMs: Date.now() - startedAt
       };
+    }
+
+    if (embedding.length !== KNOWLEDGE_EMBEDDING_DIMENSION) {
+      throw new Error(
+        `Embedding 向量维度不匹配：当前数据库需要 ${KNOWLEDGE_EMBEDDING_DIMENSION} 维，但模型返回 ${embedding.length} 维。请检查知识库的 Embedding 模型配置。`
+      );
     }
 
     const sources = await this.searchSimilarChunks({

@@ -56,7 +56,7 @@ export const tests = [
       };
       const modelProvidersService = {
         createEmbedding: async () => ({
-          embeddings: [[0.1, 0.2, 0.3]],
+          embeddings: [Array.from({ length: 1536 }, () => 0.1)],
           model: "embedding",
           providerId: "provider-id",
           providerType: "OPENAI_COMPATIBLE"
@@ -76,6 +76,49 @@ export const tests = [
       assert.deepEqual(searchedKnowledgeBaseIds, [["kb-a"]]);
       assert.equal(result.sources.length, 1);
       assert.equal(result.sources[0].content, "chunk content");
+    }
+  },
+  {
+    name: "RetrievalService reports readable error when embedding dimension mismatches",
+    run: async () => {
+      const prisma = {
+        $queryRawUnsafe: async () => {
+          throw new Error("pgvector query should not be called");
+        }
+      };
+      const knowledgeService = {
+        getRetrievalConfigs: async () => [
+          { id: "kb-a", embeddingModelConfigId: "embedding-a" }
+        ]
+      };
+      const modelProvidersService = {
+        createEmbedding: async () => ({
+          embeddings: [Array.from({ length: 1024 }, () => 0.1)],
+          model: "embedding",
+          providerId: "provider-id",
+          providerType: "OPENAI_COMPATIBLE"
+        })
+      };
+      const service = new RetrievalService(
+        prisma as never,
+        knowledgeService as never,
+        modelProvidersService as never
+      );
+
+      await assert.rejects(
+        () =>
+          service.retrieveKnowledgeContext({
+            query: "hello",
+            knowledgeBaseIds: ["kb-a"]
+          }),
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, /Embedding 向量维度不匹配/u);
+          assert.match(error.message, /1536/u);
+          assert.match(error.message, /1024/u);
+          return true;
+        }
+      );
     }
   }
 ];
