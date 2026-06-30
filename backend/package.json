@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio --schema prisma/schema.prisma"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
