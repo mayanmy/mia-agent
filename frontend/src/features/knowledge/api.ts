@@ -5,6 +5,7 @@ export type KnowledgeBaseListItem = {
   name: string;
   description: string;
   embeddingModelConfigId: string;
+  embeddingDimension: number;
   embeddingModelName: string;
   embeddingProviderName: string;
   documentCount: number;

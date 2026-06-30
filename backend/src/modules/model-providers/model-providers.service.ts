@@ -35,6 +35,7 @@ import { ModelProvidersGateway } from "./gateway";
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
 const DEFAULT_CONTEXT_LENGTH = 4096;
+const DEFAULT_EMBEDDING_DIMENSION = 1536;
 const ANTHROPIC_VERSION = "2023-06-01";
 
 type ProviderTestRequest = {
@@ -244,6 +245,13 @@ export class ModelProvidersService {
     const modelType = data.modelType ?? existing.modelType;
     let provider = existing.provider;
 
+    if (
+      data.embeddingDimension === undefined &&
+      (data.modelName !== undefined || data.modelType !== undefined)
+    ) {
+      data.embeddingDimension = this.normalizeEmbeddingDimension(undefined, modelName, modelType);
+    }
+
     if (data.providerId) {
       provider = await this.ensureProviderExists(data.providerId);
     }
@@ -350,6 +358,36 @@ export class ModelProvidersService {
     }
   }
 
+  async getEmbeddingModelDimension(id: string): Promise<number> {
+    const config = await this.prisma.modelConfig.findFirst({
+      where: {
+        id,
+        modelType: ModelConfigType.EMBEDDING,
+        enabled: true,
+        deletedAt: null,
+        provider: {
+          enabled: true,
+          deletedAt: null
+        }
+      },
+      select: {
+        modelName: true,
+        embeddingDimension: true
+      }
+    });
+
+    if (!config) {
+      throw new AppError(
+        ErrorCodes.provider.modelConfigNotFound,
+        "model config not found or unavailable",
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    // 维度优先使用模型配置中的显式值；旧数据没有该字段时，再用模型名做保守推断。
+    return config.embeddingDimension ?? this.inferEmbeddingDimension(config.modelName);
+  }
+
   async updateDefaultModelSettings(
     payload: DefaultModelSettingsUpdateDto
   ): Promise<DefaultModelSettings> {
@@ -409,12 +447,20 @@ export class ModelProvidersService {
   }
 
   private validateModelConfigCreate(payload: ModelConfigCreateDto): Required<ModelConfigCreateDto> {
+    const modelName = this.requireNonEmptyString(payload.modelName, "modelName");
+    const modelType = this.requireModelType(payload.modelType);
+
     return {
       providerId: this.requireNonEmptyString(payload.providerId, "providerId"),
-      modelName: this.requireNonEmptyString(payload.modelName, "modelName"),
-      modelType: this.requireModelType(payload.modelType),
+      modelName,
+      modelType,
       credentialName: this.normalizeOptionalString(payload.credentialName),
       contextLength: this.normalizeContextLength(payload.contextLength),
+      embeddingDimension: this.normalizeEmbeddingDimension(
+        payload.embeddingDimension,
+        modelName,
+        modelType
+      ),
       enabled: payload.enabled ?? true,
       timeoutSeconds: this.normalizeTimeout(payload.timeoutSeconds),
       maxTokens: this.normalizeMaxTokens(payload.maxTokens)
@@ -422,21 +468,33 @@ export class ModelProvidersService {
   }
 
   private validateModelConfigUpdate(payload: ModelConfigUpdateDto): ModelConfigUpdateDto {
+    const modelName =
+      payload.modelName !== undefined
+        ? this.requireNonEmptyString(payload.modelName, "modelName")
+        : undefined;
+    const modelType =
+      payload.modelType !== undefined ? this.requireModelType(payload.modelType) : undefined;
+
     return {
       ...(payload.providerId !== undefined
         ? { providerId: this.requireNonEmptyString(payload.providerId, "providerId") }
         : {}),
-      ...(payload.modelName !== undefined
-        ? { modelName: this.requireNonEmptyString(payload.modelName, "modelName") }
-        : {}),
-      ...(payload.modelType !== undefined
-        ? { modelType: this.requireModelType(payload.modelType) }
-        : {}),
+      ...(modelName !== undefined ? { modelName } : {}),
+      ...(modelType !== undefined ? { modelType } : {}),
       ...(payload.credentialName !== undefined
         ? { credentialName: this.normalizeOptionalString(payload.credentialName) }
         : {}),
       ...(payload.contextLength !== undefined
         ? { contextLength: this.normalizeContextLength(payload.contextLength) }
+        : {}),
+      ...(payload.embeddingDimension !== undefined
+        ? {
+            embeddingDimension: this.normalizeEmbeddingDimension(
+              payload.embeddingDimension,
+              modelName,
+              modelType
+            )
+          }
         : {}),
       ...(payload.enabled !== undefined ? { enabled: Boolean(payload.enabled) } : {}),
       ...(payload.timeoutSeconds !== undefined
@@ -553,6 +611,50 @@ export class ModelProvidersService {
     }
 
     return contextLength;
+  }
+
+  private normalizeEmbeddingDimension(
+    value: unknown,
+    modelName: string | undefined,
+    modelType: ModelConfigType | undefined
+  ): number | null {
+    if (modelType !== ModelConfigType.EMBEDDING) {
+      return null;
+    }
+
+    if (value === undefined || value === null || value === "") {
+      return this.inferEmbeddingDimension(modelName ?? "");
+    }
+
+    const dimension = Number(value);
+
+    if (!Number.isInteger(dimension) || dimension < 1 || dimension > 100_000) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "embeddingDimension must be a positive integer"
+      );
+    }
+
+    return dimension;
+  }
+
+  private inferEmbeddingDimension(modelName: string): number {
+    const normalizedName = modelName.toLowerCase();
+
+    // v1 先用常见模型名做保守推断；后续模型配置页会允许用户显式维护维度。
+    if (normalizedName.includes("1024")) {
+      return 1024;
+    }
+
+    if (normalizedName.includes("text-embedding-3-large")) {
+      return 3072;
+    }
+
+    if (normalizedName.includes("3072")) {
+      return 3072;
+    }
+
+    return DEFAULT_EMBEDDING_DIMENSION;
   }
 
   private async ensureProviderExists(id: string): Promise<ModelProvider> {
@@ -1153,6 +1255,7 @@ export class ModelProvidersService {
       modelType: config.modelType,
       credentialName: config.credentialName,
       contextLength: config.contextLength,
+      embeddingDimension: config.embeddingDimension,
       enabled: config.enabled,
       timeoutSeconds: config.timeoutSeconds,
       maxTokens: config.maxTokens,

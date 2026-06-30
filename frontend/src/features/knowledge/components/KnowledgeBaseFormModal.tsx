@@ -46,11 +46,17 @@ export function KnowledgeBaseFormModal({
           <Input />
         </Form.Item>
         <Form.Item
+          extra={
+            editing
+              ? "Embedding 模型和向量维度已随知识库锁定，如需更换模型请创建新知识库并重新上传文档。"
+              : "Embedding 模型决定该知识库的向量维度，创建后不建议直接修改。"
+          }
           label="Embedding 模型"
           name="embeddingModelConfigId"
           rules={[{ required: true, message: "请选择 Embedding 模型" }]}
         >
           <Select
+            disabled={editing}
             notFoundContent="暂无可用 Embedding 模型"
             options={embeddingModelOptions}
             placeholder="请选择 Embedding 模型"

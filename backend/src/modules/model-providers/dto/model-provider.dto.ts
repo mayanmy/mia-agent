@@ -65,6 +65,7 @@ export type ModelConfigListItem = {
   modelType: ModelConfigType;
   credentialName: string;
   contextLength: number;
+  embeddingDimension: number | null;
   enabled: boolean;
   timeoutSeconds: number;
   maxTokens: number | null;
@@ -82,6 +83,7 @@ export type ModelConfigCreateDto = {
   modelType?: ModelConfigType;
   credentialName?: string;
   contextLength?: number;
+  embeddingDimension?: number | null;
   enabled?: boolean;
   timeoutSeconds?: number;
   maxTokens?: number | null;
@@ -93,6 +95,7 @@ export type ModelConfigUpdateDto = {
   modelType?: ModelConfigType;
   credentialName?: string;
   contextLength?: number;
+  embeddingDimension?: number | null;
   enabled?: boolean;
   timeoutSeconds?: number;
   maxTokens?: number | null;

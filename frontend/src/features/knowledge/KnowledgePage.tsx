@@ -52,7 +52,7 @@ export function KnowledgePage() {
       modelConfigs
         .filter((config) => config.modelType === "EMBEDDING" && config.enabled)
         .map((config) => ({
-          label: config.modelName,
+          label: `${config.modelName} · ${config.embeddingDimension ?? 1536} 维`,
           value: config.id
         })),
     [modelConfigs]

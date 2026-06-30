@@ -35,6 +35,13 @@ export function KnowledgeBaseTable({
       render: (_, record) => `${record.embeddingProviderName} / ${record.embeddingModelName}`
     },
     {
+      title: "向量维度",
+      dataIndex: "embeddingDimension",
+      key: "embeddingDimension",
+      width: 110,
+      render: (dimension: number) => `${dimension} 维`
+    },
+    {
       title: "文档数",
       dataIndex: "documentCount",
       key: "documentCount",
@@ -104,7 +111,7 @@ export function KnowledgeBaseTable({
         showSizeChanger: true
       }}
       rowKey="id"
-      scroll={{ x: 1140 }}
+      scroll={{ x: 1250 }}
       onChange={(nextPagination) => {
         onPageChange(nextPagination.current || 1, nextPagination.pageSize || 20);
       }}

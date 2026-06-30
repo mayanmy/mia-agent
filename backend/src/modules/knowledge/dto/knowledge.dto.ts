@@ -35,6 +35,7 @@ export type KnowledgeBaseListItem = {
   name: string;
   description: string;
   embeddingModelConfigId: string;
+  embeddingDimension: number;
   embeddingModelName: string;
   embeddingProviderName: string;
   documentCount: number;
@@ -65,6 +66,7 @@ export type KnowledgeDocumentListItem = {
 export type KnowledgeBaseRetrievalConfig = {
   id: string;
   embeddingModelConfigId: string;
+  embeddingDimension: number;
 };
 
 export type UploadedKnowledgeFile = {

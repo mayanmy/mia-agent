@@ -29,12 +29,19 @@ export const tests = [
     }
   },
   {
-    name: "RetrievalService searches only knowledge bases with the same embedding model",
+    name: "RetrievalService searches knowledge bases grouped by embedding model",
     run: async () => {
       const searchedKnowledgeBaseIds: string[][] = [];
+      const searchedModelIds: string[] = [];
       const prisma = {
-        $queryRawUnsafe: async (_sql: string, _embedding: string, ids: string[]) => {
+        $queryRawUnsafe: async (
+          _sql: string,
+          _embedding: string,
+          ids: string[],
+          modelConfigId: string
+        ) => {
           searchedKnowledgeBaseIds.push(ids);
+          searchedModelIds.push(modelConfigId);
           return [
             {
               knowledge_base_id: ids[0],
@@ -50,17 +57,21 @@ export const tests = [
       };
       const knowledgeService = {
         getRetrievalConfigs: async () => [
-          { id: "kb-a", embeddingModelConfigId: "embedding-a" },
-          { id: "kb-b", embeddingModelConfigId: "embedding-b" }
+          { id: "kb-a", embeddingModelConfigId: "embedding-a", embeddingDimension: 1536 },
+          { id: "kb-b", embeddingModelConfigId: "embedding-b", embeddingDimension: 1024 }
         ]
       };
       const modelProvidersService = {
-        createEmbedding: async () => ({
-          embeddings: [Array.from({ length: 1536 }, () => 0.1)],
-          model: "embedding",
-          providerId: "provider-id",
-          providerType: "OPENAI_COMPATIBLE"
-        })
+        createEmbedding: async ({ modelConfigId }: { modelConfigId: string }) => {
+          const dimension = modelConfigId === "embedding-a" ? 1536 : 1024;
+
+          return {
+            embeddings: [Array.from({ length: dimension }, () => 0.1)],
+            model: "embedding",
+            providerId: "provider-id",
+            providerType: "OPENAI_COMPATIBLE"
+          };
+        }
       };
       const service = new RetrievalService(
         prisma as never,
@@ -73,8 +84,9 @@ export const tests = [
         knowledgeBaseIds: ["kb-a", "kb-b"]
       });
 
-      assert.deepEqual(searchedKnowledgeBaseIds, [["kb-a"]]);
-      assert.equal(result.sources.length, 1);
+      assert.deepEqual(searchedKnowledgeBaseIds, [["kb-a"], ["kb-b"]]);
+      assert.deepEqual(searchedModelIds, ["embedding-a", "embedding-b"]);
+      assert.equal(result.sources.length, 2);
       assert.equal(result.sources[0].content, "chunk content");
     }
   },
@@ -88,7 +100,7 @@ export const tests = [
       };
       const knowledgeService = {
         getRetrievalConfigs: async () => [
-          { id: "kb-a", embeddingModelConfigId: "embedding-a" }
+          { id: "kb-a", embeddingModelConfigId: "embedding-a", embeddingDimension: 1536 }
         ]
       };
       const modelProvidersService = {

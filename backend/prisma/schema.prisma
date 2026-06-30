@@ -47,6 +47,7 @@ model ModelConfig {
   modelType                ModelConfigType       @map("model_type")
   credentialName           String                @default("") @map("credential_name")
   contextLength            Int                   @default(4096) @map("context_length")
+  embeddingDimension       Int?                  @map("embedding_dimension")
   enabled                  Boolean               @default(true)
   timeoutSeconds           Int                   @default(120) @map("timeout_seconds")
   maxTokens                Int?                  @map("max_tokens")
@@ -57,6 +58,8 @@ model ModelConfig {
   agents                   Agent[]
   knowledgeBases           KnowledgeBase[]
   knowledgeEmbeddings      KnowledgeEmbedding[]
+  knowledgeEmbeddings1024  KnowledgeEmbedding1024[]
+  knowledgeEmbeddings1536  KnowledgeEmbedding1536[]
   defaultChatSettings      DefaultModelSetting[] @relation("DefaultChatModel")
   defaultEmbeddingSettings DefaultModelSetting[] @relation("DefaultEmbeddingModel")
 
@@ -150,6 +153,7 @@ model KnowledgeBase {
   name                   String
   description            String               @default("")
   embeddingModelConfigId String               @map("embedding_model_config_id") @db.Uuid
+  embeddingDimension     Int                  @default(1536) @map("embedding_dimension")
   enabled                Boolean              @default(true)
   createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -157,9 +161,12 @@ model KnowledgeBase {
   embeddingModelConfig   ModelConfig          @relation(fields: [embeddingModelConfigId], references: [id])
   documents              KnowledgeDocument[]
   chunks                 KnowledgeChunk[]
+  embeddings1024         KnowledgeEmbedding1024[]
+  embeddings1536         KnowledgeEmbedding1536[]
   agentKnowledgeBases    AgentKnowledgeBase[]
 
   @@index([createdAt(sort: Desc)], map: "idx_knowledge_bases_created_at")
+  @@index([embeddingDimension], map: "idx_knowledge_bases_embedding_dimension")
   @@index([embeddingModelConfigId], map: "idx_knowledge_bases_embedding_model_config_id")
   @@index([enabled, createdAt(sort: Desc)], map: "idx_knowledge_bases_enabled_created_at")
   @@map("knowledge_bases")
@@ -203,6 +210,8 @@ model KnowledgeChunk {
   knowledgeBase   KnowledgeBase       @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
   document        KnowledgeDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
   embedding       KnowledgeEmbedding?
+  embeddings1024  KnowledgeEmbedding1024?
+  embeddings1536  KnowledgeEmbedding1536?
 
   @@index([documentId, chunkIndex], map: "idx_knowledge_chunks_document_id_chunk_index")
   @@index([knowledgeBaseId, createdAt(sort: Desc)], map: "idx_knowledge_chunks_knowledge_base_id_created_at")
@@ -221,6 +230,36 @@ model KnowledgeEmbedding {
 
   @@index([knowledgeBaseId, embeddingModelConfigId], map: "idx_knowledge_embeddings_kb_model")
   @@map("knowledge_embeddings")
+}
+
+model KnowledgeEmbedding1024 {
+  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  knowledgeBaseId        String              @map("knowledge_base_id") @db.Uuid
+  chunkId                String              @unique(map: "uq_knowledge_embeddings_1024_chunk_id") @map("chunk_id") @db.Uuid
+  embeddingModelConfigId String              @map("embedding_model_config_id") @db.Uuid
+  embedding              Unsupported("vector")
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  knowledgeBase          KnowledgeBase       @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunk                  KnowledgeChunk      @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  embeddingModelConfig   ModelConfig         @relation(fields: [embeddingModelConfigId], references: [id])
+
+  @@index([knowledgeBaseId, embeddingModelConfigId], map: "idx_knowledge_embeddings_1024_kb_model")
+  @@map("knowledge_embeddings_1024")
+}
+
+model KnowledgeEmbedding1536 {
+  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  knowledgeBaseId        String              @map("knowledge_base_id") @db.Uuid
+  chunkId                String              @unique(map: "uq_knowledge_embeddings_1536_chunk_id") @map("chunk_id") @db.Uuid
+  embeddingModelConfigId String              @map("embedding_model_config_id") @db.Uuid
+  embedding              Unsupported("vector")
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  knowledgeBase          KnowledgeBase       @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunk                  KnowledgeChunk      @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  embeddingModelConfig   ModelConfig         @relation(fields: [embeddingModelConfigId], references: [id])
+
+  @@index([knowledgeBaseId, embeddingModelConfigId], map: "idx_knowledge_embeddings_1536_kb_model")
+  @@map("knowledge_embeddings_1536")
 }
 
 model AgentKnowledgeBase {

@@ -7,8 +7,6 @@ import { RetrievalContext, RetrievalSource } from "./dto/retrieval.dto";
 
 const DEFAULT_TOP_K = 5;
 const MAX_TOP_K = 12;
-// 查询向量必须和入库向量维度一致，否则 pgvector 会在相似度计算时抛出底层错误。
-const KNOWLEDGE_EMBEDDING_DIMENSION = 1536;
 
 type RetrievalRow = {
   knowledge_base_id: string;
@@ -58,50 +56,91 @@ export class RetrievalService {
       };
     }
 
-    // v1 要求一个 Agent 绑定的知识库使用同一种 embedding model，避免不同向量空间混查。
-    const embeddingModelConfigId = retrievalConfigs[0].embeddingModelConfigId;
-    const compatibleKnowledgeBaseIds = retrievalConfigs
-      .filter((config) => config.embeddingModelConfigId === embeddingModelConfigId)
-      .map((config) => config.id);
-    const queryEmbedding = await this.modelProvidersService.createEmbedding({
-      modelConfigId: embeddingModelConfigId,
-      input: normalizedQuery
-    });
-    const embedding = queryEmbedding.embeddings[0];
+    const normalizedTopK = this.normalizeTopK(topK);
+    const sources: RetrievalSource[] = [];
 
-    if (!embedding) {
-      return {
-        query: normalizedQuery,
-        sources: [],
-        elapsedMs: Date.now() - startedAt
-      };
-    }
+    // 不同 Embedding 模型处于不同向量空间，即使维度相同也不能混查，所以按模型配置分组检索。
+    for (const group of this.groupRetrievalConfigs(retrievalConfigs)) {
+      const queryEmbedding = await this.modelProvidersService.createEmbedding({
+        modelConfigId: group.embeddingModelConfigId,
+        input: normalizedQuery
+      });
+      const embedding = queryEmbedding.embeddings[0];
 
-    if (embedding.length !== KNOWLEDGE_EMBEDDING_DIMENSION) {
-      throw new Error(
-        `Embedding 向量维度不匹配：当前数据库需要 ${KNOWLEDGE_EMBEDDING_DIMENSION} 维，但模型返回 ${embedding.length} 维。请检查知识库的 Embedding 模型配置。`
+      if (!embedding) {
+        continue;
+      }
+
+      if (embedding.length !== group.embeddingDimension) {
+        throw new Error(
+          `Embedding 向量维度不匹配：当前知识库需要 ${group.embeddingDimension} 维，但模型返回 ${embedding.length} 维。请检查知识库的 Embedding 模型配置。`
+        );
+      }
+
+      sources.push(
+        ...(await this.searchSimilarChunks({
+          embedding,
+          embeddingDimension: group.embeddingDimension,
+          embeddingModelConfigId: group.embeddingModelConfigId,
+          knowledgeBaseIds: group.knowledgeBaseIds,
+          topK: normalizedTopK
+        }))
       );
     }
 
-    const sources = await this.searchSimilarChunks({
-      embedding,
-      knowledgeBaseIds: compatibleKnowledgeBaseIds,
-      topK: this.normalizeTopK(topK)
-    });
-
     return {
       query: normalizedQuery,
-      sources,
+      sources: sources.sort((left, right) => right.score - left.score).slice(0, normalizedTopK),
       elapsedMs: Date.now() - startedAt
     };
   }
 
+  private groupRetrievalConfigs(
+    configs: Array<{ id: string; embeddingModelConfigId: string; embeddingDimension: number }>
+  ): Array<{
+    embeddingModelConfigId: string;
+    embeddingDimension: number;
+    knowledgeBaseIds: string[];
+  }> {
+    const groups = new Map<
+      string,
+      { embeddingModelConfigId: string; embeddingDimension: number; knowledgeBaseIds: string[] }
+    >();
+
+    for (const config of configs) {
+      const existing = groups.get(config.embeddingModelConfigId);
+
+      if (!existing) {
+        groups.set(config.embeddingModelConfigId, {
+          embeddingModelConfigId: config.embeddingModelConfigId,
+          embeddingDimension: config.embeddingDimension,
+          knowledgeBaseIds: [config.id]
+        });
+        continue;
+      }
+
+      if (existing.embeddingDimension !== config.embeddingDimension) {
+        throw new Error(
+          `Embedding 向量维度不匹配：同一个 Embedding 模型绑定了 ${existing.embeddingDimension} 维和 ${config.embeddingDimension} 维知识库，请重建配置异常的知识库。`
+        );
+      }
+
+      existing.knowledgeBaseIds.push(config.id);
+    }
+
+    return [...groups.values()];
+  }
+
   private async searchSimilarChunks({
     embedding,
+    embeddingDimension,
+    embeddingModelConfigId,
     knowledgeBaseIds,
     topK
   }: {
     embedding: number[];
+    embeddingDimension: number;
+    embeddingModelConfigId: string;
     knowledgeBaseIds: string[];
     topK: number;
   }): Promise<RetrievalSource[]> {
@@ -110,7 +149,8 @@ export class RetrievalService {
     }
 
     const embeddingLiteral = `[${embedding.join(",")}]`;
-    // pgvector 相似度查询需要直接使用 <=> 操作符，Prisma 暂不支持这种 vector 表达式。
+    const tableName = this.getEmbeddingTableName(embeddingDimension);
+    // pgvector 相似度查询需要直接使用 <=> 操作符；表名只来自维度白名单，不能使用用户输入拼接。
     const rows = await this.prisma.$queryRawUnsafe<RetrievalRow[]>(
       `SELECT
         c."knowledge_base_id",
@@ -120,16 +160,18 @@ export class RetrievalService {
         c."chunk_index",
         c."content",
         1 - (e."embedding" <=> $1::vector) AS "score"
-      FROM "knowledge_embeddings" e
+      FROM "${tableName}" e
       INNER JOIN "knowledge_chunks" c ON c."id" = e."chunk_id"
       INNER JOIN "knowledge_documents" d ON d."id" = c."document_id"
       WHERE c."deleted_at" IS NULL
         AND d."deleted_at" IS NULL
         AND c."knowledge_base_id" = ANY($2::uuid[])
+        AND e."embedding_model_config_id" = $3::uuid
       ORDER BY e."embedding" <=> $1::vector
-      LIMIT $3`,
+      LIMIT $4`,
       embeddingLiteral,
       knowledgeBaseIds,
+      embeddingModelConfigId,
       topK
     );
 
@@ -150,5 +192,17 @@ export class RetrievalService {
     }
 
     return Math.min(value, MAX_TOP_K);
+  }
+
+  private getEmbeddingTableName(embeddingDimension: number): string {
+    if (embeddingDimension === 1024) {
+      return "knowledge_embeddings_1024";
+    }
+
+    if (embeddingDimension === 1536) {
+      return "knowledge_embeddings_1536";
+    }
+
+    throw new Error(`暂不支持 ${embeddingDimension} 维 Embedding 向量表`);
   }
 }

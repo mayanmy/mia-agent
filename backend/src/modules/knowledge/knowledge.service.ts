@@ -26,8 +26,6 @@ import { chunkText } from "./chunking";
 import { isTextDocument, parseTextDocument } from "./parsing";
 
 const MAX_DOCUMENT_FILE_SIZE = 20 * 1024 * 1024;
-// 当前 pgvector 表结构固定为 vector(1536)，入库前先校验，避免把底层 SQL 错误暴露给前端。
-const KNOWLEDGE_EMBEDDING_DIMENSION = 1536;
 const ALLOWED_DOCUMENT_EXTENSIONS = new Set([
   ".txt",
   ".md",
@@ -124,10 +122,17 @@ export class KnowledgeService {
       data.embeddingModelConfigId,
       ModelConfigType.EMBEDDING
     );
+    const embeddingDimension = await this.modelProvidersService.getEmbeddingModelDimension(
+      data.embeddingModelConfigId
+    );
     await this.ensureNameAvailable(data.name);
 
     const knowledgeBase = await this.prisma.knowledgeBase.create({
-      data,
+      // 知识库创建时锁定向量维度，后续文档索引和检索都以这个快照为准。
+      data: {
+        ...data,
+        embeddingDimension
+      },
       include: this.getKnowledgeBaseInclude()
     });
 
@@ -148,13 +153,6 @@ export class KnowledgeService {
   ): Promise<KnowledgeBaseDetail> {
     await this.ensureKnowledgeBaseExists(id);
     const data = this.validateUpdate(payload);
-
-    if (data.embeddingModelConfigId) {
-      await this.modelProvidersService.ensureEnabledModelConfig(
-        data.embeddingModelConfigId,
-        ModelConfigType.EMBEDDING
-      );
-    }
 
     if (data.name) {
       await this.ensureNameAvailable(data.name, id);
@@ -280,6 +278,9 @@ export class KnowledgeService {
 
     const deletedAt = new Date();
 
+    // 删除文档时同时清理所有维度分表里的向量，避免软删除 chunk 仍被旧索引命中。
+    await this.deleteEmbeddingsForDocument(documentId);
+
     await this.prisma.$transaction([
       this.prisma.knowledgeDocument.update({
         where: {
@@ -288,13 +289,6 @@ export class KnowledgeService {
         data: {
           deletedAt,
           status: "deleted"
-        }
-      }),
-      this.prisma.knowledgeEmbedding.deleteMany({
-        where: {
-          chunk: {
-            documentId
-          }
         }
       }),
       this.prisma.knowledgeChunk.updateMany({
@@ -345,13 +339,7 @@ export class KnowledgeService {
     });
 
     // 重新索引前先删除旧 embedding，避免旧向量继续参与后续检索。
-    await this.prisma.knowledgeEmbedding.deleteMany({
-      where: {
-        chunk: {
-          documentId: document.id
-        }
-      }
-    });
+    await this.deleteEmbeddingsForDocument(document.id);
 
     return this.indexTextDocument(processingDocument, buffer);
   }
@@ -449,8 +437,8 @@ export class KnowledgeService {
       return;
     }
 
-    const embeddingModelConfigId =
-      await this.getKnowledgeBaseEmbeddingModelConfigId(knowledgeBaseId);
+    const { embeddingModelConfigId, embeddingDimension } =
+      await this.getKnowledgeBaseEmbeddingConfig(knowledgeBaseId);
     const response = await this.modelProvidersService.createEmbedding({
       modelConfigId: embeddingModelConfigId,
       input: chunks.map((chunk) => chunk.content)
@@ -461,14 +449,14 @@ export class KnowledgeService {
       throw new Error("embedding response count does not match chunk count");
     }
 
-    // Embedding 模型维度一旦和数据库列不一致，后续检索也无法混用，因此索引阶段直接失败并提示配置问题。
+    // Embedding 模型维度一旦和知识库维度不一致，后续检索也无法混用，因此索引阶段直接失败并提示配置问题。
     const invalidEmbedding = response.embeddings.find(
-      (embedding) => embedding.length !== KNOWLEDGE_EMBEDDING_DIMENSION
+      (embedding) => embedding.length !== embeddingDimension
     );
 
     if (invalidEmbedding) {
       throw new Error(
-        `Embedding 向量维度不匹配：当前数据库需要 ${KNOWLEDGE_EMBEDDING_DIMENSION} 维，但模型返回 ${invalidEmbedding.length} 维。请为知识库选择 ${KNOWLEDGE_EMBEDDING_DIMENSION} 维 Embedding 模型，或迁移向量表维度后重试。`
+        `Embedding 向量维度不匹配：当前知识库需要 ${embeddingDimension} 维，但模型返回 ${invalidEmbedding.length} 维。请为知识库选择 ${embeddingDimension} 维 Embedding 模型，或创建新知识库后重新上传。`
       );
     }
 
@@ -479,6 +467,7 @@ export class KnowledgeService {
         knowledgeBaseId,
         chunkId: chunk.id,
         embeddingModelConfigId,
+        embeddingDimension,
         embedding
       });
     }
@@ -499,14 +488,17 @@ export class KnowledgeService {
     });
   }
 
-  private async getKnowledgeBaseEmbeddingModelConfigId(knowledgeBaseId: string): Promise<string> {
+  private async getKnowledgeBaseEmbeddingConfig(
+    knowledgeBaseId: string
+  ): Promise<{ embeddingModelConfigId: string; embeddingDimension: number }> {
     const knowledgeBase = await this.prisma.knowledgeBase.findFirst({
       where: {
         id: knowledgeBaseId,
         deletedAt: null
       },
       select: {
-        embeddingModelConfigId: true
+        embeddingModelConfigId: true,
+        embeddingDimension: true
       }
     });
 
@@ -518,26 +510,29 @@ export class KnowledgeService {
       );
     }
 
-    return knowledgeBase.embeddingModelConfigId;
+    return knowledgeBase;
   }
 
   private async insertKnowledgeEmbedding({
     knowledgeBaseId,
     chunkId,
     embeddingModelConfigId,
+    embeddingDimension,
     embedding
   }: {
     knowledgeBaseId: string;
     chunkId: string;
     embeddingModelConfigId: string;
+    embeddingDimension: number;
     embedding: number[];
   }): Promise<void> {
     const embeddingLiteral = `[${embedding.join(",")}]`;
+    const tableName = this.getEmbeddingTableName(embeddingDimension);
 
-    // Prisma 不能直接写 Unsupported("vector") 字段，这里用参数化 raw SQL 写入 pgvector。
+    // Prisma 不能直接写 Unsupported("vector") 字段；表名只能来自白名单函数，避免 raw SQL 注入风险。
     try {
       await this.prisma.$executeRawUnsafe(
-        `INSERT INTO "knowledge_embeddings" (
+        `INSERT INTO "${tableName}" (
           "id",
           "knowledge_base_id",
           "chunk_id",
@@ -561,7 +556,7 @@ export class KnowledgeService {
 
     if (dimensionMatch) {
       return new Error(
-        `Embedding 向量维度不匹配：当前数据库需要 ${dimensionMatch[1]} 维，但模型返回 ${dimensionMatch[2]} 维。请更换匹配维度的 Embedding 模型，或迁移向量表维度后重试。`
+        `Embedding 向量维度不匹配：当前知识库需要 ${dimensionMatch[1]} 维，但模型返回 ${dimensionMatch[2]} 维。请更换匹配维度的 Embedding 模型，或创建新知识库后重新上传。`
       );
     }
 
@@ -570,13 +565,7 @@ export class KnowledgeService {
 
   private async cleanupDocumentIndex(documentId: string): Promise<void> {
     // 索引失败时清理半成品，保证 failed 文档不会留下可检索的脏 chunk/embedding。
-    await this.prisma.knowledgeEmbedding.deleteMany({
-      where: {
-        chunk: {
-          documentId
-        }
-      }
-    });
+    await this.deleteEmbeddingsForDocument(documentId);
     await this.prisma.knowledgeChunk.updateMany({
       where: {
         documentId,
@@ -586,6 +575,27 @@ export class KnowledgeService {
         deletedAt: new Date()
       }
     });
+  }
+
+  private async deleteEmbeddingsForDocument(documentId: string): Promise<void> {
+    // 迁移期间同时清理旧表和新分表；等旧表下线后只保留分表清理即可。
+    await this.prisma.knowledgeEmbedding.deleteMany({
+      where: {
+        chunk: {
+          documentId
+        }
+      }
+    });
+
+    for (const tableName of ["knowledge_embeddings_1024", "knowledge_embeddings_1536"]) {
+      await this.prisma.$executeRawUnsafe(
+        `DELETE FROM "${tableName}" e
+         USING "knowledge_chunks" c
+         WHERE c."id" = e."chunk_id"
+           AND c."document_id" = $1::uuid`,
+        documentId
+      );
+    }
   }
 
   private async findKnowledgeDocument(
@@ -654,7 +664,8 @@ export class KnowledgeService {
       },
       select: {
         id: true,
-        embeddingModelConfigId: true
+        embeddingModelConfigId: true,
+        embeddingDimension: true
       }
     });
   }
@@ -678,14 +689,6 @@ export class KnowledgeService {
         : {}),
       ...(payload.description !== undefined
         ? { description: this.normalizeOptionalString(payload.description) }
-        : {}),
-      ...(payload.embeddingModelConfigId !== undefined
-        ? {
-            embeddingModelConfigId: this.requireNonEmptyString(
-              payload.embeddingModelConfigId,
-              "embeddingModelConfigId"
-            )
-          }
         : {}),
       ...(payload.enabled !== undefined ? { enabled: Boolean(payload.enabled) } : {})
     };
@@ -885,6 +888,7 @@ export class KnowledgeService {
       name: knowledgeBase.name,
       description: knowledgeBase.description,
       embeddingModelConfigId: knowledgeBase.embeddingModelConfigId,
+      embeddingDimension: knowledgeBase.embeddingDimension,
       embeddingModelName: knowledgeBase.embeddingModelConfig.modelName,
       embeddingProviderName: knowledgeBase.embeddingModelConfig.provider.name,
       documentCount: knowledgeBase._count.documents,
@@ -917,6 +921,18 @@ export class KnowledgeService {
 
   private toPrismaJson(value: Record<string, string>): Prisma.InputJsonValue {
     return value;
+  }
+
+  private getEmbeddingTableName(embeddingDimension: number): string {
+    if (embeddingDimension === 1024) {
+      return "knowledge_embeddings_1024";
+    }
+
+    if (embeddingDimension === 1536) {
+      return "knowledge_embeddings_1536";
+    }
+
+    throw new Error(`暂不支持 ${embeddingDimension} 维 Embedding 向量表`);
   }
 
   private toKnowledgeDocumentStatus(status: string): KnowledgeDocumentStatus {
