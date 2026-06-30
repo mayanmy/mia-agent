@@ -203,6 +203,10 @@ export class RetrievalService {
       return "knowledge_embeddings_1536";
     }
 
+    if (embeddingDimension === 3072) {
+      return "knowledge_embeddings_3072";
+    }
+
     throw new Error(`暂不支持 ${embeddingDimension} 维 Embedding 向量表`);
   }
 }

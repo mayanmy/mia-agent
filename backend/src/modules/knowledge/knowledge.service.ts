@@ -587,7 +587,11 @@ export class KnowledgeService {
       }
     });
 
-    for (const tableName of ["knowledge_embeddings_1024", "knowledge_embeddings_1536"]) {
+    for (const tableName of [
+      "knowledge_embeddings_1024",
+      "knowledge_embeddings_1536",
+      "knowledge_embeddings_3072"
+    ]) {
       await this.prisma.$executeRawUnsafe(
         `DELETE FROM "${tableName}" e
          USING "knowledge_chunks" c
@@ -930,6 +934,10 @@ export class KnowledgeService {
 
     if (embeddingDimension === 1536) {
       return "knowledge_embeddings_1536";
+    }
+
+    if (embeddingDimension === 3072) {
+      return "knowledge_embeddings_3072";
     }
 
     throw new Error(`暂不支持 ${embeddingDimension} 维 Embedding 向量表`);
