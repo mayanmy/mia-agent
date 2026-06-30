@@ -182,6 +182,7 @@ export function ProvidersPage() {
       baseUrl: provider?.baseUrl ?? "",
       apiKey: "",
       contextLength: config.contextLength,
+      embeddingDimension: config.embeddingDimension,
       timeoutSeconds: config.timeoutSeconds,
       maxTokens: config.maxTokens,
       enabled: config.enabled

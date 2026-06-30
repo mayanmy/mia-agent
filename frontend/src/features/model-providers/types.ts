@@ -16,6 +16,7 @@ export type ModelFormValues = {
   baseUrl: string;
   apiKey?: string;
   contextLength: number;
+  embeddingDimension?: number | null;
   timeoutSeconds: number;
   maxTokens?: number | null;
   enabled: boolean;

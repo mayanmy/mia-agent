@@ -147,6 +147,7 @@ export const modelDefaults: ModelFormValues = {
   baseUrl: "",
   apiKey: "",
   contextLength: 4096,
+  embeddingDimension: null,
   timeoutSeconds: 120,
   maxTokens: null,
   enabled: true
@@ -174,10 +175,25 @@ export function toModelConfigPayload(values: ModelFormValues): ModelConfigPayloa
     modelType: values.modelType,
     credentialName: values.credentialName.trim(),
     contextLength: values.contextLength,
+    embeddingDimension: values.modelType === "EMBEDDING" ? values.embeddingDimension : null,
     timeoutSeconds: values.timeoutSeconds,
     maxTokens: values.maxTokens ?? null,
     enabled: values.enabled
   };
+}
+
+export function inferEmbeddingDimension(modelName: string): number {
+  const normalizedName = modelName.toLowerCase();
+
+  if (normalizedName.includes("1024")) {
+    return 1024;
+  }
+
+  if (normalizedName.includes("text-embedding-3-large") || normalizedName.includes("3072")) {
+    return 3072;
+  }
+
+  return 1536;
 }
 
 export function getProviderLogo(provider: ProviderListItem): string {

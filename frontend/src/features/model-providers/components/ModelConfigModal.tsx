@@ -6,6 +6,7 @@ import type { ModelFormValues } from "../types";
 import {
   getProviderAccent,
   getProviderLogo,
+  inferEmbeddingDimension,
   modelDefaults,
   modelTypeLabels,
   modelTypes
@@ -51,6 +52,7 @@ function OpenModelConfigModal({
 }: ModelConfigModalProps) {
   const [form] = Form.useForm<ModelFormValues>();
   const selectedProviderId = Form.useWatch("providerId", form);
+  const selectedModelType = Form.useWatch("modelType", form);
   const modelProvider = providers.find((provider) => provider.id === selectedProviderId);
 
   useEffect(() => {
@@ -70,14 +72,36 @@ function OpenModelConfigModal({
     const remoteModel = remoteModels.find((item) => item.modelName === modelName);
 
     if (!remoteModel) {
-      form.setFieldsValue({ modelName });
+      form.setFieldsValue({
+        modelName,
+        ...(form.getFieldValue("modelType") === "EMBEDDING"
+          ? { embeddingDimension: inferEmbeddingDimension(modelName) }
+          : {})
+      });
       return;
     }
 
     form.setFieldsValue({
       modelName: remoteModel.modelName,
       modelType: remoteModel.suggestedType,
+      embeddingDimension:
+        remoteModel.suggestedType === "EMBEDDING"
+          ? inferEmbeddingDimension(remoteModel.modelName)
+          : null,
       contextLength: remoteModel.contextLength ?? form.getFieldValue("contextLength") ?? 4096
+    });
+  }
+
+  function handleModelTypeChange(modelType: ModelFormValues["modelType"]) {
+    if (modelType !== "EMBEDDING") {
+      form.setFieldsValue({ embeddingDimension: null });
+      return;
+    }
+
+    form.setFieldsValue({
+      embeddingDimension:
+        form.getFieldValue("embeddingDimension") ??
+        inferEmbeddingDimension(form.getFieldValue("modelName") ?? "")
     });
   }
 
@@ -156,8 +180,19 @@ function OpenModelConfigModal({
               })),
               { label: "Rerank（暂未支持）", value: "RERANK", disabled: true }
             ]}
+            onChange={handleModelTypeChange}
           />
         </Form.Item>
+        {selectedModelType === "EMBEDDING" && (
+          <Form.Item
+            extra="向量维度会被新建知识库保存为固定快照；同一个知识库内所有文档必须使用相同维度。"
+            label="向量维度"
+            name="embeddingDimension"
+            rules={[{ required: true, message: "请输入向量维度" }]}
+          >
+            <InputNumber min={1} max={100000} precision={0} style={{ width: "100%" }} />
+          </Form.Item>
+        )}
         <div className="modelCredentialSection">
           <span>模型凭据</span>
         </div>
