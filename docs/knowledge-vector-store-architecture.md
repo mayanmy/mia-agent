@@ -1,0 +1,411 @@
+# 知识库向量存储架构选型文档
+
+## 1. 背景
+
+Mia 当前知识库向量存储使用 PostgreSQL + pgvector。为了支持不同 Embedding 模型的向量维度，当前已经演进为按维度分表：
+
+```text
+knowledge_embeddings_1024
+knowledge_embeddings_1536
+knowledge_embeddings_3072
+```
+
+这种方案适合 Mia 当前轻量、本地部署、单团队使用的阶段。但对比 Dify 的知识库设计，可以看到另一种更适合长期演进的模式：
+
+```text
+一个知识库 Dataset ↔ 一个 Qdrant Collection
+```
+
+本文用于分析 Dify 模式和 Mia 当前模式的差异，并给出 Mia 后续向量存储架构的长期建议。
+
+## 2. Dify 的设计模式
+
+Dify 采用接近如下的一对一绑定设计：
+
+```text
+Dataset A -> Qdrant Collection A
+Dataset B -> Qdrant Collection B
+Dataset C -> Qdrant Collection C
+```
+
+在这个模式下，一个知识库就是一个独立向量检索单元。每个 Collection 可以独立配置：
+
+- 向量维度。
+- distance metric。
+- HNSW 索引参数。
+- payload schema。
+- metadata filter。
+- 重建策略。
+- 删除策略。
+- 多向量字段。
+- 后续迁移策略。
+
+这种设计的核心思想是：
+
+```text
+知识库 = 向量存储隔离单元
+```
+
+## 3. Mia 当前设计模式
+
+Mia 当前使用 PostgreSQL + pgvector，并按向量维度分表：
+
+```text
+PostgreSQL
+  knowledge_bases
+  knowledge_documents
+  knowledge_chunks
+  knowledge_embeddings_1024
+  knowledge_embeddings_1536
+  knowledge_embeddings_3072
+```
+
+这种设计的核心思想是：
+
+```text
+向量维度 = 向量存储隔离单元
+知识库 = 向量表中的业务字段
+```
+
+不同知识库可以使用不同 Embedding 维度，但检索时需要根据知识库的 `embedding_dimension` 和 `embedding_model_config_id` 选择对应分表，并按 Embedding 模型分组查询。
+
+## 4. 两种模式的核心差异
+
+| 维度 | Dify Collection 模式 | Mia pgvector 分表模式 |
+| --- | --- | --- |
+| 隔离单元 | 知识库 | 向量维度 |
+| 向量维度 | 每个 Collection 独立 | 每个维度一张表 |
+| 检索入口 | 按知识库查对应 Collection | 按模型分组后查对应维度表 |
+| 删除知识库 | 删除 Collection + 元数据 | 删除业务数据 + 清理分表向量 |
+| 重建知识库 | 可新建临时 Collection 后切换 | 需要清理旧向量并重写分表 |
+| 索引参数 | 每个 Collection 可独立配置 | 同维度表共享配置 |
+| 扩展模型维度 | 创建新 Collection 即可 | 新增维度需要建表和迁移 |
+| 部署复杂度 | 高，需要维护向量数据库 | 低，只依赖 PostgreSQL |
+| 事务一致性 | 需要协调 PG 和 Qdrant | PG 内一致性更简单 |
+| 长期检索能力 | 更强 | 中小规模够用 |
+
+## 5. Dify 模式的优势
+
+### 5.1 检索编排更简单
+
+每个知识库对应自己的 Collection。检索时只需要：
+
+```text
+找到知识库 -> 找到 collection_name -> 在该 Collection 中检索
+```
+
+不需要关心该知识库属于哪个维度分表，也不需要在 SQL 中动态切换表名。
+
+### 5.2 知识库生命周期更清晰
+
+删除知识库：
+
+```text
+删除 PostgreSQL 元数据
+删除 Qdrant Collection
+```
+
+重建知识库：
+
+```text
+创建临时 Collection
+重新写入全部向量
+重建完成后切换 collection_name
+删除旧 Collection
+```
+
+这种模式天然适合后续做无损重建、回滚和灰度切换。
+
+### 5.3 更适合多模型和多维度
+
+不同知识库可以使用完全不同的 Embedding 模型：
+
+```text
+知识库 A：1536 维
+知识库 B：1024 维
+知识库 C：3072 维
+```
+
+每个 Collection 自带自己的 vector size，不需要为每个维度维护全局表结构。
+
+### 5.4 更适合大规模检索
+
+Qdrant 这类向量数据库专门处理：
+
+- 高维向量检索。
+- HNSW 索引。
+- payload filter。
+- collection 级别优化。
+- segment 管理。
+- 大规模数据写入和查询。
+
+数据量增长后，比直接依赖 pgvector 更容易做性能调优。
+
+## 6. Dify 模式的成本
+
+### 6.1 基础设施更复杂
+
+需要额外部署和维护 Qdrant：
+
+```text
+PostgreSQL：业务元数据
+Qdrant：向量数据
+文件存储：原始文档
+```
+
+这会增加本地部署、备份、恢复和监控成本。
+
+### 6.2 一致性需要额外处理
+
+文档、chunk 元数据在 PostgreSQL，向量在 Qdrant。写入流程可能出现：
+
+```text
+PG 写入成功，但 Qdrant 写入失败
+Qdrant 写入成功，但 PG 状态更新失败
+删除 PG 文档后，Qdrant 向量清理失败
+```
+
+因此需要补充：
+
+- 幂等写入。
+- 重试任务。
+- 失败状态。
+- 对账任务。
+- 重建能力。
+
+### 6.3 对 Mia 当前阶段偏重
+
+Mia 当前定位是 20-50 人团队内部、本地部署、单人维护。早期引入 Qdrant 会让系统复杂度上升，开发和排障成本变高。
+
+## 7. Mia 当前模式的优势
+
+### 7.1 部署简单
+
+只需要 PostgreSQL + pgvector：
+
+```text
+业务数据、chunk、embedding 都在同一个数据库
+```
+
+本地开发、备份和迁移都更直接。
+
+### 7.2 事务一致性更好
+
+文档、chunk、embedding 都在 PostgreSQL 中，虽然 pgvector 写入需要 raw SQL，但整体仍然比跨两个存储系统更容易保持一致。
+
+### 7.3 更适合 v1 快速落地
+
+当前 Mia 的优先级是完成最小闭环：
+
+```text
+配置模型 -> 创建知识库 -> 上传文档 -> 索引 -> Agent 检索 -> Chat 引用
+```
+
+pgvector 分表可以支撑这个闭环，不需要立刻引入额外向量数据库。
+
+## 8. Mia 当前模式的局限
+
+### 8.1 新增维度需要建表
+
+例如新增 768 维模型时，需要新增：
+
+```text
+knowledge_embeddings_768
+```
+
+同时修改：
+
+- Prisma schema。
+- migration。
+- 写入表名白名单。
+- 检索表名白名单。
+- 删除清理逻辑。
+
+### 8.2 知识库隔离不够自然
+
+同维度知识库共享同一张向量表。删除、重建、迁移都需要依赖业务字段过滤。
+
+### 8.3 索引参数无法按知识库独立
+
+如果后续要给不同知识库设置不同 HNSW 参数、不同 distance metric 或不同检索策略，pgvector 分表会比较别扭。
+
+### 8.4 长期会增加 service 复杂度
+
+随着能力增长，RetrievalService 会逐渐处理：
+
+- 按模型分组。
+- 按维度选表。
+- 分数合并。
+- metadata filter。
+- 重建索引。
+- 多维度清理。
+
+这会让业务 service 变厚，需要进一步抽象。
+
+## 9. 长期推荐方案
+
+长期看，Mia 更适合演进为：
+
+```text
+PostgreSQL 管业务元数据
+向量数据库管 embedding 向量
+一个知识库对应一个向量 Collection
+```
+
+推荐目标结构：
+
+```text
+knowledge_bases
+  id
+  name
+  embedding_model_config_id
+  embedding_dimension
+  vector_store_type
+  vector_collection_name
+  vector_status
+
+Qdrant
+  collection: mia_kb_{knowledge_base_id}
+```
+
+核心思想：
+
+```text
+知识库生命周期 = Collection 生命周期
+```
+
+这样更适合后续支持：
+
+- 知识库独立重建。
+- 知识库切换 Embedding 模型。
+- 知识库级索引参数。
+- 多向量字段。
+- 大规模向量检索。
+- 外部向量库扩展。
+
+## 10. 推荐演进路线
+
+### 10.1 v1：保留 pgvector 分表
+
+当前阶段继续使用：
+
+```text
+knowledge_embeddings_1024
+knowledge_embeddings_1536
+knowledge_embeddings_3072
+```
+
+原因：
+
+- 已经满足不同知识库不同维度。
+- 部署简单。
+- 开发成本低。
+- 适合 Mia 当前本地单体阶段。
+
+### 10.2 v1.5：抽象 VectorStore
+
+下一步不要继续把向量写入和检索逻辑散在 `KnowledgeService` / `RetrievalService` 中，而是抽象：
+
+```text
+VectorStore
+  upsertChunks()
+  deleteDocument()
+  deleteKnowledgeBase()
+  search()
+  rebuildKnowledgeBase()
+```
+
+当前实现：
+
+```text
+PgvectorVectorStore
+```
+
+未来新增：
+
+```text
+QdrantVectorStore
+```
+
+这样可以让业务模块不关心底层向量存储。
+
+### 10.3 v2：支持 Collection-per-KnowledgeBase
+
+当出现以下需求时，再引入 Qdrant：
+
+- 单知识库 chunk 数量明显增长。
+- 需要更强 metadata filter。
+- 需要知识库无损重建和切换。
+- 需要每个知识库独立索引参数。
+- 需要支持更多向量维度。
+- pgvector 分表维护成本开始变高。
+
+v2 推荐引入：
+
+```text
+QdrantVectorStore
+knowledge_base.vector_collection_name
+knowledge_base.vector_store_type
+```
+
+### 10.4 v2.1：迁移现有 pgvector 数据
+
+迁移流程：
+
+```text
+遍历 knowledge_bases
+-> 创建 Qdrant Collection
+-> 读取 knowledge_chunks + pgvector embeddings
+-> 写入 Qdrant
+-> 校验数量
+-> 更新 vector_store_type / vector_collection_name
+-> 切换检索流量
+```
+
+迁移需要支持回滚，因此不能直接删除 pgvector 表。
+
+## 11. 推荐最终判断
+
+### 11.1 当前阶段
+
+Mia 当前继续使用 PostgreSQL + pgvector 分表更合适。
+
+理由：
+
+- 项目仍处在知识库 v1 能力建设期。
+- 本地部署和单人维护优先。
+- 数据规模尚未证明需要独立向量数据库。
+- 当前分表方案已经解决 1024/1536/3072 维度问题。
+
+### 11.2 长期阶段
+
+长期建议向 Dify 类似模式演进：
+
+```text
+一个知识库 -> 一个向量 Collection
+```
+
+理由：
+
+- 知识库生命周期更清晰。
+- 检索编排更简单。
+- 多模型、多维度、多索引参数支持更自然。
+- 大规模向量检索更专业。
+- 更适合未来拆分 Retrieval 服务。
+
+## 12. 结论
+
+Dify 的 Dataset ↔ Qdrant Collection 一对一模式，在检索和长期演进上更优。
+
+Mia 当前 pgvector 分表方案，在 v1 本地部署和快速交付阶段更划算。
+
+最终建议：
+
+```text
+短期：保留 pgvector 分表，完成知识库闭环。
+中期：抽象 VectorStore，隔离底层向量存储。
+长期：引入 Qdrant，实现一个知识库一个 Collection。
+```
+
+不要马上推倒当前方案，但后续新增检索能力时，应优先把向量存储操作收敛到 `VectorStore` 抽象中，为迁移到 Collection-per-KnowledgeBase 留好接口边界。
+
