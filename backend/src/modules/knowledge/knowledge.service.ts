@@ -450,10 +450,10 @@ export class KnowledgeService {
       return;
     }
 
-    const { embeddingModelConfigId, embeddingDimension, namespace } =
+    const embeddingConfig =
       await this.getKnowledgeBaseEmbeddingConfig(knowledgeBaseId);
     const response = await this.modelProvidersService.createEmbedding({
-      modelConfigId: embeddingModelConfigId,
+      modelConfigId: embeddingConfig.embeddingModelConfigId,
       input: chunks.map((chunk) => chunk.content)
     });
 
@@ -462,15 +462,17 @@ export class KnowledgeService {
       throw new Error("embedding response count does not match chunk count");
     }
 
-    // Embedding 模型维度一旦和知识库维度不一致，后续检索也无法混用，因此索引阶段直接失败并提示配置问题。
-    const invalidEmbedding = response.embeddings.find(
-      (embedding) => embedding.length !== embeddingDimension
-    );
+    const actualDimension = this.getConsistentEmbeddingDimension(response.embeddings);
+    let embeddingDimension = embeddingConfig.embeddingDimension;
 
-    if (invalidEmbedding) {
-      throw new Error(
-        `Embedding 向量维度不匹配：当前知识库需要 ${embeddingDimension} 维，但模型返回 ${invalidEmbedding.length} 维。请为知识库选择 ${embeddingDimension} 维 Embedding 模型，或创建新知识库后重新上传。`
-      );
+    if (actualDimension !== embeddingDimension) {
+      embeddingDimension = await this.resolveEmbeddingDimensionMismatch({
+        knowledgeBaseId,
+        currentDocumentId: chunks[0].documentId,
+        embeddingModelConfigId: embeddingConfig.embeddingModelConfigId,
+        expectedDimension: embeddingDimension,
+        actualDimension
+      });
     }
 
     for (const [index, embedding] of response.embeddings.entries()) {
@@ -478,10 +480,10 @@ export class KnowledgeService {
 
       try {
         await this.vectorStore.upsertEmbedding({
-          namespace,
+          namespace: embeddingConfig.namespace,
           knowledgeBaseId,
           chunkId: chunk.id,
-          embeddingModelConfigId,
+          embeddingModelConfigId: embeddingConfig.embeddingModelConfigId,
           embeddingDimension,
           embedding
         });
@@ -537,6 +539,95 @@ export class KnowledgeService {
       embeddingDimension: knowledgeBase.embeddingDimension,
       namespace: this.toVectorNamespace(knowledgeBase)
     };
+  }
+
+  private getConsistentEmbeddingDimension(embeddings: number[][]): number {
+    const firstEmbedding = embeddings[0];
+
+    if (!firstEmbedding) {
+      throw new Error("embedding response is empty");
+    }
+
+    const dimension = firstEmbedding.length;
+    const mismatchedEmbedding = embeddings.find((embedding) => embedding.length !== dimension);
+
+    if (mismatchedEmbedding) {
+      throw new Error(
+        `Embedding 向量维度不一致：同一次响应中同时出现 ${dimension} 维和 ${mismatchedEmbedding.length} 维。`
+      );
+    }
+
+    return dimension;
+  }
+
+  private async resolveEmbeddingDimensionMismatch({
+    knowledgeBaseId,
+    currentDocumentId,
+    embeddingModelConfigId,
+    expectedDimension,
+    actualDimension
+  }: {
+    knowledgeBaseId: string;
+    currentDocumentId: string;
+    embeddingModelConfigId: string;
+    expectedDimension: number;
+    actualDimension: number;
+  }): Promise<number> {
+    if (!this.isSupportedEmbeddingDimension(actualDimension)) {
+      throw new Error(
+        `暂不支持 ${actualDimension} 维 Embedding 向量表。当前可用维度为 1024、1536、3072，请更换 Embedding 模型或先扩展向量表。`
+      );
+    }
+
+    const canAdjust = await this.canAdjustKnowledgeBaseEmbeddingDimension(
+      knowledgeBaseId,
+      currentDocumentId
+    );
+
+    if (!canAdjust) {
+      throw new Error(
+        `Embedding 向量维度不匹配：当前知识库需要 ${expectedDimension} 维，但模型返回 ${actualDimension} 维。请为知识库选择 ${expectedDimension} 维 Embedding 模型，或创建新知识库后重新上传。`
+      );
+    }
+
+    // 这个分支只允许发生在知识库还没有成功索引过任何文档时。
+    // 这种情况下旧维度只是创建知识库时的错误推断，直接修正知识库和模型配置，不会破坏已有向量空间。
+    await this.prisma.knowledgeBase.update({
+      where: {
+        id: knowledgeBaseId
+      },
+      data: {
+        embeddingDimension: actualDimension
+      }
+    });
+    await this.modelProvidersService.updateDetectedEmbeddingDimension(
+      embeddingModelConfigId,
+      actualDimension
+    );
+
+    return actualDimension;
+  }
+
+  private async canAdjustKnowledgeBaseEmbeddingDimension(
+    knowledgeBaseId: string,
+    currentDocumentId: string
+  ): Promise<boolean> {
+    const indexedDocumentCount = await this.prisma.knowledgeDocument.count({
+      where: {
+        knowledgeBaseId,
+        id: {
+          not: currentDocumentId
+        },
+        status: "indexed",
+        deletedAt: null
+      }
+    });
+
+    return indexedDocumentCount === 0;
+  }
+
+  private isSupportedEmbeddingDimension(dimension: number): boolean {
+    return dimension === 1024 || dimension === 1536 || dimension === 3072;
   }
 
   private toReadableEmbeddingError(error: unknown): Error {

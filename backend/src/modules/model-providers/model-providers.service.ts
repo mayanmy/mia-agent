@@ -35,7 +35,6 @@ import { ModelProvidersGateway } from "./gateway";
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
 const DEFAULT_CONTEXT_LENGTH = 4096;
-const DEFAULT_EMBEDDING_DIMENSION = 1536;
 const ANTHROPIC_VERSION = "2023-06-01";
 
 type ProviderTestRequest = {
@@ -384,8 +383,36 @@ export class ModelProvidersService {
       );
     }
 
-    // 维度优先使用模型配置中的显式值；旧数据没有该字段时，再用模型名做保守推断。
-    return config.embeddingDimension ?? this.inferEmbeddingDimension(config.modelName);
+    if (config.embeddingDimension) {
+      return config.embeddingDimension;
+    }
+
+    // 维度不能只依赖模型名推断。OpenAI-compatible 场景下模型名称经常是自定义的，
+    // 因此缺少显式配置时，使用一次真实 Embedding 调用探测维度并回写，后续知识库创建会稳定复用。
+    const dimension = await this.detectEmbeddingModelDimension(id);
+    await this.updateDetectedEmbeddingDimension(id, dimension);
+
+    return dimension;
+  }
+
+  async updateDetectedEmbeddingDimension(id: string, dimension: number): Promise<void> {
+    if (!Number.isInteger(dimension) || dimension < 1 || dimension > 100_000) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "embeddingDimension must be a positive integer"
+      );
+    }
+
+    await this.prisma.modelConfig.updateMany({
+      where: {
+        id,
+        modelType: ModelConfigType.EMBEDDING,
+        deletedAt: null
+      },
+      data: {
+        embeddingDimension: dimension
+      }
+    });
   }
 
   async updateDefaultModelSettings(
@@ -623,7 +650,7 @@ export class ModelProvidersService {
     }
 
     if (value === undefined || value === null || value === "") {
-      return this.inferEmbeddingDimension(modelName ?? "");
+      return null;
     }
 
     const dimension = Number(value);
@@ -638,23 +665,26 @@ export class ModelProvidersService {
     return dimension;
   }
 
-  private inferEmbeddingDimension(modelName: string): number {
-    const normalizedName = modelName.toLowerCase();
+  private async detectEmbeddingModelDimension(modelConfigId: string): Promise<number> {
+    try {
+      const response = await this.createEmbedding({
+        modelConfigId,
+        input: "Mia embedding dimension probe"
+      });
+      const embedding = response.embeddings[0];
 
-    // v1 先用常见模型名做保守推断；后续模型配置页会允许用户显式维护维度。
-    if (normalizedName.includes("1024")) {
-      return 1024;
+      if (!embedding) {
+        throw new Error("embedding response is empty");
+      }
+
+      return embedding.length;
+    } catch (error) {
+      throw new AppError(
+        ErrorCodes.provider.connectionFailed,
+        `无法探测 Embedding 向量维度：${error instanceof Error ? error.message : String(error)}`,
+        HttpStatus.BAD_GATEWAY
+      );
     }
-
-    if (normalizedName.includes("text-embedding-3-large")) {
-      return 3072;
-    }
-
-    if (normalizedName.includes("3072")) {
-      return 3072;
-    }
-
-    return DEFAULT_EMBEDDING_DIMENSION;
   }
 
   private async ensureProviderExists(id: string): Promise<ModelProvider> {
