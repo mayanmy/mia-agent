@@ -46,7 +46,162 @@ Dataset C -> Qdrant Collection C
 知识库 = 向量存储隔离单元
 ```
 
-## 3. Mia 当前设计模式
+## 3. Dify 如何处理 PG 与 Qdrant 一致性
+
+Dify 这类架构不会把 PostgreSQL 和 Qdrant 做成强一致的分布式事务。更常见、也更适合 RAG 系统的方式是：
+
+```text
+PostgreSQL = 业务元数据和状态的 source of truth
+Qdrant = 可重建的派生向量索引
+```
+
+也就是说，PG 负责回答“文档是否存在、索引是否完成、失败原因是什么”，Qdrant 负责回答“哪些向量和 query 最相似”。如果 Qdrant 中的数据异常，系统应能通过 PG 中的文档、chunk 和任务状态重新构建。
+
+### 3.1 状态先落 PG
+
+索引任务开始后，系统先在 PG 中记录文档处理状态，例如：
+
+```text
+uploaded -> parsing -> chunking -> embedding -> indexing -> completed
+```
+
+这样即使后续解析、Embedding 或 Qdrant 写入失败，前端和后台任务也能通过 PG 查到文档当前卡在哪个阶段。
+
+原则：
+
+- 不把“任务正在进行中”只放在内存里。
+- 慢任务开始前先更新 PG 状态。
+- 每个关键阶段完成后及时 commit。
+
+### 3.2 分阶段提交
+
+文档索引通常分成多个阶段：
+
+```text
+解析原文
+-> 写入文档文本/解析结果
+-> 切分 chunk
+-> 写入 chunks
+-> 生成 embeddings
+-> 写入 Qdrant
+-> 更新 PG 为 completed
+```
+
+每个阶段可以独立提交 PG 状态，避免一个长事务持有太久锁。Qdrant 写入成功后，再把 PG 中的文档和 segment 状态标记为 completed。
+
+关键含义：
+
+```text
+PG completed = 向量索引流程已经走完
+PG error = 向量索引不可用，需要重试或重建
+```
+
+### 3.3 失败时 PG 记录 error
+
+如果 Qdrant 写入失败，不应该让 PG 仍然显示索引成功。失败处理应该写回：
+
+- 文档状态：`error` / `failed`
+- 失败阶段：`embedding` / `vector_indexing`
+- 错误信息：可读错误
+- 结束时间
+
+这样用户看到的是：
+
+```text
+索引失败：向量库写入失败，请重试
+```
+
+而不是静默失败，或在聊天时才发现检索不到。
+
+### 3.4 Qdrant Collection 懒创建
+
+在 Dataset ↔ Collection 模式下，Collection 可以在第一次写入向量前创建。
+
+需要注意并发问题：
+
+```text
+多个索引任务同时发现 Collection 不存在
+-> 同时尝试创建
+```
+
+因此需要使用锁或幂等创建策略：
+
+- Redis lock。
+- 数据库锁。
+- 捕获 collection already exists。
+- 本地缓存 collection exists 状态。
+
+Mia 后续如果引入 Qdrant，也应避免多个文档并发上传时重复创建 Collection。
+
+### 3.5 删除操作幂等
+
+删除文档或知识库时，Qdrant 清理应该设计成幂等：
+
+```text
+删除同一个 doc_id 多次不会报错
+Collection 不存在时视为已经删除
+部分 point 已不存在时继续完成
+```
+
+推荐删除条件：
+
+```text
+collection_name = knowledge_base.vector_collection_name
+payload.doc_id = document.id
+payload.knowledge_base_id = knowledge_base.id
+```
+
+这样即使某次删除任务失败，后续重试也可以安全执行。
+
+### 3.6 重建索引修复不一致
+
+因为 PG 和 Qdrant 没有分布式事务，所以必须承认可出现短暂不一致，并提供修复手段：
+
+```text
+以 PG 中的 documents/chunks 为准
+-> 删除旧 Collection 或旧 points
+-> 重新生成 / 重新写入向量
+-> 校验数量
+-> 更新 PG 状态
+```
+
+这也是为什么向量库应被视为“可重建索引”，而不是唯一真相。
+
+### 3.7 对账任务
+
+长期运行后，需要后台对账任务发现不一致：
+
+```text
+PG completed 文档数量
+PG chunk 数量
+Qdrant point 数量
+Qdrant payload 中 doc_id 覆盖情况
+```
+
+发现异常后可以：
+
+- 标记知识库为 `degraded`。
+- 标记文档为 `index_inconsistent`。
+- 触发重建索引。
+- 通知管理员。
+
+### 3.8 对 Mia 的启示
+
+Mia 如果后续引入 Qdrant，不应追求 PG + Qdrant 强事务，而应采用最终一致模型：
+
+```text
+PG 记录知识库、文档、chunk、索引状态
+Qdrant 保存可重建向量索引
+索引任务分阶段提交状态
+写入 Qdrant 成功后再标记 completed
+失败时写入 error
+删除和重建操作保持幂等
+定期对账并支持重建修复
+```
+
+这套方式比引入分布式事务更简单、可靠，也更符合 RAG 索引系统的工程特点。
+
+## 4. Mia 当前设计模式
 
 Mia 当前使用 PostgreSQL + pgvector，并按向量维度分表：
 
@@ -69,7 +224,7 @@ PostgreSQL
 
 不同知识库可以使用不同 Embedding 维度，但检索时需要根据知识库的 `embedding_dimension` 和 `embedding_model_config_id` 选择对应分表，并按 Embedding 模型分组查询。
 
-## 4. 两种模式的核心差异
+## 5. 两种模式的核心差异
 
 | 维度 | Dify Collection 模式 | Mia pgvector 分表模式 |
 | --- | --- | --- |
@@ -84,9 +239,9 @@ PostgreSQL
 | 事务一致性 | 需要协调 PG 和 Qdrant | PG 内一致性更简单 |
 | 长期检索能力 | 更强 | 中小规模够用 |
 
-## 5. Dify 模式的优势
+## 6. Dify 模式的优势
 
-### 5.1 检索编排更简单
+### 6.1 检索编排更简单
 
 每个知识库对应自己的 Collection。检索时只需要：
 
@@ -96,7 +251,7 @@ PostgreSQL
 
 不需要关心该知识库属于哪个维度分表，也不需要在 SQL 中动态切换表名。
 
-### 5.2 知识库生命周期更清晰
+### 6.2 知识库生命周期更清晰
 
 删除知识库：
 
@@ -116,7 +271,7 @@ PostgreSQL
 
 这种模式天然适合后续做无损重建、回滚和灰度切换。
 
-### 5.3 更适合多模型和多维度
+### 6.3 更适合多模型和多维度
 
 不同知识库可以使用完全不同的 Embedding 模型：
 
@@ -128,7 +283,7 @@ PostgreSQL
 
 每个 Collection 自带自己的 vector size，不需要为每个维度维护全局表结构。
 
-### 5.4 更适合大规模检索
+### 6.4 更适合大规模检索
 
 Qdrant 这类向量数据库专门处理：
 
@@ -141,9 +296,9 @@ Qdrant 这类向量数据库专门处理：
 
 数据量增长后，比直接依赖 pgvector 更容易做性能调优。
 
-## 6. Dify 模式的成本
+## 7. Dify 模式的成本
 
-### 6.1 基础设施更复杂
+### 7.1 基础设施更复杂
 
 需要额外部署和维护 Qdrant：
 
@@ -155,7 +310,7 @@ Qdrant：向量数据
 
 这会增加本地部署、备份、恢复和监控成本。
 
-### 6.2 一致性需要额外处理
+### 7.2 一致性需要额外处理
 
 文档、chunk 元数据在 PostgreSQL，向量在 Qdrant。写入流程可能出现：
 
@@ -173,13 +328,13 @@ Qdrant 写入成功，但 PG 状态更新失败
 - 对账任务。
 - 重建能力。
 
-### 6.3 对 Mia 当前阶段偏重
+### 7.3 对 Mia 当前阶段偏重
 
 Mia 当前定位是 20-50 人团队内部、本地部署、单人维护。早期引入 Qdrant 会让系统复杂度上升，开发和排障成本变高。
 
-## 7. Mia 当前模式的优势
+## 8. Mia 当前模式的优势
 
-### 7.1 部署简单
+### 8.1 部署简单
 
 只需要 PostgreSQL + pgvector：
 
@@ -189,11 +344,11 @@ Mia 当前定位是 20-50 人团队内部、本地部署、单人维护。早期
 
 本地开发、备份和迁移都更直接。
 
-### 7.2 事务一致性更好
+### 8.2 事务一致性更好
 
 文档、chunk、embedding 都在 PostgreSQL 中，虽然 pgvector 写入需要 raw SQL，但整体仍然比跨两个存储系统更容易保持一致。
 
-### 7.3 更适合 v1 快速落地
+### 8.3 更适合 v1 快速落地
 
 当前 Mia 的优先级是完成最小闭环：
 
@@ -203,9 +358,9 @@ Mia 当前定位是 20-50 人团队内部、本地部署、单人维护。早期
 
 pgvector 分表可以支撑这个闭环，不需要立刻引入额外向量数据库。
 
-## 8. Mia 当前模式的局限
+## 9. Mia 当前模式的局限
 
-### 8.1 新增维度需要建表
+### 9.1 新增维度需要建表
 
 例如新增 768 维模型时，需要新增：
 
@@ -221,15 +376,15 @@ knowledge_embeddings_768
 - 检索表名白名单。
 - 删除清理逻辑。
 
-### 8.2 知识库隔离不够自然
+### 9.2 知识库隔离不够自然
 
 同维度知识库共享同一张向量表。删除、重建、迁移都需要依赖业务字段过滤。
 
-### 8.3 索引参数无法按知识库独立
+### 9.3 索引参数无法按知识库独立
 
 如果后续要给不同知识库设置不同 HNSW 参数、不同 distance metric 或不同检索策略，pgvector 分表会比较别扭。
 
-### 8.4 长期会增加 service 复杂度
+### 9.4 长期会增加 service 复杂度
 
 随着能力增长，RetrievalService 会逐渐处理：
 
@@ -242,7 +397,7 @@ knowledge_embeddings_768
 
 这会让业务 service 变厚，需要进一步抽象。
 
-## 9. 长期推荐方案
+## 10. 长期推荐方案
 
 长期看，Mia 更适合演进为：
 
@@ -283,9 +438,9 @@ Qdrant
 - 大规模向量检索。
 - 外部向量库扩展。
 
-## 10. 推荐演进路线
+## 11. 推荐演进路线
 
-### 10.1 v1：保留 pgvector 分表
+### 11.1 v1：保留 pgvector 分表
 
 当前阶段继续使用：
 
@@ -302,7 +457,7 @@ knowledge_embeddings_3072
 - 开发成本低。
 - 适合 Mia 当前本地单体阶段。
 
-### 10.2 v1.5：抽象 VectorStore
+### 11.2 v1.5：抽象 VectorStore
 
 下一步不要继续把向量写入和检索逻辑散在 `KnowledgeService` / `RetrievalService` 中，而是抽象：
 
@@ -329,7 +484,7 @@ QdrantVectorStore
 
 这样可以让业务模块不关心底层向量存储。
 
-### 10.3 v2：支持 Collection-per-KnowledgeBase
+### 11.3 v2：支持 Collection-per-KnowledgeBase
 
 当出现以下需求时，再引入 Qdrant：
 
@@ -348,7 +503,7 @@ knowledge_base.vector_collection_name
 knowledge_base.vector_store_type
 ```
 
-### 10.4 v2.1：迁移现有 pgvector 数据
+### 11.4 v2.1：迁移现有 pgvector 数据
 
 迁移流程：
 
@@ -364,9 +519,9 @@ knowledge_base.vector_store_type
 
 迁移需要支持回滚，因此不能直接删除 pgvector 表。
 
-## 11. 推荐最终判断
+## 12. 推荐最终判断
 
-### 11.1 当前阶段
+### 12.1 当前阶段
 
 Mia 当前继续使用 PostgreSQL + pgvector 分表更合适。
 
@@ -377,7 +532,7 @@ Mia 当前继续使用 PostgreSQL + pgvector 分表更合适。
 - 数据规模尚未证明需要独立向量数据库。
 - 当前分表方案已经解决 1024/1536/3072 维度问题。
 
-### 11.2 长期阶段
+### 12.2 长期阶段
 
 长期建议向 Dify 类似模式演进：
 
@@ -393,7 +548,7 @@ Mia 当前继续使用 PostgreSQL + pgvector 分表更合适。
 - 大规模向量检索更专业。
 - 更适合未来拆分 Retrieval 服务。
 
-## 12. 结论
+## 13. 结论
 
 Dify 的 Dataset ↔ Qdrant Collection 一对一模式，在检索和长期演进上更优。
 
@@ -408,4 +563,3 @@ Mia 当前 pgvector 分表方案，在 v1 本地部署和快速交付阶段更�
 ```
 
 不要马上推倒当前方案，但后续新增检索能力时，应优先把向量存储操作收敛到 `VectorStore` 抽象中，为迁移到 Collection-per-KnowledgeBase 留好接口边界。
-
