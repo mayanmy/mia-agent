@@ -43,7 +43,12 @@ export const tests = [
         }
       };
       const modelProvidersService = {};
-      const service = new KnowledgeService(prisma as never, modelProvidersService as never);
+      const vectorStore = {};
+      const service = new KnowledgeService(
+        prisma as never,
+        modelProvidersService as never,
+        vectorStore as never
+      );
 
       await assert.rejects(
         () =>

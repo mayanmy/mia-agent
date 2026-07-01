@@ -6,6 +6,8 @@ export type KnowledgeBaseListItem = {
   description: string;
   embeddingModelConfigId: string;
   embeddingDimension: number;
+  vectorStoreType: "PGVECTOR";
+  vectorCollectionName: string;
   embeddingModelName: string;
   embeddingProviderName: string;
   documentCount: number;

@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from "@nestjs/common";
+import { HttpStatus, Inject, Injectable } from "@nestjs/common";
 import { ModelConfigType, Prisma } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
@@ -24,6 +24,7 @@ import {
 } from "./dto/knowledge.dto";
 import { chunkText } from "./chunking";
 import { isTextDocument, parseTextDocument } from "./parsing";
+import { VECTOR_STORE, VectorIndexNamespace, VectorStore } from "./vector-store";
 
 const MAX_DOCUMENT_FILE_SIZE = 20 * 1024 * 1024;
 const ALLOWED_DOCUMENT_EXTENSIONS = new Set([
@@ -79,7 +80,8 @@ type KnowledgeBaseUpdateData = Partial<KnowledgeBaseCreateData>;
 export class KnowledgeService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly modelProvidersService: ModelProvidersService
+    private readonly modelProvidersService: ModelProvidersService,
+    @Inject(VECTOR_STORE) private readonly vectorStore: VectorStore
   ) {}
 
   async listKnowledgeBases(
@@ -126,12 +128,17 @@ export class KnowledgeService {
       data.embeddingModelConfigId
     );
     await this.ensureNameAvailable(data.name);
+    const knowledgeBaseId = randomUUID();
 
     const knowledgeBase = await this.prisma.knowledgeBase.create({
-      // 知识库创建时锁定向量维度，后续文档索引和检索都以这个快照为准。
+      // 知识库创建时锁定向量维度和向量命名空间。
+      // 当前 vector_store_type 仍是 PGVECTOR，但 collectionName 已按知识库生成，后续切 Qdrant 时可直接映射为 Collection 名。
       data: {
+        id: knowledgeBaseId,
         ...data,
-        embeddingDimension
+        embeddingDimension,
+        vectorStoreType: "PGVECTOR",
+        vectorCollectionName: this.createVectorCollectionName(knowledgeBaseId)
       },
       include: this.getKnowledgeBaseInclude()
     });
@@ -264,7 +271,13 @@ export class KnowledgeService {
         deletedAt: null
       },
       select: {
-        id: true
+        id: true,
+        knowledgeBase: {
+          select: {
+            vectorStoreType: true,
+            vectorCollectionName: true
+          }
+        }
       }
     });
 
@@ -279,7 +292,7 @@ export class KnowledgeService {
     const deletedAt = new Date();
 
     // 删除文档时同时清理所有维度分表里的向量，避免软删除 chunk 仍被旧索引命中。
-    await this.deleteEmbeddingsForDocument(documentId);
+    await this.deleteEmbeddingsForDocument(documentId, this.toVectorNamespace(existing.knowledgeBase));
 
     await this.prisma.$transaction([
       this.prisma.knowledgeDocument.update({
@@ -339,7 +352,7 @@ export class KnowledgeService {
     });
 
     // 重新索引前先删除旧 embedding，避免旧向量继续参与后续检索。
-    await this.deleteEmbeddingsForDocument(document.id);
+    await this.deleteEmbeddingsForDocument(document.id, await this.getVectorNamespace(knowledgeBaseId));
 
     return this.indexTextDocument(processingDocument, buffer);
   }
@@ -437,7 +450,7 @@ export class KnowledgeService {
       return;
     }
 
-    const { embeddingModelConfigId, embeddingDimension } =
+    const { embeddingModelConfigId, embeddingDimension, namespace } =
       await this.getKnowledgeBaseEmbeddingConfig(knowledgeBaseId);
     const response = await this.modelProvidersService.createEmbedding({
       modelConfigId: embeddingModelConfigId,
@@ -463,13 +476,18 @@ export class KnowledgeService {
     for (const [index, embedding] of response.embeddings.entries()) {
       const chunk = chunks[index];
 
-      await this.insertKnowledgeEmbedding({
-        knowledgeBaseId,
-        chunkId: chunk.id,
-        embeddingModelConfigId,
-        embeddingDimension,
-        embedding
-      });
+      try {
+        await this.vectorStore.upsertEmbedding({
+          namespace,
+          knowledgeBaseId,
+          chunkId: chunk.id,
+          embeddingModelConfigId,
+          embeddingDimension,
+          embedding
+        });
+      } catch (error) {
+        throw this.toReadableEmbeddingError(error);
+      }
     }
   }
 
@@ -488,9 +506,11 @@ export class KnowledgeService {
     });
   }
 
-  private async getKnowledgeBaseEmbeddingConfig(
-    knowledgeBaseId: string
-  ): Promise<{ embeddingModelConfigId: string; embeddingDimension: number }> {
+  private async getKnowledgeBaseEmbeddingConfig(knowledgeBaseId: string): Promise<{
+    embeddingModelConfigId: string;
+    embeddingDimension: number;
+    namespace: VectorIndexNamespace;
+  }> {
     const knowledgeBase = await this.prisma.knowledgeBase.findFirst({
       where: {
         id: knowledgeBaseId,
@@ -498,7 +518,9 @@ export class KnowledgeService {
       },
       select: {
         embeddingModelConfigId: true,
-        embeddingDimension: true
+        embeddingDimension: true,
+        vectorStoreType: true,
+        vectorCollectionName: true
       }
     });
 
@@ -510,44 +532,11 @@ export class KnowledgeService {
       );
     }
 
-    return knowledgeBase;
-  }
-
-  private async insertKnowledgeEmbedding({
-    knowledgeBaseId,
-    chunkId,
-    embeddingModelConfigId,
-    embeddingDimension,
-    embedding
-  }: {
-    knowledgeBaseId: string;
-    chunkId: string;
-    embeddingModelConfigId: string;
-    embeddingDimension: number;
-    embedding: number[];
-  }): Promise<void> {
-    const embeddingLiteral = `[${embedding.join(",")}]`;
-    const tableName = this.getEmbeddingTableName(embeddingDimension);
-
-    // Prisma 不能直接写 Unsupported("vector") 字段；表名只能来自白名单函数，避免 raw SQL 注入风险。
-    try {
-      await this.prisma.$executeRawUnsafe(
-        `INSERT INTO "${tableName}" (
-          "id",
-          "knowledge_base_id",
-          "chunk_id",
-          "embedding_model_config_id",
-          "embedding"
-        ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::vector)`,
-        randomUUID(),
-        knowledgeBaseId,
-        chunkId,
-        embeddingModelConfigId,
-        embeddingLiteral
-      );
-    } catch (error) {
-      throw this.toReadableEmbeddingError(error);
-    }
+    return {
+      embeddingModelConfigId: knowledgeBase.embeddingModelConfigId,
+      embeddingDimension: knowledgeBase.embeddingDimension,
+      namespace: this.toVectorNamespace(knowledgeBase)
+    };
   }
 
   private toReadableEmbeddingError(error: unknown): Error {
@@ -565,7 +554,7 @@ export class KnowledgeService {
 
   private async cleanupDocumentIndex(documentId: string): Promise<void> {
     // 索引失败时清理半成品，保证 failed 文档不会留下可检索的脏 chunk/embedding。
-    await this.deleteEmbeddingsForDocument(documentId);
+    await this.deleteEmbeddingsForDocument(documentId, null);
     await this.prisma.knowledgeChunk.updateMany({
       where: {
         documentId,
@@ -577,29 +566,14 @@ export class KnowledgeService {
     });
   }
 
-  private async deleteEmbeddingsForDocument(documentId: string): Promise<void> {
-    // 迁移期间同时清理旧表和新分表；等旧表下线后只保留分表清理即可。
-    await this.prisma.knowledgeEmbedding.deleteMany({
-      where: {
-        chunk: {
-          documentId
-        }
-      }
+  private async deleteEmbeddingsForDocument(
+    documentId: string,
+    namespace: VectorIndexNamespace | null
+  ): Promise<void> {
+    await this.vectorStore.deleteDocument({
+      namespace,
+      documentId
     });
-
-    for (const tableName of [
-      "knowledge_embeddings_1024",
-      "knowledge_embeddings_1536",
-      "knowledge_embeddings_3072"
-    ]) {
-      await this.prisma.$executeRawUnsafe(
-        `DELETE FROM "${tableName}" e
-         USING "knowledge_chunks" c
-         WHERE c."id" = e."chunk_id"
-           AND c."document_id" = $1::uuid`,
-        documentId
-      );
-    }
   }
 
   private async findKnowledgeDocument(
@@ -658,7 +632,7 @@ export class KnowledgeService {
       return [];
     }
 
-    return this.prisma.knowledgeBase.findMany({
+    const knowledgeBases = await this.prisma.knowledgeBase.findMany({
       where: {
         id: {
           in: ids
@@ -669,9 +643,19 @@ export class KnowledgeService {
       select: {
         id: true,
         embeddingModelConfigId: true,
-        embeddingDimension: true
+        embeddingDimension: true,
+        vectorStoreType: true,
+        vectorCollectionName: true
       }
     });
+
+    return knowledgeBases.map((knowledgeBase) => ({
+      id: knowledgeBase.id,
+      embeddingModelConfigId: knowledgeBase.embeddingModelConfigId,
+      embeddingDimension: knowledgeBase.embeddingDimension,
+      vectorStoreType: this.toVectorNamespace(knowledgeBase).type,
+      vectorCollectionName: knowledgeBase.vectorCollectionName
+    }));
   }
 
   private validateCreate(payload: KnowledgeBaseCreateDto): KnowledgeBaseCreateData {
@@ -893,6 +877,8 @@ export class KnowledgeService {
       description: knowledgeBase.description,
       embeddingModelConfigId: knowledgeBase.embeddingModelConfigId,
       embeddingDimension: knowledgeBase.embeddingDimension,
+      vectorStoreType: this.toVectorNamespace(knowledgeBase).type,
+      vectorCollectionName: knowledgeBase.vectorCollectionName,
       embeddingModelName: knowledgeBase.embeddingModelConfig.modelName,
       embeddingProviderName: knowledgeBase.embeddingModelConfig.provider.name,
       documentCount: knowledgeBase._count.documents,
@@ -927,20 +913,45 @@ export class KnowledgeService {
     return value;
   }
 
-  private getEmbeddingTableName(embeddingDimension: number): string {
-    if (embeddingDimension === 1024) {
-      return "knowledge_embeddings_1024";
+  private async getVectorNamespace(knowledgeBaseId: string): Promise<VectorIndexNamespace> {
+    const knowledgeBase = await this.prisma.knowledgeBase.findFirst({
+      where: {
+        id: knowledgeBaseId,
+        deletedAt: null
+      },
+      select: {
+        vectorStoreType: true,
+        vectorCollectionName: true
+      }
+    });
+
+    if (!knowledgeBase) {
+      throw new AppError(
+        ErrorCodes.knowledge.notFound,
+        "knowledge base not found",
+        HttpStatus.NOT_FOUND
+      );
     }
 
-    if (embeddingDimension === 1536) {
-      return "knowledge_embeddings_1536";
+    return this.toVectorNamespace(knowledgeBase);
+  }
+
+  private toVectorNamespace(knowledgeBase: {
+    vectorStoreType: string;
+    vectorCollectionName: string;
+  }): VectorIndexNamespace {
+    if (knowledgeBase.vectorStoreType !== "PGVECTOR") {
+      throw new Error(`暂不支持 ${knowledgeBase.vectorStoreType} 向量存储`);
     }
 
-    if (embeddingDimension === 3072) {
-      return "knowledge_embeddings_3072";
-    }
+    return {
+      type: "PGVECTOR",
+      name: knowledgeBase.vectorCollectionName
+    };
+  }
 
-    throw new Error(`暂不支持 ${embeddingDimension} 维 Embedding 向量表`);
+  private createVectorCollectionName(knowledgeBaseId: string): string {
+    return `kb_${knowledgeBaseId}`;
   }
 
   private toKnowledgeDocumentStatus(status: string): KnowledgeDocumentStatus {

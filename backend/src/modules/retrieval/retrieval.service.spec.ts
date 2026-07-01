@@ -6,17 +6,17 @@ export const tests = [
   {
     name: "RetrievalService returns empty context without knowledge bases",
     run: async () => {
-      const prisma = {};
       const knowledgeService = {
         getRetrievalConfigs: async () => {
           throw new Error("knowledge service should not be called");
         }
       };
       const modelProvidersService = {};
+      const vectorStore = {};
       const service = new RetrievalService(
-        prisma as never,
         knowledgeService as never,
-        modelProvidersService as never
+        modelProvidersService as never,
+        vectorStore as never
       );
 
       const result = await service.retrieveKnowledgeContext({
@@ -31,24 +31,27 @@ export const tests = [
   {
     name: "RetrievalService searches knowledge bases grouped by embedding model",
     run: async () => {
-      const searchedKnowledgeBaseIds: string[][] = [];
+      const searchedNamespaces: string[] = [];
       const searchedModelIds: string[] = [];
-      const prisma = {
-        $queryRawUnsafe: async (
-          _sql: string,
-          _embedding: string,
-          ids: string[],
-          modelConfigId: string
-        ) => {
-          searchedKnowledgeBaseIds.push(ids);
-          searchedModelIds.push(modelConfigId);
+      const vectorStore = {
+        search: async ({
+          namespace,
+          knowledgeBaseIds,
+          embeddingModelConfigId
+        }: {
+          namespace: { name: string };
+          knowledgeBaseIds: string[];
+          embeddingModelConfigId: string;
+        }) => {
+          searchedNamespaces.push(namespace.name);
+          searchedModelIds.push(embeddingModelConfigId);
           return [
             {
-              knowledge_base_id: ids[0],
-              document_id: "document-id",
-              document_name: "manual.md",
-              chunk_id: "chunk-id",
-              chunk_index: 0,
+              knowledgeBaseId: knowledgeBaseIds[0],
+              documentId: "document-id",
+              documentName: "manual.md",
+              chunkId: "chunk-id",
+              chunkIndex: 0,
               content: "chunk content",
               score: 0.8
             }
@@ -57,8 +60,20 @@ export const tests = [
       };
       const knowledgeService = {
         getRetrievalConfigs: async () => [
-          { id: "kb-a", embeddingModelConfigId: "embedding-a", embeddingDimension: 1536 },
-          { id: "kb-b", embeddingModelConfigId: "embedding-b", embeddingDimension: 1024 }
+          {
+            id: "kb-a",
+            embeddingModelConfigId: "embedding-a",
+            embeddingDimension: 1536,
+            vectorStoreType: "PGVECTOR",
+            vectorCollectionName: "kb-kb-a"
+          },
+          {
+            id: "kb-b",
+            embeddingModelConfigId: "embedding-b",
+            embeddingDimension: 1024,
+            vectorStoreType: "PGVECTOR",
+            vectorCollectionName: "kb-kb-b"
+          }
         ]
       };
       const modelProvidersService = {
@@ -74,9 +89,9 @@ export const tests = [
         }
       };
       const service = new RetrievalService(
-        prisma as never,
         knowledgeService as never,
-        modelProvidersService as never
+        modelProvidersService as never,
+        vectorStore as never
       );
 
       const result = await service.retrieveKnowledgeContext({
@@ -84,7 +99,7 @@ export const tests = [
         knowledgeBaseIds: ["kb-a", "kb-b"]
       });
 
-      assert.deepEqual(searchedKnowledgeBaseIds, [["kb-a"], ["kb-b"]]);
+      assert.deepEqual(searchedNamespaces, ["kb-kb-a", "kb-kb-b"]);
       assert.deepEqual(searchedModelIds, ["embedding-a", "embedding-b"]);
       assert.equal(result.sources.length, 2);
       assert.equal(result.sources[0].content, "chunk content");
@@ -93,14 +108,20 @@ export const tests = [
   {
     name: "RetrievalService reports readable error when embedding dimension mismatches",
     run: async () => {
-      const prisma = {
-        $queryRawUnsafe: async () => {
-          throw new Error("pgvector query should not be called");
+      const vectorStore = {
+        search: async () => {
+          throw new Error("vector store should not be called");
         }
       };
       const knowledgeService = {
         getRetrievalConfigs: async () => [
-          { id: "kb-a", embeddingModelConfigId: "embedding-a", embeddingDimension: 1536 }
+          {
+            id: "kb-a",
+            embeddingModelConfigId: "embedding-a",
+            embeddingDimension: 1536,
+            vectorStoreType: "PGVECTOR",
+            vectorCollectionName: "kb-kb-a"
+          }
         ]
       };
       const modelProvidersService = {
@@ -112,9 +133,9 @@ export const tests = [
         })
       };
       const service = new RetrievalService(
-        prisma as never,
         knowledgeService as never,
-        modelProvidersService as never
+        modelProvidersService as never,
+        vectorStore as never
       );
 
       await assert.rejects(

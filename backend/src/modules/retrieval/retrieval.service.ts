@@ -1,29 +1,19 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 
 import { KnowledgeService } from "../knowledge/knowledge.service";
+import { VECTOR_STORE, VectorIndexNamespace, VectorStore } from "../knowledge/vector-store";
 import { ModelProvidersService } from "../model-providers/model-providers.service";
-import { PrismaService } from "../prisma/prisma.service";
 import { RetrievalContext, RetrievalSource } from "./dto/retrieval.dto";
 
 const DEFAULT_TOP_K = 5;
 const MAX_TOP_K = 12;
 
-type RetrievalRow = {
-  knowledge_base_id: string;
-  document_id: string;
-  document_name: string;
-  chunk_id: string;
-  chunk_index: number;
-  content: string;
-  score: number;
-};
-
 @Injectable()
 export class RetrievalService {
   constructor(
-    private readonly prisma: PrismaService,
     private readonly knowledgeService: KnowledgeService,
-    private readonly modelProvidersService: ModelProvidersService
+    private readonly modelProvidersService: ModelProvidersService,
+    @Inject(VECTOR_STORE) private readonly vectorStore: VectorStore
   ) {}
 
   async retrieveKnowledgeContext({
@@ -78,13 +68,18 @@ export class RetrievalService {
       }
 
       sources.push(
-        ...(await this.searchSimilarChunks({
-          embedding,
-          embeddingDimension: group.embeddingDimension,
-          embeddingModelConfigId: group.embeddingModelConfigId,
-          knowledgeBaseIds: group.knowledgeBaseIds,
-          topK: normalizedTopK
-        }))
+        ...(await Promise.all(
+          group.knowledgeBases.map((knowledgeBase) =>
+            this.vectorStore.search({
+              namespace: knowledgeBase.namespace,
+              embedding,
+              embeddingDimension: group.embeddingDimension,
+              embeddingModelConfigId: group.embeddingModelConfigId,
+              knowledgeBaseIds: [knowledgeBase.id],
+              topK: normalizedTopK
+            })
+          )
+        )).flat()
       );
     }
 
@@ -96,25 +91,42 @@ export class RetrievalService {
   }
 
   private groupRetrievalConfigs(
-    configs: Array<{ id: string; embeddingModelConfigId: string; embeddingDimension: number }>
+    configs: Array<{
+      id: string;
+      embeddingModelConfigId: string;
+      embeddingDimension: number;
+      vectorStoreType: "PGVECTOR";
+      vectorCollectionName: string;
+    }>
   ): Array<{
     embeddingModelConfigId: string;
     embeddingDimension: number;
-    knowledgeBaseIds: string[];
+    knowledgeBases: Array<{ id: string; namespace: VectorIndexNamespace }>;
   }> {
     const groups = new Map<
       string,
-      { embeddingModelConfigId: string; embeddingDimension: number; knowledgeBaseIds: string[] }
+      {
+        embeddingModelConfigId: string;
+        embeddingDimension: number;
+        knowledgeBases: Array<{ id: string; namespace: VectorIndexNamespace }>;
+      }
     >();
 
     for (const config of configs) {
       const existing = groups.get(config.embeddingModelConfigId);
+      const knowledgeBase = {
+        id: config.id,
+        namespace: {
+          type: config.vectorStoreType,
+          name: config.vectorCollectionName
+        } satisfies VectorIndexNamespace
+      };
 
       if (!existing) {
         groups.set(config.embeddingModelConfigId, {
           embeddingModelConfigId: config.embeddingModelConfigId,
           embeddingDimension: config.embeddingDimension,
-          knowledgeBaseIds: [config.id]
+          knowledgeBases: [knowledgeBase]
         });
         continue;
       }
@@ -125,65 +137,10 @@ export class RetrievalService {
         );
       }
 
-      existing.knowledgeBaseIds.push(config.id);
+      existing.knowledgeBases.push(knowledgeBase);
     }
 
     return [...groups.values()];
-  }
-
-  private async searchSimilarChunks({
-    embedding,
-    embeddingDimension,
-    embeddingModelConfigId,
-    knowledgeBaseIds,
-    topK
-  }: {
-    embedding: number[];
-    embeddingDimension: number;
-    embeddingModelConfigId: string;
-    knowledgeBaseIds: string[];
-    topK: number;
-  }): Promise<RetrievalSource[]> {
-    if (knowledgeBaseIds.length === 0) {
-      return [];
-    }
-
-    const embeddingLiteral = `[${embedding.join(",")}]`;
-    const tableName = this.getEmbeddingTableName(embeddingDimension);
-    // pgvector 相似度查询需要直接使用 <=> 操作符；表名只来自维度白名单，不能使用用户输入拼接。
-    const rows = await this.prisma.$queryRawUnsafe<RetrievalRow[]>(
-      `SELECT
-        c."knowledge_base_id",
-        c."document_id",
-        d."original_filename" AS "document_name",
-        c."id" AS "chunk_id",
-        c."chunk_index",
-        c."content",
-        1 - (e."embedding" <=> $1::vector) AS "score"
-      FROM "${tableName}" e
-      INNER JOIN "knowledge_chunks" c ON c."id" = e."chunk_id"
-      INNER JOIN "knowledge_documents" d ON d."id" = c."document_id"
-      WHERE c."deleted_at" IS NULL
-        AND d."deleted_at" IS NULL
-        AND c."knowledge_base_id" = ANY($2::uuid[])
-        AND e."embedding_model_config_id" = $3::uuid
-      ORDER BY e."embedding" <=> $1::vector
-      LIMIT $4`,
-      embeddingLiteral,
-      knowledgeBaseIds,
-      embeddingModelConfigId,
-      topK
-    );
-
-    return rows.map((row) => ({
-      knowledgeBaseId: row.knowledge_base_id,
-      documentId: row.document_id,
-      documentName: row.document_name,
-      chunkId: row.chunk_id,
-      chunkIndex: row.chunk_index,
-      content: row.content,
-      score: Number(row.score)
-    }));
   }
 
   private normalizeTopK(value: number): number {
@@ -192,21 +149,5 @@ export class RetrievalService {
     }
 
     return Math.min(value, MAX_TOP_K);
-  }
-
-  private getEmbeddingTableName(embeddingDimension: number): string {
-    if (embeddingDimension === 1024) {
-      return "knowledge_embeddings_1024";
-    }
-
-    if (embeddingDimension === 1536) {
-      return "knowledge_embeddings_1536";
-    }
-
-    if (embeddingDimension === 3072) {
-      return "knowledge_embeddings_3072";
-    }
-
-    throw new Error(`暂不支持 ${embeddingDimension} 维 Embedding 向量表`);
   }
 }

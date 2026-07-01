@@ -155,6 +155,8 @@ model KnowledgeBase {
   description            String               @default("")
   embeddingModelConfigId String               @map("embedding_model_config_id") @db.Uuid
   embeddingDimension     Int                  @default(1536) @map("embedding_dimension")
+  vectorStoreType        String               @default("PGVECTOR") @map("vector_store_type")
+  vectorCollectionName   String               @map("vector_collection_name")
   enabled                Boolean              @default(true)
   createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -171,6 +173,7 @@ model KnowledgeBase {
   @@index([embeddingDimension], map: "idx_knowledge_bases_embedding_dimension")
   @@index([embeddingModelConfigId], map: "idx_knowledge_bases_embedding_model_config_id")
   @@index([enabled, createdAt(sort: Desc)], map: "idx_knowledge_bases_enabled_created_at")
+  @@unique([vectorCollectionName], map: "uq_knowledge_bases_vector_collection_name")
   @@map("knowledge_bases")
 }
 
