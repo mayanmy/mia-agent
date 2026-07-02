@@ -108,6 +108,9 @@ export function uploadKnowledgeDocument(
 
   return request<KnowledgeDocumentListItem>(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents`, {
     method: "POST",
+    headers: {
+      "X-File-Name": encodeURIComponent(file.name)
+    },
     body
   });
 }

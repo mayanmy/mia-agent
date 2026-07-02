@@ -222,10 +222,11 @@ export class KnowledgeService {
 
   async uploadKnowledgeDocument(
     knowledgeBaseId: string,
-    file: UploadedKnowledgeFile | undefined
+    file: UploadedKnowledgeFile | undefined,
+    encodedOriginalFilename?: string
   ): Promise<KnowledgeDocumentListItem> {
     await this.ensureKnowledgeBaseExists(knowledgeBaseId);
-    const normalizedFile = this.validateUploadedDocument(file);
+    const normalizedFile = this.validateUploadedDocument(file, encodedOriginalFilename);
     const documentId = randomUUID();
     const originalFilename = basename(normalizedFile.originalname);
     const filename = this.createStoredFilename(documentId, originalFilename);
@@ -816,7 +817,8 @@ export class KnowledgeService {
   }
 
   private validateUploadedDocument(
-    file: UploadedKnowledgeFile | undefined
+    file: UploadedKnowledgeFile | undefined,
+    encodedOriginalFilename?: string
   ): Required<UploadedKnowledgeFile> {
     if (!file || !file.buffer || file.buffer.length === 0) {
       throw new AppError(ErrorCodes.knowledge.invalidDocument, "file is required");
@@ -829,7 +831,7 @@ export class KnowledgeService {
       );
     }
 
-    const originalname = this.normalizeUploadedFilename(file.originalname);
+    const originalname = this.resolveUploadedOriginalFilename(file.originalname, encodedOriginalFilename);
     const extension = extname(originalname).toLowerCase();
 
     if (!ALLOWED_DOCUMENT_EXTENSIONS.has(extension)) {
@@ -845,6 +847,27 @@ export class KnowledgeService {
       size: file.size,
       buffer: file.buffer
     };
+  }
+
+  private resolveUploadedOriginalFilename(
+    fallbackFilename: string,
+    encodedOriginalFilename?: string
+  ): string {
+    if (encodedOriginalFilename) {
+      try {
+        const decodedFilename = decodeURIComponent(encodedOriginalFilename.trim());
+
+        if (decodedFilename.trim()) {
+          // 前端通过 X-File-Name 传递 encodeURIComponent 后的用户可见文件名。
+          // 后端只把它作为数据库展示名来源，绝不直接用于磁盘路径。
+          return basename(decodedFilename.trim());
+        }
+      } catch {
+        // Header 可能来自旧客户端或手写请求，解码失败时回退到 multer 原始文件名兼容链路。
+      }
+    }
+
+    return basename(this.normalizeUploadedFilename(fallbackFilename));
   }
 
   private normalizeUploadedFilename(filename: string): string {
@@ -889,10 +912,9 @@ export class KnowledgeService {
 
   private createStoredFilename(documentId: string, originalFilename: string): string {
     const extension = extname(originalFilename).toLowerCase() || ".bin";
-    const safeBaseName =
-      basename(originalFilename, extension).replace(/[^a-zA-Z0-9._-]/gu, "_") || "document";
 
-    return `${documentId}-${safeBaseName}${extension}`;
+    // 物理存储名只使用系统生成 ID，用户文件名只进入数据库展示字段，彻底避开中文和特殊字符路径兼容问题。
+    return `${documentId}${extension}`;
   }
 
   private async ensureNameAvailable(name: string, excludeId?: string): Promise<void> {

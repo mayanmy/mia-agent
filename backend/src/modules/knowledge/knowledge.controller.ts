@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { UploadedFile, UseInterceptors } from "@nestjs/common";
 
@@ -68,9 +68,10 @@ export class KnowledgeController {
   )
   async uploadKnowledgeDocument(
     @Param("id") id: string,
+    @Headers("x-file-name") encodedOriginalFilename: string | undefined,
     @UploadedFile() file: UploadedKnowledgeFile | undefined
   ): Promise<KnowledgeDocumentListItem> {
-    return this.knowledgeService.uploadKnowledgeDocument(id, file);
+    return this.knowledgeService.uploadKnowledgeDocument(id, file, encodedOriginalFilename);
   }
 
   @Post(":id/documents/:documentId/reindex")

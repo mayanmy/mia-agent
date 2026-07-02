@@ -96,5 +96,49 @@ export const tests = [
 
       assert.equal(normalizedFile.originalname, "前端面试知识.md");
     }
+  },
+  {
+    name: "KnowledgeService prefers encoded upload filename header",
+    run: () => {
+      const service = new KnowledgeService({} as never, {} as never, {} as never);
+      const privateService = service as unknown as {
+        validateUploadedDocument: (
+          file: {
+            originalname: string;
+            mimetype: string;
+            size: number;
+            buffer: Buffer;
+          },
+          encodedOriginalFilename?: string
+        ) => {
+          originalname: string;
+        };
+      };
+      const normalizedFile = privateService.validateUploadedDocument(
+        {
+          originalname: "broken.md",
+          mimetype: "text/markdown",
+          size: 4,
+          buffer: Buffer.from("test")
+        },
+        encodeURIComponent("前端面试知识.md")
+      );
+
+      assert.equal(normalizedFile.originalname, "前端面试知识.md");
+    }
+  },
+  {
+    name: "KnowledgeService stores documents with uuid filenames",
+    run: () => {
+      const service = new KnowledgeService({} as never, {} as never, {} as never);
+      const privateService = service as unknown as {
+        createStoredFilename: (documentId: string, originalFilename: string) => string;
+      };
+
+      assert.equal(
+        privateService.createStoredFilename("document-id", "前端面试知识.md"),
+        "document-id.md"
+      );
+    }
   }
 ];
