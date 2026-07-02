@@ -69,5 +69,32 @@ export const tests = [
         }
       );
     }
+  },
+  {
+    name: "KnowledgeService normalizes mojibake upload filenames",
+    run: () => {
+      const service = new KnowledgeService({} as never, {} as never, {} as never);
+      const privateService = service as unknown as {
+        validateUploadedDocument: (
+          file: {
+            originalname: string;
+            mimetype: string;
+            size: number;
+            buffer: Buffer;
+          }
+        ) => {
+          originalname: string;
+        };
+      };
+      const mojibakeFilename = Buffer.from("前端面试知识.md", "utf8").toString("latin1");
+      const normalizedFile = privateService.validateUploadedDocument({
+        originalname: mojibakeFilename,
+        mimetype: "text/markdown",
+        size: 4,
+        buffer: Buffer.from("test")
+      });
+
+      assert.equal(normalizedFile.originalname, "前端面试知识.md");
+    }
   }
 ];

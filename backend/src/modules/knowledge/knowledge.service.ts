@@ -815,7 +815,9 @@ export class KnowledgeService {
     return status;
   }
 
-  private validateUploadedDocument(file: UploadedKnowledgeFile | undefined): Required<UploadedKnowledgeFile> {
+  private validateUploadedDocument(
+    file: UploadedKnowledgeFile | undefined
+  ): Required<UploadedKnowledgeFile> {
     if (!file || !file.buffer || file.buffer.length === 0) {
       throw new AppError(ErrorCodes.knowledge.invalidDocument, "file is required");
     }
@@ -827,7 +829,8 @@ export class KnowledgeService {
       );
     }
 
-    const extension = extname(file.originalname).toLowerCase();
+    const originalname = this.normalizeUploadedFilename(file.originalname);
+    const extension = extname(originalname).toLowerCase();
 
     if (!ALLOWED_DOCUMENT_EXTENSIONS.has(extension)) {
       throw new AppError(
@@ -837,11 +840,51 @@ export class KnowledgeService {
     }
 
     return {
-      originalname: file.originalname,
+      originalname,
       mimetype: file.mimetype,
       size: file.size,
       buffer: file.buffer
     };
+  }
+
+  private normalizeUploadedFilename(filename: string): string {
+    const trimmedFilename = filename.trim();
+
+    if (!trimmedFilename) {
+      return filename;
+    }
+
+    const decodedFilename = Buffer.from(trimmedFilename, "latin1").toString("utf8");
+
+    // multipart 文件名有时会被 multer 按 latin1 暴露，中文会显示成 å、ç、æ 这类乱码。
+    // 只有在“转回 UTF-8 后明显更像正常文件名”时才替换，避免误伤正常英文文件名。
+    if (this.getFilenameDecodeScore(decodedFilename) > this.getFilenameDecodeScore(trimmedFilename)) {
+      return decodedFilename;
+    }
+
+    return trimmedFilename;
+  }
+
+  private getFilenameDecodeScore(filename: string): number {
+    let score = 0;
+
+    if (/[\u4e00-\u9fff]/u.test(filename)) {
+      score += 3;
+    }
+
+    if ([...filename].some((character) => character.charCodeAt(0) > 127)) {
+      score += 1;
+    }
+
+    if (/[ÃÂÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞßàáâãäåæçèéêëìíîï]/u.test(filename)) {
+      score -= 2;
+    }
+
+    if (filename.includes("�")) {
+      score -= 4;
+    }
+
+    return score;
   }
 
   private createStoredFilename(documentId: string, originalFilename: string): string {
