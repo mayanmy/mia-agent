@@ -1,5 +1,6 @@
 import { AutoComplete, Button, Form, Input, InputNumber, Modal, Select, Switch } from "antd";
 import { useEffect } from "react";
+import type { DefaultOptionType } from "antd/es/select";
 
 import type { ProviderListItem, ProviderRemoteModel } from "../api";
 import type { ModelFormValues } from "../types";
@@ -162,6 +163,7 @@ function OpenModelConfigModal({
           rules={[{ required: true, message: "请输入模型名称" }]}
         >
           <AutoComplete
+            filterOption={filterRemoteModelOption}
             options={remoteModelOptions}
             placeholder="qwen2.5"
             onChange={handleRemoteModelChange}
@@ -240,4 +242,39 @@ function OpenModelConfigModal({
       </Form>
     </Modal>
   );
+}
+
+function filterRemoteModelOption(inputValue: string, option?: DefaultOptionType): boolean {
+  const keyword = normalizeSearchText(inputValue);
+
+  if (!keyword) {
+    return true;
+  }
+
+  const optionText = normalizeSearchText(
+    [option?.value, option?.label].filter((item) => typeof item === "string").join(" ")
+  );
+
+  // 支持普通包含匹配，也支持 qwenembedding 这类少打分隔符的顺序模糊匹配。
+  return optionText.includes(keyword) || isSubsequence(keyword, optionText);
+}
+
+function normalizeSearchText(value: string): string {
+  return value.toLowerCase().replace(/[\s._:/-]+/gu, "");
+}
+
+function isSubsequence(keyword: string, target: string): boolean {
+  let cursor = 0;
+
+  for (const character of target) {
+    if (character === keyword[cursor]) {
+      cursor += 1;
+    }
+
+    if (cursor === keyword.length) {
+      return true;
+    }
+  }
+
+  return false;
 }
