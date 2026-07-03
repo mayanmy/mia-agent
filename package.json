@@ -18,6 +18,7 @@
     "build": "npm run build:api && npm run build:web",
     "check": "npm run lint && npm run typecheck",
     "typecheck": "npm run typecheck:api && npm run typecheck:web",
+    "fix:document-filenames": "npm --prefix backend run fix:document-filenames",
     "lint": "eslint \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\" \"frontend/scripts/**/*.{js,mjs}\" frontend/vite.config.ts",
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,less,html,yml,yaml}\"",
