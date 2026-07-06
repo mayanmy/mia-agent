@@ -276,6 +276,7 @@ export class ModelProvidersService {
 
   async deleteModelConfig(id: string): Promise<void> {
     await this.findModelConfigDetail(id);
+    await this.ensureModelConfigNotInUse(id);
 
     await this.prisma.$transaction([
       this.prisma.defaultModelSetting.updateMany({
@@ -1133,6 +1134,45 @@ export class ModelProvidersService {
         ErrorCodes.provider.modelConfigNotFound,
         `${modelType} default model must reference an enabled ${modelType} model config`,
         HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private async ensureModelConfigNotInUse(id: string): Promise<void> {
+    const [agent, knowledgeBase] = await Promise.all([
+      this.prisma.agent.findFirst({
+        where: {
+          modelConfigId: id,
+          deletedAt: null
+        },
+        select: {
+          name: true
+        }
+      }),
+      this.prisma.knowledgeBase.findFirst({
+        where: {
+          embeddingModelConfigId: id,
+          deletedAt: null
+        },
+        select: {
+          name: true
+        }
+      })
+    ]);
+
+    if (agent) {
+      throw new AppError(
+        ErrorCodes.provider.inUse,
+        `模型正在被 Agent「${agent.name}」使用，请先切换或删除该 Agent。`,
+        HttpStatus.CONFLICT
+      );
+    }
+
+    if (knowledgeBase) {
+      throw new AppError(
+        ErrorCodes.provider.inUse,
+        `模型正在被知识库「${knowledgeBase.name}」使用，请先为知识库切换 Embedding 模型或删除知识库。`,
+        HttpStatus.CONFLICT
       );
     }
   }

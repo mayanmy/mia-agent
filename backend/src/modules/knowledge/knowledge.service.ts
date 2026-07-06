@@ -355,7 +355,16 @@ export class KnowledgeService {
     // 重新索引前先删除旧 embedding，避免旧向量继续参与后续检索。
     await this.deleteEmbeddingsForDocument(document.id, await this.getVectorNamespace(knowledgeBaseId));
 
-    return this.indexTextDocument(processingDocument, buffer);
+    const reindexedDocument = await this.indexTextDocument(processingDocument, buffer);
+
+    if (reindexedDocument.status !== "indexed") {
+      throw new AppError(
+        ErrorCodes.knowledge.invalidDocument,
+        reindexedDocument.errorMessage ?? "document reindex failed"
+      );
+    }
+
+    return reindexedDocument;
   }
 
   private async indexTextDocument(

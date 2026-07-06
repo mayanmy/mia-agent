@@ -256,7 +256,12 @@ export function KnowledgePage() {
     setDocumentLoading(true);
 
     try {
-      await reindexKnowledgeDocument(activeKnowledgeBase.id, documentId);
+      const document = await reindexKnowledgeDocument(activeKnowledgeBase.id, documentId);
+
+      if (document.status !== "indexed") {
+        throw new Error(document.errorMessage ?? "重新索引失败");
+      }
+
       message.success("文档已重新索引");
       await Promise.all([
         refreshDocuments(activeKnowledgeBase.id, documentPagination.page, documentPagination.pageSize),
