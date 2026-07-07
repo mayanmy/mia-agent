@@ -12,6 +12,10 @@ export type AppConfig = {
   knowledgeStorageDir: string;
   toolsHttpAllowedHosts: string[];
   toolsHttpAllowLocalhost: boolean;
+  authJwtSecret: string;
+  authAccessTokenTtlSeconds: number;
+  authRefreshTokenTtlDays: number;
+  authCookieSecure: boolean;
 };
 
 let envLoaded = false;
@@ -95,10 +99,51 @@ function readToolsHttpAllowedHosts(): string[] {
     .filter(Boolean);
 }
 
-function readBooleanEnv(primaryKey: string, fallbackKey: string): boolean {
-  const value = process.env[primaryKey] ?? process.env[fallbackKey] ?? "";
+function readBooleanEnv(primaryKey: string, fallbackKey?: string): boolean {
+  const value = process.env[primaryKey] ?? (fallbackKey ? process.env[fallbackKey] : undefined) ?? "";
 
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+/**
+ * 读取认证时长配置，并拒绝无效值。
+ *
+ * Token 时长配置错误会直接影响所有用户的登录状态，因此服务启动时就失败，
+ * 避免把 NaN 或负数静默带入签发逻辑。
+ */
+function readPositiveIntegerEnv(key: string, defaultValue: number): number {
+  const value = Number(process.env[key] ?? defaultValue);
+
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${key} must be a positive integer`);
+  }
+
+  return value;
+}
+
+/**
+ * 读取 JWT 签名密钥。
+ *
+ * JWT 密钥与模型凭证加密密钥分离，后续轮换登录密钥时不会导致已保存的
+ * Provider API Key 无法解密。生产环境禁止继续使用示例值，避免可预测签名。
+ */
+function readAuthJwtSecret(): string {
+  const secret = process.env.MIA_AUTH_JWT_SECRET ?? "";
+  const environment = process.env.MIA_ENVIRONMENT ?? "local";
+
+  if (!secret) {
+    if (environment === "production") {
+      throw new Error("MIA_AUTH_JWT_SECRET must be configured in production");
+    }
+
+    return "mia-local-development-jwt-secret-change-me";
+  }
+
+  if (environment === "production" && secret === "change-me-to-a-long-random-secret") {
+    throw new Error("MIA_AUTH_JWT_SECRET must not use the example value in production");
+  }
+
+  return secret;
 }
 
 export function getConfig(): AppConfig {
@@ -120,6 +165,13 @@ export function getConfig(): AppConfig {
     toolsHttpAllowLocalhost: readBooleanEnv(
       "TOOLS_HTTP_ALLOW_LOCALHOST",
       "MIA_TOOLS_HTTP_ALLOW_LOCALHOST"
-    )
+    ),
+    authJwtSecret: readAuthJwtSecret(),
+    authAccessTokenTtlSeconds: readPositiveIntegerEnv(
+      "MIA_AUTH_ACCESS_TOKEN_TTL_SECONDS",
+      15 * 60
+    ),
+    authRefreshTokenTtlDays: readPositiveIntegerEnv("MIA_AUTH_REFRESH_TOKEN_TTL_DAYS", 30),
+    authCookieSecure: readBooleanEnv("MIA_AUTH_COOKIE_SECURE")
   };
 }
