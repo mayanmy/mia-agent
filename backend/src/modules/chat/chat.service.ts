@@ -56,7 +56,7 @@ export class ChatService {
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: this.buildSystemPrompt(agent.systemPrompt, llmTools, retrievalContext)
+        content: this.buildSystemPrompt(agent.systemPrompt, message, llmTools, retrievalContext)
       },
       ...history,
       this.buildUserMessage(message, images, files)
@@ -147,7 +147,7 @@ export class ChatService {
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: this.buildSystemPrompt(agent.systemPrompt, llmTools, retrievalContext)
+        content: this.buildSystemPrompt(agent.systemPrompt, message, llmTools, retrievalContext)
       },
       ...history,
       this.buildUserMessage(message, images, files)
@@ -471,10 +471,18 @@ export class ChatService {
 
   private buildSystemPrompt(
     systemPrompt: string,
+    query: string,
     tools: LLMToolDefinition[],
     retrievalContext: RetrievalContext | null
   ): string {
-    const sections = [systemPrompt];
+    const renderedPrompt = this.renderPromptPlaceholders(systemPrompt, query);
+    const sections = [renderedPrompt];
+
+    // Agent Prompt 可以显式使用 {{query}} 控制用户问题出现的位置；
+    // 如果没有写占位符，编排层仍补充当前问题，方便模型在系统约束、知识库和工具规则中引用。
+    if (!systemPrompt.includes("{{query}}")) {
+      sections.push("", "当前用户问题：", query);
+    }
 
     if (retrievalContext && retrievalContext.sources.length > 0) {
       // 知识库内容只注入系统提示词，不直接作为用户消息，避免污染用户原始问题。
@@ -507,6 +515,10 @@ export class ChatService {
     );
 
     return sections.join("\n");
+  }
+
+  private renderPromptPlaceholders(prompt: string, query: string): string {
+    return prompt.replace(/\{\{\s*query\s*\}\}/giu, query);
   }
 
   private formatRetrievalContext(context: RetrievalContext): string {

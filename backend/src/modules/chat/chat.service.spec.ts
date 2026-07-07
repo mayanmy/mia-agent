@@ -569,5 +569,67 @@ export const tests = [
       assert.ok(systemContent.includes("知识库检索结果"));
       assert.ok(systemContent.includes("Mia 支持知识库检索。"));
     }
+  },
+  {
+    name: "ChatService renders prompt query placeholders",
+    run: async () => {
+      const modelRequests: ChatCompletionRequest[] = [];
+      const agentsService = {
+        getAgentRuntimeConfig: async () => ({
+          agentId: "agent-id",
+          name: "Template Agent",
+          systemPrompt: "# 角色：\n你是助手。\n用户问题：{{query}}",
+          modelConfigId: "model-config-id",
+          modelName: "gpt-compatible",
+          providerId: "provider-id",
+          providerType: ModelProviderType.OPENAI_COMPATIBLE,
+          baseUrl: "https://example.com/v1",
+          temperature: 0.7,
+          maxTokens: null,
+          timeoutSeconds: 120,
+          historyTurns: 6,
+          generationParams: null,
+          knowledgeBaseIds: [],
+          toolIds: []
+        })
+      };
+      const modelProvidersService = {
+        streamChatCompletion: (request: ChatCompletionRequest) => {
+          modelRequests.push(request);
+
+          return chunks([
+            {
+              type: "token",
+              content: "已回答。"
+            },
+            {
+              type: "done"
+            }
+          ]);
+        }
+      };
+      const service = new ChatService(
+        agentsService as never,
+        modelProvidersService as never,
+        { getToolDefinitions: () => [] } as never,
+        createEmptyRetrievalService() as never
+      );
+
+      for await (const event of service.streamCompletion({
+        agentId: "agent-id",
+        message: "今天穿什么？",
+        history: [],
+        images: [],
+        files: []
+      })) {
+        void event;
+      }
+
+      assert.equal(modelRequests.length, 1);
+      const systemContent = modelRequests[0].messages[0].content;
+      assert.ok(typeof systemContent === "string");
+      assert.ok(systemContent.includes("用户问题：今天穿什么？"));
+      assert.ok(!systemContent.includes("{{query}}"));
+    }
   }
 ];
