@@ -9,11 +9,11 @@ import { ToolEventCard } from "./ToolEventCard";
 
 export function ChatMessageItem({
   item,
-  sending,
+  generating,
   onCopy
 }: {
   item: ChatUiMessage;
-  sending: boolean;
+  generating: boolean;
   onCopy: (content: string) => void;
 }) {
   const citationSources = getCitationSources(item);
@@ -57,7 +57,8 @@ export function ChatMessageItem({
             ))}
           </div>
         ) : null}
-        {item.content || (item.role === "assistant" && sending ? "正在生成..." : "")}
+        {item.content}
+        {generating ? <GeneratingIndicator /> : null}
         {citationSources.length > 0 ? <CitationSourceList sources={citationSources} /> : null}
       </div>
       <div className="chatMessageMeta">
@@ -72,6 +73,19 @@ export function ChatMessageItem({
           onClick={() => onCopy(item.content)}
         />
       </div>
+    </div>
+  );
+}
+
+function GeneratingIndicator() {
+  return (
+    <div className="chatGeneratingIndicator" role="status">
+      <span>正在生成</span>
+      <span className="chatGeneratingDots" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
     </div>
   );
 }
