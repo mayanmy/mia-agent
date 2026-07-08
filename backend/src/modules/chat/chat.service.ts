@@ -26,6 +26,10 @@ const MAX_TOOL_ROUNDS = 3;
 const DEFAULT_TIMEZONE = "Asia/Shanghai";
 const RETRIEVAL_SOURCE_PREVIEW_LENGTH = 500;
 
+type ChatRequestContext = {
+  userId?: string;
+};
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -35,7 +39,16 @@ export class ChatService {
     private readonly retrievalService: RetrievalService
   ) {}
 
-  async createCompletion(payload: ChatCompletionDto): Promise<ChatCompletionResult> {
+  /**
+   * 执行非流式对话，并把调用用户写入工具日志。
+   *
+   * 用户身份由 Controller 的 Guard 提供；保留可选参数是为了兼容现有服务层单测，
+   * 但生产 HTTP 路径始终会传入 userId。
+   */
+  async createCompletion(
+    payload: ChatCompletionDto,
+    context?: ChatRequestContext
+  ): Promise<ChatCompletionResult> {
     const agentId = this.requireNonEmptyString(payload.agentId, "agentId");
     const images = this.normalizeImages(payload.images);
     const files = this.normalizeFiles(payload.files);
@@ -50,6 +63,7 @@ export class ChatService {
     await this.recordToolAvailability({
       requestId,
       agentId: agent.agentId,
+      userId: context?.userId,
       toolIds: agent.toolIds,
       toolDefinitions
     });
@@ -70,7 +84,8 @@ export class ChatService {
       maxTokens: agent.maxTokens,
       timeoutSeconds: agent.timeoutSeconds,
       requestId,
-      agentId: agent.agentId
+      agentId: agent.agentId,
+      userId: context?.userId
     });
 
     return {
@@ -82,9 +97,16 @@ export class ChatService {
     };
   }
 
+  /**
+   * 执行流式对话，并将用户身份沿工具调用链传递到审计日志。
+   *
+   * AbortSignal 仍保持第二个参数，避免中断机制与身份上下文耦合；Controller 在第三个参数
+   * 传入已验证用户，保证 SSE 与非流式接口记录一致的 userId。
+   */
   async *streamCompletion(
     payload: ChatCompletionDto,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    context?: ChatRequestContext
   ): AsyncIterable<ChatStreamEvent> {
     const agentId = this.requireNonEmptyString(payload.agentId, "agentId");
     const images = this.normalizeImages(payload.images);
@@ -99,6 +121,7 @@ export class ChatService {
     await this.recordToolAvailability({
       requestId,
       agentId: agent.agentId,
+      userId: context?.userId,
       toolIds: agent.toolIds,
       toolDefinitions
     });
@@ -159,6 +182,7 @@ export class ChatService {
       yield* this.executeToolCalls([inferredToolCall], messages, {
         agentId: agent.agentId,
         requestId,
+        userId: context?.userId,
         signal,
         source: "inferred"
       });
@@ -223,6 +247,7 @@ export class ChatService {
           await this.recordToolCallLog({
             requestId,
             agentId: agent.agentId,
+            userId: context?.userId,
             status: "skipped",
             source: "model_response",
             reason: "model_returned_no_tool_call",
@@ -272,6 +297,7 @@ export class ChatService {
       yield* this.executeToolCalls(toolCalls, messages, {
         agentId: agent.agentId,
         requestId,
+        userId: context?.userId,
         signal,
         source: toolCallSource,
         assistantContent
@@ -295,6 +321,7 @@ export class ChatService {
     timeoutSeconds: number;
     requestId: string;
     agentId: string;
+    userId?: string;
   }): Promise<{
     content: string;
     model: string;
@@ -314,6 +341,7 @@ export class ChatService {
         await this.executeToolCallsForCompletion([inferredToolCall], request.messages, {
           requestId: request.requestId,
           agentId: request.agentId,
+          userId: request.userId,
           source: "inferred"
         });
       }
@@ -338,6 +366,7 @@ export class ChatService {
           await this.recordToolCallLog({
             requestId: request.requestId,
             agentId: request.agentId,
+            userId: request.userId,
             status: "skipped",
             source: "model_response",
             reason: "model_returned_no_tool_call",
@@ -374,6 +403,7 @@ export class ChatService {
       await this.executeToolCallsForCompletion(toolCalls, request.messages, {
         requestId: request.requestId,
         agentId: request.agentId,
+        userId: request.userId,
         source: toolCallSource
       });
     }
@@ -396,6 +426,7 @@ export class ChatService {
   private async recordToolAvailability(request: {
     requestId: string;
     agentId: string;
+    userId?: string;
     toolIds: string[];
     toolDefinitions: ToolDefinition[];
   }): Promise<void> {
@@ -406,6 +437,7 @@ export class ChatService {
       await this.recordToolCallLog({
         requestId: request.requestId,
         agentId: request.agentId,
+        userId: request.userId,
         status: "skipped",
         source: "chat_start",
         reason: "agent_has_no_bound_tools",
@@ -421,6 +453,7 @@ export class ChatService {
       await this.recordToolCallLog({
         requestId: request.requestId,
         agentId: request.agentId,
+        userId: request.userId,
         status: "skipped",
         source: "chat_start",
         reason: "bound_tools_not_available",
@@ -435,6 +468,7 @@ export class ChatService {
     await this.recordToolCallLog({
       requestId: request.requestId,
       agentId: request.agentId,
+      userId: request.userId,
       status: "available",
       source: "chat_start",
       output: {
@@ -674,6 +708,7 @@ export class ChatService {
     context: {
       agentId: string;
       requestId: string;
+      userId?: string;
       signal?: AbortSignal;
       source: string;
       assistantContent?: string;
@@ -690,6 +725,7 @@ export class ChatService {
       await this.recordToolCallLog({
         requestId: context.requestId,
         agentId: context.agentId,
+        userId: context.userId,
         toolCallId: toolCall.id,
         toolId: toolCall.name,
         status: "requested",
@@ -712,6 +748,7 @@ export class ChatService {
         toolCallId: toolCall.id,
         requestId: context.requestId,
         agentId: context.agentId,
+        userId: context.userId,
         signal: context.signal
       });
 
@@ -740,6 +777,7 @@ export class ChatService {
     context: {
       requestId: string;
       agentId: string;
+      userId?: string;
       source: string;
     }
   ): Promise<void> {
@@ -748,6 +786,7 @@ export class ChatService {
       await this.recordToolCallLog({
         requestId: context.requestId,
         agentId: context.agentId,
+        userId: context.userId,
         toolCallId: toolCall.id,
         toolId: toolCall.name,
         status: "requested",
@@ -760,7 +799,8 @@ export class ChatService {
         input: this.toToolInput(toolCall.arguments),
         toolCallId: toolCall.id,
         requestId: context.requestId,
-        agentId: context.agentId
+        agentId: context.agentId,
+        userId: context.userId
       });
 
       messages.push(

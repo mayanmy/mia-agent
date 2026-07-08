@@ -1,14 +1,9 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { Prisma, User, UserRole } from "@prisma/client";
+import { Prisma, User } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateUserInput, CurrentUserDto, UserAuthRecord } from "./dto/user.dto";
-
-type UserAuthSelection = Pick<
-  User,
-  "id" | "email" | "displayName" | "passwordHash" | "role" | "disabledAt"
->;
 
 /**
  * 将邮箱收敛为唯一、稳定的数据库键。

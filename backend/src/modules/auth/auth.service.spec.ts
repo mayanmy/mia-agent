@@ -1,6 +1,9 @@
 import * as assert from "node:assert/strict";
+import { Reflector } from "@nestjs/core";
 import { UserRole } from "@prisma/client";
 
+import { JwtAuthGuard } from "../../core/auth/jwt-auth.guard";
+import { RolesGuard } from "../../core/auth/roles.guard";
 import { AuthService } from "./auth.service";
 import { PasswordService } from "./password.service";
 import { TokenService } from "./token.service";
@@ -163,6 +166,70 @@ export const tests = [
         () => authService.refresh(loginResult.refreshToken, context),
         /登录状态已失效/u
       );
+    }
+  },
+
+  {
+    name: "JwtAuthGuard 拒绝缺少 Bearer Token 的内部请求",
+    run: async () => {
+      const reflector = {
+        getAllAndOverride: () => false
+      } as unknown as Reflector;
+      const guard = new JwtAuthGuard(
+        reflector,
+        new TokenService(),
+        {
+          findActiveCurrentUser: async () => ({
+            id: testUser.id,
+            email: testUser.email,
+            displayName: testUser.displayName,
+            role: testUser.role
+          })
+        } as never
+      );
+      const request = { headers: {} };
+      const context = {
+        getHandler: () => undefined,
+        getClass: () => undefined,
+        switchToHttp: () => ({ getRequest: () => request })
+      };
+
+      await assert.rejects(
+        () => guard.canActivate(context as never),
+        /未登录或登录状态已失效/u
+      );
+    }
+  },
+
+  {
+    name: "RolesGuard 拒绝普通用户访问管理员路由",
+    run: () => {
+      const reflector = {
+        getAllAndOverride: (key: string) => {
+          if (key === "mia:isPublic") {
+            return false;
+          }
+
+          return [UserRole.ADMIN];
+        }
+      } as unknown as Reflector;
+      const guard = new RolesGuard(reflector);
+      const context = {
+        getHandler: () => undefined,
+        getClass: () => undefined,
+        switchToHttp: () => ({
+          getRequest: () => ({
+            currentUser: {
+              id: testUser.id,
+              email: testUser.email,
+              displayName: testUser.displayName,
+              role: UserRole.USER
+            }
+          })
+        })
+      };
+
+      assert.throws(() => guard.canActivate(context as never), /没有权限访问此资源/u);
     }
   }
 ];

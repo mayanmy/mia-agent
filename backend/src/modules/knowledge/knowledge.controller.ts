@@ -1,7 +1,9 @@
 import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { UploadedFile, UseInterceptors } from "@nestjs/common";
+import { UserRole } from "@prisma/client";
 
+import { Roles } from "../../core/auth/roles.decorator";
 import { PageResult } from "../../core/result";
 import {
   KnowledgeBaseCreateDto,
@@ -16,6 +18,7 @@ import {
 import { KnowledgeService } from "./knowledge.service";
 
 @Controller("knowledge-bases")
+@Roles(UserRole.ADMIN)
 export class KnowledgeController {
   constructor(private readonly knowledgeService: KnowledgeService) {}
 

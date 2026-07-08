@@ -9,6 +9,7 @@ import { KnowledgeService } from "../knowledge/knowledge.service";
 import { ModelProvidersService } from "../model-providers/model-providers.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ToolsService } from "../tools/tools.service";
+import { CurrentUserDto } from "../users/dto/user.dto";
 import {
   AgentCreateDto,
   AgentDetail,
@@ -83,11 +84,24 @@ export class AgentsService {
     private readonly knowledgeService: KnowledgeService
   ) {}
 
-  async listAgents(query: AgentQueryDto): Promise<PageResult<AgentListItem>> {
+  /**
+   * 按当前访问者权限列出 Agent。
+   *
+   * 普通成员只需要使用已启用 Agent，因此查询条件在服务层强制收敛为 enabled=true；
+   * 不能只依赖前端隐藏按钮，否则直接调用 API 仍会暴露停用配置。
+   */
+  async listAgents(
+    query: AgentQueryDto,
+    currentUser?: Pick<CurrentUserDto, "role">
+  ): Promise<PageResult<AgentListItem>> {
     const page = normalizePageQuery(query);
     const where: Prisma.AgentWhereInput = {
       deletedAt: null,
-      ...(query.enabled !== undefined ? { enabled: this.parseEnabled(query.enabled) } : {})
+      ...(currentUser?.role === "USER"
+        ? { enabled: true }
+        : query.enabled !== undefined
+          ? { enabled: this.parseEnabled(query.enabled) }
+          : {})
     };
 
     const [list, total] = await this.prisma.$transaction([

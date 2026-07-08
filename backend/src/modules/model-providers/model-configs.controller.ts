@@ -1,5 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from "@nestjs/common";
+import { UserRole } from "@prisma/client";
 
+import { Roles } from "../../core/auth/roles.decorator";
 import { PageResult } from "../../core/result";
 import { ChatCompletionResponse, TestChatCompletionDto } from "./dto/llm.dto";
 import {
@@ -14,6 +16,7 @@ import {
 import { ModelProvidersService } from "./model-providers.service";
 
 @Controller("model-configs")
+@Roles(UserRole.ADMIN)
 export class ModelConfigsController {
   constructor(private readonly modelProvidersService: ModelProvidersService) {}
 

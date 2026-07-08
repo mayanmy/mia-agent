@@ -2,6 +2,7 @@ import { Body, Controller, Post, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
 
 import { getConfig } from "../../core/config";
+import { Public } from "../../core/auth/public.decorator";
 import { AuthResponse, AuthSessionResponse, LoginDto } from "./dto/auth.dto";
 import { AuthService } from "./auth.service";
 
@@ -20,6 +21,7 @@ export class AuthController {
    * 因而前端业务代码无法读取或持久化长期凭证。
    */
   @Post("login")
+  @Public()
   async login(
     @Body() payload: LoginDto,
     @Req() request: Request,
@@ -37,6 +39,7 @@ export class AuthController {
    * 与恶意请求，减少身份状态暴露。
    */
   @Post("refresh")
+  @Public()
   async refresh(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response
@@ -55,6 +58,7 @@ export class AuthController {
    * 即使 Cookie 已经失效也应清除客户端副本，使退出操作对用户表现为可靠且幂等。
    */
   @Post("logout")
+  @Public()
   async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response

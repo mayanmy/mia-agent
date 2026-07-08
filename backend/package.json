@@ -12,7 +12,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:studio": "prisma studio --schema prisma/schema.prisma"
+    "prisma:studio": "prisma studio --schema prisma/schema.prisma",
+    "users:bootstrap-admin": "npm run build && node dist/scripts/bootstrap-admin.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
