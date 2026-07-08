@@ -9,6 +9,15 @@ export const ErrorCodes = {
     conflict: 1005,
     internal: 9000
   },
+  auth: {
+    invalidCredentials: 1101,
+    invalidSession: 1102,
+    invalidPassword: 1103
+  },
+  user: {
+    emailExists: 1201,
+    notFound: 1202
+  },
   provider: {
     notFound: 2001,
     nameExists: 2002,
