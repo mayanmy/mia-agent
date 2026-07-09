@@ -1,8 +1,10 @@
-import { Body, Controller, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, Post, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
 
 import { getConfig } from "../../core/config";
 import { Public } from "../../core/auth/public.decorator";
+import { CurrentUser } from "../../core/auth/current-user.decorator";
+import { CurrentUserDto } from "../users/dto/user.dto";
 import { AuthResponse, AuthSessionResponse, LoginDto } from "./dto/auth.dto";
 import { AuthService } from "./auth.service";
 
@@ -64,6 +66,32 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response
   ): Promise<null> {
     await this.authService.logout(this.readOptionalRefreshToken(request));
+    response.clearCookie(REFRESH_COOKIE_NAME, this.getRefreshCookieOptions());
+    return null;
+  }
+
+  /**
+   * 返回 Guard 已验证的当前用户公开资料。
+   *
+   * 此接口不再读取密码、Session 或 JWT 原始 Payload，前端只用它恢复展示名和当前角色。
+   */
+  @Get("me")
+  getCurrentUser(@CurrentUser() currentUser: CurrentUserDto): CurrentUserDto {
+    return currentUser;
+  }
+
+  /**
+   * 撤销当前用户在所有设备上的 Refresh Session。
+   *
+   * 当前 Cookie 同时被清除，因此该操作执行后本设备也必须重新登录；短期 Access Token
+   * 会被 Guard 的用户状态校验限制在自然过期前的极小窗口内。
+   */
+  @Post("logout-all")
+  async logoutAll(
+    @CurrentUser() currentUser: CurrentUserDto,
+    @Res({ passthrough: true }) response: Response
+  ): Promise<null> {
+    await this.authService.revokeAllUserSessions(currentUser.id);
     response.clearCookie(REFRESH_COOKIE_NAME, this.getRefreshCookieOptions());
     return null;
   }

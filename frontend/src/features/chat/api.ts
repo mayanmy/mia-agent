@@ -1,4 +1,4 @@
-import { request } from "../../shared/api/client";
+import { fetchWithAuth, request } from "../../shared/api/client";
 
 export type ChatRole = "user" | "assistant";
 
@@ -93,8 +93,6 @@ export function createChatCompletion(
   });
 }
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
-
 export async function streamChatCompletion(
   payload: ChatCompletionPayload,
   options: {
@@ -102,11 +100,8 @@ export async function streamChatCompletion(
     onEvent: (event: ChatStreamEvent) => void;
   }
 ): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/api/v1/chat/stream`, {
+  const response = await fetchWithAuth("/api/v1/chat/stream", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
     body: JSON.stringify(payload),
     signal: options.signal
   });

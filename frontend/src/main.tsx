@@ -6,6 +6,7 @@ import { BrowserRouter } from "react-router-dom";
 import "antd/dist/reset.css";
 
 import { App } from "./app/App";
+import { AuthProvider } from "./features/auth/AuthProvider";
 import "./styles.less";
 
 createRoot(document.getElementById("root") as HTMLElement).render(
@@ -23,7 +24,9 @@ createRoot(document.getElementById("root") as HTMLElement).render(
     >
       <BrowserRouter>
         <AntdApp>
-          <App />
+          <AuthProvider>
+            <App />
+          </AuthProvider>
         </AntdApp>
       </BrowserRouter>
     </ConfigProvider>

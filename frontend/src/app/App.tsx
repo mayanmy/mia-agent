@@ -1,5 +1,10 @@
 import { lazy, Suspense } from "react";
-import { Navigate, NavLink, Route, Routes } from "react-router-dom";
+import { Button, Dropdown, Spin } from "antd";
+import { Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+
+import { useAuth } from "../features/auth/AuthProvider";
+import { LoginPage } from "../features/auth/LoginPage";
+import type { UserRole } from "../features/auth/types";
 
 const AgentsPage = lazy(() =>
   import("../features/agents/AgentsPage").then((module) => ({ default: module.AgentsPage }))
@@ -29,24 +34,97 @@ const KnowledgePage = lazy(() =>
   }))
 );
 
-const navItems = ["providers", "agents", "knowledge", "chat", "logs"] as const;
-
-type NavItem = (typeof navItems)[number];
-
 type NavConfig = {
   label: string;
   path: string;
+  roles: UserRole[];
 };
 
-const navConfig: Record<NavItem, NavConfig> = {
-  providers: { label: "模型供应商", path: "/providers" },
-  agents: { label: "Agent", path: "/agents" },
-  knowledge: { label: "知识库", path: "/knowledge" },
-  chat: { label: "对话", path: "/chat" },
-  logs: { label: "日志", path: "/logs" }
-};
+const navConfig: NavConfig[] = [
+  { label: "模型供应商", path: "/providers", roles: ["ADMIN"] },
+  { label: "Agent", path: "/agents", roles: ["ADMIN"] },
+  { label: "知识库", path: "/knowledge", roles: ["ADMIN"] },
+  { label: "对话", path: "/chat", roles: ["ADMIN", "USER"] },
+  { label: "日志", path: "/logs", roles: ["ADMIN"] }
+];
 
+/** 应用路由把公开分享页、登录页和受保护工作台明确分开。 */
 export function App() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/share/agents/:token" element={<SharedAgentPage />} />
+        <Route element={<RequireAuth />}>
+          <Route element={<WorkspaceLayout />}>
+            <Route index element={<DefaultWorkspaceRoute />} />
+            <Route element={<RequireRole roles={["ADMIN"]} />}>
+              <Route
+                path="/providers"
+                element={
+                  <>
+                    <ProvidersPage />
+                    <HealthPage compact />
+                  </>
+                }
+              />
+              <Route path="/agents" element={<AgentsPage />} />
+              <Route path="/knowledge" element={<KnowledgePage />} />
+              <Route path="/logs" element={<LogsPage />} />
+            </Route>
+            <Route element={<RequireRole roles={["ADMIN", "USER"]} />}>
+              <Route path="/chat" element={<ChatPage />} />
+            </Route>
+            <Route path="*" element={<DefaultWorkspaceRoute />} />
+          </Route>
+        </Route>
+      </Routes>
+    </Suspense>
+  );
+}
+
+/** 等待 Refresh Cookie 恢复期间不渲染受保护页面，避免短暂闪出后台数据。 */
+function RequireAuth() {
+  const { status } = useAuth();
+  const location = useLocation();
+
+  if (status === "loading") {
+    return <RouteLoading />;
+  }
+
+  if (status === "anonymous") {
+    return <Navigate replace state={{ from: location }} to="/login" />;
+  }
+
+  return <Outlet />;
+}
+
+/** 阻止用户通过手输 URL 进入不属于其角色的页面。 */
+function RequireRole({ roles }: { roles: UserRole[] }) {
+  const { currentUser } = useAuth();
+
+  if (!currentUser || !roles.includes(currentUser.role)) {
+    return <Navigate replace to="/chat" />;
+  }
+
+  return <Outlet />;
+}
+
+/** 根据角色选择工作台默认入口。 */
+function DefaultWorkspaceRoute() {
+  const { currentUser } = useAuth();
+
+  return <Navigate replace to={currentUser?.role === "ADMIN" ? "/agents" : "/chat"} />;
+}
+
+/** 工作台壳层按当前角色渲染导航和账号退出入口。 */
+function WorkspaceLayout() {
+  const { currentUser, logoutCurrentDevice } = useAuth();
+  const navigate = useNavigate();
+  const availableNavItems = navConfig.filter((item) =>
+    item.roles.includes(currentUser?.role ?? "USER")
+  );
+
   return (
     <div className="appShell">
       <aside className="sidebar">
@@ -58,39 +136,39 @@ export function App() {
           </div>
         </div>
         <nav className="navList" aria-label="主导航">
-          {navItems.map((item) => (
+          {availableNavItems.map((item) => (
             <NavLink
               className={({ isActive }) => `navItem${isActive ? " active" : ""}`}
               end
-              key={item}
-              to={navConfig[item].path}
+              key={item.path}
+              to={item.path}
             >
-              {navConfig[item].label}
+              {item.label}
             </NavLink>
           ))}
         </nav>
+        <Dropdown
+          menu={{
+            items: [
+              {
+                key: "logout",
+                label: "退出登录",
+                onClick: () => {
+                  void logoutCurrentDevice().then(() => navigate("/login", { replace: true }));
+                }
+              }
+            ]
+          }}
+          trigger={["click"]}
+        >
+          <Button className="accountMenu" type="text">
+            <span>{currentUser?.displayName}</span>
+            <small>{currentUser?.role === "ADMIN" ? "管理员" : "成员"}</small>
+          </Button>
+        </Dropdown>
       </aside>
       <main className="main">
-        <Suspense fallback={<RouteLoading />}>
-          <Routes>
-            <Route index element={<Navigate replace to="/agents" />} />
-            <Route
-              path="/providers"
-              element={
-                <>
-                  <ProvidersPage />
-                  <HealthPage compact />
-                </>
-              }
-            />
-            <Route path="/agents" element={<AgentsPage />} />
-            <Route path="/knowledge" element={<KnowledgePage />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/share/agents/:token" element={<SharedAgentPage />} />
-            <Route path="/logs" element={<LogsPage />} />
-            <Route path="*" element={<Navigate replace to="/agents" />} />
-          </Routes>
-        </Suspense>
+        <Outlet />
       </main>
     </div>
   );
@@ -98,12 +176,8 @@ export function App() {
 
 function RouteLoading() {
   return (
-    <section className="workspace">
-      <header className="compactPageHeader">
-        <div>
-          <h1>正在加载页面</h1>
-        </div>
-      </header>
+    <section className="routeLoading">
+      <Spin />
     </section>
   );
 }
