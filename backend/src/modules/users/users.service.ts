@@ -2,8 +2,17 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import { Prisma, User } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
+import { createPageResult, normalizePageQuery } from "../../core/pagination";
+import { PageResult } from "../../core/result";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreateUserInput, CurrentUserDto, UserAuthRecord } from "./dto/user.dto";
+import {
+  CreateUserInput,
+  CurrentUserDto,
+  UpdateManagedUserDto,
+  UserAuthRecord,
+  UserListItem,
+  UserQueryDto
+} from "./dto/user.dto";
 
 /**
  * 将邮箱收敛为唯一、稳定的数据库键。
@@ -104,6 +113,106 @@ export class UsersService {
       where: { id },
       data: { lastLoginAt: new Date() }
     });
+  }
+
+  /** 管理员分页查询成员；关键词仅匹配邮箱和展示名，避免提供密码等敏感字段的检索入口。 */
+  async listUsers(query: UserQueryDto): Promise<PageResult<UserListItem>> {
+    const page = normalizePageQuery(query);
+    const keyword = query.keyword?.trim();
+    const where = keyword
+      ? {
+          OR: [
+            { email: { contains: keyword, mode: "insensitive" as const } },
+            { displayName: { contains: keyword, mode: "insensitive" as const } }
+          ]
+        }
+      : {};
+    const [list, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: page.skip,
+        take: page.take
+      }),
+      this.prisma.user.count({ where })
+    ]);
+
+    return createPageResult(
+      list.map((user) => ({
+        ...this.toCurrentUser(user),
+        lastLoginAt: user.lastLoginAt,
+        disabledAt: user.disabledAt,
+        createdAt: user.createdAt
+      })),
+      total,
+      page.page,
+      page.pageSize
+    );
+  }
+
+  /**
+   * 更新成员显示名、角色或启用状态。
+   *
+   * 不允许将最后一个可用管理员降级或禁用，否则团队会失去恢复权限的入口。
+   */
+  async updateManagedUser(id: string, payload: UpdateManagedUserDto): Promise<UserListItem> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+
+    if (!user) {
+      throw new AppError(ErrorCodes.user.notFound, "用户不存在", HttpStatus.NOT_FOUND);
+    }
+
+    const willRemainAdmin = (payload.role ?? user.role) === "ADMIN" && payload.enabled !== false;
+
+    if (user.role === "ADMIN" && !user.disabledAt && !willRemainAdmin) {
+      const activeAdminCount = await this.prisma.user.count({
+        where: { role: "ADMIN", disabledAt: null }
+      });
+      if (activeAdminCount <= 1) {
+        throw new AppError(
+          ErrorCodes.common.conflict,
+          "至少需要保留一个可用管理员",
+          HttpStatus.CONFLICT
+        );
+      }
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...(payload.displayName !== undefined ? { displayName: payload.displayName.trim() } : {}),
+        ...(payload.role !== undefined ? { role: payload.role } : {}),
+        ...(payload.enabled !== undefined
+          ? { disabledAt: payload.enabled ? null : new Date() }
+          : {})
+      }
+    });
+
+    return {
+      ...this.toCurrentUser(updated),
+      lastLoginAt: updated.lastLoginAt,
+      disabledAt: updated.disabledAt,
+      createdAt: updated.createdAt
+    };
+  }
+
+  /** 更新密码哈希；调用方必须先完成强度校验和哈希，users 模块不处理明文密码。 */
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    const result = await this.prisma.user.updateMany({
+      where: { id },
+      data: { passwordHash, passwordChangedAt: new Date() }
+    });
+    if (result.count !== 1) {
+      throw new AppError(ErrorCodes.user.notFound, "用户不存在", HttpStatus.NOT_FOUND);
+    }
+  }
+
+  /** 确认成员记录存在，供不修改用户表的会话管理操作返回正确的 404 语义。 */
+  async ensureUserExists(id: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!user) {
+      throw new AppError(ErrorCodes.user.notFound, "用户不存在", HttpStatus.NOT_FOUND);
+    }
   }
 
   /**

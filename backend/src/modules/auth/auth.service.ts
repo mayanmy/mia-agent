@@ -4,6 +4,15 @@ import { User } from "@prisma/client";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import { UsersService, normalizeUserEmail } from "../users/users.service";
+import {
+  CreateManagedUserDto,
+  CurrentUserDto,
+  ResetUserPasswordDto,
+  UpdateManagedUserDto,
+  UserListItem,
+  UserQueryDto
+} from "../users/dto/user.dto";
+import { PageResult } from "../../core/result";
 import { AuthRequestContext, AuthSessionResponse, AuthResponse, LoginDto } from "./dto/auth.dto";
 import { PasswordService } from "./password.service";
 import { TokenService } from "./token.service";
@@ -122,6 +131,53 @@ export class AuthService {
     });
   }
 
+  /** 管理员创建成员时在 auth 模块完成明文密码哈希，再委托 users 模块保存资料。 */
+  async createManagedUser(payload: CreateManagedUserDto): Promise<CurrentUserDto> {
+    const email = this.requireManagedEmail(payload.email);
+    const displayName = this.requireDisplayName(payload.displayName);
+    const password = this.requireManagedPassword(payload.password);
+    return this.usersService.createUser({
+      email,
+      displayName,
+      passwordHash: await this.passwordService.hashPassword(password),
+      role: payload.role ?? "USER"
+    });
+  }
+
+  /** 查询成员列表；认证模块作为管理编排入口，users 模块保持为纯用户数据服务。 */
+  async listManagedUsers(query: UserQueryDto): Promise<PageResult<UserListItem>> {
+    return this.usersService.listUsers(query);
+  }
+
+  /**
+   * 修改成员资料，禁用成员后立即撤销其 Refresh Session。
+   *
+   * Guard 每次请求还会读取 disabledAt，因此短期 Access Token 也无法继续访问内部接口。
+   */
+  async updateManagedUser(id: string, payload: UpdateManagedUserDto): Promise<UserListItem> {
+    const user = await this.usersService.updateManagedUser(id, payload);
+    if (payload.enabled === false) {
+      await this.revokeAllUserSessions(id);
+    }
+    return user;
+  }
+
+  /** 重置成员密码并撤销其全部会话，防止旧设备继续以原密码对应的 Session 访问。 */
+  async resetManagedUserPassword(id: string, payload: ResetUserPasswordDto): Promise<void> {
+    const password = this.requireManagedPassword(payload.password);
+    await this.usersService.updatePasswordHash(
+      id,
+      await this.passwordService.hashPassword(password)
+    );
+    await this.revokeAllUserSessions(id);
+  }
+
+  /** 撤销指定成员全部会话前先确认其存在，避免管理员误操作时得到静默成功。 */
+  async revokeManagedUserSessions(id: string): Promise<void> {
+    await this.usersService.ensureUserExists(id);
+    await this.revokeAllUserSessions(id);
+  }
+
   /**
    * 创建登录响应与服务端 Session。
    *
@@ -191,6 +247,32 @@ export class AuthService {
       throw this.createInvalidCredentialsError();
     }
 
+    return password;
+  }
+
+  /** 校验管理员创建成员时的邮箱，创建流程可返回明确参数错误而非匿名登录错误。 */
+  private requireManagedEmail(email: string | undefined): string {
+    const normalizedEmail = typeof email === "string" ? normalizeUserEmail(email) : "";
+    if (!normalizedEmail || !/^\S+@\S+\.\S+$/u.test(normalizedEmail)) {
+      throw new AppError(ErrorCodes.common.badRequest, "邮箱格式不正确", HttpStatus.BAD_REQUEST);
+    }
+    return normalizedEmail;
+  }
+
+  /** 校验成员展示名，避免空白名称导致成员列表与审计日志不可读。 */
+  private requireDisplayName(displayName: string | undefined): string {
+    const normalizedName = typeof displayName === "string" ? displayName.trim() : "";
+    if (!normalizedName) {
+      throw new AppError(ErrorCodes.common.badRequest, "成员名称不能为空", HttpStatus.BAD_REQUEST);
+    }
+    return normalizedName;
+  }
+
+  /** 校验管理员设置的密码存在；具体强度规则由 PasswordService 统一执行。 */
+  private requireManagedPassword(password: string | undefined): string {
+    if (typeof password !== "string" || !password) {
+      throw new AppError(ErrorCodes.common.badRequest, "密码不能为空", HttpStatus.BAD_REQUEST);
+    }
     return password;
   }
 

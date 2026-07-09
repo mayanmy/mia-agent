@@ -25,3 +25,30 @@ export type CreateUserInput = {
   passwordHash: string;
   role: UserRole;
 };
+
+export type UserQueryDto = {
+  page?: string;
+  pageSize?: string;
+  keyword?: string;
+};
+
+export type UserListItem = CurrentUserDto & {
+  lastLoginAt: Date | null;
+  disabledAt: Date | null;
+  createdAt: Date;
+};
+
+export type CreateManagedUserDto = {
+  email?: string;
+  displayName?: string;
+  password?: string;
+  role?: UserRole;
+};
+
+export type UpdateManagedUserDto = {
+  displayName?: string;
+  role?: UserRole;
+  enabled?: boolean;
+};
+
+export type ResetUserPasswordDto = { password?: string };

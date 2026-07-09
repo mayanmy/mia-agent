@@ -1,6 +1,14 @@
 import { lazy, Suspense } from "react";
 import { Button, Dropdown, Spin } from "antd";
-import { Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import {
+  Navigate,
+  NavLink,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate
+} from "react-router-dom";
 
 import { useAuth } from "../features/auth/AuthProvider";
 import { LoginPage } from "../features/auth/LoginPage";
@@ -33,6 +41,9 @@ const KnowledgePage = lazy(() =>
     default: module.KnowledgePage
   }))
 );
+const UsersPage = lazy(() =>
+  import("../features/users/UsersPage").then((module) => ({ default: module.UsersPage }))
+);
 
 type NavConfig = {
   label: string;
@@ -45,7 +56,8 @@ const navConfig: NavConfig[] = [
   { label: "Agent", path: "/agents", roles: ["ADMIN"] },
   { label: "知识库", path: "/knowledge", roles: ["ADMIN"] },
   { label: "对话", path: "/chat", roles: ["ADMIN", "USER"] },
-  { label: "日志", path: "/logs", roles: ["ADMIN"] }
+  { label: "日志", path: "/logs", roles: ["ADMIN"] },
+  { label: "成员", path: "/users", roles: ["ADMIN"] }
 ];
 
 /** 应用路由把公开分享页、登录页和受保护工作台明确分开。 */
@@ -71,6 +83,7 @@ export function App() {
               <Route path="/agents" element={<AgentsPage />} />
               <Route path="/knowledge" element={<KnowledgePage />} />
               <Route path="/logs" element={<LogsPage />} />
+              <Route path="/users" element={<UsersPage />} />
             </Route>
             <Route element={<RequireRole roles={["ADMIN", "USER"]} />}>
               <Route path="/chat" element={<ChatPage />} />
