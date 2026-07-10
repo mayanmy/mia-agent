@@ -1,11 +1,17 @@
-import { Body, Controller, Get, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
 
 import { getConfig } from "../../core/config";
 import { Public } from "../../core/auth/public.decorator";
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { CurrentUserDto } from "../users/dto/user.dto";
-import { AuthResponse, AuthSessionResponse, LoginDto } from "./dto/auth.dto";
+import {
+  AcceptUserInvitationDto,
+  AuthResponse,
+  AuthSessionResponse,
+  InvitationValidationResponse,
+  LoginDto
+} from "./dto/auth.dto";
 import { AuthService } from "./auth.service";
 
 const REFRESH_COOKIE_NAME = "mia_refresh_token";
@@ -70,6 +76,36 @@ export class AuthController {
     return null;
   }
 
+  /** 公开校验激活链接，激活页只在链接仍有效时才展示设置密码表单。 */
+  @Get("invitations/validate")
+  @Public()
+  validateInvitation(
+    @Query("token") token: string | undefined
+  ): Promise<InvitationValidationResponse> {
+    return this.authService.validateUserInvitation(token);
+  }
+
+  /**
+   * 接受邀请后直接签发当前浏览器会话。
+   *
+   * 这样成员无需在激活成功后再次手动输入密码登录，Refresh Token 仍只通过 HttpOnly
+   * Cookie 写入，保持与普通登录一致的安全边界。
+   */
+  @Post("invitations/accept")
+  @Public()
+  async acceptInvitation(
+    @Body() payload: AcceptUserInvitationDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response
+  ): Promise<AuthResponse> {
+    const session = await this.authService.acceptUserInvitation(
+      payload,
+      this.getRequestContext(request)
+    );
+    this.writeRefreshCookie(response, session);
+    return this.toAuthResponse(session);
+  }
+
   /**
    * 返回 Guard 已验证的当前用户公开资料。
    *
@@ -101,7 +137,10 @@ export class AuthController {
    *
    * IP 与 User-Agent 不参与权限判断，且长度受限，避免不可信请求头无限写入数据库。
    */
-  private getRequestContext(request: Request): { ipAddress: string | null; userAgent: string | null } {
+  private getRequestContext(request: Request): {
+    ipAddress: string | null;
+    userAgent: string | null;
+  } {
     const forwardedFor = request.headers["x-forwarded-for"];
     const forwardedIp = Array.isArray(forwardedFor)
       ? forwardedFor[0]

@@ -12,7 +12,8 @@ export const ErrorCodes = {
   auth: {
     invalidCredentials: 1101,
     invalidSession: 1102,
-    invalidPassword: 1103
+    invalidPassword: 1103,
+    invalidInvitation: 1104
   },
   user: {
     emailExists: 1201,

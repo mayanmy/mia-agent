@@ -26,10 +26,7 @@ export const tests = [
 
       assert.equal(await passwordService.verifyPassword(passwordHash, "MiaPassword2026"), true);
       assert.equal(await passwordService.verifyPassword(passwordHash, "wrong-password"), false);
-      assert.throws(
-        () => passwordService.validatePasswordStrength("short1"),
-        /密码至少需要 8 位/u
-      );
+      assert.throws(() => passwordService.validatePasswordStrength("short1"), /密码至少需要 8 位/u);
     }
   },
 
@@ -56,6 +53,22 @@ export const tests = [
       assert.equal(payload.role, testUser.role);
       assert.equal(typeof payload.iat, "number");
       assert.equal(typeof payload.exp, "number");
+    }
+  },
+
+  {
+    name: "TokenService 生成不可逆的成员邀请令牌索引",
+    run: () => {
+      const tokenService = new TokenService();
+      const firstToken = tokenService.createInvitationToken();
+      const secondToken = tokenService.createInvitationToken();
+
+      assert.notEqual(firstToken, secondToken);
+      assert.notEqual(tokenService.hashInvitationToken(firstToken), firstToken);
+      assert.equal(
+        tokenService.hashInvitationToken(firstToken),
+        tokenService.hashInvitationToken(firstToken)
+      );
     }
   },
 
@@ -133,7 +146,8 @@ export const tests = [
             return { count: matched.length };
           }
         },
-        $transaction: async <T>(callback: (transaction: MockPrisma) => Promise<T>) => callback(prisma)
+        $transaction: async <T>(callback: (transaction: MockPrisma) => Promise<T>) =>
+          callback(prisma)
       };
       const usersService = {
         findActiveUserByEmail: async () => testUser,
@@ -175,18 +189,14 @@ export const tests = [
       const reflector = {
         getAllAndOverride: () => false
       } as unknown as Reflector;
-      const guard = new JwtAuthGuard(
-        reflector,
-        new TokenService(),
-        {
-          findActiveCurrentUser: async () => ({
-            id: testUser.id,
-            email: testUser.email,
-            displayName: testUser.displayName,
-            role: testUser.role
-          })
-        } as never
-      );
+      const guard = new JwtAuthGuard(reflector, new TokenService(), {
+        findActiveCurrentUser: async () => ({
+          id: testUser.id,
+          email: testUser.email,
+          displayName: testUser.displayName,
+          role: testUser.role
+        })
+      } as never);
       const request = { headers: {} };
       const context = {
         getHandler: () => undefined,
@@ -194,10 +204,7 @@ export const tests = [
         switchToHttp: () => ({ getRequest: () => request })
       };
 
-      await assert.rejects(
-        () => guard.canActivate(context as never),
-        /未登录或登录状态已失效/u
-      );
+      await assert.rejects(() => guard.canActivate(context as never), /未登录或登录状态已失效/u);
     }
   },
 

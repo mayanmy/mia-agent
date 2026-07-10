@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { User } from "@prisma/client";
+import { Prisma, User, UserRole } from "@prisma/client";
 
+import { getConfig } from "../../core/config";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import { UsersService, normalizeUserEmail } from "../users/users.service";
@@ -13,12 +14,23 @@ import {
   UserQueryDto
 } from "../users/dto/user.dto";
 import { PageResult } from "../../core/result";
-import { AuthRequestContext, AuthSessionResponse, AuthResponse, LoginDto } from "./dto/auth.dto";
+import {
+  AcceptUserInvitationDto,
+  AuthRequestContext,
+  AuthResponse,
+  AuthSessionResponse,
+  CreateUserInvitationDto,
+  InvitationValidationResponse,
+  LoginDto,
+  UserInvitationResponse
+} from "./dto/auth.dto";
 import { PasswordService } from "./password.service";
 import { TokenService } from "./token.service";
 
 @Injectable()
 export class AuthService {
+  private readonly config = getConfig();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
@@ -179,6 +191,148 @@ export class AuthService {
   }
 
   /**
+   * 生成或重新生成成员激活链接。
+   *
+   * 同一邮箱始终只保留一条邀请记录，管理员再次生成时会立即替换旧 Token；这样旧链接
+   * 自动失效，无需把可用的原始 Token 长期保存到数据库或页面状态。
+   */
+  async createUserInvitation(
+    invitedByUserId: string,
+    payload: CreateUserInvitationDto
+  ): Promise<UserInvitationResponse> {
+    const email = this.requireManagedEmail(payload.email);
+    const displayName = this.requireDisplayName(payload.displayName);
+    const role = this.requireManagedRole(payload.role);
+
+    if (await this.usersService.findUserIdByEmail(email)) {
+      throw new AppError(ErrorCodes.user.emailExists, "邮箱已存在", HttpStatus.CONFLICT);
+    }
+
+    const token = this.tokenService.createInvitationToken();
+    const expiresAt = new Date(Date.now() + this.config.authInvitationTtlHours * 60 * 60 * 1000);
+    const invitation = await this.prisma.userInvitation.upsert({
+      where: { email },
+      create: {
+        email,
+        displayName,
+        role,
+        tokenHash: this.tokenService.hashInvitationToken(token),
+        expiresAt,
+        invitedByUserId
+      },
+      update: {
+        displayName,
+        role,
+        tokenHash: this.tokenService.hashInvitationToken(token),
+        expiresAt,
+        acceptedAt: null,
+        revokedAt: null,
+        invitedByUserId
+      }
+    });
+
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      displayName: invitation.displayName,
+      role: invitation.role,
+      activateUrl: this.createInvitationUrl(token),
+      expiresAt: invitation.expiresAt
+    };
+  }
+
+  /**
+   * 校验公开激活链接是否仍可使用。
+   *
+   * 不区分过期、撤销、已使用和随机 Token，避免外部利用接口判断团队成员的邀请状态。
+   */
+  async validateUserInvitation(token: string | undefined): Promise<InvitationValidationResponse> {
+    const invitation = await this.findUsableInvitation(token);
+
+    return {
+      displayName: invitation.displayName,
+      email: invitation.email,
+      expiresAt: invitation.expiresAt
+    };
+  }
+
+  /**
+   * 接受邀请、创建账号并建立登录会话。
+   *
+   * 令牌消费、User 创建和 Refresh Session 写入必须位于同一事务：任一环节失败都会回滚，
+   * 防止出现“链接已失效但账号没有创建”或“账号已创建却无法完成激活”的半完成状态。
+   */
+  async acceptUserInvitation(
+    payload: AcceptUserInvitationDto,
+    context: AuthRequestContext
+  ): Promise<AuthSessionResponse> {
+    const token = this.requireInvitationToken(payload.token);
+    const tokenHash = this.tokenService.hashInvitationToken(token);
+    const invitation = await this.findUsableInvitation(token);
+    const password = this.requireManagedPassword(payload.password);
+    const passwordHash = await this.passwordService.hashPassword(password);
+    const now = new Date();
+    const refreshToken = this.tokenService.createRefreshToken();
+    const refreshExpiresAt = this.tokenService.getRefreshExpiresAt(now);
+
+    try {
+      const user = await this.prisma.$transaction(async (transaction) => {
+        const consumed = await transaction.userInvitation.updateMany({
+          where: {
+            id: invitation.id,
+            tokenHash,
+            acceptedAt: null,
+            revokedAt: null,
+            expiresAt: { gt: now }
+          },
+          data: { acceptedAt: now }
+        });
+
+        if (consumed.count !== 1) {
+          throw this.createInvalidInvitationError();
+        }
+
+        // User 归 users 模块管理；此处为保证一次性 Token 与账号创建的原子性，受限地在
+        // auth 的邀请事务内写入。普通成员创建仍必须通过 UsersService。
+        const createdUser = await transaction.user.create({
+          data: {
+            email: invitation.email,
+            displayName: invitation.displayName,
+            passwordHash,
+            role: invitation.role,
+            lastLoginAt: now,
+            passwordChangedAt: now
+          }
+        });
+
+        await transaction.authSession.create({
+          data: {
+            userId: createdUser.id,
+            refreshTokenHash: this.tokenService.hashRefreshToken(refreshToken),
+            expiresAt: refreshExpiresAt,
+            ipAddress: context.ipAddress,
+            userAgent: context.userAgent
+          }
+        });
+
+        return createdUser;
+      });
+
+      return this.toSessionResponse(user, refreshToken, refreshExpiresAt);
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      if (this.isUniqueEmailError(error)) {
+        throw new AppError(ErrorCodes.user.emailExists, "邮箱已存在", HttpStatus.CONFLICT);
+      }
+
+      throw error;
+    }
+  }
+
+  /**
    * 创建登录响应与服务端 Session。
    *
    * Refresh Token 只返回给 Controller 用于写 HttpOnly Cookie，业务响应中不会序列化它。
@@ -276,6 +430,54 @@ export class AuthService {
     return password;
   }
 
+  /** 校验管理端指定的角色，避免不可信 HTTP 请求把任意字符串写入枚举字段。 */
+  private requireManagedRole(role: UserRole | undefined): UserRole {
+    if (role === undefined) {
+      return UserRole.USER;
+    }
+
+    if (role !== UserRole.ADMIN && role !== UserRole.USER) {
+      throw new AppError(ErrorCodes.common.badRequest, "角色不正确", HttpStatus.BAD_REQUEST);
+    }
+
+    return role;
+  }
+
+  /** 读取并校验链接中的原始令牌，空值和异常输入统一视为无效邀请。 */
+  private requireInvitationToken(token: string | undefined): string {
+    if (typeof token !== "string" || !token.trim()) {
+      throw this.createInvalidInvitationError();
+    }
+
+    return token.trim();
+  }
+
+  /** 查询尚未过期、未撤销、未使用的邀请记录。 */
+  private async findUsableInvitation(token: string | undefined) {
+    const tokenHash = this.tokenService.hashInvitationToken(this.requireInvitationToken(token));
+    const invitation = await this.prisma.userInvitation.findFirst({
+      where: {
+        tokenHash,
+        acceptedAt: null,
+        revokedAt: null,
+        expiresAt: { gt: new Date() }
+      }
+    });
+
+    if (!invitation) {
+      throw this.createInvalidInvitationError();
+    }
+
+    return invitation;
+  }
+
+  /** 将原始邀请令牌写入前端公开激活路由，不把管理端地址或请求 Host 作为来源。 */
+  private createInvitationUrl(token: string): string {
+    const url = new URL("/activate", this.config.publicBaseUrl);
+    url.searchParams.set("token", token);
+    return url.toString();
+  }
+
   /** 创建统一的匿名登录失败错误，避免泄露账号状态或密码校验细节。 */
   private createInvalidCredentialsError(): AppError {
     return new AppError(
@@ -288,5 +490,19 @@ export class AuthService {
   /** 创建统一的 Refresh Session 失败错误，避免暴露 Token 是否曾经存在。 */
   private createInvalidSessionError(): AppError {
     return new AppError(ErrorCodes.auth.invalidSession, "登录状态已失效", HttpStatus.UNAUTHORIZED);
+  }
+
+  /** 对外统一返回邀请失效文案，避免泄露链接失效的具体内部原因。 */
+  private createInvalidInvitationError(): AppError {
+    return new AppError(
+      ErrorCodes.auth.invalidInvitation,
+      "邀请链接无效或已过期",
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  /** 仅映射明确的邮箱唯一约束，避免把其余数据库故障伪装成业务冲突。 */
+  private isUniqueEmailError(error: unknown): boolean {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
   }
 }

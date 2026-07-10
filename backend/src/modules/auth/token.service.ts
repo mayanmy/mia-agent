@@ -55,6 +55,21 @@ export class TokenService {
   }
 
   /**
+   * 生成成员邀请链接使用的一次性令牌。
+   *
+   * 邀请令牌与 Refresh Token 分开命名，避免调用方误把不同生命周期的令牌混用；两者都
+   * 采用足够长度的随机字节并以 base64url 编码，适合直接放入 URL 查询参数。
+   */
+  createInvitationToken(): string {
+    return randomBytes(32).toString("base64url");
+  }
+
+  /** 将邀请令牌转换为数据库存储值，泄漏数据库时无法直接构造可激活账号的链接。 */
+  hashInvitationToken(token: string): string {
+    return createHash("sha256").update(token).digest("hex");
+  }
+
+  /**
    * 计算新 Refresh Session 的失效时间。
    *
    * 使用配置项而非 Cookie 固定值，确保服务端校验和浏览器 Cookie 生命周期保持一致。

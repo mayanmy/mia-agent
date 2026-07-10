@@ -16,6 +16,8 @@ export type AppConfig = {
   authAccessTokenTtlSeconds: number;
   authRefreshTokenTtlDays: number;
   authCookieSecure: boolean;
+  authInvitationTtlHours: number;
+  publicBaseUrl: string;
 };
 
 let envLoaded = false;
@@ -100,7 +102,8 @@ function readToolsHttpAllowedHosts(): string[] {
 }
 
 function readBooleanEnv(primaryKey: string, fallbackKey?: string): boolean {
-  const value = process.env[primaryKey] ?? (fallbackKey ? process.env[fallbackKey] : undefined) ?? "";
+  const value =
+    process.env[primaryKey] ?? (fallbackKey ? process.env[fallbackKey] : undefined) ?? "";
 
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
@@ -146,6 +149,27 @@ function readAuthJwtSecret(): string {
   return secret;
 }
 
+/**
+ * 读取可从浏览器访问 Mia 的外部地址。
+ *
+ * 邀请链接由管理员复制并转发，因此不能从单次 HTTP 请求的 Host 推断，避免反向代理、
+ * 内网地址或恶意请求头被写进链接。未配置时使用本地 Vite 默认地址以方便开发。
+ */
+function readPublicBaseUrl(): string {
+  const value = (process.env.MIA_PUBLIC_BASE_URL ?? "http://localhost:5173").replace(/\/+$/u, "");
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("invalid protocol");
+    }
+  } catch {
+    throw new Error("MIA_PUBLIC_BASE_URL must be a valid HTTP(S) URL");
+  }
+
+  return value;
+}
+
 export function getConfig(): AppConfig {
   loadEnvFile();
 
@@ -167,11 +191,10 @@ export function getConfig(): AppConfig {
       "MIA_TOOLS_HTTP_ALLOW_LOCALHOST"
     ),
     authJwtSecret: readAuthJwtSecret(),
-    authAccessTokenTtlSeconds: readPositiveIntegerEnv(
-      "MIA_AUTH_ACCESS_TOKEN_TTL_SECONDS",
-      15 * 60
-    ),
+    authAccessTokenTtlSeconds: readPositiveIntegerEnv("MIA_AUTH_ACCESS_TOKEN_TTL_SECONDS", 15 * 60),
     authRefreshTokenTtlDays: readPositiveIntegerEnv("MIA_AUTH_REFRESH_TOKEN_TTL_DAYS", 30),
-    authCookieSecure: readBooleanEnv("MIA_AUTH_COOKIE_SECURE")
+    authCookieSecure: readBooleanEnv("MIA_AUTH_COOKIE_SECURE"),
+    authInvitationTtlHours: readPositiveIntegerEnv("MIA_AUTH_INVITATION_TTL_HOURS", 72),
+    publicBaseUrl: readPublicBaseUrl()
   };
 }

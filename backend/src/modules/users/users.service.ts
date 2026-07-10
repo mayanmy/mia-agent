@@ -82,6 +82,21 @@ export class UsersService {
   }
 
   /**
+   * 查询邮箱是否已被正式成员占用。
+   *
+   * 邀请记录不会预创建 User，因此管理员生成链接前必须先检查这里，避免成员接受邀请时
+   * 才因邮箱冲突失败。该方法只返回存在性所需的 ID，不暴露账号敏感字段。
+   */
+  async findUserIdByEmail(email: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizeUserEmail(email) },
+      select: { id: true }
+    });
+
+    return user?.id ?? null;
+  }
+
+  /**
    * 按 ID 获取仍可访问工作台的用户公开信息。
    *
    * Guard 和 Refresh 流程都依赖此检查，因此禁用操作不必等待旧 Access Token 自然过期。

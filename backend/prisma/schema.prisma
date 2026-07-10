@@ -42,10 +42,36 @@ model User {
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
   authSessions      AuthSession[]
+  sentInvitations   UserInvitation[] @relation("UserInvitationInviter")
 
   @@index([role, disabledAt], map: "idx_users_role_disabled_at")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
   @@map("users")
+}
+
+/**
+ * 管理员发出的成员激活邀请。
+ *
+ * 邀请阶段不预创建 User：只有持有有效链接的成员设置密码后才创建账号，因而 users 表内
+ * 的记录始终都是可登录的正式成员，避免引入额外的“待激活用户”状态分支。
+ */
+model UserInvitation {
+  id              String   @id @default(uuid()) @db.Uuid
+  email           String   @unique(map: "uq_user_invitations_email")
+  displayName     String   @map("display_name")
+  role            UserRole @default(USER)
+  tokenHash       String   @unique(map: "uq_user_invitations_token_hash") @map("token_hash")
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz(6)
+  acceptedAt      DateTime? @map("accepted_at") @db.Timestamptz(6)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
+  invitedByUserId String   @map("invited_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  invitedBy       User     @relation("UserInvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([expiresAt], map: "idx_user_invitations_expires_at")
+  @@index([invitedByUserId, createdAt(sort: Desc)], map: "idx_user_invitations_invited_by_created_at")
+  @@map("user_invitations")
 }
 
 model AuthSession {
