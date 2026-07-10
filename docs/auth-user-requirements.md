@@ -119,7 +119,7 @@ Mia 当前运行在“本地可信网络”假设下：进入前端即可查看�
 - Refresh Token 仅通过 `HttpOnly`、`SameSite=Lax` Cookie 保存；生产环境必须启用 `Secure`。
 - Access Token 仅驻留在前端内存，页面刷新时通过 Refresh Cookie 恢复，禁止写入 `localStorage` / `sessionStorage`。
 - Refresh Token 在数据库中只保存哈希值；数据库泄漏不能直接复用会话。
-- 用户邮箱按小写规范化后唯一；密码最少 12 位，v1 要求包含字母和数字。
+- 用户邮箱按小写规范化后唯一；密码最少 8 位，v1 要求包含字母和数字。
 - 禁用、改角色、重置密码、撤销会话必须记录审计事件，日志不写密码、Token 或完整 Cookie。
 
 ## 7. 验收标准

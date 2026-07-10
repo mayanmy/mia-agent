@@ -25,7 +25,7 @@ import {
 
 const passwordRules = [
   { required: true, message: "请输入密码" },
-  { min: 12, message: "密码至少需要 12 位" },
+  { min: 8, message: "密码至少需要 8 位" },
   {
     validator: async (_: unknown, value: string | undefined) => {
       if (!value || (/[a-zA-Z]/u.test(value) && /[0-9]/u.test(value))) {

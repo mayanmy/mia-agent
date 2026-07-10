@@ -8,18 +8,18 @@ export class PasswordService {
   /**
    * 校验新密码是否满足 v1 的基础强度要求。
    *
-   * 规则保持简单可执行：至少 12 位且同时包含字母与数字；密码策略只在设置密码时失败，
+   * 规则保持简单可执行：至少 8 位且同时包含字母与数字；密码策略只在设置密码时失败，
    * 登录时绝不把策略细节暴露给匿名调用方。
    */
   validatePasswordStrength(password: string): void {
     if (
-      password.length < 12 ||
+      password.length < 8 ||
       !/[a-zA-Z]/u.test(password) ||
       !/[0-9]/u.test(password)
     ) {
       throw new AppError(
         ErrorCodes.auth.invalidPassword,
-        "密码至少需要 12 位，并同时包含字母和数字",
+        "密码至少需要 8 位，并同时包含字母和数字",
         HttpStatus.BAD_REQUEST
       );
     }

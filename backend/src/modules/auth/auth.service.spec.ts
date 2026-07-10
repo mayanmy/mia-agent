@@ -28,7 +28,7 @@ export const tests = [
       assert.equal(await passwordService.verifyPassword(passwordHash, "wrong-password"), false);
       assert.throws(
         () => passwordService.validatePasswordStrength("short1"),
-        /密码至少需要 12 位/u
+        /密码至少需要 8 位/u
       );
     }
   },
