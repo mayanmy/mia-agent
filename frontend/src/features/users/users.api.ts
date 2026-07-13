@@ -13,6 +13,19 @@ export type CreateManagedUserPayload = {
   role: UserRole;
 };
 export type UpdateManagedUserPayload = { displayName?: string; role?: UserRole; enabled?: boolean };
+export type CreateUserInvitationPayload = {
+  email: string;
+  displayName: string;
+  role: UserRole;
+};
+export type UserInvitation = {
+  id: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  activateUrl: string;
+  expiresAt: string;
+};
 
 /** 查询成员管理列表，关键词在后端按邮箱与名称模糊匹配。 */
 export function listUsers(page = 1, pageSize = 20, keyword = ""): Promise<PageResult<ManagedUser>> {
@@ -24,6 +37,16 @@ export function listUsers(page = 1, pageSize = 20, keyword = ""): Promise<PageRe
 /** 创建团队成员，密码只在本次请求中传输，不在前端保存。 */
 export function createUser(payload: CreateManagedUserPayload): Promise<CurrentUser> {
   return request<CurrentUser>("/api/v1/users", { method: "POST", body: JSON.stringify(payload) });
+}
+
+/** 生成一次性成员激活链接；原始 Token 只会在这次响应中返回。 */
+export function createUserInvitation(
+  payload: CreateUserInvitationPayload
+): Promise<UserInvitation> {
+  return request<UserInvitation>("/api/v1/users/invitations", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 /** 更新成员角色、名称或启用状态。 */
