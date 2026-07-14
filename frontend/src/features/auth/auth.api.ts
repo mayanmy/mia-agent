@@ -50,3 +50,25 @@ export function logout(): Promise<null> {
 export function getCurrentUser(): Promise<CurrentUser> {
   return authRequest<CurrentUser>("/api/v1/auth/me", { method: "GET" });
 }
+
+export type InvitationValidation = {
+  displayName: string;
+  email: string;
+  expiresAt: string;
+};
+
+/** 公开校验成员激活链接，不需要也不携带工作台 Access Token。 */
+export function validateInvitation(token: string): Promise<InvitationValidation> {
+  const search = new URLSearchParams({ token });
+  return authRequest<InvitationValidation>(
+    `/api/v1/auth/invitations/validate?${search.toString()}`
+  );
+}
+
+/** 接受邀请并设置密码；成功响应与普通登录一致，Refresh Token 仍由 Cookie 保存。 */
+export function acceptInvitation(token: string, password: string): Promise<AuthResponse> {
+  return authRequest<AuthResponse>("/api/v1/auth/invitations/accept", {
+    method: "POST",
+    body: JSON.stringify({ token, password })
+  });
+}

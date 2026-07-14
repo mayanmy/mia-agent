@@ -44,6 +44,11 @@ const KnowledgePage = lazy(() =>
 const UsersPage = lazy(() =>
   import("../features/users/UsersPage").then((module) => ({ default: module.UsersPage }))
 );
+const ActivateInvitationPage = lazy(() =>
+  import("../features/auth/ActivateInvitationPage").then((module) => ({
+    default: module.ActivateInvitationPage
+  }))
+);
 
 type NavConfig = {
   label: string;
@@ -66,6 +71,7 @@ export function App() {
     <Suspense fallback={<RouteLoading />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/activate" element={<ActivateInvitationPage />} />
         <Route path="/share/agents/:token" element={<SharedAgentPage />} />
         <Route element={<RequireAuth />}>
           <Route element={<WorkspaceLayout />}>
