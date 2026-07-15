@@ -7,7 +7,7 @@ import { ToolCallLogListItem, ToolCallLogQueryDto } from "./dto/log.dto";
 import { LogsService } from "./logs.service";
 
 @Controller("logs")
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.USER)
 export class LogsController {
   constructor(private readonly logsService: LogsService) {}
 

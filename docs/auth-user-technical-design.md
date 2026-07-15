@@ -144,18 +144,18 @@ model AuthSession {
 
 所有响应复用现有 `{ code, message, data }` 包装；下列路径均自动加 `/api/v1` 前缀。
 
-| 方法 | 路径 | 鉴权 | 说明 |
-| --- | --- | --- | --- |
-| `POST` | `/auth/login` | 匿名 | 校验邮箱密码，返回 Access Token，并设置 Refresh Cookie。 |
-| `POST` | `/auth/refresh` | Refresh Cookie | 轮换 Session Token，返回新的 Access Token。 |
-| `POST` | `/auth/logout` | Refresh Cookie 可选 | 撤销当前 Session，清 Cookie；重复调用幂等成功。 |
-| `POST` | `/auth/logout-all` | 已登录 | 撤销当前用户所有 Session。 |
-| `GET` | `/auth/me` | 已登录 | 返回当前用户公开资料。 |
-| `GET` | `/users` | Admin | 分页查询成员。 |
-| `POST` | `/users` | Admin | 创建成员并要求设置初始密码。 |
-| `PATCH` | `/users/:id` | Admin | 修改展示名、角色、启用状态。 |
-| `POST` | `/users/:id/reset-password` | Admin | 重置密码并撤销该用户全部 Session。 |
-| `POST` | `/users/:id/revoke-sessions` | Admin | 撤销目标用户全部 Session。 |
+| 方法    | 路径                         | 鉴权                | 说明                                                     |
+| ------- | ---------------------------- | ------------------- | -------------------------------------------------------- |
+| `POST`  | `/auth/login`                | 匿名                | 校验邮箱密码，返回 Access Token，并设置 Refresh Cookie。 |
+| `POST`  | `/auth/refresh`              | Refresh Cookie      | 轮换 Session Token，返回新的 Access Token。              |
+| `POST`  | `/auth/logout`               | Refresh Cookie 可选 | 撤销当前 Session，清 Cookie；重复调用幂等成功。          |
+| `POST`  | `/auth/logout-all`           | 已登录              | 撤销当前用户所有 Session。                               |
+| `GET`   | `/auth/me`                   | 已登录              | 返回当前用户公开资料。                                   |
+| `GET`   | `/users`                     | Admin               | 分页查询成员。                                           |
+| `POST`  | `/users`                     | Admin               | 创建成员并要求设置初始密码。                             |
+| `PATCH` | `/users/:id`                 | Admin               | 修改展示名、角色、启用状态。                             |
+| `POST`  | `/users/:id/reset-password`  | Admin               | 重置密码并撤销该用户全部 Session。                       |
+| `POST`  | `/users/:id/revoke-sessions` | Admin               | 撤销目标用户全部 Session。                               |
 
 DTO 摘要：
 
@@ -217,8 +217,8 @@ JWT payload：
 
 1. 全局注册 `JwtAuthGuard`。
 2. `@Public()` 标记健康检查、登录、刷新、退出和公开分享 Agent 路径。
-3. `@Roles(UserRole.ADMIN)` 限制模型、知识库、工具、日志、用户和 Agent 管理接口。
-4. 已登录的 `USER` 可以访问 Agent 列表详情（仅启用项）和 Chat 接口。
+3. `@Roles(UserRole.ADMIN)` 仅限制成员管理接口。
+4. 模型、知识库、工具、日志、Agent 和 Chat 接口统一使用 `@Roles(UserRole.ADMIN, UserRole.USER)`，支持团队共同维护。
 
 这样新增 Controller 时不会因为忘记写 Guard 而意外公开。
 
@@ -358,15 +358,15 @@ async refresh(refreshToken: string, context: RequestContext): Promise<AuthRespon
 
 ## 11. 测试矩阵
 
-| 场景 | 预期 |
-| --- | --- |
-| 正确邮箱密码登录 | 返回短期 Access Token，设置 Refresh Cookie。 |
-| 错误密码 / 不存在邮箱 / 禁用账号 | 均为统一 401 错误文案。 |
-| 使用合法 Access Token 访问 Chat | 成功，日志带当前 `userId`。 |
-| 未带 Token 访问内部 Agent 接口 | 401。 |
-| User 请求模型配置或知识库管理 | 403。 |
-| Access Token 过期，Refresh 有效 | 成功刷新并重放一次原请求。 |
-| 已撤销 Refresh Token 刷新 | 401，Cookie 被清除。 |
-| 管理员禁用用户 | 该用户后续受保护请求全部 401。 |
-| 重置密码 | 旧 Refresh Session 失效，必须重新登录。 |
-| 公开分享 Agent 查询 | 不需要内部 Token，保持可用。 |
+| 场景                             | 预期                                         |
+| -------------------------------- | -------------------------------------------- |
+| 正确邮箱密码登录                 | 返回短期 Access Token，设置 Refresh Cookie。 |
+| 错误密码 / 不存在邮箱 / 禁用账号 | 均为统一 401 错误文案。                      |
+| 使用合法 Access Token 访问 Chat  | 成功，日志带当前 `userId`。                  |
+| 未带 Token 访问内部 Agent 接口   | 401。                                        |
+| User 请求模型配置或知识库管理    | 403。                                        |
+| Access Token 过期，Refresh 有效  | 成功刷新并重放一次原请求。                   |
+| 已撤销 Refresh Token 刷新        | 401，Cookie 被清除。                         |
+| 管理员禁用用户                   | 该用户后续受保护请求全部 401。               |
+| 重置密码                         | 旧 Refresh Session 失效，必须重新登录。      |
+| 公开分享 Agent 查询              | 不需要内部 Token，保持可用。                 |

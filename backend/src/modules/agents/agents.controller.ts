@@ -35,7 +35,7 @@ export class AgentsController {
   }
 
   @Post()
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   async createAgent(@Body() payload: AgentCreateDto): Promise<AgentDetail> {
     return this.agentsService.createAgent(payload);
   }
@@ -47,13 +47,13 @@ export class AgentsController {
   }
 
   @Get(":id")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   async getAgent(@Param("id") id: string): Promise<AgentDetail> {
     return this.agentsService.getAgent(id);
   }
 
   @Put(":id")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   async updateAgent(
     @Param("id") id: string,
     @Body() payload: AgentUpdateDto
@@ -62,32 +62,32 @@ export class AgentsController {
   }
 
   @Delete(":id")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   async deleteAgent(@Param("id") id: string): Promise<null> {
     await this.agentsService.deleteAgent(id);
     return null;
   }
 
   @Post(":id/publish")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   async publishAgent(@Param("id") id: string): Promise<AgentPublishResult> {
     return this.agentsService.publishAgent(id);
   }
 
   @Delete(":id/publish")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   async unpublishAgent(@Param("id") id: string): Promise<AgentPublishResult> {
     return this.agentsService.unpublishAgent(id);
   }
 
   @Get(":id/tools")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   async getAgentTools(@Param("id") id: string): Promise<AgentToolBindingResult> {
     return this.agentsService.getAgentTools(id);
   }
 
   @Put(":id/tools")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   async updateAgentTools(
     @Param("id") id: string,
     @Body() payload: AgentToolBindingDto
@@ -96,15 +96,13 @@ export class AgentsController {
   }
 
   @Get(":id/knowledge-bases")
-  @Roles(UserRole.ADMIN)
-  async getAgentKnowledgeBases(
-    @Param("id") id: string
-  ): Promise<AgentKnowledgeBaseBindingResult> {
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  async getAgentKnowledgeBases(@Param("id") id: string): Promise<AgentKnowledgeBaseBindingResult> {
     return this.agentsService.getAgentKnowledgeBases(id);
   }
 
   @Put(":id/knowledge-bases")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   async updateAgentKnowledgeBases(
     @Param("id") id: string,
     @Body() payload: AgentKnowledgeBaseBindingDto

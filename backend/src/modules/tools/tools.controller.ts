@@ -6,7 +6,7 @@ import { ToolListItem } from "./dto/tool.dto";
 import { ToolsService } from "./tools.service";
 
 @Controller("tools")
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.USER)
 export class ToolsController {
   constructor(private readonly toolsService: ToolsService) {}
 

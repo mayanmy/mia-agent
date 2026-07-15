@@ -57,11 +57,11 @@ type NavConfig = {
 };
 
 const navConfig: NavConfig[] = [
-  { label: "模型供应商", path: "/providers", roles: ["ADMIN"] },
-  { label: "Agent", path: "/agents", roles: ["ADMIN"] },
-  { label: "知识库", path: "/knowledge", roles: ["ADMIN"] },
+  { label: "模型供应商", path: "/providers", roles: ["ADMIN", "USER"] },
+  { label: "Agent", path: "/agents", roles: ["ADMIN", "USER"] },
+  { label: "知识库", path: "/knowledge", roles: ["ADMIN", "USER"] },
   { label: "对话", path: "/chat", roles: ["ADMIN", "USER"] },
-  { label: "日志", path: "/logs", roles: ["ADMIN"] },
+  { label: "日志", path: "/logs", roles: ["ADMIN", "USER"] },
   { label: "成员", path: "/users", roles: ["ADMIN"] }
 ];
 
@@ -76,7 +76,7 @@ export function App() {
         <Route element={<RequireAuth />}>
           <Route element={<WorkspaceLayout />}>
             <Route index element={<DefaultWorkspaceRoute />} />
-            <Route element={<RequireRole roles={["ADMIN"]} />}>
+            <Route element={<RequireRole roles={["ADMIN", "USER"]} />}>
               <Route
                 path="/providers"
                 element={
@@ -88,11 +88,11 @@ export function App() {
               />
               <Route path="/agents" element={<AgentsPage />} />
               <Route path="/knowledge" element={<KnowledgePage />} />
-              <Route path="/logs" element={<LogsPage />} />
-              <Route path="/users" element={<UsersPage />} />
-            </Route>
-            <Route element={<RequireRole roles={["ADMIN", "USER"]} />}>
               <Route path="/chat" element={<ChatPage />} />
+              <Route path="/logs" element={<LogsPage />} />
+            </Route>
+            <Route element={<RequireRole roles={["ADMIN"]} />}>
+              <Route path="/users" element={<UsersPage />} />
             </Route>
             <Route path="*" element={<DefaultWorkspaceRoute />} />
           </Route>
@@ -129,11 +129,9 @@ function RequireRole({ roles }: { roles: UserRole[] }) {
   return <Outlet />;
 }
 
-/** 根据角色选择工作台默认入口。 */
+/** 所有已登录成员都可使用 Agent，成员管理仍通过独立管理员路由保护。 */
 function DefaultWorkspaceRoute() {
-  const { currentUser } = useAuth();
-
-  return <Navigate replace to={currentUser?.role === "ADMIN" ? "/agents" : "/chat"} />;
+  return <Navigate replace to="/agents" />;
 }
 
 /** 工作台壳层按当前角色渲染导航和账号退出入口。 */

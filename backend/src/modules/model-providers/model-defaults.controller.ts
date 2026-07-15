@@ -6,7 +6,7 @@ import { DefaultModelSettings, DefaultModelSettingsUpdateDto } from "./dto/model
 import { ModelProvidersService } from "./model-providers.service";
 
 @Controller("model-defaults")
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.USER)
 export class ModelDefaultsController {
   constructor(private readonly modelProvidersService: ModelProvidersService) {}
 

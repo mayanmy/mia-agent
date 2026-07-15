@@ -16,7 +16,7 @@ import {
 import { ModelProvidersService } from "./model-providers.service";
 
 @Controller("model-configs")
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.USER)
 export class ModelConfigsController {
   constructor(private readonly modelProvidersService: ModelProvidersService) {}
 

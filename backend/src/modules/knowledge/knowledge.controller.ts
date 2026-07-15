@@ -18,7 +18,7 @@ import {
 import { KnowledgeService } from "./knowledge.service";
 
 @Controller("knowledge-bases")
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.USER)
 export class KnowledgeController {
   constructor(private readonly knowledgeService: KnowledgeService) {}
 

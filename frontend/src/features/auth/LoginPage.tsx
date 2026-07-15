@@ -21,8 +21,7 @@ export function LoginPage() {
   /**
    * 提交邮箱密码并保存短期登录态。
    *
-   * 登录成功后优先回到被路由守卫拦截的原页面；未记录来源时进入 Agent 管理页，
-   * 普通用户在后续权限路由步骤会自动改为对话页。
+   * 登录成功后优先回到被路由守卫拦截的原页面；未记录来源时统一进入 Agent 管理页。
    */
   async function handleFinish(values: { email: string; password: string }) {
     setSubmitting(true);
@@ -55,11 +54,18 @@ export function LoginPage() {
           <Form.Item
             label="邮箱"
             name="email"
-            rules={[{ required: true, message: "请输入邮箱" }, { type: "email", message: "邮箱格式不正确" }]}
+            rules={[
+              { required: true, message: "请输入邮箱" },
+              { type: "email", message: "邮箱格式不正确" }
+            ]}
           >
             <Input autoComplete="email" placeholder="name@example.com" size="large" />
           </Form.Item>
-          <Form.Item label="密码" name="password" rules={[{ required: true, message: "请输入密码" }]}>
+          <Form.Item
+            label="密码"
+            name="password"
+            rules={[{ required: true, message: "请输入密码" }]}
+          >
             <Input.Password autoComplete="current-password" placeholder="请输入密码" size="large" />
           </Form.Item>
           <Button block htmlType="submit" loading={submitting} size="large" type="primary">

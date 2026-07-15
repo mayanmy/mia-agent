@@ -238,5 +238,37 @@ export const tests = [
 
       assert.throws(() => guard.canActivate(context as never), /没有权限访问此资源/u);
     }
+  },
+
+  {
+    name: "RolesGuard 允许普通用户访问通用工作台路由",
+    run: () => {
+      const reflector = {
+        getAllAndOverride: (key: string) => {
+          if (key === "mia:isPublic") {
+            return false;
+          }
+
+          return [UserRole.ADMIN, UserRole.USER];
+        }
+      } as unknown as Reflector;
+      const guard = new RolesGuard(reflector);
+      const context = {
+        getHandler: () => undefined,
+        getClass: () => undefined,
+        switchToHttp: () => ({
+          getRequest: () => ({
+            currentUser: {
+              id: testUser.id,
+              email: testUser.email,
+              displayName: testUser.displayName,
+              role: UserRole.USER
+            }
+          })
+        })
+      };
+
+      assert.equal(guard.canActivate(context as never), true);
+    }
   }
 ];
