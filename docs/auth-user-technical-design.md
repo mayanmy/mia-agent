@@ -255,6 +255,15 @@ SSE 建连前由 Guard 完成认证。`chat.service` 接收当前用户并写入
   -> 成功：保存内存 Access Token，调用 /auth/me，进入 authenticated
   -> 失败：进入 anonymous
 
+Access Token 距离到期不足 60 秒
+  -> AuthProvider 主动调用 /auth/refresh
+  -> 刷新成功：更新内存 Token 和下一次续期定时器
+  -> 刷新失败：清空 AuthProvider，跳转 /login
+
+浏览器窗口重新获得焦点或页面重新可见
+  -> 检查 Token 剩余有效期
+  -> 不足 60 秒时复用单飞刷新
+
 任意 API 401
   -> 单飞调用 /auth/refresh
   -> 成功：重放原请求一次
@@ -263,14 +272,14 @@ SSE 建连前由 Guard 完成认证。`chat.service` 接收当前用户并写入
 
 “单飞刷新”保证多个并发请求同时 401 时只发送一次 refresh，避免 Session 轮换互相作废。
 
-`shared/api/client.ts` 应集中注入 Authorization Header 和 401 重试。`streamChatCompletion` 目前直接 `fetch`，改造时必须复用同一鉴权策略，并将 Token 作为 Header 传入。
+`shared/api/client.ts` 集中注入 Authorization Header、建连前预刷新和 401 重试。`streamChatCompletion` 复用 `fetchWithAuth`，因此 SSE 建连前也会预留至少 60 秒 Token 有效期，避免长连接刚建立即因令牌到期失败。
 
 ### 7.2 路由与菜单
 
 - `RequireAuth` 包裹内部壳层。
-- `/login` 仅匿名可访问；已登录用户按角色重定向默认页面。
+- `/login` 仅匿名可访问；已登录用户重定向默认 Agent 页面。
 - `RequireRole` 保护 Admin 页面路由；即使用户手输 URL 也显示 403 页面。
-- App 根据 `currentUser.role` 生成导航，User 只保留“对话”。
+- App 根据 `currentUser.role` 生成导航，成员仅不显示“成员管理”。
 - 顶部或侧栏底部显示当前展示名、角色和退出菜单。
 
 ## 8. 配置、部署与初始化

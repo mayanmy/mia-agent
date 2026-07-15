@@ -2,6 +2,7 @@ type RefreshHandler = () => Promise<string | null>;
 type UnauthorizedHandler = () => void;
 
 let accessToken: string | null = null;
+let accessTokenExpiresAt: number | null = null;
 let refreshHandler: RefreshHandler | null = null;
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 let refreshPromise: Promise<string | null> | null = null;
@@ -25,14 +26,26 @@ export function configureAuthSession(options: {
   };
 }
 
-/** 设置只驻留内存的短期 Access Token，禁止调用方写入浏览器持久化存储。 */
-export function setAccessToken(token: string | null): void {
+/**
+ * 设置只驻留内存的短期 Access Token 及其服务端声明的有效期。
+ *
+ * 不解析 JWT 自身的 exp，统一使用登录/刷新响应的 expiresInSeconds；这样更换 JWT 格式时
+ * 前端续期逻辑不会耦合到 Token Payload，同时仍禁止把长期凭证写入浏览器持久化存储。
+ */
+export function setAccessToken(token: string | null, expiresInSeconds?: number): void {
   accessToken = token;
+  accessTokenExpiresAt =
+    token && expiresInSeconds && expiresInSeconds > 0 ? Date.now() + expiresInSeconds * 1000 : null;
 }
 
 /** 读取当前内存 Token，供 SSE 等需要手动构造 Header 的调用使用。 */
 export function getAccessToken(): string | null {
   return accessToken;
+}
+
+/** 返回 Access Token 的本地预计到期时间，供 AuthProvider 安排主动续期。 */
+export function getAccessTokenExpiresAt(): number | null {
+  return accessTokenExpiresAt;
 }
 
 /**
@@ -55,8 +68,27 @@ export async function refreshAccessToken(): Promise<string | null> {
   return refreshPromise;
 }
 
+/**
+ * 确保当前请求不会携带即将失效的 Access Token。
+ *
+ * 普通 API 和 fetch 流式 SSE 共用此入口：令牌剩余时间不足阈值时先走已有的单飞刷新，
+ * 避免刚建立长连接就因 Token 到期而被服务端中断。Refresh Cookie 无效时返回 null，
+ * 由原有 401 处理和 AuthProvider 统一清理登录态。
+ */
+export async function ensureFreshAccessToken(minimumValidityMs = 60_000): Promise<string | null> {
+  if (
+    accessToken &&
+    accessTokenExpiresAt !== null &&
+    accessTokenExpiresAt - Date.now() > minimumValidityMs
+  ) {
+    return accessToken;
+  }
+
+  return refreshAccessToken();
+}
+
 /** 通知 React 登录态已不可恢复，使受保护页面统一跳回登录页。 */
 export function notifyUnauthorized(): void {
-  accessToken = null;
+  setAccessToken(null);
   unauthorizedHandler?.();
 }

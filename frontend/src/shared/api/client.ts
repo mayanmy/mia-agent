@@ -1,3 +1,10 @@
+import {
+  ensureFreshAccessToken,
+  getAccessToken,
+  notifyUnauthorized,
+  refreshAccessToken
+} from "../../features/auth/auth-session";
+
 export type Result<T> = {
   code: number;
   message: string;
@@ -35,6 +42,8 @@ export async function fetchWithAuth(
   init?: RequestInit,
   retried = false
 ): Promise<Response> {
+  // fetch 流式 SSE 同样复用此函数，因此在发起请求前预留有效期，避免长连接刚建立就过期。
+  await ensureFreshAccessToken();
   const isFormData = init?.body instanceof FormData;
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
@@ -59,4 +68,3 @@ export async function fetchWithAuth(
 
   return fetchWithAuth(path, init, true);
 }
-import { getAccessToken, notifyUnauthorized, refreshAccessToken } from "../../features/auth/auth-session";

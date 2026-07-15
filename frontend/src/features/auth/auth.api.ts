@@ -1,3 +1,4 @@
+import { getAccessToken } from "./auth-session";
 import type { AuthResponse, CurrentUser } from "./types";
 
 type ApiResult<T> = { code: number; message: string; data: T };
@@ -46,9 +47,18 @@ export function logout(): Promise<null> {
   return authRequest<null>("/api/v1/auth/logout", { method: "POST" });
 }
 
-/** 返回已由后端 Guard 验证的当前用户公开资料。 */
+/**
+ * 返回已由后端 Guard 验证的当前用户公开资料。
+ *
+ * 刷新接口刚返回的新 Access Token 尚未写入 React 状态时也需要读取该接口，因此在认证模块
+ * 内显式带上当前内存 Token，而不是走会触发刷新重试的通用 HTTP 封装，避免刷新流程递归。
+ */
 export function getCurrentUser(): Promise<CurrentUser> {
-  return authRequest<CurrentUser>("/api/v1/auth/me", { method: "GET" });
+  const token = getAccessToken();
+  return authRequest<CurrentUser>("/api/v1/auth/me", {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined
+  });
 }
 
 export type InvitationValidation = {

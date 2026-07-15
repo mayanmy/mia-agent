@@ -3,6 +3,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { getCurrentUser, logout, refreshLogin } from "./auth.api";
 import {
   configureAuthSession,
+  ensureFreshAccessToken,
+  getAccessTokenExpiresAt,
   notifyUnauthorized,
   refreshAccessToken,
   setAccessToken
@@ -27,10 +29,12 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthContextValue["status"]>("loading");
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [accessTokenExpiresAt, setAccessTokenExpiresAt] = useState<number | null>(null);
 
-  /** 将登录或刷新接口返回的短期 Token 和用户资料同步到内存状态。 */
+  /** 将登录或刷新接口返回的短期 Token、用户资料和到期时间同步到内存状态。 */
   const completeLogin = useCallback((response: AuthResponse) => {
-    setAccessToken(response.accessToken);
+    setAccessToken(response.accessToken, response.expiresInSeconds);
+    setAccessTokenExpiresAt(getAccessTokenExpiresAt());
     setCurrentUser(response.user);
     setStatus("authenticated");
   }, []);
@@ -38,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /** 清理内存认证状态；Cookie 清理由对应后端接口负责。 */
   const clearAuthentication = useCallback(() => {
     setAccessToken(null);
+    setAccessTokenExpiresAt(null);
     setCurrentUser(null);
     setStatus("anonymous");
   }, []);
@@ -51,6 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const restoreAuthentication = useCallback(async (): Promise<string | null> => {
     try {
       const response = await refreshLogin();
+      // /auth/me 仍受 JWT Guard 保护，必须先暂存本次刷新得到的 Access Token。
+      setAccessToken(response.accessToken, response.expiresInSeconds);
       const user = await getCurrentUser();
       completeLogin({ ...response, user });
       return response.accessToken;
@@ -73,6 +80,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return dispose;
   }, [clearAuthentication, restoreAuthentication]);
+
+  /**
+   * 在 Access Token 到期前一分钟主动刷新。
+   *
+   * 刷新成功会通过 completeLogin 更新 expiresAt，从而重新安排下一个定时器；失败则清空
+   * 内存登录态。定时器只负责续期，不保存任何 Token，浏览器刷新后仍由 HttpOnly Cookie
+   * 恢复会话。
+   */
+  useEffect(() => {
+    if (status !== "authenticated" || !accessTokenExpiresAt) {
+      return;
+    }
+
+    const refreshAheadMs = 60_000;
+    const delay = Math.max(0, accessTokenExpiresAt - Date.now() - refreshAheadMs);
+    const timer = window.setTimeout(() => {
+      void restoreAuthentication();
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [accessTokenExpiresAt, restoreAuthentication, status]);
+
+  /**
+   * 页面从后台恢复时检查令牌剩余时间。
+   *
+   * 浏览器会节流后台 tab 的 timer，因此不能只依赖上面的定时器；重新聚焦时以 60 秒为
+   * 安全窗口主动续期，避免用户静置后首次点击直接触发 401。
+   */
+  useEffect(() => {
+    if (status !== "authenticated") {
+      return;
+    }
+
+    const refreshWhenNeeded = () => {
+      if (document.visibilityState === "visible") {
+        void ensureFreshAccessToken();
+      }
+    };
+
+    window.addEventListener("focus", refreshWhenNeeded);
+    document.addEventListener("visibilitychange", refreshWhenNeeded);
+
+    return () => {
+      window.removeEventListener("focus", refreshWhenNeeded);
+      document.removeEventListener("visibilitychange", refreshWhenNeeded);
+    };
+  }, [status]);
 
   /** 撤销当前设备 Session，并无论后端结果如何都清除本地可用凭证。 */
   const logoutCurrentDevice = useCallback(async () => {
