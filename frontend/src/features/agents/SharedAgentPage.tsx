@@ -12,27 +12,39 @@ export function SharedAgentPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let disposed = false;
+
+    async function loadSharedAgent() {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const sharedAgent = await getSharedAgent(token);
+        if (!disposed) {
+          setAgent(sharedAgent);
+        }
+      } catch (error) {
+        if (!disposed) {
+          message.error(error instanceof Error ? error.message : "分享链接不可用");
+          setAgent(null);
+        }
+      } finally {
+        if (!disposed) {
+          setLoading(false);
+        }
+      }
+    }
+
     void loadSharedAgent();
+    return () => {
+      // token 变化和页面卸载都必须使旧请求失效，避免旧链接覆盖新页面状态。
+      disposed = true;
+    };
   }, [token]);
-
-  async function loadSharedAgent() {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const sharedAgent = await getSharedAgent(token);
-      setAgent(sharedAgent);
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : "分享链接不可用");
-      setAgent(null);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   if (loading) {
     return (

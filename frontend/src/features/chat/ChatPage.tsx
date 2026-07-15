@@ -16,6 +16,7 @@ import "./chat.less";
 export function ChatPage() {
   const { message: messageApi } = AntdApp.useApp();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const disposedRef = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState(searchParams.get("agentId") || "");
@@ -49,10 +50,25 @@ export function ChatPage() {
     !sending && (!selectedAgentId || (!input.trim() && images.length === 0 && files.length === 0));
 
   useEffect(() => {
-    void refreshAgents();
+    let disposed = false;
+    // StrictMode 会执行一次 setup -> cleanup -> setup；每次 setup 都要恢复当前实例的可用状态。
+    disposedRef.current = false;
+    void refreshAgents(() => !disposed);
+
+    return () => {
+      disposed = true;
+      disposedRef.current = true;
+      // 页面离开时必须中断 SSE，避免后端继续生成并让旧回调写入已销毁的对话界面。
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+    };
   }, []);
 
-  async function refreshAgents() {
+  async function refreshAgents(isActive: () => boolean = () => true) {
+    if (!isActive()) {
+      return;
+    }
+
     setLoadingAgents(true);
 
     try {
@@ -61,12 +77,18 @@ export function ChatPage() {
       const nextAgentId =
         searchParams.get("agentId") || selectedAgentId || enabledAgents[0]?.id || "";
 
-      setAgents(enabledAgents);
-      setSelectedAgentId(nextAgentId);
+      if (isActive()) {
+        setAgents(enabledAgents);
+        setSelectedAgentId(nextAgentId);
+      }
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "加载 Agent 失败");
+      if (isActive()) {
+        messageApi.error(error instanceof Error ? error.message : "加载 Agent 失败");
+      }
     } finally {
-      setLoadingAgents(false);
+      if (isActive()) {
+        setLoadingAgents(false);
+      }
     }
   }
 
@@ -83,6 +105,10 @@ export function ChatPage() {
   }
 
   async function handleSend() {
+    if (disposedRef.current) {
+      return;
+    }
+
     const content = input.trim();
 
     if (!selectedAgentId) {
@@ -155,6 +181,11 @@ export function ChatPage() {
         {
           signal: controller.signal,
           onEvent: (event) => {
+            // Abort 后仍可能有一个已经排队的 SSE 事件到达，不能让它更新已停止或已卸载的页面。
+            if (disposedRef.current || controller.signal.aborted) {
+              return;
+            }
+
             if (event.type === "token" && event.data.content) {
               appendAssistantToken(assistantMessageId, event.data.content);
             }
@@ -203,14 +234,21 @@ export function ChatPage() {
       );
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        appendAssistantToken(assistantMessageId, "\n\n已停止生成。");
-      } else {
+        if (!disposedRef.current) {
+          appendAssistantToken(assistantMessageId, "\n\n已停止生成。");
+        }
+      } else if (!disposedRef.current) {
         messageApi.error(error instanceof Error ? error.message : "对话失败");
         removeAssistantMessageIfEmpty(assistantMessageId);
       }
     } finally {
-      abortControllerRef.current = null;
-      setSending(false);
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+
+      if (!disposedRef.current) {
+        setSending(false);
+      }
     }
   }
 

@@ -40,14 +40,24 @@ export function LogsPage() {
   const [detailLog, setDetailLog] = useState<ToolCallLogListItem | null>(null);
 
   useEffect(() => {
-    void refresh(1, pagination.pageSize);
+    let disposed = false;
+    void refresh(1, pagination.pageSize, filters, () => !disposed);
+
+    return () => {
+      disposed = true;
+    };
   }, []);
 
   async function refresh(
     nextPage = pagination.page,
     nextPageSize = pagination.pageSize,
-    nextFilters = filters
+    nextFilters = filters,
+    isActive: () => boolean = () => true
   ) {
+    if (!isActive()) {
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -57,16 +67,22 @@ export function LogsPage() {
         pageSize: nextPageSize
       });
 
-      setToolCallLogs(page.list);
-      setPagination({
-        page: page.page,
-        pageSize: page.pageSize,
-        total: page.total
-      });
+      if (isActive()) {
+        setToolCallLogs(page.list);
+        setPagination({
+          page: page.page,
+          pageSize: page.pageSize,
+          total: page.total
+        });
+      }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "加载工具调用日志失败");
+      if (isActive()) {
+        message.error(error instanceof Error ? error.message : "加载工具调用日志失败");
+      }
     } finally {
-      setLoading(false);
+      if (isActive()) {
+        setLoading(false);
+      }
     }
   }
 

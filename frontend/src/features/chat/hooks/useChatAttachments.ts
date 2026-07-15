@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ClipboardEvent } from "react";
 import type { UploadProps } from "antd";
 
@@ -21,6 +21,16 @@ type MessageApi = {
 export function useChatAttachments(messageApi: MessageApi) {
   const [images, setImages] = useState<ChatImageAttachment[]>([]);
   const [files, setFiles] = useState<ChatFileAttachment[]>([]);
+  const disposedRef = useRef(false);
+
+  useEffect(() => {
+    disposedRef.current = false;
+
+    // FileReader 不能可靠地从这里拿到单次读取实例，因此在读取完成后跳过已卸载组件的状态写入。
+    return () => {
+      disposedRef.current = true;
+    };
+  }, []);
 
   async function addImageFile(file: File): Promise<boolean> {
     if (!file.type?.startsWith("image/")) {
@@ -39,6 +49,10 @@ export function useChatAttachments(messageApi: MessageApi) {
     }
 
     const dataUrl = await readFileAsDataUrl(file);
+
+    if (disposedRef.current) {
+      return false;
+    }
 
     setImages((current) => [
       ...current,
@@ -89,7 +103,7 @@ export function useChatAttachments(messageApi: MessageApi) {
       }
     }
 
-    if (addedCount > 0) {
+    if (!disposedRef.current && addedCount > 0) {
       messageApi.success(`已粘贴 ${addedCount} 张图片`);
     }
   }
@@ -119,6 +133,10 @@ export function useChatAttachments(messageApi: MessageApi) {
     }
 
     const content = await readFileAsText(file);
+
+    if (disposedRef.current) {
+      return false;
+    }
 
     setFiles((current) => [
       ...current,

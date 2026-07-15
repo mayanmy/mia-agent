@@ -54,19 +54,36 @@ export function UsersPage() {
   const [passwordForm] = Form.useForm();
 
   /** 重新加载成员列表，操作成功后复用此入口保持列表状态一致。 */
-  async function loadUsers() {
+  async function loadUsers(isActive: () => boolean = () => true) {
+    if (!isActive()) {
+      return;
+    }
+
     setLoading(true);
     try {
-      setUsers((await listUsers(1, 100, keyword)).list);
+      const page = await listUsers(1, 100, keyword);
+
+      if (isActive()) {
+        setUsers(page.list);
+      }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "加载成员失败");
+      if (isActive()) {
+        message.error(error instanceof Error ? error.message : "加载成员失败");
+      }
     } finally {
-      setLoading(false);
+      if (isActive()) {
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    void loadUsers();
+    let disposed = false;
+    void loadUsers(() => !disposed);
+
+    return () => {
+      disposed = true;
+    };
   }, []);
 
   /** 创建成员后关闭表单并刷新列表，密码字段不会留在页面状态中。 */

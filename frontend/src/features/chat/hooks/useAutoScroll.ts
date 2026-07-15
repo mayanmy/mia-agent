@@ -5,6 +5,7 @@ import { isNearScrollBottom } from "../utils";
 export function useAutoScroll(dependencies: unknown[]) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const autoScrollRef = useRef(true);
+  const animationFrameRef = useRef<number | null>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   useEffect(() => {
@@ -14,10 +15,18 @@ export function useAutoScroll(dependencies: unknown[]) {
       return;
     }
 
-    requestAnimationFrame(() => {
+    animationFrameRef.current = requestAnimationFrame(() => {
       messagesElement.scrollTop = messagesElement.scrollHeight;
       setShowScrollBottom(false);
     });
+
+    // 消息更新过快或页面卸载时，旧帧不能再操作已销毁的滚动容器。
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
   }, dependencies);
 
   function releaseAutoScrollIfNeeded() {

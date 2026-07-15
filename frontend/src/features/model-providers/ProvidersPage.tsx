@@ -105,7 +105,11 @@ export function ProvidersPage() {
     });
   }, [modelConfigs, providers, search]);
 
-  async function refresh() {
+  async function refresh(isActive: () => boolean = () => true) {
+    if (!isActive()) {
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -113,17 +117,28 @@ export function ProvidersPage() {
         listProviders(1, 100),
         listModelConfigs(1, 100)
       ]);
-      setProviders(providerPage.list);
-      setModelConfigs(modelConfigPage.list);
+      if (isActive()) {
+        setProviders(providerPage.list);
+        setModelConfigs(modelConfigPage.list);
+      }
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "加载模型供应商失败");
+      if (isActive()) {
+        messageApi.error(error instanceof Error ? error.message : "加载模型供应商失败");
+      }
     } finally {
-      setLoading(false);
+      if (isActive()) {
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    void refresh();
+    let disposed = false;
+    void refresh(() => !disposed);
+
+    return () => {
+      disposed = true;
+    };
   }, []);
 
   function openCreateProvider(template?: ProviderTemplate) {

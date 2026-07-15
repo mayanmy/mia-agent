@@ -59,10 +59,23 @@ export function KnowledgePage() {
   );
 
   useEffect(() => {
-    void refresh(1, pagination.pageSize);
+    let disposed = false;
+    void refresh(1, pagination.pageSize, () => !disposed);
+
+    return () => {
+      disposed = true;
+    };
   }, []);
 
-  async function refresh(nextPage = pagination.page, nextPageSize = pagination.pageSize) {
+  async function refresh(
+    nextPage = pagination.page,
+    nextPageSize = pagination.pageSize,
+    isActive: () => boolean = () => true
+  ) {
+    if (!isActive()) {
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -71,17 +84,23 @@ export function KnowledgePage() {
         listModelConfigs(1, 100)
       ]);
 
-      setKnowledgeBases(knowledgeBasePage.list);
-      setModelConfigs(modelConfigPage.list);
-      setPagination({
-        page: knowledgeBasePage.page,
-        pageSize: knowledgeBasePage.pageSize,
-        total: knowledgeBasePage.total
-      });
+      if (isActive()) {
+        setKnowledgeBases(knowledgeBasePage.list);
+        setModelConfigs(modelConfigPage.list);
+        setPagination({
+          page: knowledgeBasePage.page,
+          pageSize: knowledgeBasePage.pageSize,
+          total: knowledgeBasePage.total
+        });
+      }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "加载知识库失败");
+      if (isActive()) {
+        message.error(error instanceof Error ? error.message : "加载知识库失败");
+      }
     } finally {
-      setLoading(false);
+      if (isActive()) {
+        setLoading(false);
+      }
     }
   }
 

@@ -64,10 +64,23 @@ export function AgentsPage() {
   }, [modelConfigs, providers]);
 
   useEffect(() => {
-    void refresh(1, pagination.pageSize);
+    let disposed = false;
+    void refresh(1, pagination.pageSize, () => !disposed);
+
+    return () => {
+      disposed = true;
+    };
   }, []);
 
-  async function refresh(nextPage = pagination.page, nextPageSize = pagination.pageSize) {
+  async function refresh(
+    nextPage = pagination.page,
+    nextPageSize = pagination.pageSize,
+    isActive: () => boolean = () => true
+  ) {
+    if (!isActive()) {
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -82,21 +95,27 @@ export function AgentsPage() {
         listTools()
       ]);
 
-      setAgents(agentPage.list);
-      setProviders(providerPage.list);
-      setModelConfigs(modelConfigPage.list);
-      setKnowledgeBases(knowledgeBasePage.list);
-      setTools(toolList);
-      setDefaultChatModelConfigId(defaultSettings?.chatModelConfigId ?? null);
-      setPagination({
-        page: agentPage.page,
-        pageSize: agentPage.pageSize,
-        total: agentPage.total
-      });
+      if (isActive()) {
+        setAgents(agentPage.list);
+        setProviders(providerPage.list);
+        setModelConfigs(modelConfigPage.list);
+        setKnowledgeBases(knowledgeBasePage.list);
+        setTools(toolList);
+        setDefaultChatModelConfigId(defaultSettings?.chatModelConfigId ?? null);
+        setPagination({
+          page: agentPage.page,
+          pageSize: agentPage.pageSize,
+          total: agentPage.total
+        });
+      }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "加载 Agent 失败");
+      if (isActive()) {
+        message.error(error instanceof Error ? error.message : "加载 Agent 失败");
+      }
     } finally {
-      setLoading(false);
+      if (isActive()) {
+        setLoading(false);
+      }
     }
   }
 
