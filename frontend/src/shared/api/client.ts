@@ -18,6 +18,11 @@ export type PageResult<T> = {
   pageSize: number;
 };
 
+/** 读取请求可通过 dedupe: false 强制独立执行，例如用户主动点击刷新时。 */
+export type RequestOptions = RequestInit & {
+  dedupe?: boolean;
+};
+
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
 
 /**
@@ -25,30 +30,55 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
  *
  * React StrictMode 仅在开发环境会执行一次额外的挂载检查。页面首屏的 useEffect 因此可能
  * 在前一个请求尚未结束时再次执行；这里复用进行中的 Promise，既保留 StrictMode 暴露副作用
- * 问题的能力，又避免列表接口被重复请求。请求结束后立即移除，不充当数据缓存，手动刷新仍会
- * 发起新的网络请求。
+ * 问题的能力，又避免列表接口被重复请求。请求结束后立即移除，不充当数据缓存；需要绕过去重的
+ * 主动刷新、轮询等调用可显式传入 dedupe: false。
  */
 const inFlightGetRequests = new Map<string, Promise<unknown>>();
 
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, options?: RequestOptions): Promise<T> {
+  const { dedupe = true, ...init } = options ?? {};
   const method = (init?.method ?? "GET").toUpperCase();
 
   // 携带 AbortSignal 的读取请求不能安全复用：任一调用方取消时不应影响其他调用方。
-  if (method === "GET" && !init?.signal) {
-    const activeRequest = inFlightGetRequests.get(path);
+  if (method === "GET" && dedupe && !init.signal) {
+    // 先完成可能发生的 Token 续期，再以最新身份生成 key，避免不同登录态错误共享响应。
+    await ensureFreshAccessToken();
+    const requestKey = createGetRequestKey(path, init);
+    const activeRequest = inFlightGetRequests.get(requestKey);
 
     if (activeRequest) {
       return activeRequest as Promise<T>;
     }
 
     const requestPromise = performRequest<T>(path, init).finally(() => {
-      inFlightGetRequests.delete(path);
+      inFlightGetRequests.delete(requestKey);
     });
-    inFlightGetRequests.set(path, requestPromise);
+    inFlightGetRequests.set(requestKey, requestPromise);
     return requestPromise;
   }
 
   return performRequest<T>(path, init);
+}
+
+/**
+ * 构造可安全共享的 GET 请求标识。
+ *
+ * URL 相同不代表响应一定相同：当前用户、语言或其他自定义请求头均可能改变服务端返回。
+ * 因此 key 显式包含当前 Access Token 和规范化 Header；Token 只存在内存 Map 的短暂 key 中，
+ * 请求结束即被清理，不写入日志、Storage 或 DOM。
+ */
+function createGetRequestKey(path: string, init: RequestInit): string {
+  const headers = Array.from(new Headers(init.headers).entries()).sort(([left], [right]) =>
+    left.localeCompare(right)
+  );
+
+  return JSON.stringify({
+    url: `${apiBaseUrl}${path}`,
+    accessToken: getAccessToken() ?? "",
+    headers,
+    credentials: init.credentials ?? "include",
+    cache: init.cache ?? "default"
+  });
 }
 
 /**
