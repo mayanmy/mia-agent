@@ -2,6 +2,7 @@ import { request, type PageResult } from "../../shared/api/client";
 import type { ModelProviderType } from "../model-providers/api";
 
 export type AgentGenerationParams = Record<string, string | number | boolean | null>;
+export type AgentChatSessionMode = "EPHEMERAL" | "PERSISTENT";
 
 export type AgentListItem = {
   id: string;
@@ -13,6 +14,7 @@ export type AgentListItem = {
   toolCount: number;
   knowledgeBaseCount: number;
   temperature: number;
+  chatSessionMode: AgentChatSessionMode;
   enabled: boolean;
   published: boolean;
   publishedAt: string | null;
@@ -36,6 +38,7 @@ export type AgentDetail = AgentListItem & {
   maxTokens: number | null;
   timeoutSeconds: number;
   historyTurns: number;
+  chatSessionMode: AgentChatSessionMode;
   generationParams: AgentGenerationParams | null;
   toolIds: string[];
   knowledgeBaseIds: string[];
@@ -50,6 +53,7 @@ export type AgentPayload = {
   temperature: number;
   maxTokens: number | null;
   historyTurns: number;
+  chatSessionMode: AgentChatSessionMode;
   enabled: boolean;
 };
 

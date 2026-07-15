@@ -98,6 +98,18 @@ export function AgentFormModal({
                   >
                     <InputNumber min={0} max={20} precision={0} style={{ width: "100%" }} />
                   </Form.Item>
+                  <Form.Item
+                    label="会话模式"
+                    name="chatSessionMode"
+                    tooltip="单次窗口关闭后不保留记录；保留模式会按成员分别恢复该 Agent 的历史对话。"
+                  >
+                    <Select
+                      options={[
+                        { label: "单次窗口讨论", value: "EPHEMERAL" },
+                        { label: "窗口可保留数据", value: "PERSISTENT" }
+                      ]}
+                    />
+                  </Form.Item>
                   <Form.Item label="启用" name="enabled" valuePropName="checked">
                     <Switch />
                   </Form.Item>

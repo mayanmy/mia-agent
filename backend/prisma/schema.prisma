@@ -30,6 +30,17 @@ enum UserRole {
   @@map("user_role")
 }
 
+/// Agent 对话的会话生命周期。
+///
+/// EPHEMERAL 保持测试对话的即时性；PERSISTENT 才会为每个成员保存可恢复的会话记录，
+/// 避免默认保存所有调试消息造成无意义的数据累积。
+enum AgentChatSessionMode {
+  EPHEMERAL
+  PERSISTENT
+
+  @@map("agent_chat_session_mode")
+}
+
 model User {
   id                String        @id @default(uuid()) @db.Uuid
   email             String        @unique(map: "uq_users_email")
@@ -162,6 +173,7 @@ model Agent {
   maxTokens           Int?                 @map("max_tokens")
   timeoutSeconds      Int                  @default(120) @map("timeout_seconds")
   historyTurns        Int                  @default(6) @map("history_turns")
+  chatSessionMode     AgentChatSessionMode @default(EPHEMERAL) @map("chat_session_mode")
   generationParams    Json?                @map("generation_params") @db.JsonB
   enabled             Boolean              @default(true)
   published           Boolean              @default(false)

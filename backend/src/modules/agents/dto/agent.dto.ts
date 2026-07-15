@@ -1,4 +1,4 @@
-import { ModelConfigType, ModelProviderType } from "@prisma/client";
+import { AgentChatSessionMode, ModelConfigType, ModelProviderType } from "@prisma/client";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -15,6 +15,7 @@ export type AgentCreateDto = {
   maxTokens?: number | null;
   timeoutSeconds?: number;
   historyTurns?: number;
+  chatSessionMode?: AgentChatSessionMode;
   generationParams?: AgentGenerationParams | null;
   enabled?: boolean;
 };
@@ -46,6 +47,7 @@ export type AgentListItem = {
   toolCount: number;
   knowledgeBaseCount: number;
   temperature: number;
+  chatSessionMode: AgentChatSessionMode;
   enabled: boolean;
   published: boolean;
   publishedAt: Date | null;
@@ -59,6 +61,7 @@ export type AgentDetail = AgentListItem & {
   maxTokens: number | null;
   timeoutSeconds: number;
   historyTurns: number;
+  chatSessionMode: AgentChatSessionMode;
   generationParams: AgentGenerationParams | null;
   toolIds: string[];
   knowledgeBaseIds: string[];
@@ -111,6 +114,7 @@ export type AgentRuntimeConfig = {
   maxTokens: number | null;
   timeoutSeconds: number;
   historyTurns: number;
+  chatSessionMode: AgentChatSessionMode;
   generationParams: AgentGenerationParams | null;
   knowledgeBaseIds: string[];
   toolIds: string[];

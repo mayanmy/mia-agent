@@ -1,4 +1,4 @@
-import type { AgentListItem } from "./api";
+import type { AgentChatSessionMode, AgentListItem } from "./api";
 
 export type AgentFormValues = {
   name: string;
@@ -8,6 +8,7 @@ export type AgentFormValues = {
   temperature: number;
   maxTokens?: number | null;
   historyTurns: number;
+  chatSessionMode: AgentChatSessionMode;
   enabled: boolean;
   toolIds: string[];
   knowledgeBaseIds: string[];

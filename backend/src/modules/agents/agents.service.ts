@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { ModelConfigType, Prisma } from "@prisma/client";
+import { AgentChatSessionMode, ModelConfigType, Prisma } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 
 import { AppError, ErrorCodes } from "../../core/errors";
@@ -67,6 +67,7 @@ type AgentCreateData = {
   maxTokens: number | null;
   timeoutSeconds: number;
   historyTurns: number;
+  chatSessionMode: AgentChatSessionMode;
   generationParams: AgentGenerationParams | null;
   enabled: boolean;
 };
@@ -154,6 +155,7 @@ export class AgentsService {
         maxTokens: data.maxTokens,
         timeoutSeconds: data.timeoutSeconds,
         historyTurns: data.historyTurns,
+        chatSessionMode: data.chatSessionMode,
         generationParams: this.toPrismaJson(data.generationParams),
         enabled: data.enabled
       },
@@ -207,6 +209,7 @@ export class AgentsService {
         ...(data.maxTokens !== undefined ? { maxTokens: data.maxTokens } : {}),
         ...(data.timeoutSeconds !== undefined ? { timeoutSeconds: data.timeoutSeconds } : {}),
         ...(data.historyTurns !== undefined ? { historyTurns: data.historyTurns } : {}),
+        ...(data.chatSessionMode !== undefined ? { chatSessionMode: data.chatSessionMode } : {}),
         ...(data.generationParams !== undefined
           ? { generationParams: this.toPrismaJson(data.generationParams) }
           : {}),
@@ -353,6 +356,7 @@ export class AgentsService {
       maxTokens: agent.maxTokens,
       timeoutSeconds: agent.timeoutSeconds,
       historyTurns: agent.historyTurns,
+      chatSessionMode: agent.chatSessionMode,
       generationParams: this.toGenerationParams(agent.generationParams),
       knowledgeBaseIds: agent.agentKnowledgeBases
         .filter((knowledgeBase) => this.isActiveAgentKnowledgeBase(knowledgeBase))
@@ -471,6 +475,7 @@ export class AgentsService {
       maxTokens: this.normalizeMaxTokens(payload.maxTokens),
       timeoutSeconds: this.normalizeTimeout(payload.timeoutSeconds),
       historyTurns: this.normalizeHistoryTurns(payload.historyTurns),
+      chatSessionMode: this.normalizeChatSessionMode(payload.chatSessionMode),
       generationParams: this.normalizeGenerationParams(payload.generationParams),
       enabled: payload.enabled ?? true
     };
@@ -501,6 +506,9 @@ export class AgentsService {
         : {}),
       ...(payload.historyTurns !== undefined
         ? { historyTurns: this.normalizeHistoryTurns(payload.historyTurns) }
+        : {}),
+      ...(payload.chatSessionMode !== undefined
+        ? { chatSessionMode: this.normalizeChatSessionMode(payload.chatSessionMode) }
         : {}),
       ...(payload.generationParams !== undefined
         ? { generationParams: this.normalizeGenerationParams(payload.generationParams) }
@@ -600,6 +608,25 @@ export class AgentsService {
     }
 
     return historyTurns;
+  }
+
+  /**
+   * 仅允许两种显式会话策略，避免把任意字符串静默写入 Agent 配置。
+   * 未提供时沿用单次会话，确保已有配置的行为不变。
+   */
+  private normalizeChatSessionMode(value: unknown): AgentChatSessionMode {
+    if (value === undefined || value === null || value === "") {
+      return AgentChatSessionMode.EPHEMERAL;
+    }
+
+    if (value === AgentChatSessionMode.EPHEMERAL || value === AgentChatSessionMode.PERSISTENT) {
+      return value;
+    }
+
+    throw new AppError(
+      ErrorCodes.common.badRequest,
+      "chatSessionMode must be EPHEMERAL or PERSISTENT"
+    );
   }
 
   private normalizeGenerationParams(value: unknown): AgentGenerationParams | null {
@@ -828,6 +855,7 @@ export class AgentsService {
         this.isActiveAgentKnowledgeBase(knowledgeBase)
       ).length,
       temperature: Number(agent.temperature),
+      chatSessionMode: agent.chatSessionMode,
       enabled: agent.enabled,
       published: agent.published,
       publishedAt: agent.publishedAt,
@@ -844,6 +872,7 @@ export class AgentsService {
       maxTokens: agent.maxTokens,
       timeoutSeconds: agent.timeoutSeconds,
       historyTurns: agent.historyTurns,
+      chatSessionMode: agent.chatSessionMode,
       generationParams: this.toGenerationParams(agent.generationParams),
       toolIds: agent.agentTools.map((tool) => tool.toolId),
       knowledgeBaseIds: agent.agentKnowledgeBases.map(
