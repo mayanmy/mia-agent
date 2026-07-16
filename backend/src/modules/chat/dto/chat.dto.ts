@@ -20,10 +20,24 @@ export type ChatFileAttachmentDto = {
 
 export type ChatCompletionDto = {
   agentId?: string;
+  sessionId?: string;
   message?: string;
   images?: ChatImageAttachmentDto[];
   files?: ChatFileAttachmentDto[];
   history?: ChatMessageDto[];
+};
+
+export type ChatSessionMessageDto = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: Date;
+};
+
+export type ChatSessionResponse = {
+  mode: "EPHEMERAL" | "PERSISTENT";
+  sessionId: string | null;
+  messages: ChatSessionMessageDto[];
 };
 
 export type ChatCompletionResult = {

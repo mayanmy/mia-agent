@@ -41,6 +41,13 @@ enum AgentChatSessionMode {
   @@map("agent_chat_session_mode")
 }
 
+enum ChatSessionMessageRole {
+  USER
+  ASSISTANT
+
+  @@map("chat_session_message_role")
+}
+
 model User {
   id                String        @id @default(uuid()) @db.Uuid
   email             String        @unique(map: "uq_users_email")
@@ -54,6 +61,7 @@ model User {
   updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
   authSessions      AuthSession[]
   sentInvitations   UserInvitation[] @relation("UserInvitationInviter")
+  chatSessions      ChatSession[]
 
   @@index([role, disabledAt], map: "idx_users_role_disabled_at")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
@@ -185,6 +193,7 @@ model Agent {
   modelConfig         ModelConfig          @relation(fields: [modelConfigId], references: [id])
   agentTools          AgentTool[]
   agentKnowledgeBases AgentKnowledgeBase[]
+  chatSessions        ChatSession[]
 
   @@index([createdAt(sort: Desc)], map: "idx_agents_created_at")
   @@index([modelConfigId], map: "idx_agents_model_config_id")
@@ -202,6 +211,39 @@ model AgentTool {
   @@id([agentId, toolId])
   @@index([toolId], map: "idx_agent_tools_tool_id")
   @@map("agent_tools")
+}
+
+/// 保留型 Agent 的成员私有会话。
+///
+/// v1 以 (agent_id, user_id) 唯一约束实现“重新打开窗口继续同一段对话”。这既避免
+/// 首期引入会话列表管理，又保证不同成员之间不会看到对方的历史内容。
+model ChatSession {
+  id        String               @id @default(uuid()) @db.Uuid
+  agentId   String               @map("agent_id") @db.Uuid
+  userId    String               @map("user_id") @db.Uuid
+  createdAt DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  agent     Agent                @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatSessionMessage[]
+
+  @@unique([agentId, userId], map: "uq_chat_sessions_agent_user")
+  @@index([userId, updatedAt(sort: Desc)], map: "idx_chat_sessions_user_updated_at")
+  @@map("chat_sessions")
+}
+
+/// 会话的可恢复文本消息。附件二进制仍由文件存储模块负责，因此这里不保存 data URL，
+/// 防止一张图片把会话表无限放大；首期恢复文本和模型上下文即可。
+model ChatSessionMessage {
+  id        String                 @id @default(uuid()) @db.Uuid
+  sessionId String                 @map("session_id") @db.Uuid
+  role      ChatSessionMessageRole
+  content   String                 @db.Text
+  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  session   ChatSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt], map: "idx_chat_session_messages_session_created_at")
+  @@map("chat_session_messages")
 }
 
 model ToolCallLog {

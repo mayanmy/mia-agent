@@ -1,5 +1,5 @@
 import * as assert from "node:assert/strict";
-import { ModelProviderType } from "@prisma/client";
+import { AgentChatSessionMode, ModelProviderType } from "@prisma/client";
 
 import { ChatService } from "./chat.service";
 import { ChatStreamEvent } from "./dto/chat.dto";
@@ -630,6 +630,97 @@ export const tests = [
       assert.ok(typeof systemContent === "string");
       assert.ok(systemContent.includes("用户问题：今天穿什么？"));
       assert.ok(!systemContent.includes("{{query}}"));
+    }
+  },
+  {
+    name: "ChatService persists messages only for persistent agent sessions",
+    run: async () => {
+      const storedMessages: Array<{ role: string; content: string }> = [];
+      const agentsService = {
+        getAgentRuntimeConfig: async () => ({
+          agentId: "agent-id",
+          name: "Persistent Agent",
+          systemPrompt: "Continue the conversation.",
+          modelConfigId: "model-config-id",
+          modelName: "gpt-compatible",
+          providerId: "provider-id",
+          providerType: ModelProviderType.OPENAI_COMPATIBLE,
+          baseUrl: "https://example.com/v1",
+          temperature: 0.7,
+          maxTokens: null,
+          timeoutSeconds: 120,
+          historyTurns: 6,
+          chatSessionMode: AgentChatSessionMode.PERSISTENT,
+          generationParams: null,
+          knowledgeBaseIds: [],
+          toolIds: []
+        })
+      };
+      const modelProvidersService = {
+        streamChatCompletion: () =>
+          chunks([
+            {
+              type: "token",
+              content: "已为你保留这段对话。"
+            },
+            { type: "done" }
+          ])
+      };
+      const prisma = {
+        chatSession: {
+          upsert: async () => ({
+            id: "session-id",
+            messages: [
+              {
+                id: "old-message",
+                role: "USER",
+                content: "上一条消息",
+                createdAt: new Date()
+              }
+            ]
+          }),
+          update: async () => null
+        },
+        chatSessionMessage: {
+          create: async ({
+            data
+          }: {
+            data: { role: string; content: string; sessionId: string };
+          }) => {
+            storedMessages.push({ role: data.role, content: data.content });
+            return null;
+          }
+        },
+        $transaction: async (operations: Array<Promise<unknown>>) => Promise.all(operations)
+      };
+      const service = new ChatService(
+        agentsService as never,
+        modelProvidersService as never,
+        { getToolDefinitions: () => [] } as never,
+        createEmptyRetrievalService() as never,
+        prisma as never
+      );
+      const events: ChatStreamEvent[] = [];
+
+      for await (const event of service.streamCompletion(
+        {
+          agentId: "agent-id",
+          message: "新的问题",
+          history: [],
+          images: [],
+          files: []
+        },
+        undefined,
+        { userId: "user-id" }
+      )) {
+        events.push(event);
+      }
+
+      assert.equal(events[0].data.sessionId, "session-id");
+      assert.deepEqual(storedMessages, [
+        { role: "USER", content: "新的问题" },
+        { role: "ASSISTANT", content: "已为你保留这段对话。" }
+      ]);
     }
   }
 ];

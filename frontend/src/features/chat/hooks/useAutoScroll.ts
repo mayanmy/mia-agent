@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { isNearScrollBottom } from "../utils";
 
@@ -29,7 +29,7 @@ export function useAutoScroll(dependencies: unknown[]) {
     };
   }, dependencies);
 
-  function releaseAutoScrollIfNeeded() {
+  const releaseAutoScrollIfNeeded = useCallback(() => {
     const messagesElement = messagesRef.current;
 
     if (!messagesElement) {
@@ -39,9 +39,9 @@ export function useAutoScroll(dependencies: unknown[]) {
     const isAtBottom = isNearScrollBottom(messagesElement);
     autoScrollRef.current = isAtBottom;
     setShowScrollBottom(!isAtBottom);
-  }
+  }, []);
 
-  function scrollMessagesToBottom() {
+  const scrollMessagesToBottom = useCallback(() => {
     const messagesElement = messagesRef.current;
 
     if (!messagesElement) {
@@ -51,12 +51,12 @@ export function useAutoScroll(dependencies: unknown[]) {
     autoScrollRef.current = true;
     messagesElement.scrollTop = messagesElement.scrollHeight;
     setShowScrollBottom(false);
-  }
+  }, []);
 
-  function resetAutoScroll() {
+  const resetAutoScroll = useCallback(() => {
     autoScrollRef.current = true;
     setShowScrollBottom(false);
-  }
+  }, []);
 
   return {
     messagesRef,

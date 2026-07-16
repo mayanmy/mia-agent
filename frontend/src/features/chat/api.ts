@@ -26,10 +26,24 @@ export type ChatMessage = {
 
 export type ChatCompletionPayload = {
   agentId: string;
+  sessionId?: string;
   message: string;
   images: ChatImageAttachment[];
   files: ChatFileAttachment[];
   history: ChatMessage[];
+};
+
+export type ChatSessionMessage = {
+  id: string;
+  role: ChatRole;
+  content: string;
+  createdAt: string;
+};
+
+export type ChatSessionResponse = {
+  mode: "EPHEMERAL" | "PERSISTENT";
+  sessionId: string | null;
+  messages: ChatSessionMessage[];
 };
 
 export type ChatCompletionResult = {
@@ -81,8 +95,14 @@ export type ChatStreamEvent = {
     modelConfigId?: string;
     modelName?: string;
     providerName?: string;
+    sessionId?: string;
   };
 };
+
+/** 获取当前成员在保留型 Agent 下的个人会话；单次模式会返回空会话。 */
+export function getChatSession(agentId: string): Promise<ChatSessionResponse> {
+  return request<ChatSessionResponse>(`/api/v1/chat/sessions/${agentId}`);
+}
 
 export function createChatCompletion(
   payload: ChatCompletionPayload

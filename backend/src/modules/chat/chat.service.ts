@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
+import { AgentChatSessionMode, ChatSessionMessageRole } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
 import { AppError, ErrorCodes } from "../../core/errors";
@@ -7,6 +8,7 @@ import { ModelProvidersService } from "../model-providers/model-providers.servic
 import { ChatMessage, LLMToolCall, LLMToolDefinition } from "../model-providers/dto/llm.dto";
 import { RetrievalContext } from "../retrieval/dto/retrieval.dto";
 import { RetrievalService } from "../retrieval/retrieval.service";
+import { PrismaService } from "../prisma/prisma.service";
 import { ToolCallLogRecord, ToolDefinition, ToolJsonValue } from "../tools/dto/tool.dto";
 import { ToolsService } from "../tools/tools.service";
 import {
@@ -15,6 +17,7 @@ import {
   ChatCompletionDto,
   ChatCompletionResult,
   ChatMessageDto,
+  ChatSessionResponse,
   ChatStreamEvent
 } from "./dto/chat.dto";
 
@@ -36,8 +39,44 @@ export class ChatService {
     private readonly agentsService: AgentsService,
     private readonly modelProvidersService: ModelProvidersService,
     private readonly toolsService: ToolsService,
-    private readonly retrievalService: RetrievalService
+    private readonly retrievalService: RetrievalService,
+    private readonly prisma?: PrismaService
   ) {}
+
+  /**
+   * 获取当前成员在指定 Agent 下的可恢复会话。
+   *
+   * 单次模式不会创建任何记录；保留模式以 agentId + userId 唯一约束复用同一个会话，
+   * 因此浏览器刷新、关闭再打开后仍能恢复，并且成员之间的数据天然隔离。
+   */
+  async getSession(agentId: string, context: ChatRequestContext): Promise<ChatSessionResponse> {
+    const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
+
+    if (agent.chatSessionMode !== AgentChatSessionMode.PERSISTENT) {
+      return {
+        mode: AgentChatSessionMode.EPHEMERAL,
+        sessionId: null,
+        messages: []
+      };
+    }
+
+    const session = await this.resolvePersistentSession({
+      agentId: agent.agentId,
+      userId: this.requireSessionUserId(context),
+      sessionId: undefined
+    });
+
+    return {
+      mode: AgentChatSessionMode.PERSISTENT,
+      sessionId: session.id,
+      messages: session.messages.map((item) => ({
+        id: item.id,
+        role: item.role === ChatSessionMessageRole.USER ? "user" : "assistant",
+        content: item.content,
+        createdAt: item.createdAt
+      }))
+    };
+  }
 
   /**
    * 执行非流式对话，并把调用用户写入工具日志。
@@ -56,7 +95,28 @@ export class ChatService {
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
     const requestId = randomUUID();
     this.ensureImageInputSupported(agent.modelName, images);
-    const history = this.normalizeHistory(payload.history, agent.historyTurns);
+    const session =
+      agent.chatSessionMode === AgentChatSessionMode.PERSISTENT
+        ? await this.resolvePersistentSession({
+            agentId: agent.agentId,
+            userId: this.requireSessionUserId(context),
+            sessionId: payload.sessionId
+          })
+        : null;
+    const history = session
+      ? this.normalizeHistory(
+          session.messages.map((item) => ({
+            role: item.role === ChatSessionMessageRole.USER ? "user" : "assistant",
+            content: item.content
+          })),
+          agent.historyTurns
+        )
+      : this.normalizeHistory(payload.history, agent.historyTurns);
+
+    if (session) {
+      // 用户消息在请求模型前落库，即便模型稍后超时，也不会让用户刚输入的内容无故消失。
+      await this.appendSessionMessage(session.id, ChatSessionMessageRole.USER, message);
+    }
     const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
     const llmTools = this.toLLMToolDefinitions(toolDefinitions);
     const retrievalContext = await this.retrieveKnowledgeContext(message, agent.knowledgeBaseIds);
@@ -88,6 +148,10 @@ export class ChatService {
       userId: context?.userId
     });
 
+    if (session) {
+      await this.appendSessionMessage(session.id, ChatSessionMessageRole.ASSISTANT, response.content);
+    }
+
     return {
       agentId: agent.agentId,
       modelConfigId: agent.modelConfigId,
@@ -115,7 +179,28 @@ export class ChatService {
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
     const requestId = randomUUID();
     this.ensureImageInputSupported(agent.modelName, images);
-    const history = this.normalizeHistory(payload.history, agent.historyTurns);
+    const session =
+      agent.chatSessionMode === AgentChatSessionMode.PERSISTENT
+        ? await this.resolvePersistentSession({
+            agentId: agent.agentId,
+            userId: this.requireSessionUserId(context),
+            sessionId: payload.sessionId
+          })
+        : null;
+    const history = session
+      ? this.normalizeHistory(
+          session.messages.map((item) => ({
+            role: item.role === ChatSessionMessageRole.USER ? "user" : "assistant",
+            content: item.content
+          })),
+          agent.historyTurns
+        )
+      : this.normalizeHistory(payload.history, agent.historyTurns);
+
+    if (session) {
+      // 先保存用户消息，模型调用失败时仍能在历史中看到本次提问。
+      await this.appendSessionMessage(session.id, ChatSessionMessageRole.USER, message);
+    }
     const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
     const llmTools = this.toLLMToolDefinitions(toolDefinitions);
     await this.recordToolAvailability({
@@ -131,7 +216,8 @@ export class ChatService {
         agentId: agent.agentId,
         modelConfigId: agent.modelConfigId,
         modelName: agent.modelName,
-        providerName: agent.providerType
+        providerName: agent.providerType,
+        sessionId: session?.id
       }
     };
 
@@ -258,6 +344,14 @@ export class ChatService {
         }
 
         const fallbackAnswer = this.getToolResultFallbackAnswer(messages, assistantContent);
+        // fallbackAnswer 为空字符串代表“不需要回退”，不能用 ??，否则会覆盖真实的流式回答。
+        const finalAnswer =
+          fallbackAnswer || (llmTools.length > 0 ? bufferedTokens.join("") : assistantContent);
+
+        if (session) {
+          // 只在拿到完整回答后写入助手消息，防止取消生成时把半截文本伪装成完整历史。
+          await this.appendSessionMessage(session.id, ChatSessionMessageRole.ASSISTANT, finalAnswer);
+        }
 
         if (fallbackAnswer) {
           yield {
@@ -310,6 +404,118 @@ export class ChatService {
         message: "tool call rounds exceeded"
       }
     };
+  }
+
+  /**
+   * 读取或创建保留会话，并校验客户端携带的 sessionId 归属当前成员和 Agent。
+   * 不能仅按 sessionId 查询，否则猜中 UUID 的其他成员可能读取或继续别人的会话。
+   */
+  private async resolvePersistentSession(request: {
+    agentId: string;
+    userId: string;
+    sessionId?: string;
+  }): Promise<{
+    id: string;
+    messages: Array<{
+      id: string;
+      role: ChatSessionMessageRole;
+      content: string;
+      createdAt: Date;
+    }>;
+  }> {
+    const prisma = this.requirePrisma();
+
+    if (request.sessionId) {
+      const session = await prisma.chatSession.findFirst({
+        where: {
+          id: request.sessionId,
+          agentId: request.agentId,
+          userId: request.userId
+        },
+        include: {
+          messages: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }]
+          }
+        }
+      });
+
+      if (!session) {
+        throw new AppError(ErrorCodes.common.notFound, "chat session not found", HttpStatus.NOT_FOUND);
+      }
+
+      return session;
+    }
+
+    return prisma.chatSession.upsert({
+      where: {
+        agentId_userId: {
+          agentId: request.agentId,
+          userId: request.userId
+        }
+      },
+      create: {
+        agentId: request.agentId,
+        userId: request.userId
+      },
+      update: {},
+      include: {
+        messages: {
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }]
+        }
+      }
+    });
+  }
+
+  /**
+   * 消息与会话更新时间一并写入，使后续会话列表可以按最近对话排序，而无需扫描消息表。
+   */
+  private async appendSessionMessage(
+    sessionId: string,
+    role: ChatSessionMessageRole,
+    content: string
+  ): Promise<void> {
+    if (!content.trim()) {
+      return;
+    }
+
+    const prisma = this.requirePrisma();
+    await prisma.$transaction([
+      prisma.chatSessionMessage.create({
+        data: {
+          sessionId,
+          role,
+          content
+        }
+      }),
+      prisma.chatSession.update({
+        where: { id: sessionId },
+        data: {
+          // @updatedAt 仅在真实 update 时生效；显式触碰记录保证新消息会刷新会话排序。
+          updatedAt: new Date()
+        }
+      })
+    ]);
+  }
+
+  private requireSessionUserId(context?: ChatRequestContext): string {
+    if (!context?.userId) {
+      throw new AppError(
+        ErrorCodes.common.unauthorized,
+        "persistent chat session requires an authenticated user",
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+
+    return context.userId;
+  }
+
+  private requirePrisma(): PrismaService {
+    if (!this.prisma) {
+      // 旧单测只覆盖单次模式，不需要构造数据库依赖；真实 Nest 容器会始终注入 PrismaService。
+      throw new AppError(ErrorCodes.common.internal, "chat session storage is not configured");
+    }
+
+    return this.prisma;
   }
 
   private async createCompletionWithTools(request: {

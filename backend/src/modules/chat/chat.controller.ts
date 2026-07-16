@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Req, Res } from "@nestjs/common";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { UserRole } from "@prisma/client";
 
@@ -6,7 +6,7 @@ import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import { ChatService } from "./chat.service";
-import { ChatCompletionDto, ChatCompletionResult } from "./dto/chat.dto";
+import { ChatCompletionDto, ChatCompletionResult, ChatSessionResponse } from "./dto/chat.dto";
 
 @Controller("chat")
 @Roles(UserRole.ADMIN, UserRole.USER)
@@ -19,6 +19,14 @@ export class ChatController {
     @CurrentUser() currentUser: CurrentUserDto
   ): Promise<ChatCompletionResult> {
     return this.chatService.createCompletion(payload, { userId: currentUser.id });
+  }
+
+  @Get("sessions/:agentId")
+  async getSession(
+    @Param("agentId") agentId: string,
+    @CurrentUser() currentUser: CurrentUserDto
+  ): Promise<ChatSessionResponse> {
+    return this.chatService.getSession(agentId, { userId: currentUser.id });
   }
 
   @Post("stream")

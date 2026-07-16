@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { App as AntdApp, Empty, Select, Tag } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
-import { streamChatCompletion } from "./api";
+import { getChatSession, streamChatCompletion } from "./api";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
 import { ChatTranscript } from "./components/ChatTranscript";
@@ -20,6 +20,7 @@ export function ChatPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState(searchParams.get("agentId") || "");
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
   const [input, setInput] = useState("");
   const [loadingAgents, setLoadingAgents] = useState(false);
@@ -46,6 +47,52 @@ export function ChatPage() {
     () => agents.find((agent) => agent.id === selectedAgentId) ?? null,
     [agents, selectedAgentId]
   );
+
+  useEffect(() => {
+    let disposed = false;
+    const sessionMode = selectedAgent?.chatSessionMode;
+
+    // 切换 Agent 时先停止旧流，避免旧 Agent 的 token 混入新 Agent 恢复出的会话。
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setSending(false);
+    setSessionId(null);
+    setMessages([]);
+    resetAutoScroll();
+
+    if (!selectedAgentId || sessionMode !== "PERSISTENT") {
+      return () => {
+        disposed = true;
+      };
+    }
+
+    void getChatSession(selectedAgentId)
+      .then((session) => {
+        if (disposed) {
+          return;
+        }
+
+        setSessionId(session.sessionId);
+        setMessages(
+          session.messages.map((item) => ({
+            id: item.id,
+            role: item.role,
+            content: item.content,
+            createdAt: new Date(item.createdAt).getTime()
+          }))
+        );
+        resetAutoScroll();
+      })
+      .catch((error) => {
+        if (!disposed) {
+          messageApi.error(error instanceof Error ? error.message : "恢复历史对话失败");
+        }
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [messageApi, resetAutoScroll, selectedAgent?.chatSessionMode, selectedAgentId]);
   const sendButtonDisabled =
     !sending && (!selectedAgentId || (!input.trim() && images.length === 0 && files.length === 0));
 
@@ -94,8 +141,6 @@ export function ChatPage() {
 
   function handleAgentChange(agentId: string) {
     setSelectedAgentId(agentId);
-    setMessages([]);
-    resetAutoScroll();
 
     if (agentId) {
       setSearchParams({ agentId });
@@ -173,6 +218,7 @@ export function ChatPage() {
       await streamChatCompletion(
         {
           agentId: selectedAgentId,
+          sessionId: sessionId ?? undefined,
           message: content,
           images: currentImages,
           files: currentFiles,
@@ -188,6 +234,10 @@ export function ChatPage() {
 
             if (event.type === "token" && event.data.content) {
               appendAssistantToken(assistantMessageId, event.data.content);
+            }
+
+            if (event.type === "message_start" && event.data.sessionId) {
+              setSessionId(event.data.sessionId);
             }
 
             if (event.type === "retrieval_start") {
@@ -419,7 +469,12 @@ export function ChatPage() {
                   <span>知识库 {selectedAgent.knowledgeBaseCount}</span>
                   <span>工具 {selectedAgent.toolCount}</span>
                 </div>
-                <Tag color="green">已启用</Tag>
+                <div className="chatAgentStatus">
+                  <Tag color="green">已启用</Tag>
+                  <Tag color={selectedAgent.chatSessionMode === "PERSISTENT" ? "blue" : "default"}>
+                    {selectedAgent.chatSessionMode === "PERSISTENT" ? "保留会话" : "单次会话"}
+                  </Tag>
+                </div>
               </div>
             ) : (
               <Empty description="暂无可用 Agent" image={Empty.PRESENTED_IMAGE_SIMPLE} />
