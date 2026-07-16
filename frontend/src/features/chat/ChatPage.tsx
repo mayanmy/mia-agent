@@ -3,9 +3,18 @@ import { useSearchParams } from "react-router-dom";
 import { App as AntdApp, Empty, Select, Tag } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
-import { getChatSession, streamChatCompletion } from "./api";
+import {
+  archiveChatSession,
+  createChatSession,
+  getChatSessionMessages,
+  listChatSessions,
+  streamChatCompletion,
+  updateChatSessionTitle,
+  type ChatSessionListItem
+} from "./api";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
+import { ChatSessionList } from "./components/ChatSessionList";
 import { ChatTranscript } from "./components/ChatTranscript";
 import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useChatAttachments } from "./hooks/useChatAttachments";
@@ -17,13 +26,19 @@ export function ChatPage() {
   const { message: messageApi } = AntdApp.useApp();
   const abortControllerRef = useRef<AbortController | null>(null);
   const disposedRef = useRef(false);
+  const sessionLoadVersionRef = useRef(0);
+  const historyLoadVersionRef = useRef(0);
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState(searchParams.get("agentId") || "");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ChatSessionListItem[]>([]);
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
   const [input, setInput] = useState("");
   const [loadingAgents, setLoadingAgents] = useState(false);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [sending, setSending] = useState(false);
   const {
     images,
@@ -51,13 +66,17 @@ export function ChatPage() {
   useEffect(() => {
     let disposed = false;
     const sessionMode = selectedAgent?.chatSessionMode;
+    const requestVersion = ++sessionLoadVersionRef.current;
 
     // 切换 Agent 时先停止旧流，避免旧 Agent 的 token 混入新 Agent 恢复出的会话。
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setSending(false);
     setSessionId(null);
+    setSessions([]);
+    setHistoryCursor(null);
     setMessages([]);
+    historyLoadVersionRef.current += 1;
     resetAutoScroll();
 
     if (!selectedAgentId || sessionMode !== "PERSISTENT") {
@@ -66,26 +85,31 @@ export function ChatPage() {
       };
     }
 
-    void getChatSession(selectedAgentId)
-      .then((session) => {
-        if (disposed) {
+    setLoadingSessions(true);
+    void listChatSessions(selectedAgentId)
+      .then(async (response) => {
+        if (disposed || requestVersion !== sessionLoadVersionRef.current) {
           return;
         }
 
-        setSessionId(session.sessionId);
-        setMessages(
-          session.messages.map((item) => ({
-            id: item.id,
-            role: item.role,
-            content: item.content,
-            createdAt: new Date(item.createdAt).getTime()
-          }))
-        );
-        resetAutoScroll();
+        const nextSessions = response.list;
+        const initialSession = nextSessions[0] ?? (await createChatSession(selectedAgentId));
+
+        if (disposed || requestVersion !== sessionLoadVersionRef.current) {
+          return;
+        }
+
+        setSessions(nextSessions.length > 0 ? nextSessions : [initialSession]);
+        await loadSessionMessages(initialSession.id, requestVersion, () => !disposed);
       })
       .catch((error) => {
         if (!disposed) {
-          messageApi.error(error instanceof Error ? error.message : "恢复历史对话失败");
+          messageApi.error(error instanceof Error ? error.message : "加载历史会话失败");
+        }
+      })
+      .finally(() => {
+        if (!disposed && requestVersion === sessionLoadVersionRef.current) {
+          setLoadingSessions(false);
         }
       });
 
@@ -149,6 +173,144 @@ export function ChatPage() {
     }
   }
 
+  async function loadSessionMessages(
+    nextSessionId: string,
+    requestVersion: number,
+    isActive: () => boolean = () => true
+  ) {
+    const page = await getChatSessionMessages(nextSessionId);
+
+    if (!isActive() || requestVersion !== sessionLoadVersionRef.current) {
+      return;
+    }
+
+    setSessionId(nextSessionId);
+    setMessages(page.list.map(toChatUiMessage));
+    setHistoryCursor(page.nextBefore);
+    resetAutoScroll();
+  }
+
+  async function handleSessionChange(nextSessionId: string) {
+    if (nextSessionId === sessionId || sending) {
+      return;
+    }
+
+    const requestVersion = ++sessionLoadVersionRef.current;
+    historyLoadVersionRef.current += 1;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setSending(false);
+    setMessages([]);
+    setHistoryCursor(null);
+    setLoadingHistory(true);
+
+    try {
+      await loadSessionMessages(nextSessionId, requestVersion);
+    } catch (error) {
+      if (requestVersion === sessionLoadVersionRef.current) {
+        messageApi.error(error instanceof Error ? error.message : "加载历史消息失败");
+      }
+    } finally {
+      if (requestVersion === sessionLoadVersionRef.current) {
+        setLoadingHistory(false);
+      }
+    }
+  }
+
+  async function handleCreateSession() {
+    if (!selectedAgentId || sending) {
+      return;
+    }
+
+    setLoadingSessions(true);
+
+    try {
+      const session = await createChatSession(selectedAgentId);
+      sessionLoadVersionRef.current += 1;
+      historyLoadVersionRef.current += 1;
+      setSessions((current) => [session, ...current]);
+      setSessionId(session.id);
+      setMessages([]);
+      setHistoryCursor(null);
+      resetAutoScroll();
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "新建会话失败");
+    } finally {
+      setLoadingSessions(false);
+    }
+  }
+
+  async function handleRenameSession(targetSessionId: string, title: string) {
+    try {
+      const session = await updateChatSessionTitle(targetSessionId, title);
+      setSessions((current) =>
+        current.map((item) => (item.id === targetSessionId ? session : item))
+      );
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "修改会话标题失败");
+    }
+  }
+
+  async function handleArchiveSession(targetSessionId: string) {
+    if (sending) {
+      return;
+    }
+
+    try {
+      await archiveChatSession(targetSessionId);
+      const nextSessions = sessions.filter((item) => item.id !== targetSessionId);
+      setSessions(nextSessions);
+
+      if (targetSessionId === sessionId) {
+        if (nextSessions[0]) {
+          await handleSessionChange(nextSessions[0].id);
+        } else {
+          await handleCreateSession();
+        }
+      }
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "归档会话失败");
+    }
+  }
+
+  async function loadOlderMessages() {
+    if (!sessionId || !historyCursor || loadingHistory) {
+      return;
+    }
+
+    const requestVersion = ++historyLoadVersionRef.current;
+    const messagesElement = messagesRef.current;
+    const previousHeight = messagesElement?.scrollHeight ?? 0;
+    const previousTop = messagesElement?.scrollTop ?? 0;
+    setLoadingHistory(true);
+
+    try {
+      const page = await getChatSessionMessages(sessionId, { before: historyCursor });
+
+      if (requestVersion !== historyLoadVersionRef.current) {
+        return;
+      }
+
+      setMessages((current) => [...page.list.map(toChatUiMessage), ...current]);
+      setHistoryCursor(page.nextBefore);
+
+      // prepend 会改变 scrollHeight；补偿高度差后用户仍停留在原先阅读的位置。
+      requestAnimationFrame(() => {
+        const currentElement = messagesRef.current;
+
+        if (currentElement) {
+          currentElement.scrollTop = previousTop + (currentElement.scrollHeight - previousHeight);
+        }
+      });
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "加载更早消息失败");
+    } finally {
+      if (requestVersion === historyLoadVersionRef.current) {
+        setLoadingHistory(false);
+      }
+    }
+  }
+
   async function handleSend() {
     if (disposedRef.current) {
       return;
@@ -158,6 +320,12 @@ export function ChatPage() {
 
     if (!selectedAgentId) {
       messageApi.warning("请选择 Agent");
+      return;
+    }
+
+    // 保留型 Agent 的每条消息必须归属到明确会话，不能退回旧的按 Agent 聚合逻辑。
+    if (selectedAgent?.chatSessionMode === "PERSISTENT" && !sessionId) {
+      messageApi.warning("历史会话正在初始化，请稍后再试");
       return;
     }
 
@@ -300,6 +468,31 @@ export function ChatPage() {
         setSending(false);
       }
     }
+
+    if (selectedAgent?.chatSessionMode === "PERSISTENT" && sessionId) {
+      updateActiveSessionPreview(sessionId, content);
+    }
+  }
+
+  function updateActiveSessionPreview(targetSessionId: string, firstMessage: string) {
+    setSessions((current) => {
+      const currentSession = current.find((item) => item.id === targetSessionId);
+
+      if (!currentSession) {
+        return current;
+      }
+
+      const nextTitle = currentSession.title === "新对话" ? createSessionTitle(firstMessage) : currentSession.title;
+      const updatedSession = {
+        ...currentSession,
+        title: nextTitle,
+        lastMessageAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // 新消息的会话回到顶部，侧栏排序和下一次服务端刷新保持一致。
+      return [updatedSession, ...current.filter((item) => item.id !== targetSessionId)];
+    });
   }
 
   function appendAssistantToken(messageId: string, token: string) {
@@ -475,6 +668,20 @@ export function ChatPage() {
                     {selectedAgent.chatSessionMode === "PERSISTENT" ? "保留会话" : "单次会话"}
                   </Tag>
                 </div>
+                {selectedAgent.chatSessionMode === "PERSISTENT" ? (
+                  <ChatSessionList
+                    activeSessionId={sessionId}
+                    disabled={sending}
+                    loading={loadingSessions}
+                    sessions={sessions}
+                    onArchive={(targetSessionId) => void handleArchiveSession(targetSessionId)}
+                    onCreate={() => void handleCreateSession()}
+                    onRename={(targetSessionId, title) =>
+                      void handleRenameSession(targetSessionId, title)
+                    }
+                    onSelect={(targetSessionId) => void handleSessionChange(targetSessionId)}
+                  />
+                ) : null}
               </div>
             ) : (
               <Empty description="暂无可用 Agent" image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -487,8 +694,11 @@ export function ChatPage() {
             messages={messages}
             messagesRef={messagesRef}
             sending={sending}
+            hasMoreHistory={Boolean(historyCursor)}
+            loadingHistory={loadingHistory}
             showScrollBottom={showScrollBottom}
             onCopyMessage={(content) => void copyMessageContent(content)}
+            onLoadMoreHistory={() => void loadOlderMessages()}
             onScroll={releaseAutoScrollIfNeeded}
             onScrollBottom={scrollMessagesToBottom}
           />
@@ -512,4 +722,30 @@ export function ChatPage() {
       </div>
     </section>
   );
+}
+
+/** 将接口返回的持久化消息映射成现有消息组件使用的视图模型。 */
+function toChatUiMessage(message: {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+}): ChatUiMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    createdAt: new Date(message.createdAt).getTime()
+  };
+}
+
+/** 用首条用户消息生成简短会话标题，完整标题仍由服务端持久化为准。 */
+function createSessionTitle(content: string): string {
+  const normalized = content.replace(/\s+/gu, " ").trim();
+
+  if (!normalized) {
+    return "新对话";
+  }
+
+  return normalized.length > 24 ? `${normalized.slice(0, 24)}...` : normalized;
 }

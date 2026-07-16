@@ -72,6 +72,88 @@
   gap: 6px;
 }
 
+.chatSessionSection {
+  border-top: 1px solid #e5e7eb;
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  min-height: 0;
+  padding-top: 14px;
+}
+
+.chatSessionHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.chatSessionHeader h3 {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.chatSessionList {
+  display: grid;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.chatSessionItem {
+  align-items: center;
+  border-radius: 6px;
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px 4px;
+}
+
+.chatSessionItem.active {
+  background: #eff6ff;
+}
+
+.chatSessionTitle {
+  background: transparent;
+  border: 0;
+  color: #475569;
+  cursor: pointer;
+  flex: 1;
+  font: inherit;
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 4px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatSessionTitle:hover,
+.chatSessionItem.active .chatSessionTitle {
+  color: #2563eb;
+}
+
+.chatSessionActions {
+  display: inline-flex;
+  flex: none;
+}
+
+.chatSessionEmpty.ant-empty {
+  margin: 8px 0;
+}
+
+.chatSessionEmpty .ant-empty-image {
+  height: 24px;
+  margin-bottom: 4px;
+}
+
+.chatSessionEmpty .ant-empty-description {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
 .chatAgentBindings span {
   background: #f1f5f9;
   border-radius: 6px;
@@ -97,6 +179,22 @@
   overscroll-behavior: contain;
   padding: 20px;
   scroll-behavior: smooth;
+}
+
+.chatHistoryLoading,
+.chatHistoryLoadMore {
+  color: #64748b;
+  font-size: 12px;
+  justify-self: center;
+}
+
+.chatHistoryLoadMore {
+  background: transparent;
+  border: 0;
+  color: #2563eb;
+  cursor: pointer;
+  font: inherit;
+  padding: 4px 8px;
 }
 
 .chatScrollBottomButton {

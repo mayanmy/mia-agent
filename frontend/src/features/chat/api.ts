@@ -46,6 +46,30 @@ export type ChatSessionResponse = {
   messages: ChatSessionMessage[];
 };
 
+export type ChatSessionStatus = "ACTIVE" | "ARCHIVED";
+
+export type ChatSessionListItem = {
+  id: string;
+  agentId: string;
+  title: string;
+  status: ChatSessionStatus;
+  lastMessageAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ChatSessionListResponse = {
+  list: ChatSessionListItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+export type ChatSessionMessagePage = {
+  list: ChatSessionMessage[];
+  nextBefore: string | null;
+  hasMore: boolean;
+};
+
 export type ChatCompletionResult = {
   agentId: string;
   modelConfigId: string;
@@ -102,6 +126,62 @@ export type ChatStreamEvent = {
 /** 获取当前成员在保留型 Agent 下的个人会话；单次模式会返回空会话。 */
 export function getChatSession(agentId: string): Promise<ChatSessionResponse> {
   return request<ChatSessionResponse>(`/api/v1/chat/sessions/${agentId}`);
+}
+
+/** 读取一个保留型 Agent 的活跃会话列表；列表与消息都采用 Cursor，避免深页 Offset 扫描。 */
+export function listChatSessions(
+  agentId: string,
+  options: { cursor?: string; pageSize?: number } = {}
+): Promise<ChatSessionListResponse> {
+  const params = new URLSearchParams({
+    agentId,
+    pageSize: String(options.pageSize ?? 30)
+  });
+
+  if (options.cursor) {
+    params.set("cursor", options.cursor);
+  }
+
+  return request<ChatSessionListResponse>(`/api/v1/chat/sessions?${params.toString()}`);
+}
+
+/** 创建独立会话，新窗口不会复用旧消息作为模型上下文。 */
+export function createChatSession(agentId: string): Promise<ChatSessionListItem> {
+  return request<ChatSessionListItem>("/api/v1/chat/sessions", {
+    method: "POST",
+    body: JSON.stringify({ agentId })
+  });
+}
+
+export function getChatSessionMessages(
+  sessionId: string,
+  options: { before?: string; pageSize?: number } = {}
+): Promise<ChatSessionMessagePage> {
+  const params = new URLSearchParams({ pageSize: String(options.pageSize ?? 50) });
+
+  if (options.before) {
+    params.set("before", options.before);
+  }
+
+  return request<ChatSessionMessagePage>(
+    `/api/v1/chat/sessions/${sessionId}/messages?${params.toString()}`
+  );
+}
+
+export function updateChatSessionTitle(
+  sessionId: string,
+  title: string
+): Promise<ChatSessionListItem> {
+  return request<ChatSessionListItem>(`/api/v1/chat/sessions/${sessionId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ title })
+  });
+}
+
+export function archiveChatSession(sessionId: string): Promise<ChatSessionListItem> {
+  return request<ChatSessionListItem>(`/api/v1/chat/sessions/${sessionId}/archive`, {
+    method: "POST"
+  });
 }
 
 export function createChatCompletion(
