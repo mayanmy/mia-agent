@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res } from "@nestjs/common";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { UserRole } from "@prisma/client";
 
@@ -6,7 +6,13 @@ import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import { ChatService } from "./chat.service";
-import { ChatCompletionDto, ChatCompletionResult, ChatSessionResponse } from "./dto/chat.dto";
+import { ChatCompletionDto, ChatCompletionResult } from "./dto/chat.dto";
+import {
+  ChatMessageQueryDto,
+  ChatSessionListQueryDto,
+  CreateChatSessionDto,
+  UpdateChatSessionDto
+} from "./dto/chat-session.dto";
 
 @Controller("chat")
 @Roles(UserRole.ADMIN, UserRole.USER)
@@ -21,12 +27,62 @@ export class ChatController {
     return this.chatService.createCompletion(payload, { userId: currentUser.id });
   }
 
+  @Get("sessions")
+  async listSessions(
+    @Query() query: ChatSessionListQueryDto,
+    @CurrentUser() currentUser: CurrentUserDto
+  ) {
+    return this.chatService.listSessions(query, { userId: currentUser.id });
+  }
+
+  @Post("sessions")
+  async createSession(
+    @Body() payload: CreateChatSessionDto,
+    @CurrentUser() currentUser: CurrentUserDto
+  ) {
+    return this.chatService.createSession(payload, { userId: currentUser.id });
+  }
+
   @Get("sessions/:agentId")
-  async getSession(
+  async getLegacySession(
     @Param("agentId") agentId: string,
     @CurrentUser() currentUser: CurrentUserDto
-  ): Promise<ChatSessionResponse> {
+  ) {
     return this.chatService.getSession(agentId, { userId: currentUser.id });
+  }
+
+  @Get("sessions/:sessionId/messages")
+  async getSessionMessages(
+    @Param("sessionId") sessionId: string,
+    @Query() query: ChatMessageQueryDto,
+    @CurrentUser() currentUser: CurrentUserDto
+  ) {
+    return this.chatService.getSessionMessages(sessionId, query, { userId: currentUser.id });
+  }
+
+  @Patch("sessions/:sessionId")
+  async updateSession(
+    @Param("sessionId") sessionId: string,
+    @Body() payload: UpdateChatSessionDto,
+    @CurrentUser() currentUser: CurrentUserDto
+  ) {
+    return this.chatService.updateSession(sessionId, payload, { userId: currentUser.id });
+  }
+
+  @Post("sessions/:sessionId/archive")
+  async archiveSession(
+    @Param("sessionId") sessionId: string,
+    @CurrentUser() currentUser: CurrentUserDto
+  ) {
+    return this.chatService.archiveSession(sessionId, { userId: currentUser.id });
+  }
+
+  @Post("sessions/:sessionId/restore")
+  async restoreSession(
+    @Param("sessionId") sessionId: string,
+    @CurrentUser() currentUser: CurrentUserDto
+  ) {
+    return this.chatService.restoreSession(sessionId, { userId: currentUser.id });
   }
 
   @Post("stream")

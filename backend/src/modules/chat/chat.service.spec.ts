@@ -666,45 +666,26 @@ export const tests = [
             { type: "done" }
           ])
       };
-      const prisma = {
-        chatSession: {
-          upsert: async () => ({
-            id: "session-id",
-            messages: [
-              {
-                id: "old-message",
-                role: "USER",
-                content: "上一条消息",
-                createdAt: new Date()
-              }
-            ]
-          }),
-          update: async () => null
-        },
-        chatSessionMessage: {
-          create: async ({
-            data
-          }: {
-            data: { role: string; content: string; sessionId: string };
-          }) => {
-            storedMessages.push({ role: data.role, content: data.content });
-            return null;
-          }
-        },
-        $transaction: async (operations: Array<Promise<unknown>>) => Promise.all(operations)
+      const chatSessionsService = {
+        requireActiveSession: async () => ({ id: "session-id" }),
+        buildModelHistory: async () => [{ role: "user" as const, content: "上一条消息" }],
+        appendMessage: async (_sessionId: string, role: string, content: string) => {
+          storedMessages.push({ role, content });
+        }
       };
       const service = new ChatService(
         agentsService as never,
         modelProvidersService as never,
         { getToolDefinitions: () => [] } as never,
         createEmptyRetrievalService() as never,
-        prisma as never
+        chatSessionsService as never
       );
       const events: ChatStreamEvent[] = [];
 
       for await (const event of service.streamCompletion(
         {
           agentId: "agent-id",
+          sessionId: "session-id",
           message: "新的问题",
           history: [],
           images: [],

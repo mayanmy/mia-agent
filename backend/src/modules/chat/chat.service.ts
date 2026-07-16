@@ -8,7 +8,6 @@ import { ModelProvidersService } from "../model-providers/model-providers.servic
 import { ChatMessage, LLMToolCall, LLMToolDefinition } from "../model-providers/dto/llm.dto";
 import { RetrievalContext } from "../retrieval/dto/retrieval.dto";
 import { RetrievalService } from "../retrieval/retrieval.service";
-import { PrismaService } from "../prisma/prisma.service";
 import { ToolCallLogRecord, ToolDefinition, ToolJsonValue } from "../tools/dto/tool.dto";
 import { ToolsService } from "../tools/tools.service";
 import {
@@ -20,6 +19,13 @@ import {
   ChatSessionResponse,
   ChatStreamEvent
 } from "./dto/chat.dto";
+import {
+  ChatMessageQueryDto,
+  ChatSessionListQueryDto,
+  CreateChatSessionDto,
+  UpdateChatSessionDto
+} from "./dto/chat-session.dto";
+import { ChatSessionsService } from "./chat-sessions.service";
 
 const MAX_IMAGE_COUNT = 4;
 const MAX_IMAGE_DATA_URL_LENGTH = 7 * 1024 * 1024;
@@ -40,42 +46,110 @@ export class ChatService {
     private readonly modelProvidersService: ModelProvidersService,
     private readonly toolsService: ToolsService,
     private readonly retrievalService: RetrievalService,
-    private readonly prisma?: PrismaService
+    private readonly chatSessionsService?: ChatSessionsService
   ) {}
 
   /**
-   * 获取当前成员在指定 Agent 下的可恢复会话。
-   *
-   * 单次模式不会创建任何记录；保留模式以 agentId + userId 唯一约束复用同一个会话，
-   * 因此浏览器刷新、关闭再打开后仍能恢复，并且成员之间的数据天然隔离。
+   * 获取指定保留型 Agent 的会话列表。
+   * 单次 Agent 不应该出现会话管理入口，因此在后端再次阻止该类请求。
+   */
+  async listSessions(
+    query: ChatSessionListQueryDto,
+    context: ChatRequestContext
+  ) {
+    const agentId = this.requireNonEmptyString(query.agentId, "agentId");
+    const agent = await this.requirePersistentAgent(agentId);
+
+    return this.requireChatSessionsService().listSessions(
+      { agentId: agent.agentId, userId: this.requireSessionUserId(context) },
+      query
+    );
+  }
+
+  /**
+   * 兼容旧聊天页的单会话读取接口。
+   * 新页面应改用会话列表、创建会话和消息分页接口；保留此入口可以避免前后端分步发布时
+   * 保留型 Agent 立即不可用。
    */
   async getSession(agentId: string, context: ChatRequestContext): Promise<ChatSessionResponse> {
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
 
     if (agent.chatSessionMode !== AgentChatSessionMode.PERSISTENT) {
-      return {
-        mode: AgentChatSessionMode.EPHEMERAL,
-        sessionId: null,
-        messages: []
-      };
+      return { mode: "EPHEMERAL", sessionId: null, messages: [] };
     }
 
-    const session = await this.resolvePersistentSession({
-      agentId: agent.agentId,
-      userId: this.requireSessionUserId(context),
-      sessionId: undefined
-    });
+    const userId = this.requireSessionUserId(context);
+    const sessions = this.requireChatSessionsService();
+    const response = await sessions.listSessions(
+      { agentId: agent.agentId, userId },
+      { pageSize: "1" }
+    );
+    const session = response.list[0] ?? (await sessions.createSession({ agentId: agent.agentId, userId }));
+    const messages = await sessions.getMessagePage(
+      session.id,
+      { agentId: agent.agentId, userId },
+      { pageSize: "100" }
+    );
 
     return {
-      mode: AgentChatSessionMode.PERSISTENT,
+      mode: "PERSISTENT",
       sessionId: session.id,
-      messages: session.messages.map((item) => ({
-        id: item.id,
-        role: item.role === ChatSessionMessageRole.USER ? "user" : "assistant",
-        content: item.content,
-        createdAt: item.createdAt
-      }))
+      messages: messages.list
     };
+  }
+
+  async createSession(payload: CreateChatSessionDto, context: ChatRequestContext) {
+    const agentId = this.requireNonEmptyString(payload.agentId, "agentId");
+    const agent = await this.requirePersistentAgent(agentId);
+
+    return this.requireChatSessionsService().createSession({
+      agentId: agent.agentId,
+      userId: this.requireSessionUserId(context)
+    });
+  }
+
+  async getSessionMessages(
+    sessionId: string,
+    query: ChatMessageQueryDto,
+    context: ChatRequestContext
+  ) {
+    const userId = this.requireSessionUserId(context);
+    const sessions = this.requireChatSessionsService();
+    const session = await sessions.getOwnedSession(sessionId, userId);
+    await this.requirePersistentAgent(session.agentId);
+
+    return sessions.getMessagePage(sessionId, { agentId: session.agentId, userId }, query);
+  }
+
+  async updateSession(
+    sessionId: string,
+    payload: UpdateChatSessionDto,
+    context: ChatRequestContext
+  ) {
+    const userId = this.requireSessionUserId(context);
+    const sessions = this.requireChatSessionsService();
+    const session = await sessions.getOwnedSession(sessionId, userId);
+    await this.requirePersistentAgent(session.agentId);
+
+    return sessions.updateSession(sessionId, { agentId: session.agentId, userId }, payload);
+  }
+
+  async archiveSession(sessionId: string, context: ChatRequestContext) {
+    const userId = this.requireSessionUserId(context);
+    const sessions = this.requireChatSessionsService();
+    const session = await sessions.getOwnedSession(sessionId, userId);
+    await this.requirePersistentAgent(session.agentId);
+
+    return sessions.archiveSession(sessionId, { agentId: session.agentId, userId });
+  }
+
+  async restoreSession(sessionId: string, context: ChatRequestContext) {
+    const userId = this.requireSessionUserId(context);
+    const sessions = this.requireChatSessionsService();
+    const session = await sessions.getOwnedSession(sessionId, userId);
+    await this.requirePersistentAgent(session.agentId);
+
+    return sessions.restoreSession(sessionId, { agentId: session.agentId, userId });
   }
 
   /**
@@ -95,27 +169,18 @@ export class ChatService {
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
     const requestId = randomUUID();
     this.ensureImageInputSupported(agent.modelName, images);
-    const session =
-      agent.chatSessionMode === AgentChatSessionMode.PERSISTENT
-        ? await this.resolvePersistentSession({
-            agentId: agent.agentId,
-            userId: this.requireSessionUserId(context),
-            sessionId: payload.sessionId
-          })
-        : null;
-    const history = session
-      ? this.normalizeHistory(
-          session.messages.map((item) => ({
-            role: item.role === ChatSessionMessageRole.USER ? "user" : "assistant",
-            content: item.content
-          })),
-          agent.historyTurns
-        )
+    const sessionId = await this.resolvePersistentSessionId(agent, payload.sessionId, context);
+    const history = sessionId
+      ? await this.requireChatSessionsService().buildModelHistory(sessionId, agent.historyTurns)
       : this.normalizeHistory(payload.history, agent.historyTurns);
 
-    if (session) {
+    if (sessionId) {
       // 用户消息在请求模型前落库，即便模型稍后超时，也不会让用户刚输入的内容无故消失。
-      await this.appendSessionMessage(session.id, ChatSessionMessageRole.USER, message);
+      await this.requireChatSessionsService().appendMessage(
+        sessionId,
+        ChatSessionMessageRole.USER,
+        message
+      );
     }
     const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
     const llmTools = this.toLLMToolDefinitions(toolDefinitions);
@@ -148,8 +213,12 @@ export class ChatService {
       userId: context?.userId
     });
 
-    if (session) {
-      await this.appendSessionMessage(session.id, ChatSessionMessageRole.ASSISTANT, response.content);
+    if (sessionId) {
+      await this.requireChatSessionsService().appendMessage(
+        sessionId,
+        ChatSessionMessageRole.ASSISTANT,
+        response.content
+      );
     }
 
     return {
@@ -179,27 +248,18 @@ export class ChatService {
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
     const requestId = randomUUID();
     this.ensureImageInputSupported(agent.modelName, images);
-    const session =
-      agent.chatSessionMode === AgentChatSessionMode.PERSISTENT
-        ? await this.resolvePersistentSession({
-            agentId: agent.agentId,
-            userId: this.requireSessionUserId(context),
-            sessionId: payload.sessionId
-          })
-        : null;
-    const history = session
-      ? this.normalizeHistory(
-          session.messages.map((item) => ({
-            role: item.role === ChatSessionMessageRole.USER ? "user" : "assistant",
-            content: item.content
-          })),
-          agent.historyTurns
-        )
+    const sessionId = await this.resolvePersistentSessionId(agent, payload.sessionId, context);
+    const history = sessionId
+      ? await this.requireChatSessionsService().buildModelHistory(sessionId, agent.historyTurns)
       : this.normalizeHistory(payload.history, agent.historyTurns);
 
-    if (session) {
+    if (sessionId) {
       // 先保存用户消息，模型调用失败时仍能在历史中看到本次提问。
-      await this.appendSessionMessage(session.id, ChatSessionMessageRole.USER, message);
+      await this.requireChatSessionsService().appendMessage(
+        sessionId,
+        ChatSessionMessageRole.USER,
+        message
+      );
     }
     const toolDefinitions = this.toolsService.getToolDefinitions(agent.toolIds);
     const llmTools = this.toLLMToolDefinitions(toolDefinitions);
@@ -217,7 +277,7 @@ export class ChatService {
         modelConfigId: agent.modelConfigId,
         modelName: agent.modelName,
         providerName: agent.providerType,
-        sessionId: session?.id
+        sessionId
       }
     };
 
@@ -348,9 +408,13 @@ export class ChatService {
         const finalAnswer =
           fallbackAnswer || (llmTools.length > 0 ? bufferedTokens.join("") : assistantContent);
 
-        if (session) {
+        if (sessionId) {
           // 只在拿到完整回答后写入助手消息，防止取消生成时把半截文本伪装成完整历史。
-          await this.appendSessionMessage(session.id, ChatSessionMessageRole.ASSISTANT, finalAnswer);
+          await this.requireChatSessionsService().appendMessage(
+            sessionId,
+            ChatSessionMessageRole.ASSISTANT,
+            finalAnswer
+          );
         }
 
         if (fallbackAnswer) {
@@ -407,94 +471,41 @@ export class ChatService {
   }
 
   /**
-   * 读取或创建保留会话，并校验客户端携带的 sessionId 归属当前成员和 Agent。
-   * 不能仅按 sessionId 查询，否则猜中 UUID 的其他成员可能读取或继续别人的会话。
+   * 保留型 Agent 的流式调用必须明确指定 sessionId。
+   *
+   * 旧版自动 upsert 会让“新建对话”仍复用历史上下文；现在由前端先创建会话，再把 ID
+   * 传入 SSE，使用户意图和数据归属都可验证。
    */
-  private async resolvePersistentSession(request: {
-    agentId: string;
-    userId: string;
-    sessionId?: string;
-  }): Promise<{
-    id: string;
-    messages: Array<{
-      id: string;
-      role: ChatSessionMessageRole;
-      content: string;
-      createdAt: Date;
-    }>;
-  }> {
-    const prisma = this.requirePrisma();
-
-    if (request.sessionId) {
-      const session = await prisma.chatSession.findFirst({
-        where: {
-          id: request.sessionId,
-          agentId: request.agentId,
-          userId: request.userId
-        },
-        include: {
-          messages: {
-            orderBy: [{ createdAt: "asc" }, { id: "asc" }]
-          }
-        }
-      });
-
-      if (!session) {
-        throw new AppError(ErrorCodes.common.notFound, "chat session not found", HttpStatus.NOT_FOUND);
-      }
-
-      return session;
+  private async resolvePersistentSessionId(
+    agent: { agentId: string; chatSessionMode: AgentChatSessionMode },
+    sessionId: string | undefined,
+    context?: ChatRequestContext
+  ): Promise<string | null> {
+    if (agent.chatSessionMode !== AgentChatSessionMode.PERSISTENT) {
+      return null;
     }
 
-    return prisma.chatSession.upsert({
-      where: {
-        agentId_userId: {
-          agentId: request.agentId,
-          userId: request.userId
-        }
-      },
-      create: {
-        agentId: request.agentId,
-        userId: request.userId
-      },
-      update: {},
-      include: {
-        messages: {
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }]
-        }
-      }
+    const id = this.requireNonEmptyString(sessionId, "sessionId");
+    await this.requireChatSessionsService().requireActiveSession(id, {
+      agentId: agent.agentId,
+      userId: this.requireSessionUserId(context)
     });
+
+    return id;
   }
 
-  /**
-   * 消息与会话更新时间一并写入，使后续会话列表可以按最近对话排序，而无需扫描消息表。
-   */
-  private async appendSessionMessage(
-    sessionId: string,
-    role: ChatSessionMessageRole,
-    content: string
-  ): Promise<void> {
-    if (!content.trim()) {
-      return;
+  private async requirePersistentAgent(agentId: string) {
+    const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
+
+    if (agent.chatSessionMode !== AgentChatSessionMode.PERSISTENT) {
+      throw new AppError(
+        ErrorCodes.common.conflict,
+        "agent uses ephemeral chat sessions",
+        HttpStatus.CONFLICT
+      );
     }
 
-    const prisma = this.requirePrisma();
-    await prisma.$transaction([
-      prisma.chatSessionMessage.create({
-        data: {
-          sessionId,
-          role,
-          content
-        }
-      }),
-      prisma.chatSession.update({
-        where: { id: sessionId },
-        data: {
-          // @updatedAt 仅在真实 update 时生效；显式触碰记录保证新消息会刷新会话排序。
-          updatedAt: new Date()
-        }
-      })
-    ]);
+    return agent;
   }
 
   private requireSessionUserId(context?: ChatRequestContext): string {
@@ -509,13 +520,13 @@ export class ChatService {
     return context.userId;
   }
 
-  private requirePrisma(): PrismaService {
-    if (!this.prisma) {
-      // 旧单测只覆盖单次模式，不需要构造数据库依赖；真实 Nest 容器会始终注入 PrismaService。
+  private requireChatSessionsService(): ChatSessionsService {
+    if (!this.chatSessionsService) {
+      // 旧单测只覆盖单次模式，不需要构造会话服务；真实 Nest 容器会始终注入该 Provider。
       throw new AppError(ErrorCodes.common.internal, "chat session storage is not configured");
     }
 
-    return this.prisma;
+    return this.chatSessionsService;
   }
 
   private async createCompletionWithTools(request: {

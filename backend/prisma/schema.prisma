@@ -48,6 +48,13 @@ enum ChatSessionMessageRole {
   @@map("chat_session_message_role")
 }
 
+enum ChatSessionStatus {
+  ACTIVE
+  ARCHIVED
+
+  @@map("chat_session_status")
+}
+
 model User {
   id                String        @id @default(uuid()) @db.Uuid
   email             String        @unique(map: "uq_users_email")
@@ -215,20 +222,26 @@ model AgentTool {
 
 /// 保留型 Agent 的成员私有会话。
 ///
-/// v1 以 (agent_id, user_id) 唯一约束实现“重新打开窗口继续同一段对话”。这既避免
-/// 首期引入会话列表管理，又保证不同成员之间不会看到对方的历史内容。
+/// 一个成员可以为同一个 Agent 创建多条会话；所有查询都必须同时按 user_id 和 agent_id
+/// 过滤，避免仅凭 session ID 访问到其他成员的对话。
 model ChatSession {
-  id        String               @id @default(uuid()) @db.Uuid
-  agentId   String               @map("agent_id") @db.Uuid
-  userId    String               @map("user_id") @db.Uuid
-  createdAt DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
-  agent     Agent                @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages  ChatSessionMessage[]
+  id            String            @id @default(uuid()) @db.Uuid
+  agentId       String            @map("agent_id") @db.Uuid
+  userId        String            @map("user_id") @db.Uuid
+  title         String            @default("")
+  status        ChatSessionStatus @default(ACTIVE)
+  summary       String?           @db.Text
+  summaryUntilId String?          @map("summary_until_id") @db.Uuid
+  lastMessageAt DateTime?         @map("last_message_at") @db.Timestamptz(6)
+  archivedAt    DateTime?         @map("archived_at") @db.Timestamptz(6)
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  agent         Agent             @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      ChatSessionMessage[]
 
-  @@unique([agentId, userId], map: "uq_chat_sessions_agent_user")
-  @@index([userId, updatedAt(sort: Desc)], map: "idx_chat_sessions_user_updated_at")
+  @@index([agentId, userId, status, lastMessageAt(sort: Desc)], map: "idx_chat_sessions_agent_user_status_last_message")
+  @@index([userId, status, updatedAt(sort: Desc)], map: "idx_chat_sessions_user_status_updated_at")
   @@map("chat_sessions")
 }
 
@@ -239,10 +252,11 @@ model ChatSessionMessage {
   sessionId String                 @map("session_id") @db.Uuid
   role      ChatSessionMessageRole
   content   String                 @db.Text
+  metadata  Json?                  @db.JsonB
   createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
   session   ChatSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
-  @@index([sessionId, createdAt], map: "idx_chat_session_messages_session_created_at")
+  @@index([sessionId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_chat_session_messages_cursor")
   @@map("chat_session_messages")
 }
 
