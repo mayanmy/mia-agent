@@ -35,8 +35,14 @@ const MAX_TOOL_ROUNDS = 3;
 const DEFAULT_TIMEZONE = "Asia/Shanghai";
 const RETRIEVAL_SOURCE_PREVIEW_LENGTH = 500;
 
-type ChatRequestContext = {
+export type ChatRequestContext = {
   userId?: string;
+  /**
+   * 外部访问模块会自行保存 ExternalConversation。这里仅接收已校验的历史，避免 Chat
+   * 直接依赖 external_access 表，同时也不会误把外部访客写入工作台 ChatSession。
+   */
+  externalHistory?: ChatMessageDto[];
+  skipInternalSessionPersistence?: boolean;
 };
 
 @Injectable()
@@ -169,10 +175,14 @@ export class ChatService {
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
     const requestId = randomUUID();
     this.ensureImageInputSupported(agent.modelName, images);
-    const sessionId = await this.resolvePersistentSessionId(agent, payload.sessionId, context);
-    const history = sessionId
-      ? await this.requireChatSessionsService().buildModelHistory(sessionId, agent.historyTurns)
-      : this.normalizeHistory(payload.history, agent.historyTurns);
+    const sessionId = context?.skipInternalSessionPersistence
+      ? null
+      : await this.resolvePersistentSessionId(agent, payload.sessionId, context);
+    const history = context?.externalHistory
+      ? this.normalizeHistory(context.externalHistory, agent.historyTurns)
+      : sessionId
+        ? await this.requireChatSessionsService().buildModelHistory(sessionId, agent.historyTurns)
+        : this.normalizeHistory(payload.history, agent.historyTurns);
 
     if (sessionId) {
       // 用户消息在请求模型前落库，即便模型稍后超时，也不会让用户刚输入的内容无故消失。
@@ -248,10 +258,14 @@ export class ChatService {
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
     const requestId = randomUUID();
     this.ensureImageInputSupported(agent.modelName, images);
-    const sessionId = await this.resolvePersistentSessionId(agent, payload.sessionId, context);
-    const history = sessionId
-      ? await this.requireChatSessionsService().buildModelHistory(sessionId, agent.historyTurns)
-      : this.normalizeHistory(payload.history, agent.historyTurns);
+    const sessionId = context?.skipInternalSessionPersistence
+      ? null
+      : await this.resolvePersistentSessionId(agent, payload.sessionId, context);
+    const history = context?.externalHistory
+      ? this.normalizeHistory(context.externalHistory, agent.historyTurns)
+      : sessionId
+        ? await this.requireChatSessionsService().buildModelHistory(sessionId, agent.historyTurns)
+        : this.normalizeHistory(payload.history, agent.historyTurns);
 
     if (sessionId) {
       // 先保存用户消息，模型调用失败时仍能在历史中看到本次提问。

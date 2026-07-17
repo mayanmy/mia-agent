@@ -19,6 +19,7 @@ import {
   updateAgentKnowledgeBases,
   updateAgentTools
 } from "./api";
+import { AgentApiKeysModal } from "./components/AgentApiKeysModal";
 import { AgentEmbedModal } from "./components/AgentEmbedModal";
 import { AgentFormModal } from "./components/AgentFormModal";
 import { AgentTable } from "./components/AgentTable";
@@ -40,6 +41,7 @@ export function AgentsPage() {
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [embedAgent, setEmbedAgent] = useState<AgentTableItem | null>(null);
+  const [apiKeyAgent, setApiKeyAgent] = useState<AgentTableItem | null>(null);
   const [embedScenario, setEmbedScenario] = useState<EmbedScenario>("single");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loadedToolIds, setLoadedToolIds] = useState<string[]>([]);
@@ -393,6 +395,7 @@ export function AgentsPage() {
         onDelete={confirmDelete}
         onEdit={(id) => void openEditDialog(id)}
         onOpenEmbed={openEmbedDialog}
+        onOpenApiKeys={setApiKeyAgent}
         onPageChange={(page, pageSize) => void refresh(page, pageSize)}
         onPublish={confirmPublish}
         onTest={(agentId) => navigate(`/chat?agentId=${agentId}`)}
@@ -419,6 +422,7 @@ export function AgentsPage() {
         onCopy={() => void copyEmbedCode()}
         onScenarioChange={setEmbedScenario}
       />
+      <AgentApiKeysModal agent={apiKeyAgent} onCancel={() => setApiKeyAgent(null)} />
     </section>
   );
 }

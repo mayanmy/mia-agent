@@ -286,7 +286,7 @@
     renderMessages();
     updateHeader();
     loadActiveAgent();
-    ensureWelcomeMessage(getActiveEntry());
+    restoreExternalConversation(getActiveEntry(), true);
   });
 
   closeButton.addEventListener("click", function () {
@@ -465,7 +465,7 @@
     }
 
     entry.loadingAgent = true;
-    fetch(entry.apiBase + "/api/v1/agents/shared/" + encodeURIComponent(entry.token))
+    fetch(entry.apiBase + "/api/v1/public/agents/" + encodeURIComponent(entry.token))
       .then(function (response) {
         if (!response.ok) {
           throw new Error("Agent 不可用");
@@ -482,9 +482,7 @@
           updateHeader();
         }
 
-        if (shouldGreet && getActiveEntry() === entry) {
-          ensureWelcomeMessage(entry);
-        }
+        restoreExternalConversation(entry, shouldGreet);
       })
       .catch(function (error) {
         if (getActiveEntry() === entry) {
@@ -505,6 +503,89 @@
       "assistant",
       "您好，我是 " + (entry.agent.name || "Mia") + "，请问有什么可以帮您？"
     );
+  }
+
+  /**
+   * 从公开会话接口恢复已保存消息。
+   *
+   * Widget 只在服务端确认 conversation 同时归属于当前 token 和匿名 sessionId 后才渲染，
+   * 因而本地存储被篡改也不能读取其他访客历史。
+   */
+  function restoreExternalConversation(entry, shouldGreet) {
+    if (!entry || entry.historyLoaded || entry.historyLoading) {
+      if (shouldGreet) {
+        ensureWelcomeMessage(entry);
+      }
+      return;
+    }
+
+    var conversationId = getWidgetConversationId(entry);
+
+    if (!conversationId) {
+      entry.historyLoaded = true;
+      if (shouldGreet) {
+        ensureWelcomeMessage(entry);
+      }
+      return;
+    }
+
+    entry.historyLoading = true;
+    var sessionId = getWidgetSessionId(entry);
+    var query =
+      "?agentToken=" +
+      encodeURIComponent(entry.token) +
+      "&sessionId=" +
+      encodeURIComponent(sessionId) +
+      "&limit=100";
+
+    fetch(
+      entry.apiBase +
+        "/api/v1/public/conversations/" +
+        encodeURIComponent(conversationId) +
+        "/messages" +
+        query
+    )
+      .then(function (response) {
+        if (!response.ok) {
+          if (response.status === 404) {
+            clearWidgetConversationId(entry);
+          }
+          throw new Error("历史会话不可用");
+        }
+
+        return response.json();
+      })
+      .then(function (result) {
+        var records = (result && result.data) || [];
+        entry.messages = records.map(function (record) {
+          return {
+            role: record.role === "assistant" ? "assistant" : "user",
+            content: String(record.content || ""),
+            bubble: null,
+            toolEvents: [],
+            toolEventsEl: null,
+            createdAt: new Date(record.createdAt).getTime()
+          };
+        });
+        entry.historyLoaded = true;
+
+        if (getActiveEntry() === entry) {
+          renderMessages();
+        }
+
+        if (shouldGreet) {
+          ensureWelcomeMessage(entry);
+        }
+      })
+      .catch(function () {
+        // 历史恢复失败不阻断新对话；若是暂时网络错误，下次重新加载 Widget 会再次尝试。
+        if (shouldGreet) {
+          ensureWelcomeMessage(entry);
+        }
+      })
+      .finally(function () {
+        entry.historyLoading = false;
+      });
   }
 
   function sendMessage() {
@@ -538,13 +619,6 @@
       return;
     }
 
-    var history = entry.messages.slice(-12).map(function (message) {
-      return {
-        role: message.role,
-        content: message.content
-      };
-    });
-
     input.value = "";
     state.images = [];
     state.files = [];
@@ -556,17 +630,18 @@
     updateStreamingControls();
     state.abortController = new AbortController();
 
-    fetch(entry.apiBase + "/api/v1/chat/stream", {
+    fetch(entry.apiBase + "/api/v1/public/chat-messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        agentId: entry.agent.id,
+        agentToken: entry.token,
+        sessionId: getWidgetSessionId(entry),
+        conversationId: getWidgetConversationId(entry),
         message: content,
         images: currentImages,
-        files: currentFiles,
-        history: history
+        files: currentFiles
       }),
       signal: state.abortController.signal
     })
@@ -580,6 +655,10 @@
             assistantMessage.content += event.data.content;
             assistantMessage.bubble.textContent = assistantMessage.content;
             scrollToBottomIfNeeded();
+          }
+
+          if (event.type === "message_start" && event.data.conversationId) {
+            setWidgetConversationId(entry, event.data.conversationId);
           }
 
           if (event.type === "tool_call") {
@@ -1252,6 +1331,8 @@
       name: nextAgent.name || "Mia Agent",
       agent: null,
       loadingAgent: false,
+      historyLoaded: false,
+      historyLoading: false,
       messages: []
     });
   }
@@ -1262,6 +1343,76 @@
 
   function getAgentKey(agent) {
     return agent.apiBase + "::" + agent.token;
+  }
+
+  /**
+   * 浏览器匿名身份只使用 Agent Token 命名空间下的随机 UUID。
+   *
+   * 不读取宿主站点账号、Cookie 或手机号等资料，清理浏览器存储后会自然成为新的外部访客。
+   */
+  function getWidgetSessionId(entry) {
+    var storageKey = "mia_widget_session:" + entry.token;
+    var existing = readLocalStorage(storageKey);
+
+    if (existing) {
+      return existing;
+    }
+
+    var sessionId = createWidgetUuid();
+    writeLocalStorage(storageKey, sessionId);
+    return sessionId;
+  }
+
+  function getWidgetConversationId(entry) {
+    // conversationId 由服务端签发并绑定匿名 session，刷新页面后继续向同一外部会话写入。
+    return readLocalStorage("mia_widget_conversation:" + entry.token);
+  }
+
+  function setWidgetConversationId(entry, conversationId) {
+    if (typeof conversationId !== "string" || !conversationId) {
+      return;
+    }
+
+    writeLocalStorage("mia_widget_conversation:" + entry.token, conversationId);
+  }
+
+  /** 当服务端已删除会话时清理失效引用，下次发送会自动创建新的匿名会话。 */
+  function clearWidgetConversationId(entry) {
+    try {
+      window.localStorage.removeItem("mia_widget_conversation:" + entry.token);
+    } catch (_) {
+      // 存储不可用时无需额外处理，当前页面的后续请求也会让服务端创建新会话。
+    }
+  }
+
+  function createWidgetUuid() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (character) {
+      var random = Math.floor(Math.random() * 16);
+      var value = character === "x" ? random : (random & 3) | 8;
+      return value.toString(16);
+    });
+  }
+
+  function readLocalStorage(key) {
+    // 宿主页面可能禁用第三方存储，读取失败时以本次内存会话降级而不是阻断聊天。
+    try {
+      return window.localStorage.getItem(key);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeLocalStorage(key, value) {
+    // 写入失败不会影响当前 SSE，只会使浏览器刷新后无法恢复匿名会话。
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (_) {
+      // 隐私模式或宿主页面禁用存储时仍可完成本次对话，只是不跨刷新恢复。
+    }
   }
 
   function getActiveEntry() {

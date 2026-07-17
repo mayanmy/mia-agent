@@ -63,6 +63,28 @@
   line-height: 1.6;
 }
 
+.agentApiKeyReveal {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 16px 0;
+}
+
+.agentApiKeyCreateForm {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.agentApiKeyCreateForm .ant-form-item {
+  flex: 1;
+  margin: 0;
+}
+
+.agentApiKeyCreateForm .ant-input {
+  width: 100%;
+}
+
 .toolSelector,
 .knowledgeSelector {
   display: grid;
@@ -169,5 +191,9 @@
 
   .agentFormFull {
     grid-column: auto;
+  }
+
+  .agentApiKeyReveal {
+    grid-template-columns: 1fr;
   }
 }

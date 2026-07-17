@@ -116,6 +116,48 @@ export function getSharedAgent(token: string): Promise<SharedAgentDetail> {
   return request<SharedAgentDetail>(`/api/v1/agents/shared/${token}`);
 }
 
+export type AgentApiKeyListItem = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+};
+
+export type CreatedAgentApiKey = AgentApiKeyListItem & {
+  apiKey: string;
+};
+
+/** 创建响应是唯一能获取完整 Key 的时机，调用方应立即复制到业务后端的安全配置中。 */
+export function createAgentApiKey(
+  agentId: string,
+  payload: { name: string; expiresAt?: string | null }
+): Promise<CreatedAgentApiKey> {
+  return request<CreatedAgentApiKey>(`/api/v1/agents/${agentId}/api-keys`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+/** 列表只包含前缀和生命周期信息，完整服务端 Key 不会再次返回。 */
+export function listAgentApiKeys(agentId: string): Promise<AgentApiKeyListItem[]> {
+  return request<AgentApiKeyListItem[]>(`/api/v1/agents/${agentId}/api-keys`);
+}
+
+export function revokeAgentApiKey(agentId: string, keyId: string): Promise<null> {
+  return request<null>(`/api/v1/agents/${agentId}/api-keys/${keyId}`, {
+    method: "DELETE"
+  });
+}
+
+export function rotateAgentApiKey(agentId: string, keyId: string): Promise<CreatedAgentApiKey> {
+  return request<CreatedAgentApiKey>(`/api/v1/agents/${agentId}/api-keys/${keyId}/rotate`, {
+    method: "POST"
+  });
+}
+
 export type AgentToolBindingResult = {
   agentId: string;
   toolIds: string[];

@@ -55,6 +55,15 @@ enum ChatSessionStatus {
   @@map("chat_session_status")
 }
 
+/// 外部访问入口决定 End User 与会话的隔离范围，不能只用一个字符串标识混合公开访客和业务用户。
+enum ExternalUserSource {
+  WIDGET
+  WEBAPP
+  SERVICE_API
+
+  @@map("external_user_source")
+}
+
 model User {
   id                String        @id @default(uuid()) @db.Uuid
   email             String        @unique(map: "uq_users_email")
@@ -69,6 +78,7 @@ model User {
   authSessions      AuthSession[]
   sentInvitations   UserInvitation[] @relation("UserInvitationInviter")
   chatSessions      ChatSession[]
+  createdAgentApiKeys AgentApiKey[] @relation("AgentApiKeyCreator")
 
   @@index([role, disabledAt], map: "idx_users_role_disabled_at")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
@@ -201,12 +211,86 @@ model Agent {
   agentTools          AgentTool[]
   agentKnowledgeBases AgentKnowledgeBase[]
   chatSessions        ChatSession[]
+  apiKeys             AgentApiKey[]
+  externalEndUsers    ExternalEndUser[]
+  externalConversations ExternalConversation[]
 
   @@index([createdAt(sort: Desc)], map: "idx_agents_created_at")
   @@index([modelConfigId], map: "idx_agents_model_config_id")
   @@index([enabled, createdAt(sort: Desc)], map: "idx_agents_enabled_created_at")
   @@index([published, publishedAt(sort: Desc)], map: "idx_agents_published_published_at")
   @@map("agents")
+}
+
+/// 业务后端调用 Agent 的长期凭证。原始 Key 只在创建或轮换时返回，数据库永远不保存明文。
+model AgentApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  agentId     String    @map("agent_id") @db.Uuid
+  name        String
+  keyPrefix   String    @map("key_prefix")
+  keyHash     String    @unique(map: "uq_agent_api_keys_key_hash") @map("key_hash")
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz(6)
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz(6)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdById String    @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  agent       Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation("AgentApiKeyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([agentId, createdAt(sort: Desc)], map: "idx_agent_api_keys_agent_id_created_at")
+  @@index([expiresAt], map: "idx_agent_api_keys_expires_at")
+  @@map("agent_api_keys")
+}
+
+/// 公开 Widget 与 Service API 的外部用户。externalId 仅用作隔离键，不是 Mia 工作台身份。
+model ExternalEndUser {
+  id            String             @id @default(uuid()) @db.Uuid
+  agentId       String             @map("agent_id") @db.Uuid
+  source        ExternalUserSource
+  externalId    String             @map("external_id")
+  firstSeenAt   DateTime           @default(now()) @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt    DateTime           @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  agent         Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  conversations ExternalConversation[]
+
+  @@unique([agentId, source, externalId], map: "uq_external_end_users_agent_source_external")
+  @@index([agentId, lastSeenAt(sort: Desc)], map: "idx_external_end_users_agent_last_seen_at")
+  @@map("external_end_users")
+}
+
+/// 外部调用的独立会话。它不能复用工作台 ChatSession，因为后者的 owner 固定为 Mia User UUID。
+model ExternalConversation {
+  id                String             @id @default(uuid()) @db.Uuid
+  agentId           String             @map("agent_id") @db.Uuid
+  externalEndUserId String             @map("external_end_user_id") @db.Uuid
+  title             String?
+  source            ExternalUserSource
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz(6)
+  agent             Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  externalEndUser   ExternalEndUser    @relation(fields: [externalEndUserId], references: [id], onDelete: Cascade)
+  messages          ExternalMessage[]
+
+  @@index([externalEndUserId, updatedAt(sort: Desc)], map: "idx_external_conversations_end_user_updated_at")
+  @@index([agentId, createdAt(sort: Desc)], map: "idx_external_conversations_agent_created_at")
+  @@map("external_conversations")
+}
+
+/// 外部会话首期只持久化文本与元数据；附件、工具和检索细节仍由已有日志模块承接。
+model ExternalMessage {
+  id             String               @id @default(uuid()) @db.Uuid
+  conversationId String               @map("conversation_id") @db.Uuid
+  role           String
+  content        String               @db.Text
+  metadata       Json?                @db.JsonB
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  conversation   ExternalConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt, id], map: "idx_external_messages_conversation_created_at")
+  @@map("external_messages")
 }
 
 model AgentTool {

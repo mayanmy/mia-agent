@@ -4,6 +4,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { AgentsModule } from "./modules/agents/agents.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { ChatModule } from "./modules/chat/chat.module";
+import { ExternalAccessModule } from "./modules/external_access/external-access.module";
 import { HealthModule } from "./modules/health/health.module";
 import { KnowledgeModule } from "./modules/knowledge/knowledge.module";
 import { LogsModule } from "./modules/logs/logs.module";
@@ -24,6 +25,7 @@ import { RolesGuard } from "./core/auth/roles.guard";
     ModelProvidersModule,
     AgentsModule,
     ChatModule,
+    ExternalAccessModule,
     ToolsModule,
     LogsModule,
     KnowledgeModule,

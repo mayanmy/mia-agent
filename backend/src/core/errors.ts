@@ -39,6 +39,12 @@ export const ErrorCodes = {
     invalidEmbeddingModel: 4003,
     invalidDocument: 4004,
     documentNotFound: 4005
+  },
+  externalAccess: {
+    invalidApiKey: 5001,
+    invalidExternalUser: 5002,
+    conversationNotFound: 5003,
+    rateLimited: 5004
   }
 } as const;
 

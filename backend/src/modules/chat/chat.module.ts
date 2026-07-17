@@ -11,6 +11,7 @@ import { ChatService } from "./chat.service";
 @Module({
   imports: [AgentsModule, ModelProvidersModule, ToolsModule, RetrievalModule],
   controllers: [ChatController],
-  providers: [ChatService, ChatSessionsService]
+  providers: [ChatService, ChatSessionsService],
+  exports: [ChatService]
 })
 export class ChatModule {}
