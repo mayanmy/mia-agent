@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { Button, Result, Spin, Tag, message } from "antd";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
+import { Result, Spin, Tag, message } from "antd";
 
 import { getSharedAgent, type SharedAgentDetail } from "./api";
 import "./agents.less";
 
 export function SharedAgentPage() {
-  const navigate = useNavigate();
   const { token } = useParams();
+  const widgetContainerRef = useRef<HTMLDivElement | null>(null);
   const [agent, setAgent] = useState<SharedAgentDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -46,6 +46,31 @@ export function SharedAgentPage() {
     };
   }, [token]);
 
+  useEffect(() => {
+    const container = widgetContainerRef.current;
+
+    if (!container || !token || !agent) {
+      return undefined;
+    }
+
+    const script = document.createElement("script");
+    // 公开页复用同一份压缩 Widget；它只携带可公开的 agentToken，不会引入工作台登录 Token。
+    script.async = true;
+    script.src = `${window.location.origin}/mia-agent-widget.min.js`;
+    script.setAttribute("data-agent-token", token);
+    script.setAttribute("data-api-base", window.location.origin);
+    script.setAttribute("data-agent-name", agent.name);
+    script.setAttribute("data-mode", "inline");
+    script.setAttribute("data-container", "#mia-public-agent-chat");
+    document.body.appendChild(script);
+
+    return () => {
+      // 路由切换后同时移除动态脚本和 widget 根节点，避免下一条公开链接复用旧 Agent 视图。
+      script.remove();
+      container.replaceChildren();
+    };
+  }, [agent, token]);
+
   if (loading) {
     return (
       <section className="workspace sharedAgentWorkspace">
@@ -80,10 +105,8 @@ export function SharedAgentPage() {
             </span>
           </div>
         </div>
-        <Button type="primary" onClick={() => navigate(`/chat?agentId=${agent.id}`)}>
-          开始对话
-        </Button>
       </div>
+      <div className="sharedAgentChat" id="mia-public-agent-chat" ref={widgetContainerRef} />
     </section>
   );
 }
