@@ -1,5 +1,5 @@
 import { EditOutlined, InboxOutlined, PlusOutlined } from "@ant-design/icons";
-import { Button, Empty, Input, Tooltip } from "antd";
+import { Button, Empty, Input, Popconfirm, Tooltip } from "antd";
 import { useState } from "react";
 
 import type { ChatSessionListItem } from "../api";
@@ -57,7 +57,11 @@ export function ChatSessionList({
         </Tooltip>
       </div>
       {sessions.length === 0 ? (
-        <Empty className="chatSessionEmpty" description="暂无历史会话" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty
+          className="chatSessionEmpty"
+          description="暂无历史会话"
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
       ) : (
         <div className="chatSessionList">
           {sessions.map((session) => {
@@ -107,14 +111,21 @@ export function ChatSessionList({
                       />
                     </Tooltip>
                     <Tooltip title="归档">
-                      <Button
-                        aria-label="归档会话"
-                        disabled={disabled}
-                        icon={<InboxOutlined />}
-                        size="small"
-                        type="text"
-                        onClick={() => onArchive(session.id)}
-                      />
+                      <Popconfirm
+                        title="归档会话"
+                        description="确认归档会话？"
+                        okText="确认"
+                        cancelText="取消"
+                        onConfirm={() => onArchive(session.id)}
+                      >
+                        <Button
+                          aria-label="归档会话"
+                          disabled={disabled}
+                          icon={<InboxOutlined />}
+                          size="small"
+                          type="text"
+                        />
+                      </Popconfirm>
                     </Tooltip>
                   </div>
                 ) : null}
