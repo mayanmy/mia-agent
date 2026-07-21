@@ -82,7 +82,11 @@ export function AgentPublicAccessModal({
           .split(/\r?\n/u)
           .map((value) => value.trim())
           .filter(Boolean),
-        ...(values.clearPassword ? { password: null } : values.password?.trim() ? { password: values.password.trim() } : {})
+        ...(values.clearPassword
+          ? { password: null }
+          : values.password?.trim()
+            ? { password: values.password.trim() }
+            : {})
       });
       setConfig(result);
       form.setFieldsValue({ password: "", clearPassword: false });
@@ -118,13 +122,28 @@ export function AgentPublicAccessModal({
       onCancel={onCancel}
     >
       <Form<PublicAccessFormValues> form={form} layout="vertical" onFinish={handleSave}>
-        <Form.Item label="公开链接到期时间" name="publicExpiresAt">
+        <Form.Item label="公开链接到期时间" extra="留空表示不设置到期时间。" name="publicExpiresAt">
           <Input type="datetime-local" />
         </Form.Item>
-        <Form.Item extra="每行一个完整 Origin，例如 https://app.example.com。留空表示允许任何来源。" label="允许嵌入的域名" name="allowedOrigins">
-          <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} placeholder="https://app.example.com" />
+        <Form.Item
+          extra="每行一个完整 Origin，例如 https://app.example.com。留空表示允许任何来源。"
+          label="允许嵌入的域名"
+          name="allowedOrigins"
+        >
+          <Input.TextArea
+            autoSize={{ minRows: 3, maxRows: 6 }}
+            placeholder="https://app.example.com"
+          />
         </Form.Item>
-        <Form.Item extra={config?.passwordRequired ? "当前已启用访问密码；留空可保留当前密码。" : "设置后，每次刷新 Widget 都需要重新输入。"} label="访问密码" name="password">
+        <Form.Item
+          extra={
+            config?.passwordRequired
+              ? "当前已启用访问密码；留空可保留当前密码。"
+              : "设置后，每次刷新 Widget 都需要重新输入。为公开链接增加一道访问保护。启用后，外部用户打开分享页或嵌入式 Widget 时，需先输入正确密码才能查看历史消息和开始对话。"
+          }
+          label="访问密码"
+          name="password"
+        >
           <Input.Password placeholder="至少 8 位，包含字母和数字" />
         </Form.Item>
         {config?.passwordRequired ? (
@@ -143,11 +162,15 @@ export function AgentPublicAccessModal({
             title="轮换后旧公开链接和嵌入代码会立即失效，确认继续吗？"
             onConfirm={() => void handleRotateToken()}
           >
-            <Button danger disabled={!agent?.published}>轮换 Token</Button>
+            <Button danger disabled={!agent?.published}>
+              轮换 Token
+            </Button>
           </Popconfirm>
           <Space>
             <Button onClick={onCancel}>取消</Button>
-            <Button htmlType="submit" loading={saving || loading} type="primary">保存</Button>
+            <Button htmlType="submit" loading={saving || loading} type="primary">
+              保存
+            </Button>
           </Space>
         </Space>
       </Form>
