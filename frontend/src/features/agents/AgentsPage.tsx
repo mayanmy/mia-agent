@@ -20,6 +20,7 @@ import {
   updateAgentTools
 } from "./api";
 import { AgentApiKeysModal } from "./components/AgentApiKeysModal";
+import { AgentPublicAccessModal } from "./components/AgentPublicAccessModal";
 import { AgentEmbedModal } from "./components/AgentEmbedModal";
 import { AgentFormModal } from "./components/AgentFormModal";
 import { AgentTable } from "./components/AgentTable";
@@ -42,6 +43,7 @@ export function AgentsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [embedAgent, setEmbedAgent] = useState<AgentTableItem | null>(null);
   const [apiKeyAgent, setApiKeyAgent] = useState<AgentTableItem | null>(null);
+  const [publicAccessAgent, setPublicAccessAgent] = useState<AgentTableItem | null>(null);
   const [embedScenario, setEmbedScenario] = useState<EmbedScenario>("single");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loadedToolIds, setLoadedToolIds] = useState<string[]>([]);
@@ -396,6 +398,7 @@ export function AgentsPage() {
         onEdit={(id) => void openEditDialog(id)}
         onOpenEmbed={openEmbedDialog}
         onOpenApiKeys={setApiKeyAgent}
+        onOpenPublicAccess={setPublicAccessAgent}
         onPageChange={(page, pageSize) => void refresh(page, pageSize)}
         onPublish={confirmPublish}
         onTest={(agentId) => navigate(`/chat?agentId=${agentId}`)}
@@ -423,6 +426,11 @@ export function AgentsPage() {
         onScenarioChange={setEmbedScenario}
       />
       <AgentApiKeysModal agent={apiKeyAgent} onCancel={() => setApiKeyAgent(null)} />
+      <AgentPublicAccessModal
+        agent={publicAccessAgent}
+        onCancel={() => setPublicAccessAgent(null)}
+        onTokenRotated={() => void refresh()}
+      />
     </section>
   );
 }

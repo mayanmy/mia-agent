@@ -99,6 +99,21 @@ export type SharedAgentDetail = {
   description: string;
   modelName: string;
   providerName: string;
+  passwordRequired?: boolean;
+};
+
+/** 仅供 external_access 模块使用的公开运行时配置，不可返回给通用工作台接口。 */
+export type AgentPublicAccessRuntime = SharedAgentDetail & {
+  publicExpiresAt: Date | null;
+  publicAllowedOrigins: string[];
+  publicPasswordHash: string | null;
+};
+
+export type AgentPublicAccessConfig = {
+  agentId: string;
+  publicExpiresAt: Date | null;
+  publicAllowedOrigins: string[];
+  passwordRequired: boolean;
 };
 
 export type AgentRuntimeConfig = {

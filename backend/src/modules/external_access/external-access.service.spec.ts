@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 
 import { AgentApiKeysService } from "./agent-api-keys.service";
 import { ExternalAccessService } from "./external-access.service";
+import { PublicAccessService } from "./public-access.service";
 
 type TestCase = {
   name: string;
@@ -74,6 +75,69 @@ export const tests: TestCase[] = [
 
       assert(result === null, "格式不合法的 Key 应被拒绝");
       assert(!queried, "格式不合法的 Key 不应触发数据库查询");
+    }
+  },
+  {
+    name: "PublicAccessService rejects requests whose Origin is not in the Agent allowlist",
+    async run() {
+      const service = new PublicAccessService(
+        {
+          getPublicAccessRuntime: async () => ({
+            id: "agent-1",
+            name: "受保护 Agent",
+            description: "",
+            modelName: "qwen",
+            providerName: "Ollama",
+            passwordRequired: false,
+            publicExpiresAt: null,
+            publicAllowedOrigins: ["https://widget.example.com"],
+            publicPasswordHash: null
+          })
+        } as never,
+        {} as never
+      );
+      let rejected = false;
+
+      try {
+        await service.getPublicProfile("share-token", "https://untrusted.example.com");
+      } catch (error) {
+        rejected = error instanceof Error && error.message === "公开访问来源未获授权";
+      }
+
+      assert(rejected, "配置来源白名单后，其他域名不能加载公开 Agent 资料");
+    }
+  },
+  {
+    name: "PublicAccessService verifies a configured public access password",
+    async run() {
+      const service = new PublicAccessService(
+        {
+          getPublicAccessRuntime: async () => ({
+            id: "agent-1",
+            name: "受密码保护 Agent",
+            description: "",
+            modelName: "qwen",
+            providerName: "Ollama",
+            passwordRequired: true,
+            publicExpiresAt: null,
+            publicAllowedOrigins: [],
+            publicPasswordHash: "stored-hash"
+          })
+        } as never,
+        {
+          verifyPassword: async (_hash: string, password: string) => password === "Mia12345"
+        } as never
+      );
+      let rejected = false;
+
+      try {
+        await service.verifyAccess("share-token", undefined, "wrong-password");
+      } catch (error) {
+        rejected = error instanceof Error && error.message === "公开访问密码错误";
+      }
+      assert(rejected, "错误密码必须被公开访问入口拒绝");
+
+      await service.verifyAccess("share-token", undefined, "Mia12345");
     }
   },
   {

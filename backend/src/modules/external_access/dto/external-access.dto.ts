@@ -25,6 +25,7 @@ export type PublicAgentProfile = {
   description: string;
   modelName: string;
   providerName: string;
+  passwordRequired: boolean;
 };
 
 export type PublicChatMessageDto = {
@@ -34,6 +35,33 @@ export type PublicChatMessageDto = {
   message?: string;
   images?: ChatImageAttachmentDto[];
   files?: ChatFileAttachmentDto[];
+  password?: string;
+};
+
+/** Widget 恢复历史时携带密码，避免受密码保护的会话被只读接口绕过。 */
+export type PublicConversationMessagesDto = {
+  agentToken?: string;
+  sessionId?: string;
+  limit?: string;
+  password?: string;
+};
+
+/** 管理端更新公开分享治理设置；undefined 表示保留现有值，null 表示明确清空。 */
+export type UpdatePublicAccessConfigDto = {
+  publicExpiresAt?: string | null;
+  allowedOrigins?: string[];
+  password?: string | null;
+};
+
+export type PublicAccessConfigResponse = {
+  agentId: string;
+  publicExpiresAt: Date | null;
+  allowedOrigins: string[];
+  passwordRequired: boolean;
+};
+
+export type VerifyPublicAccessDto = {
+  password?: string;
 };
 
 export type ServiceChatMessageDto = {

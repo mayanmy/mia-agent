@@ -158,6 +158,42 @@ export function rotateAgentApiKey(agentId: string, keyId: string): Promise<Creat
   });
 }
 
+export type AgentPublicAccessConfig = {
+  agentId: string;
+  publicExpiresAt: string | null;
+  allowedOrigins: string[];
+  passwordRequired: boolean;
+};
+
+export type UpdateAgentPublicAccessPayload = {
+  publicExpiresAt?: string | null;
+  allowedOrigins?: string[];
+  password?: string | null;
+};
+
+/** 读取公开分享的安全策略，不会返回访问密码的任何可逆信息。 */
+export function getAgentPublicAccess(agentId: string): Promise<AgentPublicAccessConfig> {
+  return request<AgentPublicAccessConfig>(`/api/v1/agents/${agentId}/public-access`);
+}
+
+/** 更新公开链接的到期时间、Widget 来源白名单和可选的访问密码。 */
+export function updateAgentPublicAccess(
+  agentId: string,
+  payload: UpdateAgentPublicAccessPayload
+): Promise<AgentPublicAccessConfig> {
+  return request<AgentPublicAccessConfig>(`/api/v1/agents/${agentId}/public-access`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+/** 返回新 Token；旧链接立即失效，因此 UI 必须提醒管理员更新嵌入产物。 */
+export function rotateAgentPublicToken(agentId: string): Promise<AgentPublishResult> {
+  return request<AgentPublishResult>(`/api/v1/agents/${agentId}/public-access/rotate-token`, {
+    method: "POST"
+  });
+}
+
 export type AgentToolBindingResult = {
   agentId: string;
   toolIds: string[];

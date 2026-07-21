@@ -204,6 +204,9 @@ model Agent {
   published           Boolean              @default(false)
   publishedAt         DateTime?            @map("published_at") @db.Timestamptz(6)
   shareToken          String?              @unique(map: "uq_agents_share_token") @map("share_token")
+  publicExpiresAt      DateTime?            @map("public_expires_at") @db.Timestamptz(6)
+  publicAllowedOrigins String[]            @default([]) @map("public_allowed_origins")
+  publicPasswordHash  String?              @map("public_password_hash") @db.Text
   createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt           DateTime?            @map("deleted_at") @db.Timestamptz(6)

@@ -129,6 +129,11 @@
     '<button class="mia-agent-fullscreen" type="button" aria-label="全屏">⛶</button>' +
     '<button class="mia-agent-close" type="button" aria-label="关闭">×</button>' +
     "</header>" +
+    '<section class="mia-agent-access-gate mia-agent-hidden">' +
+    '<strong>请输入访问密码</strong><span>此 Agent 已开启访问保护</span>' +
+    '<div><input class="mia-agent-access-password" type="password" autocomplete="current-password" placeholder="访问密码" />' +
+    '<button class="mia-agent-access-submit" type="button">进入对话</button></div>' +
+    "</section>" +
     '<main class="mia-agent-messages"></main>' +
     '<button class="mia-agent-scroll-bottom mia-agent-hidden" type="button" aria-label="回到底部">↓</button>' +
     '<footer class="mia-agent-composer">' +
@@ -174,6 +179,8 @@
     ".mia-agent-message{margin-bottom:12px;display:flex;flex-direction:column}" +
     ".mia-agent-message-user{align-items:flex-end}" +
     ".mia-agent-message-assistant{align-items:flex-start}" +
+    ".mia-agent-access-gate{display:grid;gap:8px;margin:16px;padding:16px;border:1px solid #dbe3ef;border-radius:12px;background:#f8fafc;color:#334155;font-size:13px;line-height:1.45}" +
+    ".mia-agent-access-gate strong{color:#111827;font-size:15px}.mia-agent-access-gate span{color:#64748b}.mia-agent-access-gate>div{display:flex;gap:8px}.mia-agent-access-password{min-width:0;flex:1;height:36px;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;font:inherit;outline:none}.mia-agent-access-password:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.mia-agent-access-submit{height:36px;border:0;border-radius:8px;background:#2563eb;color:#fff;padding:0 12px;font:inherit;cursor:pointer;white-space:nowrap}" +
     ".mia-agent-bubble{max-width:84%;white-space:pre-wrap;word-break:break-word;border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.55}" +
     ".mia-agent-message-user .mia-agent-bubble{background:#2563eb;color:#fff;border-bottom-right-radius:4px}" +
     ".mia-agent-message-assistant .mia-agent-bubble{background:#f1f5f9;color:#111827;border-bottom-left-radius:4px}" +
@@ -224,6 +231,9 @@
   var panel = root.querySelector(".mia-agent-panel");
   var closeButton = root.querySelector(".mia-agent-close");
   var fullscreenButton = root.querySelector(".mia-agent-fullscreen");
+  var accessGate = root.querySelector(".mia-agent-access-gate");
+  var accessPasswordInput = root.querySelector(".mia-agent-access-password");
+  var accessSubmitButton = root.querySelector(".mia-agent-access-submit");
   var messagesEl = root.querySelector(".mia-agent-messages");
   var scrollBottomButton = root.querySelector(".mia-agent-scroll-bottom");
   var input = root.querySelector(".mia-agent-input");
@@ -286,7 +296,18 @@
     renderMessages();
     updateHeader();
     loadActiveAgent();
-    restoreExternalConversation(getActiveEntry(), true);
+    ensurePublicAccess(getActiveEntry(), true);
+  });
+
+  accessSubmitButton.addEventListener("click", function () {
+    verifyAccessPassword(getActiveEntry());
+  });
+
+  accessPasswordInput.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      verifyAccessPassword(getActiveEntry());
+    }
   });
 
   closeButton.addEventListener("click", function () {
@@ -447,6 +468,10 @@
 
   function loadActiveAgent() {
     var entry = getActiveEntry();
+    if (entry && entry.agent) {
+      ensurePublicAccess(entry, true);
+      return;
+    }
 
     loadAgentEntry(entry, true);
   }
@@ -482,7 +507,7 @@
           updateHeader();
         }
 
-        restoreExternalConversation(entry, shouldGreet);
+        ensurePublicAccess(entry, shouldGreet);
       })
       .catch(function (error) {
         if (getActiveEntry() === entry) {
@@ -503,6 +528,64 @@
       "assistant",
       "您好，我是 " + (entry.agent.name || "Mia") + "，请问有什么可以帮您？"
     );
+  }
+
+  /**
+   * 密码只保留在当前 Widget 实例内存中，不写入 localStorage 或 Cookie。
+   *
+   * 这样刷新页面会再次要求输入密码，避免共享电脑上遗留访问凭据。
+   */
+  function ensurePublicAccess(entry, shouldGreet) {
+    if (!entry || !entry.agent) {
+      return;
+    }
+
+    if (entry.agent.passwordRequired && !entry.accessGranted) {
+      accessGate.classList.remove("mia-agent-hidden");
+      messagesEl.classList.add("mia-agent-hidden");
+      input.disabled = true;
+      imageButton.disabled = true;
+      fileButton.disabled = true;
+      accessPasswordInput.focus();
+      return;
+    }
+
+    accessGate.classList.add("mia-agent-hidden");
+    messagesEl.classList.remove("mia-agent-hidden");
+    updateStreamingControls();
+    restoreExternalConversation(entry, shouldGreet);
+  }
+
+  /** 验证成功后继续历史恢复，而非仅解锁输入框，保证密码保护覆盖已保存消息。 */
+  function verifyAccessPassword(entry) {
+    var password = accessPasswordInput.value;
+
+    if (!entry || !entry.agent || !password) {
+      showToast("请输入访问密码", "error");
+      return;
+    }
+
+    accessSubmitButton.disabled = true;
+    fetch(entry.apiBase + "/api/v1/public/agents/" + encodeURIComponent(entry.token) + "/verify-access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: password })
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("访问密码错误");
+        }
+        entry.accessPassword = password;
+        entry.accessGranted = true;
+        accessPasswordInput.value = "";
+        ensurePublicAccess(entry, true);
+      })
+      .catch(function (error) {
+        showToast(error.message || "访问验证失败", "error");
+      })
+      .finally(function () {
+        accessSubmitButton.disabled = false;
+      });
   }
 
   /**
@@ -531,19 +614,21 @@
 
     entry.historyLoading = true;
     var sessionId = getWidgetSessionId(entry);
-    var query =
-      "?agentToken=" +
-      encodeURIComponent(entry.token) +
-      "&sessionId=" +
-      encodeURIComponent(sessionId) +
-      "&limit=100";
-
     fetch(
       entry.apiBase +
         "/api/v1/public/conversations/" +
         encodeURIComponent(conversationId) +
-        "/messages" +
-        query
+        "/messages",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentToken: entry.token,
+          sessionId: sessionId,
+          limit: "100",
+          password: entry.accessPassword || undefined
+        })
+      }
     )
       .then(function (response) {
         if (!response.ok) {
@@ -609,6 +694,11 @@
       return;
     }
 
+    if (entry.agent.passwordRequired && !entry.accessGranted) {
+      ensurePublicAccess(entry, true);
+      return;
+    }
+
     if (currentImages.length > 0 && !isLikelyVisionModel(getAgentModelName(entry.agent))) {
       appendMessage(
         "assistant",
@@ -641,7 +731,8 @@
         conversationId: getWidgetConversationId(entry),
         message: content,
         images: currentImages,
-        files: currentFiles
+        files: currentFiles,
+        password: entry.accessPassword || undefined
       }),
       signal: state.abortController.signal
     })
@@ -1333,6 +1424,8 @@
       loadingAgent: false,
       historyLoaded: false,
       historyLoading: false,
+      accessGranted: false,
+      accessPassword: "",
       messages: []
     });
   }

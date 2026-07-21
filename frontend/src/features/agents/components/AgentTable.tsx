@@ -14,6 +14,7 @@ export function AgentTable({
   onCopyLink,
   onOpenEmbed,
   onOpenApiKeys,
+  onOpenPublicAccess,
   onUnpublish,
   onEdit,
   onDelete
@@ -27,6 +28,7 @@ export function AgentTable({
   onCopyLink: (agent: AgentTableItem) => void;
   onOpenEmbed: (agent: AgentTableItem) => void;
   onOpenApiKeys: (agent: AgentTableItem) => void;
+  onOpenPublicAccess: (agent: AgentTableItem) => void;
   onUnpublish: (agentId: string) => void;
   onEdit: (agentId: string) => void;
   onDelete: (agentId: string) => void;
@@ -116,6 +118,10 @@ export function AgentTable({
                   label: "服务端 API Key"
                 },
                 {
+                  key: "public-access",
+                  label: "公开访问设置"
+                },
+                {
                   key: "unpublish",
                   label: "取消发布"
                 }
@@ -153,6 +159,11 @@ export function AgentTable({
 
           if (key === "api-keys") {
             onOpenApiKeys(record);
+            return;
+          }
+
+          if (key === "public-access") {
+            onOpenPublicAccess(record);
             return;
           }
 

@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -22,16 +23,47 @@ import {
   CreateAgentApiKeyDto,
   ExternalConversationListQueryDto,
   ExternalConversationMessageQueryDto,
+  PublicConversationMessagesDto,
   PublicChatMessageDto,
-  ServiceChatMessageDto
+  ServiceChatMessageDto,
+  UpdatePublicAccessConfigDto,
+  VerifyPublicAccessDto
 } from "./dto/external-access.dto";
 import { ExternalAccessService } from "./external-access.service";
 import { ExternalRateLimiterService } from "./external-rate-limiter.service";
 import { AgentApiKeyGuard, AgentApiKeyRequest } from "./guards/agent-api-key.guard";
+import { PublicAccessService } from "./public-access.service";
 
 @Controller("agents")
 export class AgentApiKeysController {
-  constructor(private readonly agentApiKeysService: AgentApiKeysService) {}
+  constructor(
+    private readonly agentApiKeysService: AgentApiKeysService,
+    private readonly publicAccessService: PublicAccessService
+  ) {}
+
+  @Get(":agentId/public-access")
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  /** 公开治理配置只返回是否设置了密码，绝不返回密码哈希。 */
+  getPublicAccess(@Param("agentId") agentId: string) {
+    return this.publicAccessService.getConfig(agentId);
+  }
+
+  @Put(":agentId/public-access")
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  /** 保存公开链接有效期、Widget 域名白名单与访问密码。 */
+  updatePublicAccess(
+    @Param("agentId") agentId: string,
+    @Body() payload: UpdatePublicAccessConfigDto
+  ) {
+    return this.publicAccessService.updateConfig(agentId, payload);
+  }
+
+  @Post(":agentId/public-access/rotate-token")
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  /** Token 轮换用于泄露止损，调用方必须重新复制新链接或嵌入代码。 */
+  rotatePublicToken(@Param("agentId") agentId: string) {
+    return this.publicAccessService.rotateToken(agentId);
+  }
 
   @Post(":agentId/api-keys")
   @Roles(UserRole.ADMIN, UserRole.USER)
@@ -76,14 +108,27 @@ export class AgentApiKeysController {
 export class PublicAgentsController {
   constructor(
     private readonly externalAccessService: ExternalAccessService,
-    private readonly rateLimiter: ExternalRateLimiterService
+    private readonly rateLimiter: ExternalRateLimiterService,
+    private readonly publicAccessService: PublicAccessService
   ) {}
 
   @Get("agents/:agentToken")
   /** Widget 只需要公开资料，接口在查询前按 token + IP 做基础限流。 */
   async getAgent(@Param("agentToken") agentToken: string, @Req() request: IncomingMessage) {
     this.rateLimiter.assertAllowed("public-profile", `${agentToken}:${this.getClientIp(request)}`, 60);
-    return this.externalAccessService.getPublicAgentProfile(agentToken);
+    return this.publicAccessService.getPublicProfile(agentToken, this.getOrigin(request));
+  }
+
+  @Post("agents/:agentToken/verify-access")
+  /** 密码只用于本次浏览器内存会话验证，服务端不生成可复用的密码通行 Token。 */
+  async verifyAccess(
+    @Param("agentToken") agentToken: string,
+    @Body() payload: VerifyPublicAccessDto,
+    @Req() request: IncomingMessage
+  ): Promise<null> {
+    this.rateLimiter.assertAllowed("public-password", `${agentToken}:${this.getClientIp(request)}`, 10);
+    await this.publicAccessService.verifyAccess(agentToken, this.getOrigin(request), payload.password);
+    return null;
   }
 
   @Post("chat-messages")
@@ -100,7 +145,11 @@ export class PublicAgentsController {
       `${agentToken}:${sessionId}:${this.getClientIp(request)}`,
       20
     );
-    const agent = await this.externalAccessService.getPublicAgentProfile(agentToken);
+    const agent = await this.publicAccessService.resolvePublicAgent(
+      agentToken,
+      this.getOrigin(request),
+      payload.password
+    );
 
     await streamSse(request, response, (signal) =>
       this.externalAccessService.streamMessage(
@@ -122,20 +171,24 @@ export class PublicAgentsController {
   }
 
   /** Widget 刷新后按 token + sessionId 恢复自己会话的消息，不能只凭 conversationId 读取。 */
-  @Get("conversations/:conversationId/messages")
+  @Post("conversations/:conversationId/messages")
   async getMessages(
     @Param("conversationId") conversationId: string,
-    @Query("agentToken") agentToken: string,
-    @Query("sessionId") sessionId: string,
-    @Query("limit") limit: string | undefined,
+    @Body() payload: PublicConversationMessagesDto,
     @Req() request: IncomingMessage
   ) {
+    const agentToken = payload.agentToken?.trim() ?? "";
+    const sessionId = payload.sessionId?.trim() ?? "";
     this.rateLimiter.assertAllowed(
       "public-messages",
       `${agentToken}:${sessionId}:${this.getClientIp(request)}`,
       60
     );
-    const agent = await this.externalAccessService.getPublicAgentProfile(agentToken);
+    const agent = await this.publicAccessService.resolvePublicAgent(
+      agentToken,
+      this.getOrigin(request),
+      payload.password
+    );
 
     return this.externalAccessService.listConversationMessages(
       {
@@ -144,7 +197,7 @@ export class PublicAgentsController {
         externalId: sessionId,
         conversationId
       },
-      limit
+      payload.limit
     );
   }
 
@@ -154,6 +207,12 @@ export class PublicAgentsController {
     const value = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(",")[0];
 
     return value?.trim() || request.socket.remoteAddress || "unknown";
+  }
+
+  /** Origin 只来自浏览器请求头；域名白名单启用时缺失 Origin 会被 PublicAccessService 拒绝。 */
+  private getOrigin(request: IncomingMessage): string | undefined {
+    const origin = request.headers.origin;
+    return Array.isArray(origin) ? origin[0] : origin;
   }
 }
 

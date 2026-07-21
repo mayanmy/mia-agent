@@ -18,6 +18,8 @@ import {
   AgentKnowledgeBaseBindingResult,
   AgentListItem,
   AgentModelConfigSummary,
+  AgentPublicAccessConfig,
+  AgentPublicAccessRuntime,
   AgentPublishResult,
   AgentQueryDto,
   AgentRuntimeConfig,
@@ -305,14 +307,120 @@ export class AgentsService {
     };
   }
 
+  /**
+   * 轮换公开 Token 会立即让旧嵌入代码失效。
+   *
+   * 该操作不改变发布状态或 API Key；管理员需要把返回的新 Token 更新到外部页面，
+   * 用于 Token 泄露或不再信任旧嵌入代码时的快速止损。
+   */
+  async rotateShareToken(id: string): Promise<AgentPublishResult> {
+    await this.ensureAgentExists(id);
+    const agent = await this.prisma.agent.update({
+      where: { id },
+      data: { shareToken: this.createShareToken() },
+      select: {
+        id: true,
+        published: true,
+        publishedAt: true,
+        shareToken: true
+      }
+    });
+
+    return {
+      agentId: agent.id,
+      published: agent.published,
+      publishedAt: agent.publishedAt,
+      shareToken: agent.shareToken
+    };
+  }
+
+  /** 读取公开发布治理配置；密码字段只转换为是否启用，永不返回哈希。 */
+  async getPublicAccessConfig(id: string): Promise<AgentPublicAccessConfig> {
+    await this.ensureAgentExists(id);
+    const agent = await this.prisma.agent.findUniqueOrThrow({
+      where: { id },
+      select: {
+        publicExpiresAt: true,
+        publicAllowedOrigins: true,
+        publicPasswordHash: true
+      }
+    });
+
+    return {
+      agentId: id,
+      publicExpiresAt: agent.publicExpiresAt,
+      publicAllowedOrigins: agent.publicAllowedOrigins,
+      passwordRequired: Boolean(agent.publicPasswordHash)
+    };
+  }
+
+  /**
+   * 保存发布治理配置。
+   *
+   * 密码哈希只允许 external_access 在验证并哈希后传入；undefined 表示保留原值，null 才是
+   * 明确关闭访问密码，防止管理员只改域名时意外清除保护。
+   */
+  async updatePublicAccessConfig(
+    id: string,
+    input: {
+      publicExpiresAt: Date | null;
+      publicAllowedOrigins: string[];
+      publicPasswordHash?: string | null;
+    }
+  ): Promise<AgentPublicAccessConfig> {
+    await this.ensureAgentExists(id);
+    const agent = await this.prisma.agent.update({
+      where: { id },
+      data: {
+        publicExpiresAt: input.publicExpiresAt,
+        publicAllowedOrigins: input.publicAllowedOrigins,
+        ...(input.publicPasswordHash === undefined
+          ? {}
+          : { publicPasswordHash: input.publicPasswordHash })
+      },
+      select: {
+        publicExpiresAt: true,
+        publicAllowedOrigins: true,
+        publicPasswordHash: true
+      }
+    });
+
+    return {
+      agentId: id,
+      publicExpiresAt: agent.publicExpiresAt,
+      publicAllowedOrigins: agent.publicAllowedOrigins,
+      passwordRequired: Boolean(agent.publicPasswordHash)
+    };
+  }
+
   async getSharedAgent(token: string): Promise<SharedAgentDetail> {
+    const agent = await this.getPublicAccessRuntime(token);
+
+    return {
+      id: agent.id,
+      name: agent.name,
+      description: agent.description,
+      modelName: agent.modelName,
+      providerName: agent.providerName,
+      passwordRequired: agent.passwordRequired
+    };
+  }
+
+  /**
+   * external_access 使用该运行时配置执行来源域名和密码校验。
+   *
+   * 过期判断必须在数据库过滤层完成，避免 Profile 与 Chat 两个入口出现“页面能打开、发送失败”
+   * 的不一致状态；密码哈希只在模块边界内传递，不会进入公共 DTO。
+   */
+  async getPublicAccessRuntime(token: string): Promise<AgentPublicAccessRuntime> {
     const shareToken = this.requireNonEmptyString(token, "token");
     const agent = await this.prisma.agent.findFirst({
       where: {
         shareToken,
         published: true,
         enabled: true,
-        deletedAt: null
+        deletedAt: null,
+        OR: [{ publicExpiresAt: null }, { publicExpiresAt: { gt: new Date() } }]
       },
       include: {
         modelConfig: {
@@ -332,7 +440,11 @@ export class AgentsService {
       name: agent.name,
       description: agent.description,
       modelName: agent.modelConfig.modelName,
-      providerName: agent.modelConfig.provider.name
+      providerName: agent.modelConfig.provider.name,
+      passwordRequired: Boolean(agent.publicPasswordHash),
+      publicExpiresAt: agent.publicExpiresAt,
+      publicAllowedOrigins: agent.publicAllowedOrigins,
+      publicPasswordHash: agent.publicPasswordHash
     };
   }
 

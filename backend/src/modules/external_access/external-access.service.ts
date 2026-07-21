@@ -34,7 +34,10 @@ export class ExternalAccessService {
   async getPublicAgentProfile(agentToken: string): Promise<PublicAgentProfile> {
     const agent = await this.agentsService.getSharedAgent(agentToken);
 
-    return agent;
+    return {
+      ...agent,
+      passwordRequired: Boolean(agent.passwordRequired)
+    };
   }
 
   /**
