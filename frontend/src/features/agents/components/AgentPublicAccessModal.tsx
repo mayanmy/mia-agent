@@ -138,7 +138,7 @@ export function AgentPublicAccessModal({
         <Form.Item
           extra={
             config?.passwordRequired
-              ? "当前已启用访问密码；留空可保留当前密码。"
+              ? "当前已启用访问密码；留空可保留当前密码。为了安全性设计，已经设置的访问密码不会回显"
               : "设置后，每次刷新 Widget 都需要重新输入。为公开链接增加一道访问保护。启用后，外部用户打开分享页或嵌入式 Widget 时，需先输入正确密码才能查看历史消息和开始对话。"
           }
           label="访问密码"
