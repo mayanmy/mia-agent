@@ -131,7 +131,7 @@ export function getChatSession(agentId: string): Promise<ChatSessionResponse> {
 /** 读取一个保留型 Agent 的活跃会话列表；列表与消息都采用 Cursor，避免深页 Offset 扫描。 */
 export function listChatSessions(
   agentId: string,
-  options: { cursor?: string; pageSize?: number } = {}
+  options: { cursor?: string; pageSize?: number; status?: ChatSessionStatus } = {}
 ): Promise<ChatSessionListResponse> {
   const params = new URLSearchParams({
     agentId,
@@ -140,6 +140,9 @@ export function listChatSessions(
 
   if (options.cursor) {
     params.set("cursor", options.cursor);
+  }
+  if (options.status) {
+    params.set("status", options.status);
   }
 
   return request<ChatSessionListResponse>(`/api/v1/chat/sessions?${params.toString()}`);
@@ -181,6 +184,20 @@ export function updateChatSessionTitle(
 export function archiveChatSession(sessionId: string): Promise<ChatSessionListItem> {
   return request<ChatSessionListItem>(`/api/v1/chat/sessions/${sessionId}/archive`, {
     method: "POST"
+  });
+}
+
+/** 恢复后会话重新出现在默认历史列表，并允许继续发送消息。 */
+export function restoreChatSession(sessionId: string): Promise<ChatSessionListItem> {
+  return request<ChatSessionListItem>(`/api/v1/chat/sessions/${sessionId}/restore`, {
+    method: "POST"
+  });
+}
+
+/** 删除仅适用于已归档会话，消息会随会话一起永久清理。 */
+export function deleteChatSession(sessionId: string): Promise<null> {
+  return request<null>(`/api/v1/chat/sessions/${sessionId}`, {
+    method: "DELETE"
   });
 }
 

@@ -1,4 +1,11 @@
-import { EditOutlined, InboxOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  InboxOutlined,
+  PlusOutlined,
+  RollbackOutlined,
+  UnorderedListOutlined
+} from "@ant-design/icons";
 import { Button, Empty, Input, Popconfirm, Tooltip } from "antd";
 import { useState } from "react";
 
@@ -12,7 +19,11 @@ export function ChatSessionList({
   onCreate,
   onSelect,
   onRename,
-  onArchive
+  onArchive,
+  onRestore,
+  onDelete,
+  showingArchived,
+  onToggleArchived
 }: {
   sessions: ChatSessionListItem[];
   activeSessionId: string | null;
@@ -22,6 +33,10 @@ export function ChatSessionList({
   onSelect: (sessionId: string) => void;
   onRename: (sessionId: string, title: string) => void;
   onArchive: (sessionId: string) => void;
+  onRestore: (sessionId: string) => void;
+  onDelete: (sessionId: string) => void;
+  showingArchived: boolean;
+  onToggleArchived: () => void;
 }) {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -43,23 +58,37 @@ export function ChatSessionList({
   return (
     <section className="chatSessionSection">
       <div className="chatSessionHeader">
-        <h3>历史会话</h3>
-        <Tooltip title="新建对话">
-          <Button
-            aria-label="新建对话"
-            disabled={disabled}
-            icon={<PlusOutlined />}
-            loading={loading}
-            size="small"
-            type="text"
-            onClick={onCreate}
-          />
-        </Tooltip>
+        <h3>{showingArchived ? "已归档会话" : "历史会话"}</h3>
+        <div className="chatSessionHeaderActions">
+          <Tooltip title={showingArchived ? "返回历史会话" : "查看已归档会话"}>
+            <Button
+              aria-label={showingArchived ? "返回历史会话" : "查看已归档会话"}
+              disabled={disabled}
+              icon={showingArchived ? <UnorderedListOutlined /> : <InboxOutlined />}
+              size="small"
+              type="text"
+              onClick={onToggleArchived}
+            />
+          </Tooltip>
+          {!showingArchived ? (
+            <Tooltip title="新建对话">
+              <Button
+                aria-label="新建对话"
+                disabled={disabled}
+                icon={<PlusOutlined />}
+                loading={loading}
+                size="small"
+                type="text"
+                onClick={onCreate}
+              />
+            </Tooltip>
+          ) : null}
+        </div>
       </div>
       {sessions.length === 0 ? (
         <Empty
           className="chatSessionEmpty"
-          description="暂无历史会话"
+          description={showingArchived ? "暂无已归档会话" : "暂无历史会话"}
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       ) : (
@@ -98,7 +127,39 @@ export function ChatSessionList({
                     {session.title || "新对话"}
                   </button>
                 )}
-                {isActive && !isEditing ? (
+                {showingArchived ? (
+                  <div className="chatSessionActions">
+                    <Tooltip title="恢复">
+                      <Button
+                        aria-label="恢复会话"
+                        disabled={disabled}
+                        icon={<RollbackOutlined />}
+                        size="small"
+                        type="text"
+                        onClick={() => onRestore(session.id)}
+                      />
+                    </Tooltip>
+                    <Tooltip title="删除">
+                      <Popconfirm
+                        cancelText="取消"
+                        description="会话及其所有消息将永久删除，无法恢复。"
+                        okButtonProps={{ danger: true }}
+                        okText="永久删除"
+                        title="删除归档会话"
+                        onConfirm={() => onDelete(session.id)}
+                      >
+                        <Button
+                          danger
+                          aria-label="删除归档会话"
+                          disabled={disabled}
+                          icon={<DeleteOutlined />}
+                          size="small"
+                          type="text"
+                        />
+                      </Popconfirm>
+                    </Tooltip>
+                  </div>
+                ) : isActive && !isEditing ? (
                   <div className="chatSessionActions">
                     <Tooltip title="重命名">
                       <Button

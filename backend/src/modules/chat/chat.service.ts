@@ -159,6 +159,20 @@ export class ChatService {
   }
 
   /**
+   * 永久删除只允许针对已归档会话执行。
+   *
+   * 活跃会话仍应先归档，给用户一次恢复机会；删除后由外键级联清理消息，无法恢复。
+   */
+  async deleteSession(sessionId: string, context: ChatRequestContext): Promise<void> {
+    const userId = this.requireSessionUserId(context);
+    const sessions = this.requireChatSessionsService();
+    const session = await sessions.getOwnedSession(sessionId, userId);
+    await this.requirePersistentAgent(session.agentId);
+
+    return sessions.deleteSession(sessionId, { agentId: session.agentId, userId });
+  }
+
+  /**
    * 执行非流式对话，并把调用用户写入工具日志。
    *
    * 用户身份由 Controller 的 Guard 提供；保留可选参数是为了兼容现有服务层单测，

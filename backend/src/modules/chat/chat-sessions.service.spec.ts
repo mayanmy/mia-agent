@@ -68,5 +68,28 @@ export const tests = [
         /chat session not found/u
       );
     }
+  },
+  {
+    name: "ChatSessionsService only deletes archived sessions",
+    run: async () => {
+      let deletedSessionId: string | null = null;
+      const prisma = {
+        chatSession: {
+          findFirst: async () => ({
+            id: "archived-session",
+            agentId: "agent-id",
+            userId: "user-id",
+            status: ChatSessionStatus.ARCHIVED
+          }),
+          delete: async ({ where }: { where: { id: string } }) => {
+            deletedSessionId = where.id;
+          }
+        }
+      };
+      const service = new ChatSessionsService(prisma as never);
+
+      await service.deleteSession("archived-session", { agentId: "agent-id", userId: "user-id" });
+      assert.equal(deletedSessionId, "archived-session");
+    }
   }
 ];

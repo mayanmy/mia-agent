@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } from "@nestjs/common";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { UserRole } from "@prisma/client";
 
@@ -83,6 +83,16 @@ export class ChatController {
     @CurrentUser() currentUser: CurrentUserDto
   ) {
     return this.chatService.restoreSession(sessionId, { userId: currentUser.id });
+  }
+
+  @Delete("sessions/:sessionId")
+  /** 永久删除归档会话及其消息；Controller 只传递当前用户，归属校验由 Service 完成。 */
+  async deleteSession(
+    @Param("sessionId") sessionId: string,
+    @CurrentUser() currentUser: CurrentUserDto
+  ): Promise<null> {
+    await this.chatService.deleteSession(sessionId, { userId: currentUser.id });
+    return null;
   }
 
   @Post("stream")

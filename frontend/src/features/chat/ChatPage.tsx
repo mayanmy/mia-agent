@@ -6,11 +6,14 @@ import { listAgents, type AgentListItem } from "../agents/api";
 import {
   archiveChatSession,
   createChatSession,
+  deleteChatSession,
   getChatSessionMessages,
   listChatSessions,
+  restoreChatSession,
   streamChatCompletion,
   updateChatSessionTitle,
-  type ChatSessionListItem
+  type ChatSessionListItem,
+  type ChatSessionStatus
 } from "./api";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
@@ -32,6 +35,7 @@ export function ChatPage() {
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState(searchParams.get("agentId") || "");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<ChatSessionStatus>("ACTIVE");
   const [sessions, setSessions] = useState<ChatSessionListItem[]>([]);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
@@ -86,13 +90,23 @@ export function ChatPage() {
     }
 
     setLoadingSessions(true);
-    void listChatSessions(selectedAgentId)
+    void listChatSessions(selectedAgentId, { status: sessionStatus })
       .then(async (response) => {
         if (disposed || requestVersion !== sessionLoadVersionRef.current) {
           return;
         }
 
         const nextSessions = response.list;
+
+        if (sessionStatus === "ARCHIVED") {
+          setSessions(nextSessions);
+          const archivedSession = nextSessions[0];
+          if (archivedSession) {
+            await loadSessionMessages(archivedSession.id, requestVersion, () => !disposed);
+          }
+          return;
+        }
+
         const initialSession = nextSessions[0] ?? (await createChatSession(selectedAgentId));
 
         if (disposed || requestVersion !== sessionLoadVersionRef.current) {
@@ -116,9 +130,12 @@ export function ChatPage() {
     return () => {
       disposed = true;
     };
-  }, [messageApi, resetAutoScroll, selectedAgent?.chatSessionMode, selectedAgentId]);
+  }, [messageApi, resetAutoScroll, selectedAgent?.chatSessionMode, selectedAgentId, sessionStatus]);
   const sendButtonDisabled =
-    !sending && (!selectedAgentId || (!input.trim() && images.length === 0 && files.length === 0));
+    !sending &&
+    (sessionStatus === "ARCHIVED" ||
+      !selectedAgentId ||
+      (!input.trim() && images.length === 0 && files.length === 0));
 
   useEffect(() => {
     let disposed = false;
@@ -273,6 +290,51 @@ export function ChatPage() {
     }
   }
 
+  /** 归档视图与活跃视图共用列表加载逻辑，切换时 effect 会取消旧请求并读取对应状态。 */
+  function handleToggleArchivedSessions() {
+    if (sending) {
+      return;
+    }
+
+    setSessionStatus((current) => (current === "ACTIVE" ? "ARCHIVED" : "ACTIVE"));
+  }
+
+  /** 恢复后切回活跃列表，避免归档视图继续展示已经可写入的会话。 */
+  async function handleRestoreSession(targetSessionId: string) {
+    if (sending) {
+      return;
+    }
+
+    try {
+      await restoreChatSession(targetSessionId);
+      messageApi.success("会话已恢复");
+      setSessionStatus("ACTIVE");
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "恢复会话失败");
+    }
+  }
+
+  /** 删除仅在归档视图触发，删除后清空已选会话，等待列表 effect 选择下一条。 */
+  async function handleDeleteSession(targetSessionId: string) {
+    if (sending) {
+      return;
+    }
+
+    try {
+      await deleteChatSession(targetSessionId);
+      setSessions((current) => current.filter((session) => session.id !== targetSessionId));
+      if (sessionId === targetSessionId) {
+        historyLoadVersionRef.current += 1;
+        setSessionId(null);
+        setMessages([]);
+        setHistoryCursor(null);
+      }
+      messageApi.success("归档会话已删除");
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "删除会话失败");
+    }
+  }
+
   async function loadOlderMessages() {
     if (!sessionId || !historyCursor || loadingHistory) {
       return;
@@ -320,6 +382,11 @@ export function ChatPage() {
 
     if (!selectedAgentId) {
       messageApi.warning("请选择 Agent");
+      return;
+    }
+
+    if (sessionStatus === "ARCHIVED") {
+      messageApi.warning("已归档会话仅可查看，恢复后可继续对话");
       return;
     }
 
@@ -674,12 +741,16 @@ export function ChatPage() {
                     disabled={sending}
                     loading={loadingSessions}
                     sessions={sessions}
+                    showingArchived={sessionStatus === "ARCHIVED"}
                     onArchive={(targetSessionId) => void handleArchiveSession(targetSessionId)}
                     onCreate={() => void handleCreateSession()}
+                    onDelete={(targetSessionId) => void handleDeleteSession(targetSessionId)}
                     onRename={(targetSessionId, title) =>
                       void handleRenameSession(targetSessionId, title)
                     }
+                    onRestore={(targetSessionId) => void handleRestoreSession(targetSessionId)}
                     onSelect={(targetSessionId) => void handleSessionChange(targetSessionId)}
+                    onToggleArchived={handleToggleArchivedSessions}
                   />
                 ) : null}
               </div>
@@ -707,6 +778,7 @@ export function ChatPage() {
             images={images}
             input={input}
             selectedAgentId={selectedAgentId}
+            disabled={sessionStatus === "ARCHIVED"}
             sendButtonDisabled={sendButtonDisabled}
             sending={sending}
             onFileBeforeUpload={handleFileBeforeUpload}

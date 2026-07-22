@@ -12,6 +12,7 @@ export function ChatComposer({
   files,
   selectedAgentId,
   sending,
+  disabled,
   sendButtonDisabled,
   onInputChange,
   onSend,
@@ -27,6 +28,8 @@ export function ChatComposer({
   files: ChatFileAttachment[];
   selectedAgentId: string;
   sending: boolean;
+  /** 归档视图只读，仍复用同一个 Composer 但禁止输入和上传。 */
+  disabled?: boolean;
   sendButtonDisabled: boolean;
   onInputChange: (value: string) => void;
   onSend: () => void;
@@ -37,7 +40,7 @@ export function ChatComposer({
   onRemoveImage: (id: string | undefined) => void;
   onRemoveFile: (id: string | undefined) => void;
 }) {
-  const disabled = !selectedAgentId || sending;
+  const controlsDisabled = !selectedAgentId || sending || disabled;
 
   return (
     <div className="chatComposer">
@@ -45,22 +48,22 @@ export function ChatComposer({
         <Upload
           accept="image/*"
           beforeUpload={onImageBeforeUpload}
-          disabled={disabled}
+          disabled={controlsDisabled}
           maxCount={4}
           showUploadList={false}
         >
-          <Button className="chatComposerToolButton" disabled={disabled}>
+          <Button className="chatComposerToolButton" disabled={controlsDisabled}>
             上传图片
           </Button>
         </Upload>
         <Upload
           accept={supportedTextFileExtensions.join(",")}
           beforeUpload={onFileBeforeUpload}
-          disabled={disabled}
+          disabled={controlsDisabled}
           maxCount={4}
           showUploadList={false}
         >
-          <Button className="chatComposerToolButton" disabled={disabled}>
+          <Button className="chatComposerToolButton" disabled={controlsDisabled}>
             上传文件
           </Button>
         </Upload>
@@ -74,8 +77,8 @@ export function ChatComposer({
         />
         <Input.TextArea
           autoSize={{ minRows: 2, maxRows: 6 }}
-          disabled={disabled}
-          placeholder="输入消息，或直接粘贴图片"
+          disabled={controlsDisabled}
+          placeholder={disabled ? "已归档会话仅可查看，恢复后可继续对话" : "输入消息，或直接粘贴图片"}
           value={input}
           onChange={(event) => onInputChange(event.target.value)}
           onPaste={onPaste}
@@ -88,7 +91,7 @@ export function ChatComposer({
         />
       </div>
       <Button
-        disabled={sendButtonDisabled}
+        disabled={disabled || sendButtonDisabled}
         danger={sending}
         type="primary"
         onClick={() => {

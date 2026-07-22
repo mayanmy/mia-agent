@@ -178,6 +178,26 @@ export class ChatSessionsService {
     return this.toSessionListItem(session);
   }
 
+  /**
+   * 仅允许删除已经归档的会话，防止操作菜单误触直接清空正在使用的对话。
+   *
+   * ChatSessionMessage 配置了 onDelete: Cascade，因此删除会话时数据库会在同一约束链内
+   * 清理对应消息，不需要应用层逐条删除。
+   */
+  async deleteSession(sessionId: string, owner: SessionOwner): Promise<void> {
+    const session = await this.requireSession(sessionId, owner);
+
+    if (session.status !== ChatSessionStatus.ARCHIVED) {
+      throw new AppError(
+        ErrorCodes.common.conflict,
+        "active chat session must be archived before deletion",
+        HttpStatus.CONFLICT
+      );
+    }
+
+    await this.prisma.chatSession.delete({ where: { id: sessionId } });
+  }
+
   /** 仅按当前成员查找会话，用于消息详情接口先取得其所属 Agent 再完成模式校验。 */
   async getOwnedSession(sessionId: string, userId: string) {
     const session = await this.prisma.chatSession.findFirst({
