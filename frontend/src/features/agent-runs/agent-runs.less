@@ -1,0 +1,17 @@
+.runWorkspace { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.runFilters { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) 150px 170px minmax(280px, 1fr) auto; gap: 12px; align-items: center; }
+.runTable { min-width: 0; overflow: hidden; }
+.runMono { max-width: 190px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.runDetail { display: flex; flex-direction: column; gap: 16px; }
+.runSummary { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #e5e7eb; }
+.runSummary > div { display: grid; grid-template-columns: 100px 1fr; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; min-width: 0; }
+.runSummary span { color: #64748b; }
+.runSummary strong { overflow-wrap: anywhere; font-weight: 500; }
+.runStep { padding-bottom: 8px; }
+.runStep header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.runStep header > span:last-child { color: #64748b; }
+.runError { color: #b42318; }
+.traceBlock h3 { margin: 0 0 6px; font-size: 13px; }
+.traceBlock pre { max-height: 260px; overflow: auto; margin: 0; padding: 10px; border: 1px solid #e5e7eb; background: #f8fafc; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+@media (max-width: 1200px) { .runFilters { grid-template-columns: 1fr 1fr 150px 170px; } }
+@media (max-width: 760px) { .runFilters, .runSummary { grid-template-columns: 1fr; } .runSummary > div { grid-template-columns: 90px 1fr; } }

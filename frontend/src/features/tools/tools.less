@@ -1,0 +1,92 @@
+.toolsWorkspace {
+  gap: 20px;
+}
+.toolsHeaderActions {
+  display: flex;
+  gap: 10px;
+}
+.toolsTablePanel {
+  overflow: hidden;
+  padding: 0;
+}
+.httpToolTarget {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.httpToolFormGrid {
+  display: grid;
+  gap: 0 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.httpToolFormFull {
+  grid-column: 1 / -1;
+}
+.httpToolFormSection {
+  border-top: 1px solid #e7eaf0;
+  padding-top: 18px;
+}
+.httpToolSectionHeader {
+  margin-bottom: 12px;
+}
+.httpToolRows {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.httpToolParameterRow {
+  align-items: start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr 100px 100px 1.2fr 66px 66px 48px;
+}
+.httpToolHeaderRow {
+  align-items: start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(150px, 1fr) minmax(220px, 2fr) 48px;
+}
+.httpToolTokenParameterRow {
+  align-items: start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(120px, 1fr) 110px minmax(140px, 1fr) minmax(140px, 1fr) 48px;
+}
+.httpToolParameterRow .ant-form-item,
+.httpToolHeaderRow .ant-form-item,
+.httpToolTokenParameterRow .ant-form-item {
+  margin-bottom: 0;
+}
+.httpToolTestLabel {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.httpToolTestResult {
+  background: #f6f8fa;
+  border: 1px solid #e2e7ee;
+  border-radius: 6px;
+  margin: 16px 0 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+@media (max-width: 860px) {
+  .httpToolFormGrid {
+    grid-template-columns: 1fr;
+  }
+  .httpToolFormFull {
+    grid-column: auto;
+  }
+  .httpToolParameterRow {
+    grid-template-columns: 1fr 1fr;
+  }
+  .httpToolHeaderRow {
+    grid-template-columns: 1fr;
+  }
+  .httpToolTokenParameterRow {
+    grid-template-columns: 1fr;
+  }
+}

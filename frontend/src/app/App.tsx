@@ -36,6 +36,11 @@ const HealthPage = lazy(() =>
 const LogsPage = lazy(() =>
   import("../features/logs/LogsPage").then((module) => ({ default: module.LogsPage }))
 );
+const AgentRunsPage = lazy(() =>
+  import("../features/agent-runs/AgentRunsPage").then((module) => ({
+    default: module.AgentRunsPage
+  }))
+);
 const KnowledgePage = lazy(() =>
   import("../features/knowledge/KnowledgePage").then((module) => ({
     default: module.KnowledgePage
@@ -43,6 +48,9 @@ const KnowledgePage = lazy(() =>
 );
 const UsersPage = lazy(() =>
   import("../features/users/UsersPage").then((module) => ({ default: module.UsersPage }))
+);
+const ToolsPage = lazy(() =>
+  import("../features/tools/ToolsPage").then((module) => ({ default: module.ToolsPage }))
 );
 const ActivateInvitationPage = lazy(() =>
   import("../features/auth/ActivateInvitationPage").then((module) => ({
@@ -60,8 +68,10 @@ const navConfig: NavConfig[] = [
   { label: "模型供应商", path: "/providers", roles: ["ADMIN", "USER"] },
   { label: "Agent", path: "/agents", roles: ["ADMIN", "USER"] },
   { label: "知识库", path: "/knowledge", roles: ["ADMIN", "USER"] },
+  { label: "工具", path: "/tools", roles: ["ADMIN"] },
   { label: "对话", path: "/chat", roles: ["ADMIN", "USER"] },
   { label: "日志", path: "/logs", roles: ["ADMIN", "USER"] },
+  { label: "Run Trace", path: "/agent-runs", roles: ["ADMIN"] },
   { label: "成员", path: "/users", roles: ["ADMIN"] }
 ];
 
@@ -92,6 +102,8 @@ export function App() {
               <Route path="/logs" element={<LogsPage />} />
             </Route>
             <Route element={<RequireRole roles={["ADMIN"]} />}>
+              <Route path="/tools" element={<ToolsPage />} />
+              <Route path="/agent-runs" element={<AgentRunsPage />} />
               <Route path="/users" element={<UsersPage />} />
             </Route>
             <Route path="*" element={<DefaultWorkspaceRoute />} />
