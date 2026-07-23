@@ -29,8 +29,10 @@ export function AgentFormModal({
   onCancel: () => void;
   onSubmit: (values: AgentFormValues) => void;
 }) {
-  const selectedToolIds = Form.useWatch("toolIds", form) ?? [];
-  const selectedKnowledgeBaseIds = Form.useWatch("knowledgeBaseIds", form) ?? [];
+  // Tabs 会延迟挂载非活动页签；preserve 让标签在字段尚未挂载时也能读取已加载的绑定值。
+  const selectedToolIds = Form.useWatch("toolIds", { form, preserve: true }) ?? [];
+  const selectedKnowledgeBaseIds =
+    Form.useWatch("knowledgeBaseIds", { form, preserve: true }) ?? [];
 
   return (
     <Modal
