@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
 
 import { AgentsModule } from "../agents/agents.module";
+import { AgentRuntimeModule } from "../agent_runtime/agent-runtime.module";
+import { AgentRunsModule } from "../agent_runs/agent-runs.module";
 import { ModelProvidersModule } from "../model-providers/model-providers.module";
 import { RetrievalModule } from "../retrieval/retrieval.module";
 import { ToolsModule } from "../tools/tools.module";
@@ -9,7 +11,14 @@ import { ChatSessionsService } from "./chat-sessions.service";
 import { ChatService } from "./chat.service";
 
 @Module({
-  imports: [AgentsModule, ModelProvidersModule, ToolsModule, RetrievalModule],
+  imports: [
+    AgentsModule,
+    AgentRuntimeModule,
+    AgentRunsModule,
+    ModelProvidersModule,
+    ToolsModule,
+    RetrievalModule
+  ],
   controllers: [ChatController],
   providers: [ChatService, ChatSessionsService],
   exports: [ChatService]

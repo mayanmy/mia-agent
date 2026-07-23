@@ -17,6 +17,7 @@ import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Public } from "../../core/auth/public.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
+import { RequestWithId } from "../../core/request-id.middleware";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import { AgentApiKeysService } from "./agent-api-keys.service";
 import {
@@ -115,7 +116,11 @@ export class PublicAgentsController {
   @Get("agents/:agentToken")
   /** Widget 只需要公开资料，接口在查询前按 token + IP 做基础限流。 */
   async getAgent(@Param("agentToken") agentToken: string, @Req() request: IncomingMessage) {
-    this.rateLimiter.assertAllowed("public-profile", `${agentToken}:${this.getClientIp(request)}`, 60);
+    this.rateLimiter.assertAllowed(
+      "public-profile",
+      `${agentToken}:${this.getClientIp(request)}`,
+      60
+    );
     return this.publicAccessService.getPublicProfile(agentToken, this.getOrigin(request));
   }
 
@@ -126,8 +131,16 @@ export class PublicAgentsController {
     @Body() payload: VerifyPublicAccessDto,
     @Req() request: IncomingMessage
   ): Promise<null> {
-    this.rateLimiter.assertAllowed("public-password", `${agentToken}:${this.getClientIp(request)}`, 10);
-    await this.publicAccessService.verifyAccess(agentToken, this.getOrigin(request), payload.password);
+    this.rateLimiter.assertAllowed(
+      "public-password",
+      `${agentToken}:${this.getClientIp(request)}`,
+      10
+    );
+    await this.publicAccessService.verifyAccess(
+      agentToken,
+      this.getOrigin(request),
+      payload.password
+    );
     return null;
   }
 
@@ -135,7 +148,7 @@ export class PublicAgentsController {
   /** 公开 Widget 的流式入口：token 只识别发布 Agent，sessionId 仅作为匿名隔离键。 */
   async chat(
     @Body() payload: PublicChatMessageDto,
-    @Req() request: IncomingMessage,
+    @Req() request: IncomingMessage & RequestWithId,
     @Res() response: ServerResponse
   ): Promise<void> {
     const sessionId = payload.sessionId?.trim() ?? "";
@@ -165,7 +178,8 @@ export class PublicAgentsController {
           images: payload.images,
           files: payload.files
         },
-        signal
+        signal,
+        request.requestId
       )
     );
   }
@@ -249,7 +263,8 @@ export class ServiceApiController {
           images: payload.images,
           files: payload.files
         },
-        signal
+        signal,
+        request.requestId
       );
 
     // v1.1 以 streaming 为默认实现；blocking 在同一编排器上收集 token 后返回，避免两套模型逻辑。
@@ -270,7 +285,11 @@ export class ServiceApiController {
     @Query() query: ExternalConversationListQueryDto,
     @Req() request: AgentApiKeyRequest
   ) {
-    return this.externalAccessService.listConversations(request.agentApiKey!.agentId, query.user ?? "", query.limit);
+    return this.externalAccessService.listConversations(
+      request.agentApiKey!.agentId,
+      query.user ?? "",
+      query.limit
+    );
   }
 
   @Get("messages")
@@ -293,7 +312,9 @@ export class ServiceApiController {
 async function streamSse(
   request: IncomingMessage,
   response: ServerResponse,
-  createStream: (signal: AbortSignal) => AsyncIterable<{ type: string; data: Record<string, unknown> }>
+  createStream: (
+    signal: AbortSignal
+  ) => AsyncIterable<{ type: string; data: Record<string, unknown> }>
 ): Promise<void> {
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -332,13 +353,16 @@ async function streamSse(
 }
 
 /** blocking 模式复用流式编排并收集 token，避免维护第二套模型和工具调用流程。 */
-async function collectStream(stream: AsyncIterable<{ type: string; data: Record<string, unknown> }>) {
+async function collectStream(
+  stream: AsyncIterable<{ type: string; data: Record<string, unknown> }>
+) {
   let answer = "";
   let conversationId: string | null = null;
 
   for await (const event of stream) {
     if (event.type === "message_start") {
-      conversationId = typeof event.data.conversationId === "string" ? event.data.conversationId : null;
+      conversationId =
+        typeof event.data.conversationId === "string" ? event.data.conversationId : null;
     }
 
     if (event.type === "token") {

@@ -1,0 +1,38 @@
+import { RuntimeError } from "./runtime-error.dto";
+
+export type RuntimeUsage = {
+  inputTokens?: number;
+  outputTokens?: number;
+  estimatedCost?: number;
+};
+
+export type RuntimeRunStartedData = {
+  runId?: string;
+  agentId: string;
+  modelConfigId: string;
+  modelName: string;
+  providerName: string;
+  sessionId: string | null;
+};
+
+export type RuntimeCompletion = {
+  runId?: string;
+  agentId: string;
+  modelConfigId: string;
+  modelName: string;
+  providerName: string;
+  sessionId: string | null;
+  content: string;
+  usage?: RuntimeUsage;
+};
+
+export type AgentRuntimeEvent =
+  | { type: "run_started"; data: RuntimeRunStartedData }
+  | { type: "retrieval_started"; data: Record<string, unknown> }
+  | { type: "retrieval_completed"; data: Record<string, unknown> }
+  | { type: "token"; data: { content: string } }
+  | { type: "tool_started"; data: Record<string, unknown> }
+  | { type: "tool_completed"; data: Record<string, unknown> }
+  | { type: "run_completed"; data: RuntimeCompletion }
+  | { type: "run_failed"; data: { runId?: string; error: RuntimeError } }
+  | { type: "run_canceled"; data: { runId?: string } };

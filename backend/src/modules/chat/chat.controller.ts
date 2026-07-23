@@ -5,6 +5,7 @@ import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
 import { CurrentUserDto } from "../users/dto/user.dto";
+import { RequestWithId } from "../../core/request-id.middleware";
 import { ChatService } from "./chat.service";
 import { ChatCompletionDto, ChatCompletionResult } from "./dto/chat.dto";
 import {
@@ -22,9 +23,13 @@ export class ChatController {
   @Post("completions")
   async createCompletion(
     @Body() payload: ChatCompletionDto,
-    @CurrentUser() currentUser: CurrentUserDto
+    @CurrentUser() currentUser: CurrentUserDto,
+    @Req() request: IncomingMessage & RequestWithId
   ): Promise<ChatCompletionResult> {
-    return this.chatService.createCompletion(payload, { userId: currentUser.id });
+    return this.chatService.createCompletion(payload, {
+      requestId: request.requestId,
+      userId: currentUser.id
+    });
   }
 
   @Get("sessions")
@@ -99,7 +104,7 @@ export class ChatController {
   async streamCompletion(
     @Body() payload: ChatCompletionDto,
     @CurrentUser() currentUser: CurrentUserDto,
-    @Req() request: IncomingMessage,
+    @Req() request: IncomingMessage & RequestWithId,
     @Res() response: ServerResponse
   ): Promise<void> {
     const controller = new AbortController();
@@ -119,6 +124,7 @@ export class ChatController {
 
     try {
       for await (const event of this.chatService.streamCompletion(payload, controller.signal, {
+        requestId: request.requestId,
         userId: currentUser.id
       })) {
         response.write(`event: ${event.type}\n`);

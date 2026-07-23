@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 
 import { AgentsModule } from "./modules/agents/agents.module";
+import { AgentRunsModule } from "./modules/agent_runs/agent-runs.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { ChatModule } from "./modules/chat/chat.module";
 import { ExternalAccessModule } from "./modules/external_access/external-access.module";
@@ -23,6 +24,7 @@ import { RolesGuard } from "./core/auth/roles.guard";
     AuthModule,
     HealthModule,
     ModelProvidersModule,
+    AgentRunsModule,
     AgentsModule,
     ChatModule,
     ExternalAccessModule,

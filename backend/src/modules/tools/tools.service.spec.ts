@@ -1,13 +1,43 @@
 import * as assert from "node:assert/strict";
 
+import { HttpToolRuntimeConfig } from "./dto/http-tool.dto";
+import { HttpToolExecutor } from "./http/http-tool.executor";
 import { ToolsService } from "./tools.service";
+
+const configuredHttpTool: HttpToolRuntimeConfig = {
+  id: "tool-1",
+  method: "GET",
+  baseUrl: "http://127.0.0.1:9000",
+  path: "/orders/{orderId}",
+  parameters: [
+    { name: "orderId", description: "订单号", type: "string", location: "path", required: true },
+    {
+      name: "verbose",
+      targetName: "include_items",
+      description: "返回详情",
+      type: "boolean",
+      location: "query",
+      required: false
+    }
+  ],
+  fixedHeaders: [{ name: "X-Tenant-ID", value: "team-a" }],
+  authType: "bearer",
+  authHeaderName: null,
+  secret: "secret-token",
+  authConfig: null,
+  credentials: {},
+  tokenCacheKey: "tool-1:1",
+  timeoutMs: 1000,
+  maxResponseBytes: 10000,
+  allowPrivateNetwork: true
+};
 
 export const tests = [
   {
     name: "ToolsService lists enabled builtin tools",
-    run: () => {
+    run: async () => {
       const service = new ToolsService();
-      const tools = service.listTools();
+      const tools = await service.listTools();
       const toolIds = tools.map((tool) => tool.id);
 
       assert.deepEqual(toolIds, ["http_request", "calculator", "current_time"]);
@@ -39,17 +69,21 @@ export const tests = [
   {
     name: "ToolsService logs tool execution results when prisma is available",
     run: async () => {
-      const queries: Array<{ values?: unknown[] }> = [];
+      const writes: Array<Record<string, unknown>> = [];
       const service = new ToolsService({
-        $executeRaw: async (query: { values?: unknown[] }) => {
-          queries.push(query);
-          return 1;
+        toolCallLog: {
+          create: async ({ data }: { data: Record<string, unknown> }) => {
+            writes.push(data);
+            return { id: "log-1" };
+          }
         }
       } as never);
       const result = await service.executeTool({
         toolCallId: "call-1",
         toolId: "calculator",
         requestId: "request-1",
+        runId: "run-1",
+        stepId: "step-1",
         agentId: "agent-1",
         input: {
           operation: "add",
@@ -58,12 +92,14 @@ export const tests = [
       });
 
       assert.equal(result.ok, true);
-      assert.equal(queries.length, 1);
-      assert.ok(queries[0].values?.includes("request-1"));
-      assert.ok(queries[0].values?.includes("agent-1"));
-      assert.ok(queries[0].values?.includes("call-1"));
-      assert.ok(queries[0].values?.includes("calculator"));
-      assert.ok(queries[0].values?.includes("completed"));
+      assert.equal(writes.length, 1);
+      assert.equal(writes[0].requestId, "request-1");
+      assert.equal(writes[0].runId, "run-1");
+      assert.equal(writes[0].stepId, "step-1");
+      assert.equal(writes[0].agentId, "agent-1");
+      assert.equal(writes[0].toolCallId, "call-1");
+      assert.equal(writes[0].toolId, "calculator");
+      assert.equal(writes[0].status, "completed");
     }
   },
 
@@ -323,6 +359,188 @@ export const tests = [
         } else {
           process.env.TOOLS_HTTP_ALLOWED_HOSTS = originalAllowedHosts;
         }
+      }
+    }
+  },
+
+  {
+    name: "HttpToolExecutor builds configured path query headers and bearer auth",
+    run: async () => {
+      const executor = new HttpToolExecutor();
+      const originalFetch = globalThis.fetch;
+      let requestedUrl = "";
+      let requestedHeaders = new Headers();
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        requestedUrl = String(url);
+        requestedHeaders = new Headers(init?.headers);
+        return new Response(
+          JSON.stringify({ id: "ORD 1", token: "secret-token", note: "secret-token suffix" }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }) as typeof fetch;
+
+      try {
+        const output = await executor.execute(configuredHttpTool, {
+          orderId: "ORD 1",
+          verbose: true
+        });
+        assert.equal(requestedUrl, "http://127.0.0.1:9000/orders/ORD%201?include_items=true");
+        assert.equal(requestedHeaders.get("x-tenant-id"), "team-a");
+        assert.equal(requestedHeaders.get("authorization"), "Bearer secret-token");
+        assert.ok(output && typeof output === "object" && !Array.isArray(output));
+        assert.deepEqual(output.body, {
+          id: "ORD 1",
+          token: "[REDACTED]",
+          note: "[REDACTED] suffix"
+        });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
+  },
+
+  {
+    name: "HttpToolExecutor blocks private targets unless the tool explicitly allows them",
+    run: async () => {
+      const executor = new HttpToolExecutor();
+      await assert.rejects(
+        () =>
+          executor.execute({ ...configuredHttpTool, allowPrivateNetwork: false }, { orderId: "1" }),
+        /private address/
+      );
+    }
+  },
+
+  {
+    name: "HttpToolExecutor fetches and singleflights OAuth2 client credentials tokens",
+    run: async () => {
+      const executor = new HttpToolExecutor();
+      const originalFetch = globalThis.fetch;
+      let tokenRequests = 0;
+      const businessAuthorizations: string[] = [];
+      let tokenRequestBody = "";
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === "/oauth/token") {
+          tokenRequests += 1;
+          tokenRequestBody = String(init?.body ?? "");
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return new Response(
+            JSON.stringify({ access_token: "oauth-token", token_type: "Bearer", expires_in: 3600 }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        businessAuthorizations.push(new Headers(init?.headers).get("authorization") ?? "");
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }) as typeof fetch;
+
+      const config: HttpToolRuntimeConfig = {
+        ...configuredHttpTool,
+        authType: "oauth2_client_credentials",
+        secret: null,
+        credentials: { clientId: "mia-client", clientSecret: "client-secret" },
+        tokenCacheKey: "oauth-tool:1",
+        authConfig: {
+          tokenUrl: "http://127.0.0.1:9000/oauth/token",
+          clientAuthMethod: "body",
+          scope: "orders.read",
+          tokenField: "access_token",
+          expiresInField: "expires_in",
+          tokenTypeField: "token_type",
+          defaultTtlSeconds: 300,
+          refreshBeforeSeconds: 60
+        }
+      };
+
+      try {
+        await Promise.all([
+          executor.execute(config, { orderId: "1" }),
+          executor.execute(config, { orderId: "2" })
+        ]);
+        assert.equal(tokenRequests, 1);
+        assert.deepEqual(businessAuthorizations, ["Bearer oauth-token", "Bearer oauth-token"]);
+        assert.equal(
+          tokenRequestBody,
+          "grant_type=client_credentials&client_id=mia-client&client_secret=client-secret&scope=orders.read"
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
+  },
+
+  {
+    name: "HttpToolExecutor refreshes a custom token once after HTTP 401 and redacts credentials",
+    run: async () => {
+      const executor = new HttpToolExecutor();
+      const originalFetch = globalThis.fetch;
+      let tokenRequests = 0;
+      let businessRequests = 0;
+      let tokenRequestHeaders = new Headers();
+      let tokenRequestBody = "";
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === "/custom/token") {
+          tokenRequests += 1;
+          tokenRequestHeaders = new Headers(init?.headers);
+          tokenRequestBody = String(init?.body ?? "");
+          return new Response(
+            JSON.stringify({ data: { accessToken: `custom-token-${tokenRequests}`, ttl: 3600 } }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        businessRequests += 1;
+        const authorization = new Headers(init?.headers).get("x-access-token");
+        if (businessRequests === 1) return new Response(null, { status: 401 });
+        return new Response(JSON.stringify({ authorization, echoedCredential: "custom-secret" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }) as typeof fetch;
+
+      const config: HttpToolRuntimeConfig = {
+        ...configuredHttpTool,
+        authType: "custom_token",
+        secret: null,
+        credentials: { appSecret: "custom-secret" },
+        tokenCacheKey: "custom-tool:1",
+        authConfig: {
+          tokenUrl: "http://127.0.0.1:9000/custom/token",
+          method: "POST",
+          contentType: "application_json",
+          parameters: [
+            { name: "X-Client", location: "header", value: "mia" },
+            { name: "secret", location: "body", credentialKey: "appSecret" }
+          ],
+          tokenField: "data.accessToken",
+          expiresInField: "data.ttl",
+          tokenTypeField: "data.type",
+          headerName: "X-Access-Token",
+          tokenPrefix: "",
+          defaultTtlSeconds: 300,
+          refreshBeforeSeconds: 60
+        }
+      };
+
+      try {
+        const output = await executor.execute(config, { orderId: "1" });
+        assert.equal(tokenRequests, 2);
+        assert.equal(businessRequests, 2);
+        assert.equal(tokenRequestHeaders.get("x-client"), "mia");
+        assert.equal(tokenRequestBody, JSON.stringify({ secret: "custom-secret" }));
+        assert.ok(output && typeof output === "object" && !Array.isArray(output));
+        assert.deepEqual(output.body, {
+          authorization: "[REDACTED]",
+          echoedCredential: "[REDACTED]"
+        });
+      } finally {
+        globalThis.fetch = originalFetch;
       }
     }
   }

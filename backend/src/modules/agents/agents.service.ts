@@ -501,7 +501,7 @@ export class AgentsService {
   ): Promise<AgentToolBindingResult> {
     await this.ensureAgentExists(id);
     const toolIds = this.normalizeToolIds(payload.toolIds);
-    this.ensureToolIdsExist(toolIds);
+    await this.ensureToolIdsExist(toolIds);
 
     await this.prisma.$transaction([
       this.prisma.agentTool.deleteMany({
@@ -813,13 +813,13 @@ export class AgentsService {
     return [...new Set(knowledgeBaseIds)];
   }
 
-  private ensureToolIdsExist(toolIds: string[]): void {
+  private async ensureToolIdsExist(toolIds: string[]): Promise<void> {
     if (toolIds.length === 0) {
       return;
     }
 
     const availableToolIds = new Set(
-      this.toolsService.getToolDefinitions(toolIds).map((tool) => tool.id)
+      (await this.toolsService.getToolDefinitions(toolIds)).map((tool) => tool.id)
     );
     const missingToolIds = toolIds.filter((toolId) => !availableToolIds.has(toolId));
 

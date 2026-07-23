@@ -1,8 +1,15 @@
 import * as assert from "node:assert/strict";
-import { AgentChatSessionMode, ModelProviderType } from "@prisma/client";
+import {
+  AgentChatSessionMode,
+  AgentRunSource,
+  AgentRunStatus,
+  AgentRunStepType,
+  ModelProviderType
+} from "@prisma/client";
 
 import { ChatService } from "./chat.service";
 import { ChatStreamEvent } from "./dto/chat.dto";
+import { AgentRuntimeEvent } from "../agent_runtime/dto/runtime-event.dto";
 import { ChatCompletionRequest, ChatStreamChunk } from "../model-providers/dto/llm.dto";
 
 async function* chunks(items: ChatStreamChunk[]): AsyncIterable<ChatStreamChunk> {
@@ -20,6 +27,253 @@ function createEmptyRetrievalService() {
 }
 
 export const tests = [
+  {
+    name: "ChatService traces streaming model execution with the incoming request ID",
+    run: async () => {
+      const traceCalls: Array<{ method: string; payload?: unknown }> = [];
+      const agentsService = {
+        getAgentRuntimeConfig: async () => ({
+          agentId: "agent-id",
+          name: "Trace Agent",
+          systemPrompt: "Answer clearly.",
+          modelConfigId: "model-config-id",
+          modelName: "gpt-compatible",
+          providerId: "provider-id",
+          providerType: ModelProviderType.OPENAI_COMPATIBLE,
+          baseUrl: "https://example.com/v1",
+          temperature: 0.7,
+          maxTokens: null,
+          timeoutSeconds: 120,
+          historyTurns: 6,
+          generationParams: null,
+          knowledgeBaseIds: [],
+          toolIds: []
+        })
+      };
+      const modelProvidersService = {
+        streamChatCompletion: () =>
+          chunks([
+            { type: "token", content: "hello" },
+            { type: "token", content: " world" },
+            { type: "done" }
+          ])
+      };
+      const toolsService = {
+        getToolDefinitions: () => [],
+        recordToolCallLog: async () => undefined
+      };
+      const agentRunsService = {
+        createRun: async (payload: unknown) => {
+          traceCalls.push({ method: "createRun", payload });
+          return {
+            runId: "run-1",
+            requestId: "request-from-middleware",
+            status: AgentRunStatus.QUEUED
+          };
+        },
+        startRun: async (...payload: unknown[]) => {
+          traceCalls.push({ method: "startRun", payload });
+        },
+        startStep: async (payload: { sequence: number; type: AgentRunStepType }) => {
+          traceCalls.push({ method: "startStep", payload });
+          return {
+            stepId: "model-step-1",
+            runId: "run-1",
+            sequence: payload.sequence,
+            startedAt: new Date()
+          };
+        },
+        markFirstToken: async () => {
+          traceCalls.push({ method: "markFirstToken" });
+        },
+        completeStep: async (...payload: unknown[]) => {
+          traceCalls.push({ method: "completeStep", payload });
+        },
+        completeRun: async (...payload: unknown[]) => {
+          traceCalls.push({ method: "completeRun", payload });
+        }
+      };
+      const service = new ChatService(
+        agentsService as never,
+        modelProvidersService as never,
+        toolsService as never,
+        createEmptyRetrievalService() as never,
+        undefined,
+        agentRunsService as never
+      );
+      const events: ChatStreamEvent[] = [];
+
+      for await (const event of service.streamCompletion(
+        { agentId: "agent-id", message: "hello" },
+        undefined,
+        {
+          requestId: "request-from-middleware",
+          source: AgentRunSource.INTERNAL_CHAT,
+          userId: "user-id"
+        }
+      )) {
+        events.push(event);
+      }
+
+      const createPayload = traceCalls.find((call) => call.method === "createRun")
+        ?.payload as Record<string, unknown>;
+      assert.equal(createPayload.requestId, "request-from-middleware");
+      assert.equal(createPayload.source, AgentRunSource.INTERNAL_CHAT);
+      assert.equal(events[0].type, "message_start");
+      assert.equal(events[0].data.runId, "run-1");
+      assert.equal(events.at(-1)?.type, "message_end");
+      assert.equal(events.at(-1)?.data.runId, "run-1");
+      assert.equal(traceCalls.filter((call) => call.method === "startStep").length, 1);
+      assert.equal(traceCalls.filter((call) => call.method === "markFirstToken").length, 1);
+      assert.equal(traceCalls.filter((call) => call.method === "completeRun").length, 1);
+    }
+  },
+  {
+    name: "ChatService cancels an unfinished streaming Run when the request is aborted",
+    run: async () => {
+      const canceledRuns: string[] = [];
+      const controller = new AbortController();
+      const agentsService = {
+        getAgentRuntimeConfig: async () => ({
+          agentId: "agent-id",
+          name: "Cancel Agent",
+          systemPrompt: "Answer clearly.",
+          modelConfigId: "model-config-id",
+          modelName: "gpt-compatible",
+          providerId: "provider-id",
+          providerType: ModelProviderType.OPENAI_COMPATIBLE,
+          baseUrl: "https://example.com/v1",
+          temperature: 0.7,
+          maxTokens: null,
+          timeoutSeconds: 120,
+          historyTurns: 6,
+          generationParams: null,
+          knowledgeBaseIds: [],
+          toolIds: []
+        })
+      };
+      const modelProvidersService = {
+        streamChatCompletion: async function* () {
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          throw error;
+          yield { type: "done" as const };
+        }
+      };
+      const agentRunsService = {
+        createRun: async () => ({
+          runId: "run-canceled",
+          requestId: "request-canceled",
+          status: AgentRunStatus.QUEUED
+        }),
+        startRun: async () => undefined,
+        startStep: async () => ({
+          stepId: "model-step",
+          runId: "run-canceled",
+          sequence: 1,
+          startedAt: new Date()
+        }),
+        failStep: async () => undefined,
+        cancelRun: async (runId: string) => {
+          canceledRuns.push(runId);
+        }
+      };
+      const service = new ChatService(
+        agentsService as never,
+        modelProvidersService as never,
+        {
+          getToolDefinitions: () => [],
+          recordToolCallLog: async () => undefined
+        } as never,
+        createEmptyRetrievalService() as never,
+        undefined,
+        agentRunsService as never
+      );
+      controller.abort();
+
+      const events: ChatStreamEvent[] = [];
+
+      for await (const event of service.streamCompletion(
+        { agentId: "agent-id", message: "hello" },
+        controller.signal,
+        { requestId: "request-canceled" }
+      )) {
+        events.push(event);
+      }
+
+      assert.deepEqual(canceledRuns, ["run-canceled"]);
+      assert.equal(events.at(-1)?.type, "error");
+      assert.equal(events.at(-1)?.data.errorType, "canceled");
+    }
+  },
+  {
+    name: "ChatService exposes unified Runtime events and aggregates them for blocking completion",
+    run: async () => {
+      const agentsService = {
+        getAgentRuntimeConfig: async () => ({
+          agentId: "agent-id",
+          name: "Runtime Agent",
+          systemPrompt: "Answer clearly.",
+          modelConfigId: "model-config-id",
+          modelName: "gpt-compatible",
+          providerId: "provider-id",
+          providerType: ModelProviderType.OPENAI_COMPATIBLE,
+          baseUrl: "https://example.com/v1",
+          temperature: 0.7,
+          maxTokens: null,
+          timeoutSeconds: 120,
+          historyTurns: 6,
+          generationParams: null,
+          knowledgeBaseIds: [],
+          toolIds: []
+        })
+      };
+      const modelProvidersService = {
+        streamChatCompletion: () =>
+          chunks([
+            { type: "token", content: "统一" },
+            { type: "token", content: "事件" },
+            { type: "done" }
+          ])
+      };
+      const service = new ChatService(
+        agentsService as never,
+        modelProvidersService as never,
+        {
+          getToolDefinitions: () => [],
+          recordToolCallLog: async () => undefined
+        } as never,
+        createEmptyRetrievalService() as never
+      );
+      const runtimeEvents: AgentRuntimeEvent[] = [];
+
+      for await (const event of service.streamRuntimeEvents(
+        { agentId: "agent-id", message: "hello" },
+        undefined,
+        { requestId: "runtime-request" }
+      )) {
+        runtimeEvents.push(event);
+      }
+
+      const completion = await service.createCompletion(
+        { agentId: "agent-id", message: "hello" },
+        { requestId: "blocking-request" }
+      );
+
+      assert.deepEqual(
+        runtimeEvents.map((event) => event.type),
+        ["run_started", "token", "token", "run_completed"]
+      );
+      const completedEvent = runtimeEvents.at(-1);
+      assert.equal(completedEvent?.type, "run_completed");
+      if (completedEvent?.type === "run_completed") {
+        assert.equal(completedEvent.data.content, "统一事件");
+      }
+      assert.equal(completion.content, "统一事件");
+      assert.equal(completion.agentId, "agent-id");
+      assert.equal(completion.modelConfigId, "model-config-id");
+    }
+  },
   {
     name: "ChatService streams tool_call, tool_result, then final answer",
     run: async () => {
@@ -154,7 +408,7 @@ export const tests = [
     }
   },
   {
-    name: "ChatService parses text tool call JSON instead of showing it as assistant text",
+    name: "ChatService parses a name-only text tool call instead of showing raw JSON",
     run: async () => {
       const modelRequests: ChatCompletionRequest[] = [];
       const agentsService = {
@@ -184,8 +438,7 @@ export const tests = [
             return chunks([
               {
                 type: "token",
-                content:
-                  'okie dokie\n\n```json\n{"name":"calculator","arguments":{"operation":"add","operands":[1,5]}}\n```'
+                content: '```json\n{"name":"calculator"}\n```'
               },
               {
                 type: "done"
@@ -253,11 +506,210 @@ export const tests = [
         ["message_start", "tool_call", "tool_result", "token", "message_end"]
       );
       assert.equal(events[1].data.name, "calculator");
-      assert.deepEqual(events[1].data.arguments, {
-        operation: "add",
-        operands: [1, 5]
-      });
+      assert.deepEqual(events[1].data.arguments, {});
       assert.equal(events[3].data.content, "计算结果是 6。");
+    }
+  },
+  {
+    name: "ChatService follows explicit prompt tool rules and fills default arguments",
+    run: async () => {
+      const executions: Array<{ toolId: string; input: Record<string, unknown> }> = [];
+      let routerCalls = 0;
+      const agentsService = {
+        getAgentRuntimeConfig: async () => ({
+          agentId: "agent-id",
+          name: "Outfit Agent",
+          systemPrompt: [
+            "当用户问今天穿什么颜色时，使用 获取今日幸运色工具",
+            "当用户问今天穿什么时，使用 获取穿衣建议工具",
+            '{"longitude":113.93041,"latitude":22.53332}'
+          ].join("\n"),
+          modelConfigId: "model-config-id",
+          modelName: "qwen2.5:1.5b",
+          providerId: "provider-id",
+          providerType: ModelProviderType.OLLAMA,
+          baseUrl: "http://127.0.0.1:11434",
+          temperature: 0.7,
+          maxTokens: null,
+          timeoutSeconds: 120,
+          historyTurns: 6,
+          generationParams: null,
+          knowledgeBaseIds: [],
+          toolIds: ["wear_advice", "lucky_color"]
+        })
+      };
+      const modelProvidersService = {
+        streamChatCompletion: () =>
+          chunks([{ type: "token", content: "已根据工具结果生成建议。" }, { type: "done" }]),
+        createChatCompletion: async () => {
+          routerCalls += 1;
+          throw new Error("显式 Prompt 规则不应再调用模型路由器");
+        }
+      };
+      const toolsService = {
+        getToolDefinitions: () => [
+          {
+            id: "wear_advice",
+            name: "获取穿衣建议",
+            description: "根据天气返回穿衣建议",
+            enabled: true,
+            inputSchema: {
+              type: "object",
+              properties: {
+                longitude: { type: "number" },
+                latitude: { type: "number" }
+              },
+              required: ["longitude", "latitude"],
+              additionalProperties: false
+            }
+          },
+          {
+            id: "lucky_color",
+            name: "获取今日幸运色",
+            description: "返回当天幸运色",
+            enabled: true,
+            inputSchema: {
+              type: "object",
+              properties: {},
+              required: [],
+              additionalProperties: false
+            }
+          }
+        ],
+        executeTool: async ({
+          toolId,
+          input
+        }: {
+          toolId: string;
+          input: Record<string, unknown>;
+        }) => {
+          executions.push({ toolId, input });
+          return { toolId, ok: true, output: { ok: true }, elapsedMs: 1 };
+        }
+      };
+      const service = new ChatService(
+        agentsService as never,
+        modelProvidersService as never,
+        toolsService as never,
+        createEmptyRetrievalService() as never
+      );
+
+      for (const message of ["今天穿什么颜色", "今天穿什么"]) {
+        for await (const _event of service.streamCompletion({
+          agentId: "agent-id",
+          message,
+          history: [],
+          images: [],
+          files: []
+        })) {
+          // 消费完整流，确保工具执行和最终模型回复均已结束。
+        }
+      }
+
+      assert.equal(routerCalls, 0);
+      assert.deepEqual(executions, [
+        { toolId: "lucky_color", input: {} },
+        {
+          toolId: "wear_advice",
+          input: { longitude: 113.93041, latitude: 22.53332 }
+        }
+      ]);
+    }
+  },
+  {
+    name: "ChatService routes a tool after a weak model ignores native tool calling",
+    run: async () => {
+      let streamRound = 0;
+      let routerCalls = 0;
+      const executedInputs: Array<Record<string, unknown>> = [];
+      const agentsService = {
+        getAgentRuntimeConfig: async () => ({
+          agentId: "agent-id",
+          name: "Outfit Agent",
+          systemPrompt: "今天穿什么颜色时必须调用幸运色工具。",
+          modelConfigId: "model-config-id",
+          modelName: "qwen2.5:1.5b",
+          providerId: "provider-id",
+          providerType: ModelProviderType.OLLAMA,
+          baseUrl: "http://127.0.0.1:11434",
+          temperature: 0.7,
+          maxTokens: null,
+          timeoutSeconds: 120,
+          historyTurns: 6,
+          generationParams: null,
+          knowledgeBaseIds: [],
+          toolIds: ["lucky_color"]
+        })
+      };
+      const modelProvidersService = {
+        streamChatCompletion: () => {
+          streamRound += 1;
+          return streamRound === 1
+            ? chunks([{ type: "token", content: "今天的幸运色是紫色。" }, { type: "done" }])
+            : chunks([{ type: "token", content: "今天的幸运色是绿色。" }, { type: "done" }]);
+        },
+        createChatCompletion: async () => {
+          routerCalls += 1;
+          return {
+            content: '{"name":"lucky_color","arguments":{}}',
+            model: "qwen2.5:1.5b",
+            providerId: "provider-id",
+            providerType: ModelProviderType.OLLAMA
+          };
+        }
+      };
+      const toolsService = {
+        getToolDefinitions: () => [
+          {
+            id: "lucky_color",
+            name: "获取今日幸运色",
+            description: "返回当天幸运色",
+            enabled: true,
+            inputSchema: {
+              type: "object",
+              properties: {},
+              required: [],
+              additionalProperties: false
+            }
+          }
+        ],
+        executeTool: async ({ input }: { input: Record<string, unknown> }) => {
+          executedInputs.push(input);
+          return {
+            toolId: "lucky_color",
+            ok: true,
+            output: { color: "绿色" },
+            elapsedMs: 1
+          };
+        }
+      };
+      const service = new ChatService(
+        agentsService as never,
+        modelProvidersService as never,
+        toolsService as never,
+        createEmptyRetrievalService() as never
+      );
+      const events: ChatStreamEvent[] = [];
+
+      for await (const event of service.streamCompletion({
+        agentId: "agent-id",
+        message: "今天穿什么颜色",
+        history: [],
+        images: [],
+        files: []
+      })) {
+        events.push(event);
+      }
+
+      assert.equal(routerCalls, 1);
+      assert.deepEqual(executedInputs, [{}]);
+      assert.deepEqual(
+        events.map((event) => event.type),
+        ["message_start", "tool_call", "tool_result", "token", "message_end"]
+      );
+      assert.equal(events[1].data.name, "lucky_color");
+      assert.equal(events[3].data.content, "今天的幸运色是绿色。");
+      assert.ok(!events.some((event) => event.data.content === "今天的幸运色是紫色。"));
     }
   },
   {

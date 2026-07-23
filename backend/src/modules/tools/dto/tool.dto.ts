@@ -28,6 +28,8 @@ export type ToolExecutionRequest = {
   input: Record<string, ToolJsonValue>;
   toolCallId?: string;
   requestId?: string;
+  runId?: string;
+  stepId?: string;
   userId?: string;
   agentId?: string;
   signal?: AbortSignal;
@@ -42,15 +44,12 @@ export type ToolExecutionResult = {
   elapsedMs: number;
 };
 
-export type ToolCallLogStatus =
-  | "available"
-  | "skipped"
-  | "requested"
-  | "completed"
-  | "failed";
+export type ToolCallLogStatus = "available" | "skipped" | "requested" | "completed" | "failed";
 
 export type ToolCallLogRecord = {
   requestId?: string;
+  runId?: string;
+  stepId?: string;
   agentId?: string;
   userId?: string;
   toolCallId?: string;

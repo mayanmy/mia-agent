@@ -45,6 +45,10 @@ export const ErrorCodes = {
     invalidExternalUser: 5002,
     conversationNotFound: 5003,
     rateLimited: 5004
+  },
+  agentRun: {
+    notFound: 6001,
+    invalidState: 6002
   }
 } as const;
 

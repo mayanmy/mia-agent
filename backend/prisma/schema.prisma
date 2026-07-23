@@ -64,21 +64,67 @@ enum ExternalUserSource {
   @@map("external_user_source")
 }
 
+/// 一次 Agent Run 的调用入口，用于区分内部成员、公开访客和业务系统请求。
+enum AgentRunSource {
+  INTERNAL_CHAT
+  PUBLIC_WIDGET
+  SERVICE_API
+  ASYNC_TASK
+
+  @@map("agent_run_source")
+}
+
+/// Agent Run 只允许从排队态进入运行态，再收敛到唯一终态。
+enum AgentRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+  TIMED_OUT
+
+  @@map("agent_run_status")
+}
+
+/// Step 类型覆盖当前检索、模型和工具调用，并为后续 Hook、Subagent 保留稳定值。
+enum AgentRunStepType {
+  RETRIEVAL
+  MODEL
+  TOOL
+  HOOK
+  SUBAGENT
+
+  @@map("agent_run_step_type")
+}
+
+enum AgentRunStepStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+  SKIPPED
+
+  @@map("agent_run_step_status")
+}
+
 model User {
-  id                String        @id @default(uuid()) @db.Uuid
-  email             String        @unique(map: "uq_users_email")
-  displayName       String        @map("display_name")
-  passwordHash      String        @map("password_hash")
-  role              UserRole      @default(USER)
-  lastLoginAt       DateTime?     @map("last_login_at") @db.Timestamptz(6)
-  disabledAt        DateTime?     @map("disabled_at") @db.Timestamptz(6)
-  passwordChangedAt DateTime      @default(now()) @map("password_changed_at") @db.Timestamptz(6)
-  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
-  authSessions      AuthSession[]
-  sentInvitations   UserInvitation[] @relation("UserInvitationInviter")
-  chatSessions      ChatSession[]
-  createdAgentApiKeys AgentApiKey[] @relation("AgentApiKeyCreator")
+  id                  String           @id @default(uuid()) @db.Uuid
+  email               String           @unique(map: "uq_users_email")
+  displayName         String           @map("display_name")
+  passwordHash        String           @map("password_hash")
+  role                UserRole         @default(USER)
+  lastLoginAt         DateTime?        @map("last_login_at") @db.Timestamptz(6)
+  disabledAt          DateTime?        @map("disabled_at") @db.Timestamptz(6)
+  passwordChangedAt   DateTime         @default(now()) @map("password_changed_at") @db.Timestamptz(6)
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  authSessions        AuthSession[]
+  sentInvitations     UserInvitation[] @relation("UserInvitationInviter")
+  chatSessions        ChatSession[]
+  createdAgentApiKeys AgentApiKey[]    @relation("AgentApiKeyCreator")
+  agentRuns           AgentRun[]
+  createdHttpTools    HttpTool[]       @relation("HttpToolCreator")
+  createdToolSecrets  ToolSecret[]     @relation("ToolSecretCreator")
 
   @@index([role, disabledAt], map: "idx_users_role_disabled_at")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
@@ -87,23 +133,22 @@ model User {
 
 /**
  * 管理员发出的成员激活邀请。
- *
  * 邀请阶段不预创建 User：只有持有有效链接的成员设置密码后才创建账号，因而 users 表内
  * 的记录始终都是可登录的正式成员，避免引入额外的“待激活用户”状态分支。
  */
 model UserInvitation {
-  id              String   @id @default(uuid()) @db.Uuid
-  email           String   @unique(map: "uq_user_invitations_email")
-  displayName     String   @map("display_name")
-  role            UserRole @default(USER)
-  tokenHash       String   @unique(map: "uq_user_invitations_token_hash") @map("token_hash")
-  expiresAt       DateTime @map("expires_at") @db.Timestamptz(6)
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String    @unique(map: "uq_user_invitations_email")
+  displayName     String    @map("display_name")
+  role            UserRole  @default(USER)
+  tokenHash       String    @unique(map: "uq_user_invitations_token_hash") @map("token_hash")
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(6)
   acceptedAt      DateTime? @map("accepted_at") @db.Timestamptz(6)
   revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
-  invitedByUserId String   @map("invited_by_user_id") @db.Uuid
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  invitedBy       User     @relation("UserInvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  invitedByUserId String    @map("invited_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  invitedBy       User      @relation("UserInvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Restrict)
 
   @@index([expiresAt], map: "idx_user_invitations_expires_at")
   @@index([invitedByUserId, createdAt(sort: Desc)], map: "idx_user_invitations_invited_by_created_at")
@@ -145,28 +190,28 @@ model ModelProvider {
 }
 
 model ModelConfig {
-  id                       String                @id @default(uuid()) @db.Uuid
-  providerId               String                @map("provider_id") @db.Uuid
-  modelName                String                @map("model_name")
-  modelType                ModelConfigType       @map("model_type")
-  credentialName           String                @default("") @map("credential_name")
-  contextLength            Int                   @default(4096) @map("context_length")
-  embeddingDimension       Int?                  @map("embedding_dimension")
-  enabled                  Boolean               @default(true)
-  timeoutSeconds           Int                   @default(120) @map("timeout_seconds")
-  maxTokens                Int?                  @map("max_tokens")
-  createdAt                DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt                DateTime?             @map("deleted_at") @db.Timestamptz(6)
-  provider                 ModelProvider         @relation(fields: [providerId], references: [id])
+  id                       String                   @id @default(uuid()) @db.Uuid
+  providerId               String                   @map("provider_id") @db.Uuid
+  modelName                String                   @map("model_name")
+  modelType                ModelConfigType          @map("model_type")
+  credentialName           String                   @default("") @map("credential_name")
+  contextLength            Int                      @default(4096) @map("context_length")
+  embeddingDimension       Int?                     @map("embedding_dimension")
+  enabled                  Boolean                  @default(true)
+  timeoutSeconds           Int                      @default(120) @map("timeout_seconds")
+  maxTokens                Int?                     @map("max_tokens")
+  createdAt                DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                DateTime?                @map("deleted_at") @db.Timestamptz(6)
+  provider                 ModelProvider            @relation(fields: [providerId], references: [id])
   agents                   Agent[]
   knowledgeBases           KnowledgeBase[]
   knowledgeEmbeddings      KnowledgeEmbedding[]
   knowledgeEmbeddings1024  KnowledgeEmbedding1024[]
   knowledgeEmbeddings1536  KnowledgeEmbedding1536[]
   knowledgeEmbeddings3072  KnowledgeEmbedding3072[]
-  defaultChatSettings      DefaultModelSetting[] @relation("DefaultChatModel")
-  defaultEmbeddingSettings DefaultModelSetting[] @relation("DefaultEmbeddingModel")
+  defaultChatSettings      DefaultModelSetting[]    @relation("DefaultChatModel")
+  defaultEmbeddingSettings DefaultModelSetting[]    @relation("DefaultEmbeddingModel")
 
   @@index([providerId], map: "idx_model_configs_provider_id")
   @@index([modelType, enabled], map: "idx_model_configs_type_enabled")
@@ -189,34 +234,35 @@ model DefaultModelSetting {
 }
 
 model Agent {
-  id                  String               @id @default(uuid()) @db.Uuid
-  name                String
-  description         String               @default("")
-  systemPrompt        String               @map("system_prompt") @db.Text
-  modelConfigId       String               @map("model_config_id") @db.Uuid
-  temperature         Decimal              @default(0.70) @db.Decimal(3, 2)
-  maxTokens           Int?                 @map("max_tokens")
-  timeoutSeconds      Int                  @default(120) @map("timeout_seconds")
-  historyTurns        Int                  @default(6) @map("history_turns")
-  chatSessionMode     AgentChatSessionMode @default(EPHEMERAL) @map("chat_session_mode")
-  generationParams    Json?                @map("generation_params") @db.JsonB
-  enabled             Boolean              @default(true)
-  published           Boolean              @default(false)
-  publishedAt         DateTime?            @map("published_at") @db.Timestamptz(6)
-  shareToken          String?              @unique(map: "uq_agents_share_token") @map("share_token")
-  publicExpiresAt      DateTime?            @map("public_expires_at") @db.Timestamptz(6)
-  publicAllowedOrigins String[]            @default([]) @map("public_allowed_origins")
-  publicPasswordHash  String?              @map("public_password_hash") @db.Text
-  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt           DateTime?            @map("deleted_at") @db.Timestamptz(6)
-  modelConfig         ModelConfig          @relation(fields: [modelConfigId], references: [id])
-  agentTools          AgentTool[]
-  agentKnowledgeBases AgentKnowledgeBase[]
-  chatSessions        ChatSession[]
-  apiKeys             AgentApiKey[]
-  externalEndUsers    ExternalEndUser[]
+  id                    String                 @id @default(uuid()) @db.Uuid
+  name                  String
+  description           String                 @default("")
+  systemPrompt          String                 @map("system_prompt") @db.Text
+  modelConfigId         String                 @map("model_config_id") @db.Uuid
+  temperature           Decimal                @default(0.70) @db.Decimal(3, 2)
+  maxTokens             Int?                   @map("max_tokens")
+  timeoutSeconds        Int                    @default(120) @map("timeout_seconds")
+  historyTurns          Int                    @default(6) @map("history_turns")
+  chatSessionMode       AgentChatSessionMode   @default(EPHEMERAL) @map("chat_session_mode")
+  generationParams      Json?                  @map("generation_params") @db.JsonB
+  enabled               Boolean                @default(true)
+  published             Boolean                @default(false)
+  publishedAt           DateTime?              @map("published_at") @db.Timestamptz(6)
+  shareToken            String?                @unique(map: "uq_agents_share_token") @map("share_token")
+  publicExpiresAt       DateTime?              @map("public_expires_at") @db.Timestamptz(6)
+  publicAllowedOrigins  String[]               @default([]) @map("public_allowed_origins")
+  publicPasswordHash    String?                @map("public_password_hash") @db.Text
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt             DateTime?              @map("deleted_at") @db.Timestamptz(6)
+  modelConfig           ModelConfig            @relation(fields: [modelConfigId], references: [id])
+  agentTools            AgentTool[]
+  agentKnowledgeBases   AgentKnowledgeBase[]
+  chatSessions          ChatSession[]
+  apiKeys               AgentApiKey[]
+  externalEndUsers      ExternalEndUser[]
   externalConversations ExternalConversation[]
+  runs                  AgentRun[]
 
   @@index([createdAt(sort: Desc)], map: "idx_agents_created_at")
   @@index([modelConfigId], map: "idx_agents_model_config_id")
@@ -248,14 +294,14 @@ model AgentApiKey {
 
 /// 公开 Widget 与 Service API 的外部用户。externalId 仅用作隔离键，不是 Mia 工作台身份。
 model ExternalEndUser {
-  id            String             @id @default(uuid()) @db.Uuid
-  agentId       String             @map("agent_id") @db.Uuid
+  id            String                 @id @default(uuid()) @db.Uuid
+  agentId       String                 @map("agent_id") @db.Uuid
   source        ExternalUserSource
-  externalId    String             @map("external_id")
-  firstSeenAt   DateTime           @default(now()) @map("first_seen_at") @db.Timestamptz(6)
-  lastSeenAt    DateTime           @default(now()) @map("last_seen_at") @db.Timestamptz(6)
-  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  agent         Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  externalId    String                 @map("external_id")
+  firstSeenAt   DateTime               @default(now()) @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt    DateTime               @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  agent         Agent                  @relation(fields: [agentId], references: [id], onDelete: Cascade)
   conversations ExternalConversation[]
 
   @@unique([agentId, source, externalId], map: "uq_external_end_users_agent_source_external")
@@ -307,25 +353,71 @@ model AgentTool {
   @@map("agent_tools")
 }
 
+/// 管理员预配置的 HTTP API 工具。运行时 ID 使用 `http_{id}`，继续兼容 AgentTool 的字符串绑定。
+model HttpTool {
+  id                  String      @id @default(uuid()) @db.Uuid
+  name                String
+  slug                String      @unique(map: "uq_http_tools_slug")
+  description         String      @db.Text
+  enabled             Boolean     @default(true)
+  method              String
+  baseUrl             String      @map("base_url")
+  path                String
+  parameters          Json        @db.JsonB
+  fixedHeaders        Json        @map("fixed_headers") @db.JsonB
+  authType            String      @default("none") @map("auth_type")
+  authHeaderName      String?     @map("auth_header_name")
+  authConfig          Json        @default("{}") @map("auth_config") @db.JsonB
+  secretId            String?     @unique(map: "uq_http_tools_secret_id") @map("secret_id") @db.Uuid
+  timeoutMs           Int         @default(10000) @map("timeout_ms")
+  maxResponseBytes    Int         @default(1000000) @map("max_response_bytes")
+  allowPrivateNetwork Boolean     @default(false) @map("allow_private_network")
+  createdByUserId     String      @map("created_by_user_id") @db.Uuid
+  deletedAt           DateTime?   @map("deleted_at") @db.Timestamptz(6)
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  secret              ToolSecret? @relation(fields: [secretId], references: [id], onDelete: SetNull)
+  createdBy           User        @relation("HttpToolCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([enabled, deletedAt], map: "idx_http_tools_enabled_deleted_at")
+  @@index([createdAt(sort: Desc)], map: "idx_http_tools_created_at")
+  @@map("http_tools")
+}
+
+/// HTTP Tool 的加密凭据。API 与日志只暴露 configured 状态，禁止返回密文。
+model ToolSecret {
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String
+  encryptedValue  String    @map("encrypted_value") @db.Text
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  httpTool        HttpTool?
+  createdBy       User      @relation("ToolSecretCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([createdByUserId, createdAt(sort: Desc)], map: "idx_tool_secrets_creator_created_at")
+  @@map("tool_secrets")
+}
+
 /// 保留型 Agent 的成员私有会话。
 ///
 /// 一个成员可以为同一个 Agent 创建多条会话；所有查询都必须同时按 user_id 和 agent_id
 /// 过滤，避免仅凭 session ID 访问到其他成员的对话。
 model ChatSession {
-  id            String            @id @default(uuid()) @db.Uuid
-  agentId       String            @map("agent_id") @db.Uuid
-  userId        String            @map("user_id") @db.Uuid
-  title         String            @default("")
-  status        ChatSessionStatus @default(ACTIVE)
-  summary       String?           @db.Text
-  summaryUntilId String?          @map("summary_until_id") @db.Uuid
-  lastMessageAt DateTime?         @map("last_message_at") @db.Timestamptz(6)
-  archivedAt    DateTime?         @map("archived_at") @db.Timestamptz(6)
-  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  agent         Agent             @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages      ChatSessionMessage[]
+  id             String               @id @default(uuid()) @db.Uuid
+  agentId        String               @map("agent_id") @db.Uuid
+  userId         String               @map("user_id") @db.Uuid
+  title          String               @default("")
+  status         ChatSessionStatus    @default(ACTIVE)
+  summary        String?              @db.Text
+  summaryUntilId String?              @map("summary_until_id") @db.Uuid
+  lastMessageAt  DateTime?            @map("last_message_at") @db.Timestamptz(6)
+  archivedAt     DateTime?            @map("archived_at") @db.Timestamptz(6)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  agent          Agent                @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages       ChatSessionMessage[]
 
   @@index([agentId, userId, status, lastMessageAt(sort: Desc)], map: "idx_chat_sessions_agent_user_status_last_message")
   @@index([userId, status, updatedAt(sort: Desc)], map: "idx_chat_sessions_user_status_updated_at")
@@ -362,6 +454,8 @@ model ToolCallLog {
   errorType    String?  @map("error_type")
   errorMessage String?  @map("error_message") @db.Text
   elapsedMs    Int?     @map("elapsed_ms")
+  runId        String?  @map("run_id") @db.Uuid
+  stepId       String?  @map("step_id") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([createdAt(sort: Desc)], map: "idx_tool_call_logs_created_at")
@@ -369,22 +463,85 @@ model ToolCallLog {
   @@index([agentId, createdAt(sort: Desc)], map: "idx_tool_call_logs_agent_id_created_at")
   @@index([toolId, createdAt(sort: Desc)], map: "idx_tool_call_logs_tool_id_created_at")
   @@index([status, createdAt(sort: Desc)], map: "idx_tool_call_logs_status_created_at")
+  @@index([runId], map: "idx_tool_call_logs_run_id")
+  @@index([stepId], map: "idx_tool_call_logs_step_id")
   @@map("tool_call_logs")
 }
 
+/// 一次 Agent 执行的顶层记录。会话 ID 只作为跨模块追踪键，不建立到会话表的 ORM 关系。
+model AgentRun {
+  id                     String         @id @default(uuid()) @db.Uuid
+  requestId              String         @map("request_id")
+  source                 AgentRunSource
+  agentId                String         @map("agent_id") @db.Uuid
+  userId                 String?        @map("user_id") @db.Uuid
+  sessionId              String?        @map("session_id") @db.Uuid
+  externalConversationId String?        @map("external_conversation_id") @db.Uuid
+  status                 AgentRunStatus @default(QUEUED)
+  modelConfigId          String?        @map("model_config_id") @db.Uuid
+  inputPreview           String         @map("input_preview") @db.Text
+  outputPreview          String?        @map("output_preview") @db.Text
+  inputTokens            Int?           @map("input_tokens")
+  outputTokens           Int?           @map("output_tokens")
+  estimatedCost          Decimal?       @map("estimated_cost") @db.Decimal(12, 6)
+  firstTokenAt           DateTime?      @map("first_token_at") @db.Timestamptz(6)
+  startedAt              DateTime?      @map("started_at") @db.Timestamptz(6)
+  finishedAt             DateTime?      @map("finished_at") @db.Timestamptz(6)
+  errorType              String?        @map("error_type")
+  errorMessage           String?        @map("error_message") @db.Text
+  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  agent                  Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user                   User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  steps                  AgentRunStep[]
+
+  @@index([requestId], map: "idx_agent_runs_request_id")
+  @@index([agentId, createdAt(sort: Desc)], map: "idx_agent_runs_agent_created_at")
+  @@index([userId, createdAt(sort: Desc)], map: "idx_agent_runs_user_created_at")
+  @@index([status, createdAt(sort: Desc)], map: "idx_agent_runs_status_created_at")
+  @@index([sessionId, createdAt(sort: Desc)], map: "idx_agent_runs_session_created_at")
+  @@index([externalConversationId, createdAt(sort: Desc)], map: "idx_agent_runs_external_conversation_created_at")
+  @@map("agent_runs")
+}
+
+/// Run 内的可排序执行步骤，记录检索、模型、工具等阶段的状态和脱敏摘要。
+model AgentRunStep {
+  id           String             @id @default(uuid()) @db.Uuid
+  runId        String             @map("run_id") @db.Uuid
+  sequence     Int
+  type         AgentRunStepType
+  name         String
+  status       AgentRunStepStatus @default(RUNNING)
+  input        Json?              @db.JsonB
+  output       Json?              @db.JsonB
+  elapsedMs    Int?               @map("elapsed_ms")
+  errorType    String?            @map("error_type")
+  errorMessage String?            @map("error_message") @db.Text
+  startedAt    DateTime           @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt   DateTime?          @map("finished_at") @db.Timestamptz(6)
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  run          AgentRun           @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, sequence], map: "uq_agent_run_steps_run_sequence")
+  @@index([runId, sequence], map: "idx_agent_run_steps_run_sequence")
+  @@index([type, startedAt(sort: Desc)], map: "idx_agent_run_steps_type_started_at")
+  @@index([status, startedAt(sort: Desc)], map: "idx_agent_run_steps_status_started_at")
+  @@map("agent_run_steps")
+}
+
 model KnowledgeBase {
-  id                     String               @id @default(uuid()) @db.Uuid
+  id                     String                   @id @default(uuid()) @db.Uuid
   name                   String
-  description            String               @default("")
-  embeddingModelConfigId String               @map("embedding_model_config_id") @db.Uuid
-  embeddingDimension     Int                  @default(1536) @map("embedding_dimension")
-  vectorStoreType        String               @default("PGVECTOR") @map("vector_store_type")
-  vectorCollectionName   String               @map("vector_collection_name")
-  enabled                Boolean              @default(true)
-  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt              DateTime?            @map("deleted_at") @db.Timestamptz(6)
-  embeddingModelConfig   ModelConfig          @relation(fields: [embeddingModelConfigId], references: [id])
+  description            String                   @default("")
+  embeddingModelConfigId String                   @map("embedding_model_config_id") @db.Uuid
+  embeddingDimension     Int                      @default(1536) @map("embedding_dimension")
+  vectorStoreType        String                   @default("PGVECTOR") @map("vector_store_type")
+  vectorCollectionName   String                   @map("vector_collection_name")
+  enabled                Boolean                  @default(true)
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt              DateTime?                @map("deleted_at") @db.Timestamptz(6)
+  embeddingModelConfig   ModelConfig              @relation(fields: [embeddingModelConfigId], references: [id])
   documents              KnowledgeDocument[]
   chunks                 KnowledgeChunk[]
   embeddings1024         KnowledgeEmbedding1024[]
@@ -392,11 +549,11 @@ model KnowledgeBase {
   embeddings3072         KnowledgeEmbedding3072[]
   agentKnowledgeBases    AgentKnowledgeBase[]
 
+  @@unique([vectorCollectionName], map: "uq_knowledge_bases_vector_collection_name")
   @@index([createdAt(sort: Desc)], map: "idx_knowledge_bases_created_at")
   @@index([embeddingDimension], map: "idx_knowledge_bases_embedding_dimension")
   @@index([embeddingModelConfigId], map: "idx_knowledge_bases_embedding_model_config_id")
   @@index([enabled, createdAt(sort: Desc)], map: "idx_knowledge_bases_enabled_created_at")
-  @@unique([vectorCollectionName], map: "uq_knowledge_bases_vector_collection_name")
   @@map("knowledge_bases")
 }
 
@@ -426,17 +583,17 @@ model KnowledgeDocument {
 }
 
 model KnowledgeChunk {
-  id              String              @id @default(uuid()) @db.Uuid
-  knowledgeBaseId String              @map("knowledge_base_id") @db.Uuid
-  documentId      String              @map("document_id") @db.Uuid
-  chunkIndex      Int                 @map("chunk_index")
-  content         String              @db.Text
-  tokenCount      Int?                @map("token_count")
-  metadata        Json?               @db.JsonB
-  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  deletedAt       DateTime?           @map("deleted_at") @db.Timestamptz(6)
-  knowledgeBase   KnowledgeBase       @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
-  document        KnowledgeDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  id              String                  @id @default(uuid()) @db.Uuid
+  knowledgeBaseId String                  @map("knowledge_base_id") @db.Uuid
+  documentId      String                  @map("document_id") @db.Uuid
+  chunkIndex      Int                     @map("chunk_index")
+  content         String                  @db.Text
+  tokenCount      Int?                    @map("token_count")
+  metadata        Json?                   @db.JsonB
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt       DateTime?               @map("deleted_at") @db.Timestamptz(6)
+  knowledgeBase   KnowledgeBase           @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  document        KnowledgeDocument       @relation(fields: [documentId], references: [id], onDelete: Cascade)
   embedding       KnowledgeEmbedding?
   embeddings1024  KnowledgeEmbedding1024?
   embeddings1536  KnowledgeEmbedding1536?
@@ -462,45 +619,45 @@ model KnowledgeEmbedding {
 }
 
 model KnowledgeEmbedding1024 {
-  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  knowledgeBaseId        String              @map("knowledge_base_id") @db.Uuid
-  chunkId                String              @unique(map: "uq_knowledge_embeddings_1024_chunk_id") @map("chunk_id") @db.Uuid
-  embeddingModelConfigId String              @map("embedding_model_config_id") @db.Uuid
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  knowledgeBaseId        String                @map("knowledge_base_id") @db.Uuid
+  chunkId                String                @unique(map: "uq_knowledge_embeddings_1024_chunk_id") @map("chunk_id") @db.Uuid
+  embeddingModelConfigId String                @map("embedding_model_config_id") @db.Uuid
   embedding              Unsupported("vector")
-  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  knowledgeBase          KnowledgeBase       @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
-  chunk                  KnowledgeChunk      @relation(fields: [chunkId], references: [id], onDelete: Cascade)
-  embeddingModelConfig   ModelConfig         @relation(fields: [embeddingModelConfigId], references: [id])
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  knowledgeBase          KnowledgeBase         @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunk                  KnowledgeChunk        @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  embeddingModelConfig   ModelConfig           @relation(fields: [embeddingModelConfigId], references: [id])
 
   @@index([knowledgeBaseId, embeddingModelConfigId], map: "idx_knowledge_embeddings_1024_kb_model")
   @@map("knowledge_embeddings_1024")
 }
 
 model KnowledgeEmbedding1536 {
-  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  knowledgeBaseId        String              @map("knowledge_base_id") @db.Uuid
-  chunkId                String              @unique(map: "uq_knowledge_embeddings_1536_chunk_id") @map("chunk_id") @db.Uuid
-  embeddingModelConfigId String              @map("embedding_model_config_id") @db.Uuid
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  knowledgeBaseId        String                @map("knowledge_base_id") @db.Uuid
+  chunkId                String                @unique(map: "uq_knowledge_embeddings_1536_chunk_id") @map("chunk_id") @db.Uuid
+  embeddingModelConfigId String                @map("embedding_model_config_id") @db.Uuid
   embedding              Unsupported("vector")
-  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  knowledgeBase          KnowledgeBase       @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
-  chunk                  KnowledgeChunk      @relation(fields: [chunkId], references: [id], onDelete: Cascade)
-  embeddingModelConfig   ModelConfig         @relation(fields: [embeddingModelConfigId], references: [id])
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  knowledgeBase          KnowledgeBase         @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunk                  KnowledgeChunk        @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  embeddingModelConfig   ModelConfig           @relation(fields: [embeddingModelConfigId], references: [id])
 
   @@index([knowledgeBaseId, embeddingModelConfigId], map: "idx_knowledge_embeddings_1536_kb_model")
   @@map("knowledge_embeddings_1536")
 }
 
 model KnowledgeEmbedding3072 {
-  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  knowledgeBaseId        String              @map("knowledge_base_id") @db.Uuid
-  chunkId                String              @unique(map: "uq_knowledge_embeddings_3072_chunk_id") @map("chunk_id") @db.Uuid
-  embeddingModelConfigId String              @map("embedding_model_config_id") @db.Uuid
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  knowledgeBaseId        String                @map("knowledge_base_id") @db.Uuid
+  chunkId                String                @unique(map: "uq_knowledge_embeddings_3072_chunk_id") @map("chunk_id") @db.Uuid
+  embeddingModelConfigId String                @map("embedding_model_config_id") @db.Uuid
   embedding              Unsupported("vector")
-  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  knowledgeBase          KnowledgeBase       @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
-  chunk                  KnowledgeChunk      @relation(fields: [chunkId], references: [id], onDelete: Cascade)
-  embeddingModelConfig   ModelConfig         @relation(fields: [embeddingModelConfigId], references: [id])
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  knowledgeBase          KnowledgeBase         @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunk                  KnowledgeChunk        @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  embeddingModelConfig   ModelConfig           @relation(fields: [embeddingModelConfigId], references: [id])
 
   @@index([knowledgeBaseId, embeddingModelConfigId], map: "idx_knowledge_embeddings_3072_kb_model")
   @@map("knowledge_embeddings_3072")

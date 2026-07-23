@@ -2,9 +2,11 @@ import { CanActivate, ExecutionContext, HttpStatus, Injectable } from "@nestjs/c
 import type { Request } from "express";
 
 import { AppError, ErrorCodes } from "../../../core/errors";
+import { RequestWithId } from "../../../core/request-id.middleware";
 import { AgentApiKeysService } from "../agent-api-keys.service";
 
 export type AgentApiKeyRequest = Request & {
+  requestId?: RequestWithId["requestId"];
   agentApiKey?: {
     id: string;
     agentId: string;

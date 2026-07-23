@@ -13,6 +13,7 @@
     "prisma:generate": "npm --prefix backend run prisma:generate",
     "prisma:migrate": "npm --prefix backend run prisma:migrate",
     "prisma:deploy": "npm --prefix backend run prisma:deploy",
+    "agent-runs:cleanup": "npm --prefix backend run agent-runs:cleanup",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "build": "npm run build:api && npm run build:web",

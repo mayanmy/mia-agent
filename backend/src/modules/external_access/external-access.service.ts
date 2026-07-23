@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { ExternalUserSource } from "@prisma/client";
+import { AgentRunSource, ExternalUserSource } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
 import { AgentsService } from "../agents/agents.service";
@@ -49,7 +49,8 @@ export class ExternalAccessService {
   async *streamMessage(
     owner: ExternalConversationOwner,
     payload: ChatCompletionDto,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    requestId?: string
   ): AsyncIterable<ChatStreamEvent> {
     const conversation = await this.resolveConversation(owner);
     const runtime = await this.agentsService.getAgentRuntimeConfig(owner.agentId);
@@ -69,6 +70,12 @@ export class ExternalAccessService {
     let assistantContent = "";
     let completed = false;
     const chatContext: ChatRequestContext = {
+      requestId,
+      source:
+        owner.source === ExternalUserSource.SERVICE_API
+          ? AgentRunSource.SERVICE_API
+          : AgentRunSource.PUBLIC_WIDGET,
+      externalConversationId: conversation.id,
       externalHistory: history,
       skipInternalSessionPersistence: true
     };
