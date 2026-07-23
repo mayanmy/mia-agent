@@ -256,8 +256,120 @@
   color: #111827;
   line-height: 1.7;
   padding: 12px 14px;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Markdown 本身控制段落和换行，不能再对气泡整体使用 white-space: pre-wrap。 */
+.chatMarkdown {
+  overflow-wrap: anywhere;
+}
+
+.chatMarkdown > :first-child {
+  margin-top: 0;
+}
+
+.chatMarkdown > :last-child {
+  margin-bottom: 0;
+}
+
+.chatMarkdown h1,
+.chatMarkdown h2,
+.chatMarkdown h3,
+.chatMarkdown h4,
+.chatMarkdown h5,
+.chatMarkdown h6 {
+  color: #111827;
+  line-height: 1.35;
+  margin: 18px 0 8px;
+}
+
+.chatMarkdown h1 {
+  font-size: 20px;
+}
+
+.chatMarkdown h2 {
+  font-size: 18px;
+}
+
+.chatMarkdown h3 {
+  font-size: 16px;
+}
+
+.chatMarkdown h4,
+.chatMarkdown h5,
+.chatMarkdown h6 {
+  font-size: 14px;
+}
+
+.chatMarkdown p {
+  margin: 0 0 10px;
+}
+
+.chatMarkdown ul,
+.chatMarkdown ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.chatMarkdown li + li {
+  margin-top: 4px;
+}
+
+.chatMarkdown code {
+  background: #f1f5f9;
+  border-radius: 4px;
+  color: #be123c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+  padding: 2px 4px;
+}
+
+.chatMarkdown pre {
+  background: #0f172a;
+  border-radius: 6px;
+  color: #e2e8f0;
+  margin: 10px 0;
+  overflow-x: auto;
+  padding: 12px;
+}
+
+.chatMarkdown pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.chatMarkdown blockquote {
+  border-left: 3px solid #93c5fd;
+  color: #475569;
+  margin: 10px 0;
+  padding-left: 12px;
+}
+
+.chatMarkdown table {
+  border-collapse: collapse;
+  display: block;
+  margin: 10px 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chatMarkdown th,
+.chatMarkdown td {
+  border: 1px solid #dbe3ef;
+  padding: 6px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.chatMarkdown th {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.chatMarkdown a {
+  color: #2563eb;
+  text-decoration: underline;
 }
 
 .chatRetrievalEvents,

@@ -1,5 +1,7 @@
 import { Button } from "antd";
 import { CopyOutlined } from "@ant-design/icons";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import type { ChatRetrievalSource } from "../api";
 import type { ChatUiMessage } from "../types";
@@ -57,7 +59,7 @@ export function ChatMessageItem({
             ))}
           </div>
         ) : null}
-        {item.content}
+        <MarkdownMessageContent content={item.content} />
         {generating ? <GeneratingIndicator /> : null}
         {citationSources.length > 0 ? <CitationSourceList sources={citationSources} /> : null}
       </div>
@@ -73,6 +75,35 @@ export function ChatMessageItem({
           onClick={() => onCopy(item.content)}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * 消息内容始终保留模型返回的原始 Markdown。
+ *
+ * ReactMarkdown 默认不会解析原始 HTML，因此模型输出的 HTML 不会直接注入 DOM；复制按钮
+ * 继续使用 item.content，确保用户拿到的是可复用的 Markdown 源文，而不是渲染后的纯文本。
+ */
+function MarkdownMessageContent({ content }: { content: string }) {
+  if (!content) {
+    return null;
+  }
+
+  return (
+    <div className="chatMarkdown">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ children, href }) => (
+            <a href={href} rel="noreferrer noopener" target="_blank">
+              {children}
+            </a>
+          )
+        }}
+      >
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }
