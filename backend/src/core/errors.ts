@@ -57,7 +57,13 @@ export const ErrorCodes = {
     revisionConflict: 7003,
     invalidGraph: 7004,
     notPublished: 7005,
-    validationFailed: 7006
+    validationFailed: 7006,
+    resourceUnavailable: 7007,
+    nodeFailed: 7008,
+    nodeTimeout: 7009,
+    executionLimitExceeded: 7010,
+    contextTooLarge: 7011,
+    outputInvalid: 7012
   }
 } as const;
 
