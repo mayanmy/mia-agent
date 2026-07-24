@@ -14,6 +14,7 @@ import { PrismaModule } from "./modules/prisma/prisma.module";
 import { RetrievalModule } from "./modules/retrieval/retrieval.module";
 import { ToolsModule } from "./modules/tools/tools.module";
 import { UsersModule } from "./modules/users/users.module";
+import { WorkflowsModule } from "./modules/workflows/workflows.module";
 import { JwtAuthGuard } from "./core/auth/jwt-auth.guard";
 import { RolesGuard } from "./core/auth/roles.guard";
 
@@ -25,6 +26,7 @@ import { RolesGuard } from "./core/auth/roles.guard";
     HealthModule,
     ModelProvidersModule,
     AgentRunsModule,
+    WorkflowsModule,
     AgentsModule,
     ChatModule,
     ExternalAccessModule,

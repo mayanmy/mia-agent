@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { AgentChatSessionMode, ModelConfigType, Prisma } from "@prisma/client";
+import { AgentChatSessionMode, AgentExecutionMode, ModelConfigType, Prisma } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 
 import { AppError, ErrorCodes } from "../../core/errors";
@@ -10,6 +10,7 @@ import { ModelProvidersService } from "../model-providers/model-providers.servic
 import { PrismaService } from "../prisma/prisma.service";
 import { ToolsService } from "../tools/tools.service";
 import { CurrentUserDto } from "../users/dto/user.dto";
+import { WorkflowsService } from "../workflows/workflows.service";
 import {
   AgentCreateDto,
   AgentDetail,
@@ -26,6 +27,8 @@ import {
   AgentToolBindingDto,
   AgentToolBindingResult,
   AgentUpdateDto,
+  AgentWorkflowBindingDto,
+  AgentWorkflowBindingResult,
   SharedAgentDetail
 } from "./dto/agent.dto";
 
@@ -41,6 +44,7 @@ type AgentWithModelConfig = Prisma.AgentGetPayload<{
       };
     };
     agentTools: true;
+    agentWorkflow: true;
     agentKnowledgeBases: {
       include: {
         knowledgeBase: {
@@ -84,7 +88,8 @@ export class AgentsService {
     private readonly prisma: PrismaService,
     private readonly modelProvidersService: ModelProvidersService,
     private readonly toolsService: ToolsService,
-    private readonly knowledgeService: KnowledgeService
+    private readonly knowledgeService: KnowledgeService,
+    private readonly workflowsService: WorkflowsService
   ) {}
 
   /**
@@ -117,6 +122,7 @@ export class AgentsService {
             }
           },
           agentTools: true,
+          agentWorkflow: true,
           agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
           _count: {
             select: {
@@ -168,6 +174,7 @@ export class AgentsService {
           }
         },
         agentTools: true,
+        agentWorkflow: true,
         agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
         _count: {
           select: {
@@ -224,6 +231,7 @@ export class AgentsService {
           }
         },
         agentTools: true,
+        agentWorkflow: true,
         agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
         _count: {
           select: {
@@ -254,9 +262,24 @@ export class AgentsService {
     const existing = await this.prisma.agent.findUnique({
       where: { id },
       select: {
-        shareToken: true
+        shareToken: true,
+        executionMode: true,
+        agentWorkflow: true
       }
     });
+    if (existing?.executionMode === AgentExecutionMode.WORKFLOW) {
+      if (!existing.agentWorkflow) {
+        throw new AppError(
+          ErrorCodes.agent.invalidWorkflow,
+          "WORKFLOW 模式的 Agent 必须绑定已发布 Workflow Version"
+        );
+      }
+      // 发布前重新校验，防止 Agent 绑定后 Workflow 被归档或发布版本发生变化。
+      await this.workflowsService.getPublishedRuntimeConfig(
+        existing.agentWorkflow.workflowId,
+        existing.agentWorkflow.workflowVersionId
+      );
+    }
     const shareToken = existing?.shareToken || this.createShareToken();
 
     const agent = await this.prisma.agent.update({
@@ -469,6 +492,13 @@ export class AgentsService {
       timeoutSeconds: agent.timeoutSeconds,
       historyTurns: agent.historyTurns,
       chatSessionMode: agent.chatSessionMode,
+      executionMode: agent.executionMode,
+      workflow: agent.agentWorkflow
+        ? {
+            workflowId: agent.agentWorkflow.workflowId,
+            workflowVersionId: agent.agentWorkflow.workflowVersionId
+          }
+        : null,
       generationParams: this.toGenerationParams(agent.generationParams),
       knowledgeBaseIds: agent.agentKnowledgeBases
         .filter((knowledgeBase) => this.isActiveAgentKnowledgeBase(knowledgeBase))
@@ -492,6 +522,71 @@ export class AgentsService {
     return {
       agentId: id,
       toolIds: tools.map((tool) => tool.toolId)
+    };
+  }
+
+  /** 读取 Agent 当前执行策略；绑定表由 agents 模块独占写入。 */
+  async getAgentWorkflow(id: string): Promise<AgentWorkflowBindingResult> {
+    await this.ensureAgentExists(id);
+    const agent = await this.prisma.agent.findUniqueOrThrow({
+      where: { id },
+      select: { executionMode: true, agentWorkflow: true }
+    });
+    return {
+      agentId: id,
+      executionMode: agent.executionMode,
+      workflow: agent.agentWorkflow
+        ? {
+            workflowId: agent.agentWorkflow.workflowId,
+            workflowVersionId: agent.agentWorkflow.workflowVersionId
+          }
+        : null
+    };
+  }
+
+  /**
+   * WORKFLOW 模式只允许绑定 WorkflowsService 确认过的当前发布版本；切回自主循环会删除绑定，
+   * 避免运行时同时看到两套互相矛盾的执行配置。
+   */
+  async updateAgentWorkflow(
+    id: string,
+    payload: AgentWorkflowBindingDto
+  ): Promise<AgentWorkflowBindingResult> {
+    await this.ensureAgentExists(id);
+    const executionMode = this.normalizeExecutionMode(payload.executionMode);
+
+    if (executionMode === AgentExecutionMode.AGENT_LOOP) {
+      await this.prisma.$transaction([
+        this.prisma.agentWorkflow.deleteMany({ where: { agentId: id } }),
+        this.prisma.agent.update({
+          where: { id },
+          data: { executionMode: AgentExecutionMode.AGENT_LOOP }
+        })
+      ]);
+      return { agentId: id, executionMode, workflow: null };
+    }
+
+    const workflowId = this.requireNonEmptyString(payload.workflowId, "workflowId");
+    const workflowVersionId = this.requireNonEmptyString(
+      payload.workflowVersionId,
+      "workflowVersionId"
+    );
+    await this.workflowsService.getPublishedRuntimeConfig(workflowId, workflowVersionId);
+    await this.prisma.$transaction([
+      this.prisma.agentWorkflow.upsert({
+        where: { agentId: id },
+        create: { agentId: id, workflowId, workflowVersionId },
+        update: { workflowId, workflowVersionId }
+      }),
+      this.prisma.agent.update({
+        where: { id },
+        data: { executionMode: AgentExecutionMode.WORKFLOW }
+      })
+    ]);
+    return {
+      agentId: id,
+      executionMode,
+      workflow: { workflowId, workflowVersionId }
     };
   }
 
@@ -741,6 +836,16 @@ export class AgentsService {
     );
   }
 
+  private normalizeExecutionMode(value: unknown): AgentExecutionMode {
+    if (value === AgentExecutionMode.AGENT_LOOP || value === AgentExecutionMode.WORKFLOW) {
+      return value;
+    }
+    throw new AppError(
+      ErrorCodes.common.badRequest,
+      "executionMode must be AGENT_LOOP or WORKFLOW"
+    );
+  }
+
   private normalizeGenerationParams(value: unknown): AgentGenerationParams | null {
     if (value === undefined || value === null || value === "") {
       return null;
@@ -937,6 +1042,7 @@ export class AgentsService {
           }
         },
         agentTools: true,
+        agentWorkflow: true,
         agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
         _count: {
           select: {
@@ -968,6 +1074,7 @@ export class AgentsService {
       ).length,
       temperature: Number(agent.temperature),
       chatSessionMode: agent.chatSessionMode,
+      executionMode: agent.executionMode,
       enabled: agent.enabled,
       published: agent.published,
       publishedAt: agent.publishedAt,
@@ -990,7 +1097,13 @@ export class AgentsService {
       knowledgeBaseIds: agent.agentKnowledgeBases.map(
         (knowledgeBase) => knowledgeBase.knowledgeBaseId
       ),
-      modelConfig: this.toModelConfigSummary(agent)
+      modelConfig: this.toModelConfigSummary(agent),
+      workflow: agent.agentWorkflow
+        ? {
+            workflowId: agent.agentWorkflow.workflowId,
+            workflowVersionId: agent.agentWorkflow.workflowVersionId
+          }
+        : null
     };
   }
 

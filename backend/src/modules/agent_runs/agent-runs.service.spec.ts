@@ -23,23 +23,44 @@ export const tests = [
       let findQuery: Record<string, unknown> | undefined;
       const createdAt = new Date("2026-07-22T08:00:00.000Z");
       const run = {
-        id: "run-1", requestId: "request-1", source: AgentRunSource.INTERNAL_CHAT,
-        status: AgentRunStatus.COMPLETED, agentId: "agent-1", userId: "user-1",
-        sessionId: null, externalConversationId: null, modelConfigId: "model-1",
-        inputPreview: "hello", outputPreview: "world", inputTokens: 2, outputTokens: 3,
-        estimatedCost: null, firstTokenAt: createdAt, startedAt: createdAt, finishedAt: createdAt,
-        errorType: null, errorMessage: null, createdAt, updatedAt: createdAt,
+        id: "run-1",
+        requestId: "request-1",
+        source: AgentRunSource.INTERNAL_CHAT,
+        status: AgentRunStatus.COMPLETED,
+        agentId: "agent-1",
+        userId: "user-1",
+        sessionId: null,
+        externalConversationId: null,
+        modelConfigId: "model-1",
+        inputPreview: "hello",
+        outputPreview: "world",
+        inputTokens: 2,
+        outputTokens: 3,
+        estimatedCost: null,
+        firstTokenAt: createdAt,
+        startedAt: createdAt,
+        finishedAt: createdAt,
+        errorType: null,
+        errorMessage: null,
+        createdAt,
+        updatedAt: createdAt,
         _count: { steps: 2 }
       };
       const prisma = {
         agentRun: {
-          findMany: async (query: Record<string, unknown>) => { findQuery = query; return [run]; },
+          findMany: async (query: Record<string, unknown>) => {
+            findQuery = query;
+            return [run];
+          },
           count: async () => 1
         }
       };
       const result = await new AgentRunsService(prisma as never).listRuns({
-        page: "2", pageSize: "10", status: AgentRunStatus.COMPLETED,
-        agentId: " agent-1 ", createdFrom: "2026-07-01T00:00:00.000Z"
+        page: "2",
+        pageSize: "10",
+        status: AgentRunStatus.COMPLETED,
+        agentId: " agent-1 ",
+        createdFrom: "2026-07-01T00:00:00.000Z"
       });
 
       assert.equal(result.page, 2);
@@ -58,29 +79,63 @@ export const tests = [
       const createdAt = new Date("2026-07-22T08:00:00.000Z");
       const prisma = {
         agentRun: {
-          findUnique: async ({ where }: { where: { id: string } }) => where.id === "missing" ? null : ({
-            id: "run-1", requestId: "request-1", source: AgentRunSource.SERVICE_API,
-            status: AgentRunStatus.FAILED, agentId: "agent-1", userId: null, sessionId: null,
-            externalConversationId: "conversation-1", modelConfigId: "model-1",
-            inputPreview: "hello", outputPreview: null, inputTokens: null, outputTokens: null,
-            estimatedCost: null, firstTokenAt: null, startedAt: createdAt, finishedAt: createdAt,
-            errorType: "model_timeout", errorMessage: "timeout", createdAt, updatedAt: createdAt,
-            steps: [{ id: "step-1", sequence: 1, type: AgentRunStepType.MODEL, name: "chat_stream",
-              status: AgentRunStepStatus.FAILED, input: null, output: null, elapsedMs: 20,
-              errorType: "model_timeout", errorMessage: "timeout", startedAt: createdAt, finishedAt: createdAt }]
-          })
+          findUnique: async ({ where }: { where: { id: string } }) =>
+            where.id === "missing"
+              ? null
+              : {
+                  id: "run-1",
+                  requestId: "request-1",
+                  source: AgentRunSource.SERVICE_API,
+                  status: AgentRunStatus.FAILED,
+                  agentId: "agent-1",
+                  userId: null,
+                  sessionId: null,
+                  externalConversationId: "conversation-1",
+                  modelConfigId: "model-1",
+                  inputPreview: "hello",
+                  outputPreview: null,
+                  inputTokens: null,
+                  outputTokens: null,
+                  estimatedCost: null,
+                  firstTokenAt: null,
+                  startedAt: createdAt,
+                  finishedAt: createdAt,
+                  errorType: "model_timeout",
+                  errorMessage: "timeout",
+                  createdAt,
+                  updatedAt: createdAt,
+                  steps: [
+                    {
+                      id: "step-1",
+                      sequence: 1,
+                      type: AgentRunStepType.MODEL,
+                      name: "chat_stream",
+                      status: AgentRunStepStatus.FAILED,
+                      input: null,
+                      output: null,
+                      elapsedMs: 20,
+                      errorType: "model_timeout",
+                      errorMessage: "timeout",
+                      startedAt: createdAt,
+                      finishedAt: createdAt
+                    }
+                  ]
+                }
         }
       };
       const service = new AgentRunsService(prisma as never);
       const detail = await service.getRunDetail("run-1");
       assert.equal(detail.steps[0].sequence, 1);
       assert.equal(detail.externalConversationId, "conversation-1");
-      await assert.rejects(() => service.getRunDetail("missing"), (error) => {
-        assert.ok(error instanceof AppError);
-        assert.equal(error.code, ErrorCodes.agentRun.notFound);
-        assert.equal(error.httpStatus, 404);
-        return true;
-      });
+      await assert.rejects(
+        () => service.getRunDetail("missing"),
+        (error) => {
+          assert.ok(error instanceof AppError);
+          assert.equal(error.code, ErrorCodes.agentRun.notFound);
+          assert.equal(error.httpStatus, 404);
+          return true;
+        }
+      );
     }
   },
   {

@@ -89,6 +89,8 @@ export class AgentRunsService {
         sequence: step.sequence,
         type: step.type,
         name: step.name,
+        nodeId: step.nodeId,
+        attempt: step.attempt,
         status: step.status,
         input: step.input,
         output: step.output,
@@ -109,11 +111,16 @@ export class AgentRunsService {
     completedRetentionDays = 90,
     failedRetentionDays = 180
   ): Promise<CleanupAgentRunsResult> {
-    const completedDays = this.requireRetentionDays(completedRetentionDays, "completedRetentionDays");
+    const completedDays = this.requireRetentionDays(
+      completedRetentionDays,
+      "completedRetentionDays"
+    );
     const failedDays = this.requireRetentionDays(failedRetentionDays, "failedRetentionDays");
     const completedCutoff = new Date(Date.now() - completedDays * 86_400_000);
     const failedCutoff = new Date(Date.now() - failedDays * 86_400_000);
-    const rows = await this.prisma.$queryRaw<Array<{ deleted_runs: bigint; deleted_tool_logs: bigint }>>(
+    const rows = await this.prisma.$queryRaw<
+      Array<{ deleted_runs: bigint; deleted_tool_logs: bigint }>
+    >(
       Prisma.sql`
         WITH expired_runs AS (
           SELECT id
@@ -155,6 +162,9 @@ export class AgentRunsService {
         userId: this.optionalText(payload.userId),
         sessionId: this.optionalText(payload.sessionId),
         externalConversationId: this.optionalText(payload.externalConversationId),
+        workflowId: this.optionalText(payload.workflowId),
+        workflowVersionId: this.optionalText(payload.workflowVersionId),
+        workflowRunMode: payload.workflowRunMode,
         inputPreview: this.truncate(payload.inputPreview, INPUT_PREVIEW_LIMIT)
       },
       select: {
@@ -261,6 +271,8 @@ export class AgentRunsService {
           sequence: payload.sequence,
           type: payload.type,
           name: this.requireText(payload.name, "name"),
+          nodeId: this.optionalText(payload.nodeId),
+          attempt: this.optionalPositiveInteger(payload.attempt, "attempt") ?? 1,
           input: this.toPrismaJson(payload.input)
         },
         select: {
@@ -474,6 +486,9 @@ export class AgentRunsService {
       userId: run.userId,
       sessionId: run.sessionId,
       modelConfigId: run.modelConfigId,
+      workflowId: run.workflowId,
+      workflowVersionId: run.workflowVersionId,
+      workflowRunMode: run.workflowRunMode,
       inputPreview: run.inputPreview,
       outputPreview: run.outputPreview,
       inputTokens: run.inputTokens,
@@ -532,6 +547,15 @@ export class AgentRunsService {
       throw new AppError(ErrorCodes.common.badRequest, `${fieldName} 必须是非负整数`);
     }
 
+    return value;
+  }
+
+  /** Workflow 节点重试次数从 1 开始，普通 Agent Step 未提供时仍保持首次执行。 */
+  private optionalPositiveInteger(value: number | undefined, fieldName: string) {
+    if (value === undefined) return undefined;
+    if (!Number.isInteger(value) || value < 1) {
+      throw new AppError(ErrorCodes.common.badRequest, `${fieldName} 必须是正整数`);
+    }
     return value;
   }
 

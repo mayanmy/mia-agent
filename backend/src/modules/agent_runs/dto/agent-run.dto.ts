@@ -1,4 +1,4 @@
-import { AgentRunSource, AgentRunStatus } from "@prisma/client";
+import { AgentRunSource, AgentRunStatus, WorkflowRunMode } from "@prisma/client";
 
 export type CreateAgentRunDto = {
   requestId: string;
@@ -7,6 +7,9 @@ export type CreateAgentRunDto = {
   userId?: string;
   sessionId?: string;
   externalConversationId?: string;
+  workflowId?: string;
+  workflowVersionId?: string;
+  workflowRunMode?: WorkflowRunMode;
   inputPreview: string;
 };
 

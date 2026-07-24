@@ -9,6 +9,8 @@ export type StartAgentRunStepDto = {
   sequence: number;
   type: AgentRunStepType;
   name: string;
+  nodeId?: string;
+  attempt?: number;
   input?: TraceJsonValue;
 };
 

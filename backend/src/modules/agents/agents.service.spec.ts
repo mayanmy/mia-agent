@@ -1,4 +1,5 @@
 import * as assert from "node:assert/strict";
+import { AgentExecutionMode } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
 import { AgentsService } from "./agents.service";
@@ -34,7 +35,8 @@ export const tests = [
         prisma as never,
         modelProvidersService as never,
         toolsService as never,
-        knowledgeService as never
+        knowledgeService as never,
+        {} as never
       );
 
       await assert.rejects(
@@ -76,7 +78,8 @@ export const tests = [
         prisma as never,
         modelProvidersService as never,
         toolsService as never,
-        knowledgeService as never
+        knowledgeService as never,
+        {} as never
       );
 
       await assert.rejects(
@@ -88,6 +91,89 @@ export const tests = [
           assert.ok(error instanceof AppError);
           assert.equal(error.code, ErrorCodes.agent.invalidKnowledgeBases);
           assert.equal(error.message, "unknown or disabled knowledgeBaseIds: missing_kb");
+          return true;
+        }
+      );
+    }
+  },
+  {
+    name: "AgentsService binds only a Workflow version accepted by WorkflowsService",
+    run: async () => {
+      const writes: Array<Record<string, unknown>> = [];
+      const prisma = {
+        agent: {
+          findFirst: async () => ({ id: "agent-id" }),
+          update: async (request: Record<string, unknown>) => {
+            writes.push(request);
+            return {};
+          }
+        },
+        agentWorkflow: {
+          upsert: async (request: Record<string, unknown>) => {
+            writes.push(request);
+            return {};
+          }
+        },
+        $transaction: async (operations: Array<Promise<unknown>>) => Promise.all(operations)
+      };
+      let validatedBinding: { workflowId: string; versionId: string } | undefined;
+      const workflowsService = {
+        getPublishedRuntimeConfig: async (workflowId: string, versionId: string) => {
+          validatedBinding = { workflowId, versionId };
+          return {};
+        }
+      };
+      const service = new AgentsService(
+        prisma as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        workflowsService as never
+      );
+
+      const result = await service.updateAgentWorkflow("agent-id", {
+        executionMode: AgentExecutionMode.WORKFLOW,
+        workflowId: "workflow-1",
+        workflowVersionId: "version-1"
+      });
+
+      assert.deepEqual(validatedBinding, {
+        workflowId: "workflow-1",
+        versionId: "version-1"
+      });
+      assert.equal(writes.length, 2);
+      assert.deepEqual(result.workflow, {
+        workflowId: "workflow-1",
+        workflowVersionId: "version-1"
+      });
+    }
+  },
+  {
+    name: "AgentsService refuses to publish a Workflow Agent without a version binding",
+    run: async () => {
+      const prisma = {
+        agent: {
+          findFirst: async () => ({ id: "agent-id" }),
+          findUnique: async () => ({
+            shareToken: null,
+            executionMode: AgentExecutionMode.WORKFLOW,
+            agentWorkflow: null
+          })
+        }
+      };
+      const service = new AgentsService(
+        prisma as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never
+      );
+
+      await assert.rejects(
+        () => service.publishAgent("agent-id"),
+        (error) => {
+          assert.ok(error instanceof AppError);
+          assert.equal(error.code, ErrorCodes.agent.invalidWorkflow);
           return true;
         }
       );

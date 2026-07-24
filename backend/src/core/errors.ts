@@ -31,7 +31,8 @@ export const ErrorCodes = {
     notFound: 3001,
     invalidModelConfig: 3002,
     invalidTools: 3003,
-    invalidKnowledgeBases: 3004
+    invalidKnowledgeBases: 3004,
+    invalidWorkflow: 3005
   },
   knowledge: {
     notFound: 4001,
@@ -49,6 +50,13 @@ export const ErrorCodes = {
   agentRun: {
     notFound: 6001,
     invalidState: 6002
+  },
+  workflow: {
+    notFound: 7001,
+    versionNotFound: 7002,
+    revisionConflict: 7003,
+    invalidGraph: 7004,
+    notPublished: 7005
   }
 } as const;
 

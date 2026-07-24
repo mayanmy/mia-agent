@@ -1,4 +1,9 @@
-import { AgentChatSessionMode, ModelConfigType, ModelProviderType } from "@prisma/client";
+import {
+  AgentChatSessionMode,
+  AgentExecutionMode,
+  ModelConfigType,
+  ModelProviderType
+} from "@prisma/client";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -48,6 +53,7 @@ export type AgentListItem = {
   knowledgeBaseCount: number;
   temperature: number;
   chatSessionMode: AgentChatSessionMode;
+  executionMode: AgentExecutionMode;
   enabled: boolean;
   published: boolean;
   publishedAt: Date | null;
@@ -66,6 +72,24 @@ export type AgentDetail = AgentListItem & {
   toolIds: string[];
   knowledgeBaseIds: string[];
   modelConfig: AgentModelConfigSummary;
+  workflow: AgentWorkflowBinding | null;
+};
+
+export type AgentWorkflowBinding = {
+  workflowId: string;
+  workflowVersionId: string;
+};
+
+export type AgentWorkflowBindingDto = {
+  executionMode?: AgentExecutionMode;
+  workflowId?: string | null;
+  workflowVersionId?: string | null;
+};
+
+export type AgentWorkflowBindingResult = {
+  agentId: string;
+  executionMode: AgentExecutionMode;
+  workflow: AgentWorkflowBinding | null;
 };
 
 export type AgentToolBindingDto = {
@@ -130,6 +154,8 @@ export type AgentRuntimeConfig = {
   timeoutSeconds: number;
   historyTurns: number;
   chatSessionMode: AgentChatSessionMode;
+  executionMode: AgentExecutionMode;
+  workflow: AgentWorkflowBinding | null;
   generationParams: AgentGenerationParams | null;
   knowledgeBaseIds: string[];
   toolIds: string[];

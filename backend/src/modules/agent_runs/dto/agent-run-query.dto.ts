@@ -1,4 +1,10 @@
-import { AgentRunSource, AgentRunStatus, AgentRunStepStatus, AgentRunStepType } from "@prisma/client";
+import {
+  AgentRunSource,
+  AgentRunStatus,
+  AgentRunStepStatus,
+  AgentRunStepType,
+  WorkflowRunMode
+} from "@prisma/client";
 
 export type AgentRunQueryDto = {
   page?: string;
@@ -21,6 +27,9 @@ export type AgentRunListItem = {
   userId: string | null;
   sessionId: string | null;
   modelConfigId: string | null;
+  workflowId: string | null;
+  workflowVersionId: string | null;
+  workflowRunMode: WorkflowRunMode | null;
   inputPreview: string;
   outputPreview: string | null;
   inputTokens: number | null;
@@ -39,6 +48,8 @@ export type AgentRunStepDetail = {
   sequence: number;
   type: AgentRunStepType;
   name: string;
+  nodeId: string | null;
+  attempt: number;
   status: AgentRunStepStatus;
   input: unknown;
   output: unknown;

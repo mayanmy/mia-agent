@@ -41,6 +41,29 @@ enum AgentChatSessionMode {
   @@map("agent_chat_session_mode")
 }
 
+/// Agent 可以继续使用自主 Tool Loop，也可以绑定已发布 Workflow 进行确定性编排。
+enum AgentExecutionMode {
+  AGENT_LOOP
+  WORKFLOW
+
+  @@map("agent_execution_mode")
+}
+
+enum WorkflowStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("workflow_status")
+}
+
+enum WorkflowRunMode {
+  DRAFT_TEST
+  PUBLISHED
+
+  @@map("workflow_run_mode")
+}
+
 enum ChatSessionMessageRole {
   USER
   ASSISTANT
@@ -91,6 +114,9 @@ enum AgentRunStepType {
   RETRIEVAL
   MODEL
   TOOL
+  WORKFLOW
+  CONDITION
+  TRANSFORM
   HOOK
   SUBAGENT
 
@@ -244,6 +270,7 @@ model Agent {
   timeoutSeconds        Int                    @default(120) @map("timeout_seconds")
   historyTurns          Int                    @default(6) @map("history_turns")
   chatSessionMode       AgentChatSessionMode   @default(EPHEMERAL) @map("chat_session_mode")
+  executionMode         AgentExecutionMode     @default(AGENT_LOOP) @map("execution_mode")
   generationParams      Json?                  @map("generation_params") @db.JsonB
   enabled               Boolean                @default(true)
   published             Boolean                @default(false)
@@ -263,12 +290,64 @@ model Agent {
   externalEndUsers      ExternalEndUser[]
   externalConversations ExternalConversation[]
   runs                  AgentRun[]
+  agentWorkflow         AgentWorkflow?
 
   @@index([createdAt(sort: Desc)], map: "idx_agents_created_at")
   @@index([modelConfigId], map: "idx_agents_model_config_id")
   @@index([enabled, createdAt(sort: Desc)], map: "idx_agents_enabled_created_at")
   @@index([published, publishedAt(sort: Desc)], map: "idx_agents_published_published_at")
   @@map("agents")
+}
+
+/// Agent 只绑定一个明确的已发布 Workflow Version；关系生命周期归 agents 模块管理。
+model AgentWorkflow {
+  agentId           String   @id @map("agent_id") @db.Uuid
+  workflowId        String   @map("workflow_id") @db.Uuid
+  workflowVersionId String   @map("workflow_version_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId, workflowVersionId], map: "idx_agent_workflows_workflow_version")
+  @@map("agent_workflows")
+}
+
+/// Workflow 保存可编辑草稿；正式执行只能引用 workflow_versions 中的不可变版本。
+model Workflow {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String
+  description      String            @default("") @db.Text
+  status           WorkflowStatus    @default(DRAFT)
+  draftGraph       Json              @map("draft_graph") @db.JsonB
+  draftRevision    Int               @default(1) @map("draft_revision")
+  publishedVersion Int?              @map("published_version")
+  createdByUserId  String            @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?         @map("deleted_at") @db.Timestamptz(6)
+  versions         WorkflowVersion[]
+
+  @@index([status, updatedAt(sort: Desc)], map: "idx_workflows_status_updated_at")
+  @@index([createdByUserId, createdAt(sort: Desc)], map: "idx_workflows_creator_created_at")
+  @@map("workflows")
+}
+
+/// 发布版本不可更新；graph 用于回显，compiled_plan 从 W2 开始由编译器生成。
+model WorkflowVersion {
+  id                 String   @id @default(uuid()) @db.Uuid
+  workflowId         String   @map("workflow_id") @db.Uuid
+  version            Int
+  graphSchemaVersion Int      @map("graph_schema_version")
+  graph              Json     @db.JsonB
+  compiledPlan       Json     @map("compiled_plan") @db.JsonB
+  checksum           String
+  publishedByUserId  String   @map("published_by_user_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  workflow           Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, version], map: "uq_workflow_versions_workflow_version")
+  @@index([workflowId, createdAt(sort: Desc)], map: "idx_workflow_versions_workflow_created_at")
+  @@map("workflow_versions")
 }
 
 /// 业务后端调用 Agent 的长期凭证。原始 Key 只在创建或轮换时返回，数据库永远不保存明文。
@@ -470,29 +549,32 @@ model ToolCallLog {
 
 /// 一次 Agent 执行的顶层记录。会话 ID 只作为跨模块追踪键，不建立到会话表的 ORM 关系。
 model AgentRun {
-  id                     String         @id @default(uuid()) @db.Uuid
-  requestId              String         @map("request_id")
+  id                     String           @id @default(uuid()) @db.Uuid
+  requestId              String           @map("request_id")
   source                 AgentRunSource
-  agentId                String         @map("agent_id") @db.Uuid
-  userId                 String?        @map("user_id") @db.Uuid
-  sessionId              String?        @map("session_id") @db.Uuid
-  externalConversationId String?        @map("external_conversation_id") @db.Uuid
-  status                 AgentRunStatus @default(QUEUED)
-  modelConfigId          String?        @map("model_config_id") @db.Uuid
-  inputPreview           String         @map("input_preview") @db.Text
-  outputPreview          String?        @map("output_preview") @db.Text
-  inputTokens            Int?           @map("input_tokens")
-  outputTokens           Int?           @map("output_tokens")
-  estimatedCost          Decimal?       @map("estimated_cost") @db.Decimal(12, 6)
-  firstTokenAt           DateTime?      @map("first_token_at") @db.Timestamptz(6)
-  startedAt              DateTime?      @map("started_at") @db.Timestamptz(6)
-  finishedAt             DateTime?      @map("finished_at") @db.Timestamptz(6)
-  errorType              String?        @map("error_type")
-  errorMessage           String?        @map("error_message") @db.Text
-  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
-  agent                  Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  user                   User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  agentId                String           @map("agent_id") @db.Uuid
+  userId                 String?          @map("user_id") @db.Uuid
+  sessionId              String?          @map("session_id") @db.Uuid
+  externalConversationId String?          @map("external_conversation_id") @db.Uuid
+  status                 AgentRunStatus   @default(QUEUED)
+  modelConfigId          String?          @map("model_config_id") @db.Uuid
+  workflowId             String?          @map("workflow_id") @db.Uuid
+  workflowVersionId      String?          @map("workflow_version_id") @db.Uuid
+  workflowRunMode        WorkflowRunMode? @map("workflow_run_mode")
+  inputPreview           String           @map("input_preview") @db.Text
+  outputPreview          String?          @map("output_preview") @db.Text
+  inputTokens            Int?             @map("input_tokens")
+  outputTokens           Int?             @map("output_tokens")
+  estimatedCost          Decimal?         @map("estimated_cost") @db.Decimal(12, 6)
+  firstTokenAt           DateTime?        @map("first_token_at") @db.Timestamptz(6)
+  startedAt              DateTime?        @map("started_at") @db.Timestamptz(6)
+  finishedAt             DateTime?        @map("finished_at") @db.Timestamptz(6)
+  errorType              String?          @map("error_type")
+  errorMessage           String?          @map("error_message") @db.Text
+  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  agent                  Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user                   User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   steps                  AgentRunStep[]
 
   @@index([requestId], map: "idx_agent_runs_request_id")
@@ -501,6 +583,7 @@ model AgentRun {
   @@index([status, createdAt(sort: Desc)], map: "idx_agent_runs_status_created_at")
   @@index([sessionId, createdAt(sort: Desc)], map: "idx_agent_runs_session_created_at")
   @@index([externalConversationId, createdAt(sort: Desc)], map: "idx_agent_runs_external_conversation_created_at")
+  @@index([workflowId, workflowVersionId, createdAt(sort: Desc)], map: "idx_agent_runs_workflow_version_created_at")
   @@map("agent_runs")
 }
 
@@ -511,6 +594,8 @@ model AgentRunStep {
   sequence     Int
   type         AgentRunStepType
   name         String
+  nodeId       String?            @map("node_id")
+  attempt      Int                @default(1)
   status       AgentRunStepStatus @default(RUNNING)
   input        Json?              @db.JsonB
   output       Json?              @db.JsonB

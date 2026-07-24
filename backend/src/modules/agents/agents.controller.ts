@@ -17,7 +17,9 @@ import {
   SharedAgentDetail,
   AgentToolBindingDto,
   AgentToolBindingResult,
-  AgentUpdateDto
+  AgentUpdateDto,
+  AgentWorkflowBindingDto,
+  AgentWorkflowBindingResult
 } from "./dto/agent.dto";
 import { AgentsService } from "./agents.service";
 
@@ -108,5 +110,20 @@ export class AgentsController {
     @Body() payload: AgentKnowledgeBaseBindingDto
   ): Promise<AgentKnowledgeBaseBindingResult> {
     return this.agentsService.updateAgentKnowledgeBases(id, payload);
+  }
+
+  @Get(":id/workflow")
+  @Roles(UserRole.ADMIN)
+  async getAgentWorkflow(@Param("id") id: string): Promise<AgentWorkflowBindingResult> {
+    return this.agentsService.getAgentWorkflow(id);
+  }
+
+  @Put(":id/workflow")
+  @Roles(UserRole.ADMIN)
+  async updateAgentWorkflow(
+    @Param("id") id: string,
+    @Body() payload: AgentWorkflowBindingDto
+  ): Promise<AgentWorkflowBindingResult> {
+    return this.agentsService.updateAgentWorkflow(id, payload);
   }
 }
