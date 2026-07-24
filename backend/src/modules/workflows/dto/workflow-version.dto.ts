@@ -1,4 +1,4 @@
-import { WorkflowGraph } from "./workflow.dto";
+import { WorkflowGraph } from "./workflow-graph.dto";
 
 export type WorkflowVersionListItem = {
   id: string;

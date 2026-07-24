@@ -20,6 +20,13 @@ import {
   WorkflowVersionDetail,
   WorkflowVersionListItem
 } from "./dto/workflow-version.dto";
+import {
+  WorkflowPublishDto,
+  WorkflowPublishResult,
+  WorkflowValidateDto,
+  WorkflowValidationResult
+} from "./dto/workflow-validation.dto";
+import { WorkflowCompiler } from "./workflow-compiler";
 
 const EMPTY_WORKFLOW_GRAPH: WorkflowGraph = {
   schemaVersion: 1,
@@ -33,7 +40,10 @@ const MAX_DRAFT_EDGES = 500;
 
 @Injectable()
 export class WorkflowsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly workflowCompiler: WorkflowCompiler
+  ) {}
 
   /** 管理列表只读取未删除 Workflow，并在数据库层处理状态筛选和分页。 */
   async listWorkflows(query: WorkflowQueryDto): Promise<PageResult<WorkflowListItem>> {
@@ -144,6 +154,99 @@ export class WorkflowsService {
       draftRevision: workflow.draftRevision,
       updatedAt: workflow.updatedAt
     };
+  }
+
+  /** 前端可传临时画布做预检；未传时校验数据库中的最新草稿。 */
+  async validateWorkflow(
+    id: string,
+    payload: WorkflowValidateDto = {}
+  ): Promise<WorkflowValidationResult> {
+    const workflowId = this.requireId(id, "workflowId");
+    const workflow = await this.prisma.workflow.findFirst({
+      where: { id: workflowId, deletedAt: null },
+      select: { draftGraph: true }
+    });
+    if (!workflow) throw this.notFound();
+    const graph =
+      payload.graph === undefined ? workflow.draftGraph : this.normalizeGraph(payload.graph);
+    return this.workflowCompiler.compile(graph);
+  }
+
+  /**
+   * 外部资源校验可能发生远程或多模块读取，因此先在事务外编译；写事务再用 revision
+   * 做条件更新，保证被发布的 graph 与 compiledPlan 一定来自同一份草稿。
+   */
+  async publishWorkflow(
+    id: string,
+    payload: WorkflowPublishDto = {},
+    actorUserId: string
+  ): Promise<WorkflowPublishResult> {
+    const workflowId = this.requireId(id, "workflowId");
+    const expectedRevision = this.requirePositiveInteger(
+      payload.expectedRevision,
+      "expectedRevision"
+    );
+    const publisherId = this.requireId(actorUserId, "actorUserId");
+    const workflow = await this.prisma.workflow.findFirst({
+      where: { id: workflowId, deletedAt: null },
+      select: {
+        draftGraph: true,
+        draftRevision: true,
+        publishedVersion: true
+      }
+    });
+    if (!workflow) throw this.notFound();
+    if (workflow.draftRevision !== expectedRevision) throw this.revisionConflict();
+
+    const graph = this.normalizeGraph(workflow.draftGraph);
+    const compilation = await this.workflowCompiler.compile(graph);
+    if (!compilation.valid || !compilation.compiledPlan || !compilation.checksum) {
+      const summary = compilation.issues.map((issue) => issue.message).join("；");
+      throw new AppError(ErrorCodes.workflow.validationFailed, summary || "Workflow 编译校验失败");
+    }
+    const nextVersion = (workflow.publishedVersion ?? 0) + 1;
+    const compiledPlan = compilation.compiledPlan;
+    const checksum = compilation.checksum;
+
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const updated = await transaction.workflow.updateMany({
+          where: {
+            id: workflowId,
+            deletedAt: null,
+            draftRevision: expectedRevision,
+            // 同一 draftRevision 可能被两个发布请求同时读取，旧 publishedVersion 也是写入前置条件。
+            publishedVersion: workflow.publishedVersion
+          },
+          data: {
+            status: WorkflowStatus.PUBLISHED,
+            publishedVersion: nextVersion
+          }
+        });
+        if (updated.count !== 1) throw this.revisionConflict();
+
+        const version = await transaction.workflowVersion.create({
+          data: {
+            workflowId,
+            version: nextVersion,
+            graphSchemaVersion: graph.schemaVersion,
+            graph: graph as Prisma.InputJsonValue,
+            compiledPlan: compiledPlan as unknown as Prisma.InputJsonValue,
+            checksum,
+            publishedByUserId: publisherId
+          },
+          select: { id: true, createdAt: true }
+        });
+        return {
+          workflowId,
+          workflowVersionId: version.id,
+          version: nextVersion,
+          checksum,
+          publishedAt: version.createdAt
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
   }
 
   /** 软删除保留历史 Version 和 Run 的可解释性，并阻止其继续作为已发布配置使用。 */
@@ -360,5 +463,13 @@ export class WorkflowsService {
 
   private notFound(): AppError {
     return new AppError(ErrorCodes.workflow.notFound, "Workflow 不存在", HttpStatus.NOT_FOUND);
+  }
+
+  private revisionConflict(): AppError {
+    return new AppError(
+      ErrorCodes.workflow.revisionConflict,
+      "Workflow 草稿已被其他操作更新，请刷新后重试",
+      HttpStatus.CONFLICT
+    );
   }
 }

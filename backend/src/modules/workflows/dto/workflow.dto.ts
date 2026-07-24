@@ -1,10 +1,7 @@
 import { WorkflowStatus } from "@prisma/client";
+import { WorkflowGraph } from "./workflow-graph.dto";
 
-export type WorkflowGraph = {
-  schemaVersion: number;
-  nodes: unknown[];
-  edges: unknown[];
-};
+export type { WorkflowGraph } from "./workflow-graph.dto";
 
 export type WorkflowCreateDto = {
   name?: string;

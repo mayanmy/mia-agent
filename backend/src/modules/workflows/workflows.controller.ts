@@ -14,6 +14,12 @@ import {
   WorkflowQueryDto,
   WorkflowUpdateDto
 } from "./dto/workflow.dto";
+import {
+  WorkflowPublishDto,
+  WorkflowPublishResult,
+  WorkflowValidateDto,
+  WorkflowValidationResult
+} from "./dto/workflow-validation.dto";
 import { WorkflowVersionDetail, WorkflowVersionListItem } from "./dto/workflow-version.dto";
 import { WorkflowsService } from "./workflows.service";
 
@@ -54,6 +60,23 @@ export class WorkflowsController {
     @Body() payload: WorkflowDraftUpdateDto
   ): Promise<WorkflowDraftUpdateResult> {
     return this.workflowsService.updateDraft(id, payload);
+  }
+
+  @Post(":id/validate")
+  validateWorkflow(
+    @Param("id") id: string,
+    @Body() payload: WorkflowValidateDto
+  ): Promise<WorkflowValidationResult> {
+    return this.workflowsService.validateWorkflow(id, payload);
+  }
+
+  @Post(":id/publish")
+  publishWorkflow(
+    @Param("id") id: string,
+    @Body() payload: WorkflowPublishDto,
+    @CurrentUser() currentUser: CurrentUserDto
+  ): Promise<WorkflowPublishResult> {
+    return this.workflowsService.publishWorkflow(id, payload, currentUser.id);
   }
 
   @Delete(":id")

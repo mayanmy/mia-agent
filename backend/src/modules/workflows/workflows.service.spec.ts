@@ -3,10 +3,12 @@ import { WorkflowStatus } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
 import { WorkflowsController } from "./workflows.controller";
+import { WorkflowGraph } from "./dto/workflow-graph.dto";
 import { WorkflowsService } from "./workflows.service";
 
 const now = new Date("2026-07-29T10:00:00.000Z");
-const graph = { schemaVersion: 1, nodes: [], edges: [] };
+const graph: WorkflowGraph = { schemaVersion: 1, nodes: [], edges: [] };
+const unusedCompiler = { compile: async () => ({ valid: true, issues: [] }) };
 
 export const tests = [
   {
@@ -39,10 +41,10 @@ export const tests = [
           }
         }
       };
-      const result = await new WorkflowsService(prisma as never).createWorkflow(
-        { name: "  穿衣流程  ", graph },
-        "user-1"
-      );
+      const result = await new WorkflowsService(
+        prisma as never,
+        unusedCompiler as never
+      ).createWorkflow({ name: "  穿衣流程  ", graph }, "user-1");
 
       assert.equal(result.name, "穿衣流程");
       assert.equal(result.draftRevision, 1);
@@ -64,7 +66,10 @@ export const tests = [
           findUniqueOrThrow: async () => ({ draftRevision: 4, updatedAt: now })
         }
       };
-      const result = await new WorkflowsService(prisma as never).updateDraft("workflow-1", {
+      const result = await new WorkflowsService(
+        prisma as never,
+        unusedCompiler as never
+      ).updateDraft("workflow-1", {
         expectedRevision: 3,
         graph
       });
@@ -86,7 +91,7 @@ export const tests = [
           findFirst: async () => ({ id: "workflow-1" })
         }
       };
-      const service = new WorkflowsService(prisma as never);
+      const service = new WorkflowsService(prisma as never, unusedCompiler as never);
 
       await assert.rejects(
         () => service.updateDraft("workflow-1", { expectedRevision: 2, graph }),
@@ -115,13 +120,74 @@ export const tests = [
           })
         }
       };
-      const result = await new WorkflowsService(prisma as never).getPublishedRuntimeConfig(
-        "workflow-1",
-        "version-2"
-      );
+      const result = await new WorkflowsService(
+        prisma as never,
+        unusedCompiler as never
+      ).getPublishedRuntimeConfig("workflow-1", "version-2");
 
       assert.equal(result.workflowVersionId, "version-2");
       assert.deepEqual(result.compiledPlan, { startNodeId: "start" });
+    }
+  },
+  {
+    name: "WorkflowsService publishes a compiled immutable version transactionally",
+    run: async () => {
+      const executableGraph: WorkflowGraph = {
+        schemaVersion: 1,
+        nodes: [
+          { id: "start", type: "start", name: "开始", config: { inputs: [] } },
+          { id: "end", type: "end", name: "结束", config: { output: {} } }
+        ],
+        edges: [{ id: "edge-1", source: "start", target: "end" }]
+      };
+      let versionData: Record<string, unknown> | undefined;
+      let publishWhere: Record<string, unknown> | undefined;
+      const transaction = {
+        workflow: {
+          updateMany: async ({ where }: { where: Record<string, unknown> }) => {
+            publishWhere = where;
+            return { count: 1 };
+          }
+        },
+        workflowVersion: {
+          create: async ({ data }: { data: Record<string, unknown> }) => {
+            versionData = data;
+            return { id: "version-1", createdAt: now };
+          }
+        }
+      };
+      const prisma = {
+        workflow: {
+          findFirst: async () => ({
+            draftGraph: executableGraph,
+            draftRevision: 3,
+            publishedVersion: null
+          })
+        },
+        $transaction: async (callback: (client: typeof transaction) => Promise<unknown>) =>
+          callback(transaction)
+      };
+      const compiler = {
+        compile: async () => ({
+          valid: true,
+          issues: [],
+          compiledPlan: { schemaVersion: 1, startNodeId: "start" },
+          checksum: "compiled-checksum"
+        })
+      };
+
+      const result = await new WorkflowsService(prisma as never, compiler as never).publishWorkflow(
+        "workflow-1",
+        { expectedRevision: 3 },
+        "user-1"
+      );
+
+      assert.equal(result.workflowVersionId, "version-1");
+      assert.equal(result.version, 1);
+      assert.equal(versionData?.checksum, "compiled-checksum");
+      assert.deepEqual(versionData?.graph, executableGraph);
+      assert.equal(publishWhere?.draftRevision, 3);
+      assert.equal(publishWhere?.publishedVersion, null);
     }
   }
 ];

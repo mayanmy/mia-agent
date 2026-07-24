@@ -10,6 +10,8 @@ import { tests as knowledgeTests } from "../modules/knowledge/knowledge.service.
 import { tests as retrievalTests } from "../modules/retrieval/retrieval.service.spec";
 import { tests as toolTests } from "../modules/tools/tools.service.spec";
 import { tests as workflowTests } from "../modules/workflows/workflows.service.spec";
+import { tests as workflowCompilerTests } from "../modules/workflows/workflow-compiler.spec";
+import { tests as workflowExpressionTests } from "../modules/workflows/expression-parser.spec";
 
 type TestCase = {
   name: string;
@@ -23,6 +25,8 @@ const tests: TestCase[] = [
   ...agentPromptBuilderTests,
   ...agentRuntimeTests,
   ...agentTests,
+  ...workflowExpressionTests,
+  ...workflowCompilerTests,
   ...workflowTests,
   ...knowledgeTests,
   ...retrievalTests,

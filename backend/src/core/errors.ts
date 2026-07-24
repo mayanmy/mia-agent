@@ -56,7 +56,8 @@ export const ErrorCodes = {
     versionNotFound: 7002,
     revisionConflict: 7003,
     invalidGraph: 7004,
-    notPublished: 7005
+    notPublished: 7005,
+    validationFailed: 7006
   }
 } as const;
 
