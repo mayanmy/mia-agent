@@ -282,10 +282,29 @@ export class WorkflowCompiler {
       if (node.type === "llm") {
         this.requireConfigString(node, "modelConfigId", issues);
         this.requireConfigString(node, "prompt", issues);
+        this.optionalConfigString(node, "systemPrompt", issues);
+        this.optionalNumberRange(node, "temperature", 0, 2, issues);
+        this.optionalPositiveInteger(node, "maxTokens", issues);
+        this.optionalPositiveNumber(node, "timeoutSeconds", issues);
+        if (
+          node.config.responseFormat !== undefined &&
+          node.config.responseFormat !== "text" &&
+          node.config.responseFormat !== "json_object"
+        ) {
+          this.addIssue(
+            issues,
+            "NODE_CONFIG_INVALID",
+            "responseFormat 只支持 text 或 json_object",
+            node.id,
+            "responseFormat"
+          );
+        }
       }
       if (node.type === "retrieval") {
         this.requireStringArray(node, "knowledgeBaseIds", issues);
         this.requireConfigString(node, "query", issues);
+        this.optionalPositiveInteger(node, "topK", issues);
+        this.optionalNumberRange(node, "scoreThreshold", 0, 1, issues);
       }
       if (node.type === "tool") {
         this.requireConfigString(node, "toolId", issues);
@@ -296,6 +315,20 @@ export class WorkflowCompiler {
             "arguments 必须是对象",
             node.id,
             "arguments"
+          );
+        }
+        this.optionalPositiveNumber(node, "timeoutSeconds", issues);
+        if (
+          node.config.failurePolicy !== undefined &&
+          node.config.failurePolicy !== "fail" &&
+          node.config.failurePolicy !== "continue"
+        ) {
+          this.addIssue(
+            issues,
+            "NODE_CONFIG_INVALID",
+            "failurePolicy 只支持 fail 或 continue",
+            node.id,
+            "failurePolicy"
           );
         }
       }
@@ -717,6 +750,68 @@ export class WorkflowCompiler {
       value.some((item) => !this.nonEmptyString(item))
     ) {
       this.addIssue(issues, "NODE_CONFIG_INVALID", `${field} 必须是非空字符串数组`, node.id, field);
+    }
+  }
+
+  /** 可选字符串存在时也必须保持静态字符串类型。 */
+  private optionalConfigString(
+    node: WorkflowNode,
+    field: string,
+    issues: WorkflowValidationIssue[]
+  ): void {
+    const value = node.config[field];
+    if (value !== undefined && typeof value !== "string") {
+      this.addIssue(issues, "NODE_CONFIG_INVALID", `${field} 必须是字符串`, node.id, field);
+    }
+  }
+
+  /** 浮点配置使用闭区间校验，不接受字符串形式数字。 */
+  private optionalNumberRange(
+    node: WorkflowNode,
+    field: string,
+    minimum: number,
+    maximum: number,
+    issues: WorkflowValidationIssue[]
+  ): void {
+    const value = node.config[field];
+    if (
+      value !== undefined &&
+      (typeof value !== "number" || !Number.isFinite(value) || value < minimum || value > maximum)
+    ) {
+      this.addIssue(
+        issues,
+        "NODE_CONFIG_INVALID",
+        `${field} 必须在 ${minimum}-${maximum} 之间`,
+        node.id,
+        field
+      );
+    }
+  }
+
+  /** Token 和 Top K 等计数配置必须为正整数。 */
+  private optionalPositiveInteger(
+    node: WorkflowNode,
+    field: string,
+    issues: WorkflowValidationIssue[]
+  ): void {
+    const value = node.config[field];
+    if (value !== undefined && (!Number.isInteger(value) || Number(value) < 1)) {
+      this.addIssue(issues, "NODE_CONFIG_INVALID", `${field} 必须是正整数`, node.id, field);
+    }
+  }
+
+  /** 节点超时允许小数秒，但必须为有限正数。 */
+  private optionalPositiveNumber(
+    node: WorkflowNode,
+    field: string,
+    issues: WorkflowValidationIssue[]
+  ): void {
+    const value = node.config[field];
+    if (
+      value !== undefined &&
+      (typeof value !== "number" || !Number.isFinite(value) || value <= 0)
+    ) {
+      this.addIssue(issues, "NODE_CONFIG_INVALID", `${field} 必须是正数`, node.id, field);
     }
   }
 

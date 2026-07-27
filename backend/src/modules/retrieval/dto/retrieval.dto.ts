@@ -13,3 +13,11 @@ export type RetrievalContext = {
   sources: RetrievalSource[];
   elapsedMs: number;
 };
+
+export type RetrieveKnowledgeContextRequest = {
+  query: string;
+  knowledgeBaseIds: string[];
+  topK?: number;
+  scoreThreshold?: number;
+  signal?: AbortSignal;
+};

@@ -153,5 +153,60 @@ export const tests = [
         }
       );
     }
+  },
+  {
+    name: "RetrievalService forwards cancellation and applies score threshold after merging",
+    run: async () => {
+      const signal = new AbortController().signal;
+      let embeddingSignal: AbortSignal | undefined;
+      const service = new RetrievalService(
+        {
+          getRetrievalConfigs: async () => [
+            {
+              id: "kb-a",
+              embeddingModelConfigId: "embedding-a",
+              embeddingDimension: 2,
+              vectorStoreType: "PGVECTOR",
+              vectorCollectionName: "kb-a"
+            }
+          ]
+        } as never,
+        {
+          createEmbedding: async ({ signal: requestSignal }: { signal?: AbortSignal }) => {
+            embeddingSignal = requestSignal;
+            return { embeddings: [[0.1, 0.2]] };
+          }
+        } as never,
+        {
+          search: async () => [
+            { content: "high", score: 0.9 },
+            { content: "low", score: 0.4 }
+          ]
+        } as never
+      );
+
+      const result = await service.retrieveKnowledgeContext({
+        query: "hello",
+        knowledgeBaseIds: ["kb-a"],
+        scoreThreshold: 0.7,
+        signal
+      });
+
+      assert.equal(embeddingSignal, signal);
+      assert.deepEqual(
+        result.sources.map((source) => source.content),
+        ["high"]
+      );
+
+      const resultWithInvalidThreshold = await service.retrieveKnowledgeContext({
+        query: "hello",
+        knowledgeBaseIds: ["kb-a"],
+        scoreThreshold: 2
+      });
+      assert.deepEqual(
+        resultWithInvalidThreshold.sources.map((source) => source.content),
+        ["high", "low"]
+      );
+    }
   }
 ];

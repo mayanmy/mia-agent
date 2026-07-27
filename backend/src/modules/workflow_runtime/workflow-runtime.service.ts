@@ -23,6 +23,7 @@ const MAX_EXECUTED_NODES = 50;
 const DEFAULT_WORKFLOW_TIMEOUT_MS = 180_000;
 const MAX_WORKFLOW_TIMEOUT_MS = 300_000;
 const DEFAULT_NODE_TIMEOUT_MS = 30_000;
+const DEFAULT_LLM_NODE_TIMEOUT_MS = 120_000;
 const MAX_NODE_TIMEOUT_MS = 120_000;
 const MAX_NODE_OUTPUT_BYTES = 1024 * 1024;
 const MAX_CONTEXT_BYTES = 5 * 1024 * 1024;
@@ -183,7 +184,7 @@ export class WorkflowRuntimeService {
     requestSignal: AbortSignal | undefined,
     deadline: number
   ): AsyncGenerator<NodeExecutionEvent, NodeExecutionResult, void> {
-    const configuredTimeout = this.normalizeNodeTimeout(node.config.timeoutSeconds);
+    const configuredTimeout = this.normalizeNodeTimeout(node.config.timeoutSeconds, node.type);
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw this.workflowTimeout(node.id);
     const timeoutMs = Math.min(configuredTimeout, remaining);
@@ -371,8 +372,10 @@ export class WorkflowRuntimeService {
   }
 
   /** 节点 timeoutSeconds 受系统上限约束，避免配置绕过总运行治理。 */
-  private normalizeNodeTimeout(value: unknown): number {
-    if (value === undefined) return DEFAULT_NODE_TIMEOUT_MS;
+  private normalizeNodeTimeout(value: unknown, nodeType: string): number {
+    if (value === undefined) {
+      return nodeType === "llm" ? DEFAULT_LLM_NODE_TIMEOUT_MS : DEFAULT_NODE_TIMEOUT_MS;
+    }
     const milliseconds = Number(value) * 1000;
     return Number.isFinite(milliseconds) && milliseconds >= 1
       ? Math.min(milliseconds, MAX_NODE_TIMEOUT_MS)

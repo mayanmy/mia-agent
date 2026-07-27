@@ -150,6 +150,38 @@ export const tests = [
     }
   },
   {
+    name: "WorkflowCompiler rejects invalid capability node settings",
+    run: async () => {
+      const invalid: WorkflowGraph = {
+        ...graph,
+        nodes: graph.nodes.map((node) => {
+          if (node.id === "search") {
+            return {
+              ...node,
+              config: { ...node.config, topK: 0, scoreThreshold: 2 }
+            };
+          }
+          if (node.id === "answer") {
+            return {
+              ...node,
+              config: {
+                ...node.config,
+                temperature: 3,
+                maxTokens: 0,
+                responseFormat: "yaml"
+              }
+            };
+          }
+          return node;
+        })
+      };
+      const result = await createCompiler().compile(invalid);
+
+      assert.equal(result.valid, false);
+      assert.ok(result.issues.filter((issue) => issue.code === "NODE_CONFIG_INVALID").length >= 5);
+    }
+  },
+  {
     name: "WorkflowCompiler rejects references produced by only one condition branch",
     run: async () => {
       const branchGraph: WorkflowGraph = {
