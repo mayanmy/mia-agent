@@ -12,6 +12,9 @@ export type AgentRunListItem = {
   userId: string | null;
   sessionId: string | null;
   modelConfigId: string | null;
+  workflowId: string | null;
+  workflowVersionId: string | null;
+  workflowRunMode: "DRAFT_TEST" | "PUBLISHED" | null;
   inputPreview: string;
   outputPreview: string | null;
   inputTokens: number | null;
@@ -30,6 +33,8 @@ export type AgentRunStep = {
   sequence: number;
   type: string;
   name: string;
+  nodeId: string | null;
+  attempt: number;
   status: string;
   input: unknown;
   output: unknown;

@@ -475,6 +475,11 @@ export function ChatPage() {
               setSessionId(event.data.sessionId);
             }
 
+            if (event.type === "message_end" && typeof event.data.content === "string") {
+              // Workflow End answer 是最终权威内容，可能没有 token，也可能转换过中间模型输出。
+              replaceAssistantContent(assistantMessageId, event.data.content);
+            }
+
             if (event.type === "retrieval_start") {
               appendRetrievalEvent(assistantMessageId, {
                 id: createMessageId(),
@@ -572,6 +577,13 @@ export function ChatPage() {
             }
           : item
       )
+    );
+  }
+
+  /** 终态回答覆盖流式草稿，保证 Workflow 的 End 输出与页面、历史记录完全一致。 */
+  function replaceAssistantContent(messageId: string, content: string) {
+    setMessages((current) =>
+      current.map((item) => (item.id === messageId ? { ...item, content } : item))
     );
   }
 

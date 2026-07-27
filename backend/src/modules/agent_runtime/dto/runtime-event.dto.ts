@@ -13,6 +13,9 @@ export type RuntimeRunStartedData = {
   modelName: string;
   providerName: string;
   sessionId: string | null;
+  executionMode?: "AGENT_LOOP" | "WORKFLOW";
+  workflowId?: string;
+  workflowVersionId?: string;
 };
 
 export type RuntimeCompletion = {
@@ -23,6 +26,9 @@ export type RuntimeCompletion = {
   providerName: string;
   sessionId: string | null;
   content: string;
+  executionMode?: "AGENT_LOOP" | "WORKFLOW";
+  workflowId?: string;
+  workflowVersionId?: string;
   usage?: RuntimeUsage;
 };
 

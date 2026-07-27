@@ -123,6 +123,7 @@ export const tests = [
       assert.equal(events[0].data.runId, "run-1");
       assert.equal(events.at(-1)?.type, "message_end");
       assert.equal(events.at(-1)?.data.runId, "run-1");
+      assert.equal(events.at(-1)?.data.content, "hello world");
       assert.equal(traceCalls.filter((call) => call.method === "startStep").length, 1);
       assert.equal(traceCalls.filter((call) => call.method === "markFirstToken").length, 1);
       assert.equal(traceCalls.filter((call) => call.method === "completeRun").length, 1);

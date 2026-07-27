@@ -1,5 +1,10 @@
 import { Injectable, Logger, Optional } from "@nestjs/common";
-import { AgentRunSource, AgentRunStepType } from "@prisma/client";
+import {
+  AgentExecutionMode,
+  AgentRunSource,
+  AgentRunStepType,
+  WorkflowRunMode
+} from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
 import { AgentRunsService } from "../agent_runs/agent-runs.service";
@@ -7,12 +12,15 @@ import { AgentRunErrorDto } from "../agent_runs/dto/agent-run.dto";
 import { TraceJsonValue } from "../agent_runs/dto/agent-run-step.dto";
 import { RuntimeError } from "./dto/runtime-error.dto";
 import { AgentsService } from "../agents/agents.service";
+import { AgentRuntimeConfig } from "../agents/dto/agent.dto";
 import { ModelProvidersService } from "../model-providers/model-providers.service";
 import { ChatMessage, LLMToolCall, LLMToolDefinition } from "../model-providers/dto/llm.dto";
 import { RetrievalContext } from "../retrieval/dto/retrieval.dto";
 import { RetrievalService } from "../retrieval/retrieval.service";
 import { ToolCallLogRecord, ToolDefinition, ToolJsonValue } from "../tools/dto/tool.dto";
 import { ToolsService } from "../tools/tools.service";
+import { WorkflowRuntimeEvent } from "../workflow_runtime/dto/workflow-run.dto";
+import { WorkflowRuntimeService } from "../workflow_runtime/workflow-runtime.service";
 import { AgentRunRequest } from "./dto/agent-run.dto";
 import { AgentRuntimeEvent } from "./dto/runtime-event.dto";
 import { AgentPromptBuilder } from "./prompt-builder";
@@ -42,7 +50,8 @@ export class AgentRuntimeService {
     @Optional() private readonly modelProvidersService?: ModelProvidersService,
     @Optional() private readonly toolsService?: ToolsService,
     @Optional() private readonly retrievalService?: RetrievalService,
-    @Optional() private readonly promptBuilder?: AgentPromptBuilder
+    @Optional() private readonly promptBuilder?: AgentPromptBuilder,
+    @Optional() private readonly workflowRuntimeService?: WorkflowRuntimeService
   ) {}
 
   /**
@@ -54,7 +63,9 @@ export class AgentRuntimeService {
 
     try {
       const agent = await this.requireAgentsService().getAgentRuntimeConfig(request.agentId);
-      this.ensureImageInputSupported(agent.modelName, request.message.images ?? []);
+      if (agent.executionMode !== AgentExecutionMode.WORKFLOW) {
+        this.ensureImageInputSupported(agent.modelName, request.message.images ?? []);
+      }
       trace = await this.createTrace({
         requestId: request.requestId,
         source: request.source,
@@ -63,8 +74,35 @@ export class AgentRuntimeService {
         sessionId: request.sessionId,
         externalConversationId: request.externalConversationId,
         inputPreview: request.message.text,
-        modelConfigId: agent.modelConfigId
+        modelConfigId:
+          agent.executionMode === AgentExecutionMode.WORKFLOW ? undefined : agent.modelConfigId,
+        workflowId: agent.workflow?.workflowId,
+        workflowVersionId: agent.workflow?.workflowVersionId,
+        workflowRunMode:
+          agent.executionMode === AgentExecutionMode.WORKFLOW
+            ? WorkflowRunMode.PUBLISHED
+            : undefined
       });
+      yield {
+        type: "run_started",
+        data: {
+          runId: trace?.runId,
+          agentId: agent.agentId,
+          modelConfigId: agent.modelConfigId,
+          modelName: agent.modelName,
+          providerName: agent.providerType,
+          sessionId: request.sessionId ?? null,
+          executionMode: agent.executionMode,
+          workflowId: agent.workflow?.workflowId,
+          workflowVersionId: agent.workflow?.workflowVersionId
+        }
+      };
+
+      if (agent.executionMode === AgentExecutionMode.WORKFLOW) {
+        yield* this.runWorkflowAgent(request, agent, trace);
+        return;
+      }
+
       const toolDefinitions = await this.requireToolsService().getToolDefinitions(agent.toolIds);
       const llmTools = this.toLLMToolDefinitions(toolDefinitions);
       await this.recordToolAvailability({
@@ -75,17 +113,6 @@ export class AgentRuntimeService {
         toolIds: agent.toolIds,
         toolDefinitions
       });
-      yield {
-        type: "run_started",
-        data: {
-          runId: trace?.runId,
-          agentId: agent.agentId,
-          modelConfigId: agent.modelConfigId,
-          modelName: agent.modelName,
-          providerName: agent.providerType,
-          sessionId: request.sessionId ?? null
-        }
-      };
 
       let retrievalContext: RetrievalContext | null = null;
       if (agent.knowledgeBaseIds.length > 0) {
@@ -286,6 +313,212 @@ export class AgentRuntimeService {
     }
   }
 
+  /**
+   * 将已发布 Workflow 的节点事件桥接为统一 Agent Runtime Event，并同步写入 Run Step。
+   * 三类 Chat 入口只消费 Agent Event，因此不会感知底层是自主循环还是确定性 Workflow。
+   */
+  private async *runWorkflowAgent(
+    request: AgentRunRequest,
+    agent: AgentRuntimeConfig,
+    trace: AgentRuntimeTrace | undefined
+  ): AsyncIterable<AgentRuntimeEvent> {
+    const binding = agent.workflow;
+    if (!binding) {
+      throw new Error("WORKFLOW 模式的 Agent 缺少已发布 Workflow Version");
+    }
+
+    const activeSteps = new Map<string, AgentRuntimeTraceStep | undefined>();
+    for await (const event of this.requireWorkflowRuntimeService().runWorkflow({
+      requestId: request.requestId,
+      runId: trace?.runId,
+      agentId: agent.agentId,
+      userId: request.userId,
+      sessionId: request.sessionId,
+      workflowId: binding.workflowId,
+      workflowVersionId: binding.workflowVersionId,
+      mode: WorkflowRunMode.PUBLISHED,
+      inputs: this.buildWorkflowInputs(request),
+      signal: request.signal
+    })) {
+      if (event.type === "workflow_started") continue;
+
+      if (event.type === "node_started") {
+        const nodeId = this.eventString(event, "nodeId");
+        const nodeType = this.eventString(event, "nodeType");
+        const name = this.eventString(event, "name") || nodeId;
+        const attempt = this.eventPositiveInteger(event, "attempt") ?? 1;
+        const step = await this.startStep(
+          trace,
+          this.toWorkflowStepType(nodeType),
+          name,
+          { nodeType, attempt },
+          { nodeId, attempt }
+        );
+        activeSteps.set(nodeId, step);
+        continue;
+      }
+
+      if (event.type === "token") {
+        await this.markFirstToken(trace);
+        yield event;
+        continue;
+      }
+
+      if (event.type === "node_completed") {
+        const nodeId = this.eventString(event, "nodeId");
+        const nodeType = this.eventString(event, "nodeType");
+        await this.completeStep(activeSteps.get(nodeId), {
+          nodeType,
+          selectedHandle: this.eventString(event, "nextHandle") || null,
+          output: this.toTraceJsonValue(event.data.output)
+        });
+        activeSteps.delete(nodeId);
+        continue;
+      }
+
+      if (event.type === "node_failed") {
+        const nodeId = this.eventString(event, "nodeId");
+        const error = this.readWorkflowError(event);
+        await this.failStep(activeSteps.get(nodeId), error);
+        activeSteps.delete(nodeId);
+        continue;
+      }
+
+      if (event.type === "workflow_completed") {
+        const content = this.eventString(event, "answer");
+        if (!content) {
+          const error = {
+            type: "workflow_answer_missing",
+            message: "Workflow End 节点必须返回非空 answer"
+          };
+          await this.failTrace(trace, error);
+          yield {
+            type: "run_failed",
+            data: { runId: trace?.runId, error: this.toPublicError(error) }
+          };
+          return;
+        }
+        await this.completeTrace(trace, content);
+        yield {
+          type: "run_completed",
+          data: {
+            runId: trace?.runId,
+            agentId: agent.agentId,
+            modelConfigId: agent.modelConfigId,
+            modelName: agent.modelName,
+            providerName: agent.providerType,
+            sessionId: request.sessionId ?? null,
+            content,
+            executionMode: AgentExecutionMode.WORKFLOW,
+            workflowId: binding.workflowId,
+            workflowVersionId: binding.workflowVersionId
+          }
+        };
+        return;
+      }
+
+      if (event.type === "workflow_failed") {
+        const error = this.readWorkflowError(event);
+        await this.failTrace(trace, error);
+        yield {
+          type: "run_failed",
+          data: { runId: trace?.runId, error: this.toWorkflowPublicError(event) }
+        };
+        return;
+      }
+
+      if (event.type === "workflow_canceled") {
+        await this.cancelTrace(trace);
+        yield { type: "run_canceled", data: { runId: trace?.runId } };
+        return;
+      }
+    }
+
+    throw new Error("Workflow Runtime 未返回终态事件");
+  }
+
+  /** Chat 输入使用固定业务字段投影；Start 节点只会保留自己声明的字段。 */
+  private buildWorkflowInputs(request: AgentRunRequest): Record<string, unknown> {
+    return {
+      query: request.message.text,
+      message: request.message.text,
+      history: request.history,
+      images: request.message.images ?? [],
+      files: request.message.files ?? [],
+      sessionId: request.sessionId ?? null
+    };
+  }
+
+  /** Workflow 节点类型映射为稳定 Step 类型，未知扩展节点先归到 WORKFLOW。 */
+  private toWorkflowStepType(nodeType: string): AgentRunStepType {
+    const mapping: Record<string, AgentRunStepType> = {
+      start: AgentRunStepType.WORKFLOW,
+      end: AgentRunStepType.WORKFLOW,
+      llm: AgentRunStepType.MODEL,
+      retrieval: AgentRunStepType.RETRIEVAL,
+      tool: AgentRunStepType.TOOL,
+      condition: AgentRunStepType.CONDITION,
+      template: AgentRunStepType.TRANSFORM
+    };
+    return mapping[nodeType] ?? AgentRunStepType.WORKFLOW;
+  }
+
+  /** Runtime Event 字段只按预期类型读取，避免异常事件对象污染 Trace。 */
+  private eventString(event: WorkflowRuntimeEvent, field: string): string {
+    const value = (event.data as Record<string, unknown>)[field];
+    return typeof value === "string" ? value : "";
+  }
+
+  /** attempt 只接受正整数，历史或扩展事件缺失时由调用方回退为 1。 */
+  private eventPositiveInteger(event: WorkflowRuntimeEvent, field: string): number | undefined {
+    const value = (event.data as Record<string, unknown>)[field];
+    return Number.isInteger(value) && Number(value) > 0 ? Number(value) : undefined;
+  }
+
+  /** 节点及 Workflow 失败统一提取安全错误字段，不持久化异常对象和堆栈。 */
+  private readWorkflowError(event: WorkflowRuntimeEvent): AgentRunErrorDto {
+    const value = (event.data as Record<string, unknown>).error;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return { type: "workflow_failed", message: "Workflow 执行失败" };
+    }
+    const error = value as Record<string, unknown>;
+    return {
+      type: typeof error.type === "string" ? error.type : "workflow_failed",
+      message: typeof error.message === "string" ? error.message : "Workflow 执行失败"
+    };
+  }
+
+  /** Workflow Runtime 已计算 retryable，Agent 层只补充公开消息并保持原分类。 */
+  private toWorkflowPublicError(event: WorkflowRuntimeEvent): RuntimeError {
+    const error = this.readWorkflowError(event);
+    const raw = (event.data as Record<string, unknown>).error;
+    const retryable =
+      Boolean(raw) &&
+      typeof raw === "object" &&
+      !Array.isArray(raw) &&
+      (raw as Record<string, unknown>).retryable === true;
+    return { ...error, publicMessage: error.message, retryable };
+  }
+
+  /** 未知节点输出递归收敛为 Trace JSON；undefined、函数和非有限数统一写 null。 */
+  private toTraceJsonValue(value: unknown): TraceJsonValue {
+    if (
+      value === null ||
+      typeof value === "string" ||
+      typeof value === "boolean" ||
+      (typeof value === "number" && Number.isFinite(value))
+    ) {
+      return value;
+    }
+    if (Array.isArray(value)) return value.map((item) => this.toTraceJsonValue(item));
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [key, this.toTraceJsonValue(item)])
+      );
+    }
+    return null;
+  }
+
   /** HTTP 入口沿用调用方 request ID，内部任务和旧调用方回退生成 UUID。 */
   resolveRequestId(requestId?: string): string {
     return requestId?.trim() || randomUUID();
@@ -300,7 +533,10 @@ export class AgentRuntimeService {
     sessionId?: string;
     externalConversationId?: string;
     inputPreview: string;
-    modelConfigId: string;
+    modelConfigId?: string;
+    workflowId?: string;
+    workflowVersionId?: string;
+    workflowRunMode?: WorkflowRunMode;
   }): Promise<AgentRuntimeTrace | undefined> {
     if (!this.agentRunsService) {
       return undefined;
@@ -327,7 +563,8 @@ export class AgentRuntimeService {
     trace: AgentRuntimeTrace | undefined,
     type: AgentRunStepType,
     name: string,
-    input?: TraceJsonValue
+    input?: TraceJsonValue,
+    metadata?: { nodeId?: string; attempt?: number }
   ): Promise<AgentRuntimeTraceStep | undefined> {
     if (!trace || !this.agentRunsService || trace.terminal) {
       return undefined;
@@ -342,7 +579,9 @@ export class AgentRuntimeService {
         sequence,
         type,
         name,
-        input
+        input,
+        ...(metadata?.nodeId ? { nodeId: metadata.nodeId } : {}),
+        ...(metadata?.attempt ? { attempt: metadata.attempt } : {})
       });
       return { stepId: step.stepId };
     } catch (error) {
@@ -377,6 +616,17 @@ export class AgentRuntimeService {
       await this.agentRunsService.failStep(step.stepId, error);
     } catch (traceError) {
       this.logTraceFailure(`结束失败 Agent Run Step 失败: ${step.stepId}`, traceError);
+    }
+  }
+
+  /** Workflow 主动取消时直接收敛 Run，不能依赖调用方 Signal 一定仍处于 aborted 状态。 */
+  async cancelTrace(trace: AgentRuntimeTrace | undefined): Promise<void> {
+    if (!trace || trace.terminal) return;
+    trace.terminal = true;
+    try {
+      await this.agentRunsService?.cancelRun(trace.runId);
+    } catch (error) {
+      this.logTraceFailure(`取消 Agent Run 失败: ${trace.runId}`, error);
     }
   }
 
@@ -1038,6 +1288,14 @@ export class AgentRuntimeService {
   private requireToolsService(): ToolsService {
     if (!this.toolsService) throw new Error("Agent Runtime 缺少 ToolsService");
     return this.toolsService;
+  }
+
+  /** Workflow 模式必须由统一 Runtime 执行，缺少依赖说明模块装配不完整。 */
+  private requireWorkflowRuntimeService(): WorkflowRuntimeService {
+    if (!this.workflowRuntimeService) {
+      throw new Error("Agent Runtime 缺少 WorkflowRuntimeService");
+    }
+    return this.workflowRuntimeService;
   }
 
   /** Runtime 依赖缺失属于部署错误，在知识检索前给出明确诊断。 */

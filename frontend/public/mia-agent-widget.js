@@ -752,6 +752,13 @@
             setWidgetConversationId(entry, event.data.conversationId);
           }
 
+          if (event.type === "message_end" && typeof event.data.content === "string") {
+            // End answer 是 Workflow 的最终结果，覆盖可能为空或仅代表中间节点的 token。
+            assistantMessage.content = event.data.content;
+            assistantMessage.bubble.textContent = assistantMessage.content;
+            scrollToBottomIfNeeded();
+          }
+
           if (event.type === "tool_call") {
             appendToolCall(assistantMessage, event.data);
             scrollToBottomIfNeeded();

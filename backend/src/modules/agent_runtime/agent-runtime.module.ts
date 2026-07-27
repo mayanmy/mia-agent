@@ -5,6 +5,7 @@ import { AgentsModule } from "../agents/agents.module";
 import { ModelProvidersModule } from "../model-providers/model-providers.module";
 import { RetrievalModule } from "../retrieval/retrieval.module";
 import { ToolsModule } from "../tools/tools.module";
+import { WorkflowRuntimeModule } from "../workflow_runtime/workflow-runtime.module";
 import { AgentRuntimeService } from "./agent-runtime.service";
 import { AgentPromptBuilder } from "./prompt-builder";
 
@@ -15,7 +16,14 @@ import { AgentPromptBuilder } from "./prompt-builder";
  * 对外暴露，Chat 只依赖该模块，不再直接持有模型、检索和工具实现。
  */
 @Module({
-  imports: [AgentRunsModule, AgentsModule, ModelProvidersModule, RetrievalModule, ToolsModule],
+  imports: [
+    AgentRunsModule,
+    AgentsModule,
+    ModelProvidersModule,
+    RetrievalModule,
+    ToolsModule,
+    WorkflowRuntimeModule
+  ],
   providers: [AgentRuntimeService, AgentPromptBuilder],
   exports: [AgentRuntimeService, AgentPromptBuilder]
 })

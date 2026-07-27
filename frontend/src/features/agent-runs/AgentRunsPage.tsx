@@ -53,6 +53,7 @@ export function AgentRunsPage() {
     { title: "时间", dataIndex: "createdAt", width: 170, render: formatDate },
     { title: "状态", dataIndex: "status", width: 110, render: (value: string) => <Tag color={statusColor(value)}>{value}</Tag> },
     { title: "来源", dataIndex: "source", width: 140 },
+    { title: "执行", width: 110, render: (_, run) => <Tag color={run.workflowVersionId ? "cyan" : "default"}>{run.workflowVersionId ? "Workflow" : "Agent Loop"}</Tag> },
     { title: "输入", dataIndex: "inputPreview", width: 280, ellipsis: true },
     { title: "Agent ID", dataIndex: "agentId", width: 220, render: (value: string) => <Typography.Text copyable className="runMono">{value}</Typography.Text> },
     { title: "步骤", dataIndex: "stepCount", width: 80 },
@@ -80,11 +81,11 @@ export function AgentRunsPage() {
 /** 将 Run 和 Step 组织为可扫描的摘要与时间线。 */
 function RunDetail({ detail }: { detail: AgentRunDetail }) {
   return <div className="runDetail">
-    <div className="runSummary">{[["Run ID", detail.id], ["Request ID", detail.requestId], ["状态", detail.status], ["来源", detail.source], ["Agent ID", detail.agentId], ["模型配置", detail.modelConfigId], ["总耗时", formatDuration(detail.startedAt, detail.finishedAt)], ["首 Token", formatDuration(detail.startedAt, detail.firstTokenAt)], ["Token", `${detail.inputTokens ?? "-"} / ${detail.outputTokens ?? "-"}`], ["错误", detail.errorType ? `${detail.errorType}: ${detail.errorMessage ?? ""}` : "-"]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value || "-"}</strong></div>)}</div>
+    <div className="runSummary">{[["Run ID", detail.id], ["Request ID", detail.requestId], ["状态", detail.status], ["来源", detail.source], ["Agent ID", detail.agentId], ["模型配置", detail.modelConfigId], ["Workflow ID", detail.workflowId], ["Workflow Version", detail.workflowVersionId], ["Workflow 模式", detail.workflowRunMode], ["总耗时", formatDuration(detail.startedAt, detail.finishedAt)], ["首 Token", formatDuration(detail.startedAt, detail.firstTokenAt)], ["Token", `${detail.inputTokens ?? "-"} / ${detail.outputTokens ?? "-"}`], ["错误", detail.errorType ? `${detail.errorType}: ${detail.errorMessage ?? ""}` : "-"]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value || "-"}</strong></div>)}</div>
     <TraceBlock title="输入" value={detail.inputPreview} />
     <TraceBlock title="输出" value={detail.outputPreview} />
     <h2>Timeline</h2>
-    <Timeline items={detail.steps.map((step) => ({ color: statusColor(step.status), children: <article className="runStep"><header><strong>#{step.sequence} {step.type} · {step.name}</strong><Tag color={statusColor(step.status)}>{step.status}</Tag><span>{step.elapsedMs === null ? "-" : `${step.elapsedMs}ms`}</span></header>{step.errorType ? <p className="runError">{step.errorType}: {step.errorMessage}</p> : null}<TraceBlock title="Input" value={step.input} /><TraceBlock title="Output" value={step.output} /></article> }))} />
+    <Timeline items={detail.steps.map((step) => ({ color: statusColor(step.status), children: <article className="runStep"><header><strong>#{step.sequence} {step.type} · {step.name}</strong><Tag color={statusColor(step.status)}>{step.status}</Tag><span>{step.elapsedMs === null ? "-" : `${step.elapsedMs}ms`}</span></header>{step.nodeId ? <Typography.Text type="secondary" copyable className="runMono">Node {step.nodeId} · Attempt {step.attempt}</Typography.Text> : null}{step.errorType ? <p className="runError">{step.errorType}: {step.errorMessage}</p> : null}<TraceBlock title="Input" value={step.input} /><TraceBlock title="Output" value={step.output} /></article> }))} />
   </div>;
 }
 

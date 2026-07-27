@@ -106,6 +106,10 @@ export class ExternalAccessService {
 
       if (event.type === "message_end") {
         completed = true;
+        // Workflow 的 End answer 可能由 Template 生成，没有 token；终态内容才是权威回答。
+        if (typeof event.data.content === "string") {
+          assistantContent = event.data.content;
+        }
       }
 
       yield event;

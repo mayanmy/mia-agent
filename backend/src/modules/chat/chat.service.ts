@@ -1,9 +1,5 @@
 import { HttpStatus, Injectable, Optional } from "@nestjs/common";
-import {
-  AgentChatSessionMode,
-  AgentRunSource,
-  ChatSessionMessageRole
-} from "@prisma/client";
+import { AgentChatSessionMode, AgentRunSource, ChatSessionMessageRole } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
 import { AgentRuntimeEvent, RuntimeCompletion } from "../agent_runtime/dto/runtime-event.dto";
@@ -313,6 +309,7 @@ export class ChatService {
           type: "message_end",
           data: {
             runId: event.data.runId,
+            content: event.data.content,
             usage: event.data.usage
           }
         };

@@ -193,8 +193,7 @@ export const tests: TestCase[] = [
         {
           async *streamCompletion() {
             yield { type: "message_start", data: {} };
-            yield { type: "token", data: { content: "你好" } };
-            yield { type: "message_end", data: {} };
+            yield { type: "message_end", data: { content: "Workflow 最终答案" } };
           }
         } as never
       );
@@ -213,7 +212,10 @@ export const tests: TestCase[] = [
 
       assert(events[0]?.data.conversationId === "conversation-1", "首个 SSE 事件应返回会话 ID");
       assert(createdMessages.length === 2, "完成响应应保存用户与助手两条消息");
-      assert(createdMessages[1]?.content === "你好", "助手完整消息应在 message_end 后写入");
+      assert(
+        createdMessages[1]?.content === "Workflow 最终答案",
+        "无 token 的 Workflow End answer 也应在 message_end 后写入"
+      );
     }
   }
 ];

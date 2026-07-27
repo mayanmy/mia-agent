@@ -369,6 +369,11 @@ async function collectStream(
       answer += String(event.data.content ?? "");
     }
 
+    if (event.type === "message_end" && typeof event.data.content === "string") {
+      // blocking 返回 End answer，避免把 Workflow 中间 LLM 节点的 token 当作最终结果。
+      answer = event.data.content;
+    }
+
     if (event.type === "error") {
       throw new Error(String(event.data.message ?? "对话失败"));
     }
