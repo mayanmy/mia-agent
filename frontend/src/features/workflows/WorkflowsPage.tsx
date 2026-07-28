@@ -25,6 +25,7 @@ import { NodePalette } from "./components/NodePalette";
 import { CreateWorkflowModal, type WorkflowCreateValues } from "./components/CreateWorkflowModal";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { WorkflowCanvas } from "./components/WorkflowCanvas";
+import { WorkflowGuide } from "./components/WorkflowGuide";
 import { WorkflowSidebar } from "./components/WorkflowSidebar";
 import { WorkflowTraceDrawer } from "./components/WorkflowTraceDrawer";
 import type {
@@ -289,9 +290,12 @@ export function WorkflowsPage() {
           <h1>Workflow 编排</h1>
           <p>构建确定性 Agent 流程，校验后发布为不可变版本。</p>
         </div>
-        <Button icon={<PlusOutlined />} type="primary" onClick={() => setCreateOpen(true)}>
-          新建 Workflow
-        </Button>
+        <Space size={8}>
+          <WorkflowGuide />
+          <Button icon={<PlusOutlined />} type="primary" onClick={() => setCreateOpen(true)}>
+            新建 Workflow
+          </Button>
+        </Space>
       </header>
 
       <div className="workflowWorkbench">
