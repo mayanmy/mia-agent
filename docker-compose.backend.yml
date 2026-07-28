@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mia}
+      POSTGRES_USER: ${POSTGRES_USER:-mia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env.docker 中配置 POSTGRES_PASSWORD}
+    volumes:
+      - mia_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build:
+      context: ./backend
+      target: build
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mia}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mia}
+    command: ["npm", "run", "prisma:deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+      target: runtime
+    restart: unless-stopped
+    ports:
+      - "${MIA_API_BIND_ADDRESS:-127.0.0.1}:${MIA_API_PORT:-8000}:8000"
+    environment:
+      NODE_ENV: production
+      MIA_ENVIRONMENT: production
+      PORT: 8000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mia}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mia}
+      MIA_API_PREFIX: /api/v1
+      MIA_CORS_ORIGINS: ${MIA_CORS_ORIGINS:-http://localhost:8080}
+      MIA_PUBLIC_BASE_URL: ${MIA_PUBLIC_BASE_URL:-http://localhost:8080}
+      MIA_SECRET_KEY: ${MIA_SECRET_KEY:?请在 .env.docker 中配置 MIA_SECRET_KEY}
+      MIA_AUTH_JWT_SECRET: ${MIA_AUTH_JWT_SECRET:?请在 .env.docker 中配置 MIA_AUTH_JWT_SECRET}
+      MIA_AUTH_COOKIE_SECURE: ${MIA_AUTH_COOKIE_SECURE:-false}
+      MIA_KNOWLEDGE_STORAGE_DIR: /app/storage/knowledge
+      TOOLS_HTTP_ALLOWED_HOSTS: ${TOOLS_HTTP_ALLOWED_HOSTS:-}
+      MIA_TOOLS_HTTP_ALLOW_LOCALHOST: ${MIA_TOOLS_HTTP_ALLOW_LOCALHOST:-false}
+    volumes:
+      - mia_knowledge_data:/app/storage/knowledge
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8000/api/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  mia_postgres_data:
+  mia_knowledge_data:

@@ -1,0 +1,18 @@
+services:
+  web:
+    build:
+      context: ./frontend
+      target: runtime
+    restart: unless-stopped
+    ports:
+      - "${MIA_WEB_BIND_ADDRESS:-0.0.0.0}:${MIA_HTTP_PORT:-8080}:80"
+    environment:
+      MIA_API_UPSTREAM: ${MIA_API_UPSTREAM:-http://host.docker.internal:8000}
+    extra_hosts:
+      # Linux Docker 使用 host-gateway；Docker Desktop 也兼容 host.docker.internal。
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5

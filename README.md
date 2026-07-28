@@ -66,6 +66,44 @@ Backend:  http://127.0.0.1:8000/api/v1/health
 Frontend: http://127.0.0.1:5173/
 ```
 
+## Docker deployment
+
+The frontend and backend use separate Compose files. They can run independently on
+one host or be copied to different servers. The backend stack includes PostgreSQL,
+Prisma migrations and the API; the frontend stack contains Nginx and static assets.
+
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
+Deploy them independently:
+
+```bash
+./deploy-backend.sh
+./deploy-frontend.sh
+```
+
+For different servers, copy the repository and `.env.docker` to both hosts. Set
+`MIA_API_UPSTREAM` on the frontend host to the reachable backend URL, and set
+`MIA_PUBLIC_BASE_URL` plus `MIA_CORS_ORIGINS` on the backend host to the frontend URL.
+
+For a Baota Panel deployment with HTTPS and SSE proxy settings, see
+[`docs/baota-nginx-deployment.md`](docs/baota-nginx-deployment.md).
+
+On first run, the script creates `.env.docker` with random database and application
+secrets. Before exposing Mia outside the host, set `MIA_PUBLIC_BASE_URL` to the HTTPS
+URL and set `MIA_AUTH_COOKIE_SECURE=true`, then run `./deploy.sh` again.
+
+Useful operations:
+
+```bash
+docker compose -p mia-backend --env-file .env.docker -f docker-compose.backend.yml logs -f
+docker compose -p mia-frontend --env-file .env.docker -f docker-compose.frontend.yml logs -f
+docker compose -p mia-backend --env-file .env.docker -f docker-compose.backend.yml down
+docker compose -p mia-frontend --env-file .env.docker -f docker-compose.frontend.yml down
+```
+
 ## Agent Widget
 
 Production embed code should use the minified widget:
