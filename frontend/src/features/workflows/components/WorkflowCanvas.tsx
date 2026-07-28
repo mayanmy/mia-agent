@@ -1,3 +1,4 @@
+import { useRef, useState, type KeyboardEvent } from "react";
 import {
   Background,
   Controls,
@@ -6,7 +7,6 @@ import {
   MiniMap,
   Position,
   ReactFlow,
-  applyEdgeChanges,
   applyNodeChanges,
   type Connection,
   type Edge,
@@ -51,6 +51,11 @@ export function WorkflowCanvas({
   onSelectNode,
   onConnectionRejected
 }: WorkflowCanvasProps) {
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const activeSelectedEdgeId = graph.edges.some((edge) => edge.id === selectedEdgeId)
+    ? selectedEdgeId
+    : null;
   const nodes: CanvasNode[] = graph.nodes.map((node) => ({
     id: node.id,
     type: "workflow",
@@ -64,6 +69,8 @@ export function WorkflowCanvas({
   }));
   const edges: Edge[] = graph.edges.map((edge) => ({
     ...edge,
+    interactionWidth: 24,
+    selected: edge.id === activeSelectedEdgeId,
     type: "smoothstep",
     markerEnd: { type: MarkerType.ArrowClosed },
     style: { strokeWidth: 1.6 }
@@ -92,16 +99,28 @@ export function WorkflowCanvas({
 
   /** 删除连线只更新 Graph DTO，发布时仍由后端重新构建邻接表。 */
   function handleEdgeChanges(changes: EdgeChange<Edge>[]) {
-    const next = applyEdgeChanges(changes, edges);
+    const removedIds = new Set(
+      changes.filter((change) => change.type === "remove").map((change) => change.id)
+    );
+    // 选择事件不属于 Graph 修改，避免点击连线时把草稿误标记为未保存。
+    if (removedIds.size === 0) return;
     onGraphChange({
       ...graph,
-      edges: next.map((edge) => ({
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        ...(edge.sourceHandle ? { sourceHandle: edge.sourceHandle } : {})
-      }))
+      edges: graph.edges.filter((edge) => !removedIds.has(edge.id))
     });
+    setSelectedEdgeId(null);
+  }
+
+  /** macOS 点击连线后主动聚焦画布，确保 Backspace/Delete 事件不会丢失。 */
+  function handleCanvasKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!activeSelectedEdgeId || (event.key !== "Backspace" && event.key !== "Delete")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onGraphChange({
+      ...graph,
+      edges: graph.edges.filter((edge) => edge.id !== activeSelectedEdgeId)
+    });
+    setSelectedEdgeId(null);
   }
 
   function handleConnect(connection: Connection) {
@@ -125,10 +144,18 @@ export function WorkflowCanvas({
   }
 
   return (
-    <div className="workflowCanvas" data-testid="workflow-canvas">
+    <div
+      className="workflowCanvas"
+      data-testid="workflow-canvas"
+      ref={canvasRef}
+      role="application"
+      aria-label="Workflow 画布"
+      tabIndex={0}
+      onKeyDown={handleCanvasKeyDown}
+    >
       <ReactFlow<CanvasNode, Edge>
         colorMode="light"
-        deleteKeyCode={["Backspace", "Delete"]}
+        deleteKeyCode={null}
         edges={edges}
         fitView
         fitViewOptions={{ padding: 0.25 }}
@@ -137,10 +164,21 @@ export function WorkflowCanvas({
         nodeTypes={{ workflow: WorkflowNodeCard }}
         nodes={nodes}
         onConnect={handleConnect}
+        onEdgeClick={(_, edge) => {
+          setSelectedEdgeId(edge.id);
+          onSelectNode(null);
+          canvasRef.current?.focus({ preventScroll: true });
+        }}
         onEdgesChange={handleEdgeChanges}
-        onNodeClick={(_, node) => onSelectNode(node.id)}
+        onNodeClick={(_, node) => {
+          setSelectedEdgeId(null);
+          onSelectNode(node.id);
+        }}
         onNodesChange={handleNodeChanges}
-        onPaneClick={() => onSelectNode(null)}
+        onPaneClick={() => {
+          setSelectedEdgeId(null);
+          onSelectNode(null);
+        }}
       >
         <Background color="#d7dde7" gap={20} size={1} />
         <MiniMap pannable zoomable nodeColor={miniMapColor} />
