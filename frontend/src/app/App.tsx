@@ -1,5 +1,19 @@
-import { lazy, Suspense } from "react";
-import { Button, Dropdown, Spin } from "antd";
+import { lazy, Suspense, useState, type ReactNode } from "react";
+import {
+  ApiOutlined,
+  ApartmentOutlined,
+  DatabaseOutlined,
+  FileSearchOutlined,
+  FundProjectionScreenOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  MessageOutlined,
+  RobotOutlined,
+  TeamOutlined,
+  ToolOutlined,
+  UserOutlined
+} from "@ant-design/icons";
+import { Button, Dropdown, Spin, Tooltip } from "antd";
 import {
   Navigate,
   NavLink,
@@ -67,19 +81,37 @@ type NavConfig = {
   label: string;
   path: string;
   roles: UserRole[];
+  icon: ReactNode;
 };
 
 const navConfig: NavConfig[] = [
-  { label: "模型供应商", path: "/providers", roles: ["ADMIN", "USER"] },
-  { label: "Agent", path: "/agents", roles: ["ADMIN", "USER"] },
-  { label: "知识库", path: "/knowledge", roles: ["ADMIN", "USER"] },
-  { label: "工具", path: "/tools", roles: ["ADMIN"] },
-  { label: "Workflow", path: "/workflows", roles: ["ADMIN"] },
-  { label: "对话", path: "/chat", roles: ["ADMIN", "USER"] },
-  { label: "日志", path: "/logs", roles: ["ADMIN", "USER"] },
-  { label: "Run Trace", path: "/agent-runs", roles: ["ADMIN"] },
-  { label: "成员", path: "/users", roles: ["ADMIN"] }
+  {
+    label: "模型供应商",
+    path: "/providers",
+    roles: ["ADMIN", "USER"],
+    icon: <ApiOutlined />
+  },
+  { label: "Agent", path: "/agents", roles: ["ADMIN", "USER"], icon: <RobotOutlined /> },
+  {
+    label: "知识库",
+    path: "/knowledge",
+    roles: ["ADMIN", "USER"],
+    icon: <DatabaseOutlined />
+  },
+  { label: "工具", path: "/tools", roles: ["ADMIN"], icon: <ToolOutlined /> },
+  { label: "Workflow", path: "/workflows", roles: ["ADMIN"], icon: <ApartmentOutlined /> },
+  { label: "对话", path: "/chat", roles: ["ADMIN", "USER"], icon: <MessageOutlined /> },
+  { label: "日志", path: "/logs", roles: ["ADMIN", "USER"], icon: <FileSearchOutlined /> },
+  {
+    label: "Run Trace",
+    path: "/agent-runs",
+    roles: ["ADMIN"],
+    icon: <FundProjectionScreenOutlined />
+  },
+  { label: "成员", path: "/users", roles: ["ADMIN"], icon: <TeamOutlined /> }
 ];
+
+const SIDEBAR_COLLAPSED_KEY = "mia.workspace.sidebarCollapsed";
 
 /** 应用路由把公开分享页、登录页和受保护工作台明确分开。 */
 export function App() {
@@ -157,30 +189,62 @@ function DefaultWorkspaceRoute() {
 function WorkspaceLayout() {
   const { currentUser, logoutCurrentDevice } = useAuth();
   const navigate = useNavigate();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const availableNavItems = navConfig.filter((item) =>
     item.roles.includes(currentUser?.role ?? "USER")
   );
 
+  /** 同步保存用户的桌面布局偏好，刷新和重新登录后继续沿用。 */
+  function toggleSidebar() {
+    setSidebarCollapsed((collapsed) => {
+      const next = !collapsed;
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        // 隐私模式可能禁用 Storage，布局仍可在当前页面正常切换。
+      }
+      return next;
+    });
+  }
+
   return (
-    <div className="appShell">
+    <div className={`appShell${sidebarCollapsed ? " sidebarCollapsed" : ""}`}>
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brandMark">M</div>
-          <div>
-            <div className="brandName">Mia</div>
-            <div className="brandMeta">AI Agent 平台</div>
+        <div className="sidebarHeader">
+          <div className="brand">
+            <div className="brandMark">M</div>
+            <div className="brandText">
+              <div className="brandName">Mia</div>
+              <div className="brandMeta">AI Agent 平台</div>
+            </div>
           </div>
+          <Tooltip title={sidebarCollapsed ? "展开菜单" : "收起菜单"} placement="right">
+            <Button
+              aria-label={sidebarCollapsed ? "展开菜单" : "收起菜单"}
+              className="sidebarToggle"
+              icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              type="text"
+              onClick={toggleSidebar}
+            />
+          </Tooltip>
         </div>
         <nav className="navList" aria-label="主导航">
           {availableNavItems.map((item) => (
-            <NavLink
-              className={({ isActive }) => `navItem${isActive ? " active" : ""}`}
-              end
+            <Tooltip
               key={item.path}
-              to={item.path}
+              placement="right"
+              title={sidebarCollapsed ? item.label : undefined}
             >
-              {item.label}
-            </NavLink>
+              <NavLink
+                aria-label={item.label}
+                className={({ isActive }) => `navItem${isActive ? " active" : ""}`}
+                end
+                to={item.path}
+              >
+                <span className="navItemIcon">{item.icon}</span>
+                <span className="navItemLabel">{item.label}</span>
+              </NavLink>
+            </Tooltip>
           ))}
         </nav>
         <Dropdown
@@ -197,9 +261,17 @@ function WorkspaceLayout() {
           }}
           trigger={["click"]}
         >
-          <Button className="accountMenu" type="text">
-            <span>{currentUser?.displayName}</span>
-            <small>{currentUser?.role === "ADMIN" ? "管理员" : "成员"}</small>
+          <Button
+            aria-label="账户菜单"
+            className="accountMenu"
+            icon={<UserOutlined />}
+            title={sidebarCollapsed ? currentUser?.displayName : undefined}
+            type="text"
+          >
+            <span className="accountMenuText">
+              <span>{currentUser?.displayName}</span>
+              <small>{currentUser?.role === "ADMIN" ? "管理员" : "成员"}</small>
+            </span>
           </Button>
         </Dropdown>
       </aside>
@@ -208,6 +280,15 @@ function WorkspaceLayout() {
       </main>
     </div>
   );
+}
+
+/** Storage 读取失败时使用展开态，保证无持久化能力的浏览器也可正常进入工作台。 */
+function readSidebarCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+  } catch {
+    return false;
+  }
 }
 
 function RouteLoading() {

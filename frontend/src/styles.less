@@ -35,6 +35,11 @@ a {
   height: 100vh;
   grid-template-columns: 248px minmax(0, 1fr);
   overflow: hidden;
+  transition: grid-template-columns 180ms ease;
+}
+
+.appShell.sidebarCollapsed {
+  grid-template-columns: 72px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -47,11 +52,19 @@ a {
   padding: 20px 14px;
 }
 
+.sidebarHeader {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  min-height: 58px;
+}
+
 .brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 6px 22px;
+  min-width: 0;
+  padding: 0 6px;
 }
 
 .brandMark {
@@ -76,6 +89,10 @@ a {
   line-height: 1.4;
 }
 
+.sidebarToggle {
+  flex: none;
+}
+
 .navList {
   display: grid;
   gap: 4px;
@@ -84,19 +101,35 @@ a {
 }
 
 .accountMenu {
-  align-items: flex-start;
+  align-items: center;
   display: flex;
-  flex-direction: column;
+  gap: 9px;
+  justify-content: flex-start;
   margin-top: auto;
   min-height: 52px;
   padding: 8px 12px;
   text-align: left;
   width: 100%;
+}
 
-  small {
-    color: #64748b;
-    font-size: 12px;
-  }
+.accountMenuText {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.accountMenuText > span {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountMenuText small {
+  color: #64748b;
+  font-size: 12px;
 }
 
 .routeLoading {
@@ -107,17 +140,65 @@ a {
 }
 
 .navItem {
-  display: block;
+  align-items: center;
   border-radius: 8px;
   border: 0;
   background: transparent;
   color: #4b5563;
   cursor: pointer;
+  display: flex;
   font-size: 14px;
+  gap: 10px;
   font-weight: 600;
   padding: 10px 12px;
   text-align: left;
   text-decoration: none;
+}
+
+.navItemIcon {
+  display: inline-grid;
+  flex: none;
+  font-size: 16px;
+  place-items: center;
+  width: 18px;
+}
+
+.navItemLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebarCollapsed .sidebar {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.sidebarCollapsed .brand {
+  display: none;
+}
+
+.sidebarCollapsed .sidebarHeader {
+  justify-content: center;
+}
+
+.sidebarCollapsed .navItem {
+  gap: 0;
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sidebarCollapsed .navItemLabel,
+.sidebarCollapsed .accountMenuText {
+  display: none;
+}
+
+.sidebarCollapsed .accountMenu {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .navItem.active,
@@ -443,7 +524,8 @@ td {
 }
 
 @media (max-width: 760px) {
-  .appShell {
+  .appShell,
+  .appShell.sidebarCollapsed {
     grid-template-columns: 1fr;
   }
 
@@ -452,11 +534,34 @@ td {
     border-right: 0;
   }
 
+  .sidebarToggle {
+    display: none;
+  }
+
+  .sidebarCollapsed .brand {
+    display: flex;
+  }
+
+  .sidebarCollapsed .sidebarHeader {
+    justify-content: space-between;
+  }
+
+  .sidebarCollapsed .navItem {
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .sidebarCollapsed .navItemLabel,
+  .sidebarCollapsed .accountMenuText {
+    display: flex;
+  }
+
   .navList {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .navItem {
+    justify-content: center;
     overflow: hidden;
     padding: 9px 6px;
     text-align: center;
