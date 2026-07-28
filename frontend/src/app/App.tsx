@@ -41,6 +41,11 @@ const AgentRunsPage = lazy(() =>
     default: module.AgentRunsPage
   }))
 );
+const WorkflowsPage = lazy(() =>
+  import("../features/workflows/WorkflowsPage").then((module) => ({
+    default: module.WorkflowsPage
+  }))
+);
 const KnowledgePage = lazy(() =>
   import("../features/knowledge/KnowledgePage").then((module) => ({
     default: module.KnowledgePage
@@ -69,6 +74,7 @@ const navConfig: NavConfig[] = [
   { label: "Agent", path: "/agents", roles: ["ADMIN", "USER"] },
   { label: "知识库", path: "/knowledge", roles: ["ADMIN", "USER"] },
   { label: "工具", path: "/tools", roles: ["ADMIN"] },
+  { label: "Workflow", path: "/workflows", roles: ["ADMIN"] },
   { label: "对话", path: "/chat", roles: ["ADMIN", "USER"] },
   { label: "日志", path: "/logs", roles: ["ADMIN", "USER"] },
   { label: "Run Trace", path: "/agent-runs", roles: ["ADMIN"] },
@@ -103,6 +109,7 @@ export function App() {
             </Route>
             <Route element={<RequireRole roles={["ADMIN"]} />}>
               <Route path="/tools" element={<ToolsPage />} />
+              <Route path="/workflows" element={<WorkflowsPage />} />
               <Route path="/agent-runs" element={<AgentRunsPage />} />
               <Route path="/users" element={<UsersPage />} />
             </Route>

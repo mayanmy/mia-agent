@@ -12,6 +12,8 @@ export type AgentRunQueryDto = {
   requestId?: string;
   agentId?: string;
   userId?: string;
+  workflowId?: string;
+  workflowVersionId?: string;
   status?: AgentRunStatus;
   source?: AgentRunSource;
   createdFrom?: string;

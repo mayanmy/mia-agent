@@ -462,6 +462,10 @@ export class AgentRunsService {
     if (query.requestId?.trim()) where.requestId = query.requestId.trim();
     if (query.agentId?.trim()) where.agentId = query.agentId.trim();
     if (query.userId?.trim()) where.userId = query.userId.trim();
+    if (query.workflowId?.trim()) where.workflowId = query.workflowId.trim();
+    if (query.workflowVersionId?.trim()) {
+      where.workflowVersionId = query.workflowVersionId.trim();
+    }
     if (query.status) where.status = query.status;
     if (query.source) where.source = query.source;
     const createdFrom = this.parseDate(query.createdFrom, "createdFrom");

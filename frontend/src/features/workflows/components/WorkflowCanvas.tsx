@@ -1,0 +1,209 @@
+import {
+  Background,
+  Controls,
+  Handle,
+  MarkerType,
+  MiniMap,
+  Position,
+  ReactFlow,
+  applyEdgeChanges,
+  applyNodeChanges,
+  type Connection,
+  type Edge,
+  type EdgeChange,
+  type Node,
+  type NodeChange,
+  type NodeProps
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+
+import type {
+  WorkflowGraph,
+  WorkflowNode,
+  WorkflowTraceNodeStatus,
+  WorkflowValidationIssue
+} from "../types";
+import { NODE_LABELS, validateConnection } from "../utils";
+
+type WorkflowNodeData = {
+  workflowNode: WorkflowNode;
+  issueCount: number;
+  traceStatus?: WorkflowTraceNodeStatus;
+};
+type CanvasNode = Node<WorkflowNodeData, "workflow">;
+
+export type WorkflowCanvasProps = {
+  graph: WorkflowGraph;
+  selectedNodeId: string | null;
+  issues: WorkflowValidationIssue[];
+  traceStatuses: Record<string, WorkflowTraceNodeStatus>;
+  onGraphChange: (graph: WorkflowGraph) => void;
+  onSelectNode: (nodeId: string | null) => void;
+  onConnectionRejected: (message: string) => void;
+};
+
+export function WorkflowCanvas({
+  graph,
+  selectedNodeId,
+  issues,
+  traceStatuses,
+  onGraphChange,
+  onSelectNode,
+  onConnectionRejected
+}: WorkflowCanvasProps) {
+  const nodes: CanvasNode[] = graph.nodes.map((node) => ({
+    id: node.id,
+    type: "workflow",
+    position: node.position ?? { x: 0, y: 0 },
+    selected: node.id === selectedNodeId,
+    data: {
+      workflowNode: node,
+      issueCount: issues.filter((issue) => issue.nodeId === node.id).length,
+      traceStatus: traceStatuses[node.id]
+    }
+  }));
+  const edges: Edge[] = graph.edges.map((edge) => ({
+    ...edge,
+    type: "smoothstep",
+    markerEnd: { type: MarkerType.ArrowClosed },
+    style: { strokeWidth: 1.6 }
+  }));
+
+  /** React Flow change 先作用到视图模型，再投影回稳定的 Mia Graph DTO。 */
+  function handleNodeChanges(changes: NodeChange<CanvasNode>[]) {
+    // 选择态由页面单独管理，不能因为点击节点就把草稿误标记为已修改。
+    const graphChanges = changes.filter(
+      (change) => change.type === "position" || change.type === "remove"
+    );
+    if (graphChanges.length === 0) return;
+    const next = applyNodeChanges(graphChanges, nodes);
+    const remainingIds = new Set(next.map((node) => node.id));
+    onGraphChange({
+      ...graph,
+      nodes: next.map((flowNode) => ({
+        ...flowNode.data.workflowNode,
+        position: flowNode.position
+      })),
+      edges: graph.edges.filter(
+        (edge) => remainingIds.has(edge.source) && remainingIds.has(edge.target)
+      )
+    });
+  }
+
+  /** 删除连线只更新 Graph DTO，发布时仍由后端重新构建邻接表。 */
+  function handleEdgeChanges(changes: EdgeChange<Edge>[]) {
+    const next = applyEdgeChanges(changes, edges);
+    onGraphChange({
+      ...graph,
+      edges: next.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        ...(edge.sourceHandle ? { sourceHandle: edge.sourceHandle } : {})
+      }))
+    });
+  }
+
+  function handleConnect(connection: Connection) {
+    const error = validateConnection(graph, connection);
+    if (error) {
+      onConnectionRejected(error);
+      return;
+    }
+    onGraphChange({
+      ...graph,
+      edges: [
+        ...graph.edges,
+        {
+          id: `edge-${crypto.randomUUID()}`,
+          source: connection.source!,
+          target: connection.target!,
+          ...(connection.sourceHandle ? { sourceHandle: connection.sourceHandle } : {})
+        }
+      ]
+    });
+  }
+
+  return (
+    <div className="workflowCanvas" data-testid="workflow-canvas">
+      <ReactFlow<CanvasNode, Edge>
+        colorMode="light"
+        deleteKeyCode={["Backspace", "Delete"]}
+        edges={edges}
+        fitView
+        fitViewOptions={{ padding: 0.25 }}
+        minZoom={0.35}
+        maxZoom={1.6}
+        nodeTypes={{ workflow: WorkflowNodeCard }}
+        nodes={nodes}
+        onConnect={handleConnect}
+        onEdgesChange={handleEdgeChanges}
+        onNodeClick={(_, node) => onSelectNode(node.id)}
+        onNodesChange={handleNodeChanges}
+        onPaneClick={() => onSelectNode(null)}
+      >
+        <Background color="#d7dde7" gap={20} size={1} />
+        <MiniMap pannable zoomable nodeColor={miniMapColor} />
+        <Controls showInteractive={false} />
+      </ReactFlow>
+    </div>
+  );
+}
+
+/** 节点卡只展示执行语义和状态；业务配置全部留在右侧属性面板。 */
+function WorkflowNodeCard({ data, selected }: NodeProps<CanvasNode>) {
+  const { workflowNode, issueCount, traceStatus } = data;
+  const branches =
+    workflowNode.type === "condition" && Array.isArray(workflowNode.config.branches)
+      ? workflowNode.config.branches
+          .map((branch) =>
+            branch &&
+            typeof branch === "object" &&
+            typeof (branch as { handle?: unknown }).handle === "string"
+              ? String((branch as { handle: string }).handle)
+              : ""
+          )
+          .filter(Boolean)
+      : [];
+  const handles =
+    workflowNode.type === "condition"
+      ? [...branches, String(workflowNode.config.defaultHandle || "default")]
+      : [""];
+
+  return (
+    <div
+      className={`workflowNode workflowNode-${workflowNode.type}${selected ? " selected" : ""}${issueCount ? " invalid" : ""}${traceStatus ? ` trace-${traceStatus.toLowerCase()}` : ""}`}
+    >
+      {workflowNode.type !== "start" ? <Handle type="target" position={Position.Left} /> : null}
+      <div className="workflowNodeType">{NODE_LABELS[workflowNode.type]}</div>
+      <strong>{workflowNode.name}</strong>
+      <code>{workflowNode.id}</code>
+      {issueCount ? <span className="workflowNodeIssue">{issueCount}</span> : null}
+      {traceStatus ? <span className="workflowNodeTrace">{traceStatus}</span> : null}
+      {workflowNode.type !== "end"
+        ? handles.map((handle, index) => (
+            <Handle
+              id={handle || undefined}
+              key={handle || "default-source"}
+              position={Position.Right}
+              style={
+                handles.length > 1
+                  ? { top: `${((index + 1) / (handles.length + 1)) * 100}%` }
+                  : undefined
+              }
+              title={handle || "下一步"}
+              type="source"
+            />
+          ))
+        : null}
+    </div>
+  );
+}
+
+function miniMapColor(node: Node<WorkflowNodeData>) {
+  if (node.data.traceStatus === "FAILED") return "#d14343";
+  if (node.data.traceStatus === "COMPLETED") return "#2f855a";
+  if (node.data.traceStatus === "SKIPPED") return "#94a3b8";
+  if (node.data.issueCount > 0) return "#d97706";
+  return "#6b7a90";
+}

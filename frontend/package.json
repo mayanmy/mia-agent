@@ -12,6 +12,7 @@
     "check:widget": "npm run build:widget && node --check public/mia-agent-widget.js && node --check public/mia-agent-widget.min.js"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.2",
     "antd": "^6.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

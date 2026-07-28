@@ -60,6 +60,7 @@ export const tests = [
         pageSize: "10",
         status: AgentRunStatus.COMPLETED,
         agentId: " agent-1 ",
+        workflowId: " workflow-1 ",
         createdFrom: "2026-07-01T00:00:00.000Z"
       });
 
@@ -68,6 +69,7 @@ export const tests = [
       assert.equal(findQuery?.skip, 10);
       assert.deepEqual(findQuery?.where, {
         agentId: "agent-1",
+        workflowId: "workflow-1",
         status: AgentRunStatus.COMPLETED,
         createdAt: { gte: new Date("2026-07-01T00:00:00.000Z") }
       });
