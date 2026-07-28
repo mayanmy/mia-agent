@@ -200,6 +200,33 @@
   width: 178px;
 }
 
+.workflowNode .react-flow__handle {
+  background: #2563eb;
+  border: 3px solid #ffffff;
+  box-shadow:
+    0 0 0 1px #2563eb,
+    0 2px 5px rgb(15 23 42 / 20%);
+  height: 16px;
+  min-height: 16px;
+  min-width: 16px;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+  width: 16px;
+}
+
+/* 扩大透明命中区，让拖拽连线不必精确落在可见圆点内。 */
+.workflowNode .react-flow__handle::after {
+  content: "";
+  inset: -7px;
+  position: absolute;
+}
+
+.workflowNode .react-flow__handle:hover {
+  background: #174ba5;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 22%);
+}
+
 .workflowNode-start {
   border-left-color: #16856b;
 }
