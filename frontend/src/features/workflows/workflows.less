@@ -393,6 +393,12 @@
   color: #c03636;
 }
 
+.workflowConditionGuideButton {
+  justify-self: start;
+  margin: -4px 0 6px;
+  padding-left: 0;
+}
+
 .workflowValidation {
   background: #ffffff;
   border-top: 1px solid #dfe5ed;
@@ -558,6 +564,105 @@
 
 .workflowGuideErrors li + li {
   margin-top: 7px;
+}
+
+.conditionBranchGuide {
+  display: grid;
+  gap: 22px;
+}
+
+.conditionBranchGuide.compact {
+  gap: 18px;
+}
+
+.conditionBranchGuide section h3 {
+  color: #263548;
+  font-size: 14px;
+  margin: 0 0 10px;
+}
+
+.conditionBranchGuideRows,
+.conditionOperatorRows {
+  display: grid;
+}
+
+.conditionBranchGuideRows > div,
+.conditionOperatorRows > div,
+.conditionOperatorHeader {
+  align-items: center;
+  border-bottom: 1px solid #edf0f4;
+  display: grid;
+  gap: 10px;
+  padding: 9px 0;
+}
+
+.conditionBranchGuideRows > div {
+  grid-template-columns: 110px minmax(0, 1fr);
+}
+
+.conditionOperatorRows > div,
+.conditionOperatorHeader {
+  grid-template-columns: 100px minmax(0, 1fr) 64px;
+}
+
+.conditionOperatorHeader {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.conditionBranchGuideRows span,
+.conditionOperatorRows span,
+.conditionBranchGuide p,
+.conditionBranchGuide li {
+  color: #5f6f83;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.conditionBranchGuide code {
+  overflow-wrap: anywhere;
+}
+
+.conditionBranchGuide pre {
+  background: #111827;
+  border-radius: 6px;
+  color: #e5edf8;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.conditionBranchGuide p {
+  margin: 9px 0 0;
+}
+
+.conditionBranchGuideNote code,
+.conditionBranchGuide p code {
+  color: #254f8a;
+  font-weight: 600;
+}
+
+.conditionBranchGuide ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.conditionBranchGuide li + li {
+  margin-top: 5px;
+}
+
+@media (max-width: 520px) {
+  .conditionBranchGuideRows > div {
+    grid-template-columns: 82px minmax(0, 1fr);
+  }
+
+  .conditionOperatorRows > div,
+  .conditionOperatorHeader {
+    grid-template-columns: 78px minmax(0, 1fr) 54px;
+  }
 }
 
 @media (max-width: 1180px) {

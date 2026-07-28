@@ -4,6 +4,7 @@ import { Button, Input, InputNumber, Select } from "antd";
 
 import type { WorkflowNode, WorkflowResources } from "../types";
 import { NODE_LABELS } from "../utils";
+import { ConditionBranchGuide } from "./ConditionBranchGuide";
 
 type Props = {
   node: WorkflowNode | null;
@@ -183,6 +184,7 @@ export function NodeInspector({ node, resources, onChange, onDelete }: Props) {
 
       {node.type === "condition" ? (
         <>
+          <ConditionBranchGuide />
           <JsonField
             label="分支规则"
             value={node.config.branches}

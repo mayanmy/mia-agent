@@ -10,6 +10,8 @@ import {
 } from "@ant-design/icons";
 import { Alert, Button, Collapse, Drawer, Steps, Tag } from "antd";
 
+import { ConditionBranchGuideContent } from "./ConditionBranchGuide";
+
 const nodeDescriptions = [
   ["开始", "定义 Workflow 输入，每个流程只能有一个。"],
   ["模型", "调用 Chat 模型生成文本或 JSON。"],
@@ -129,6 +131,11 @@ export function WorkflowGuide() {
                     <span>在 Prompt 或模板中混合固定文本和变量</span>
                   </div>
                 )
+              },
+              {
+                key: "condition",
+                label: "条件分支配置规则",
+                children: <ConditionBranchGuideContent compact />
               },
               {
                 key: "publish",
