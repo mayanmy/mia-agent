@@ -26,9 +26,7 @@ export function ProviderMarketplace({ templates, onCreateProvider }: ProviderMar
               </div>
               <div>
                 <strong>{template.name}</strong>
-                <p>
-                  {template.author} · ⇩ {template.downloads}
-                </p>
+                <p>{template.author}</p>
               </div>
             </div>
             <p className="marketplaceDescription">{template.description}</p>
