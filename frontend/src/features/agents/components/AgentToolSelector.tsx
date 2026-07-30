@@ -2,9 +2,13 @@ import { Checkbox, Empty, Tag } from "antd";
 
 import type { ToolListItem } from "../../tools/api";
 
+/** Agent 工具选择器的受控组件参数。 */
 type AgentToolSelectorProps = {
+  /** 可供选择的全部工具。 */
   tools: ToolListItem[];
+  /** 当前已绑定的工具 ID。 */
   value?: string[];
+  /** 绑定选择发生变化时回传完整 ID 集合。 */
   onChange?: (value: string[]) => void;
 };
 

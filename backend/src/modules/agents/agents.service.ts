@@ -36,49 +36,83 @@ const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_TIMEOUT_SECONDS = 120;
 const DEFAULT_HISTORY_TURNS = 6;
 
+/**
+ * Agent 查询的完整 Prisma 投影。
+ * 仅在 agents 模块内部使用，跨模块返回时必须转换为明确 DTO。
+ */
 type AgentWithModelConfig = Prisma.AgentGetPayload<{
+  /** 一次加载列表、详情和运行时转换共同需要的关联。 */
   include: {
+    /** Agent 绑定的模型配置。 */
     modelConfig: {
+      /** 同时加载供应商以生成安全摘要与运行时路由信息。 */
       include: {
+        /** 模型供应商记录。 */
         provider: true;
       };
     };
+    /** Agent 工具绑定记录。 */
     agentTools: true;
+    /** Agent 工作流绑定记录。 */
     agentWorkflow: true;
+    /** Agent 知识库绑定及可用性判断所需字段。 */
     agentKnowledgeBases: {
+      /** 加载知识库的启用与软删除状态。 */
       include: {
+        /** 绑定指向的知识库。 */
         knowledgeBase: {
+          /** 仅选择判断绑定是否可运行所需字段。 */
           select: {
+            /** 知识库是否启用。 */
             enabled: true;
+            /** 知识库软删除时间。 */
             deletedAt: true;
           };
         };
       };
     };
+    /** 列表展示绑定数量所需的聚合计数。 */
     _count: {
+      /** 仅统计列表实际展示的两类绑定。 */
       select: {
+        /** 工具绑定数量。 */
         agentTools: true;
+        /** 知识库绑定数量。 */
         agentKnowledgeBases: true;
       };
     };
   };
 }>;
 
+/** 写入 Agent 表前已经完成默认值、格式和跨模块引用校验的数据。 */
 type AgentCreateData = {
+  /** 规范化后的 Agent 名称。 */
   name: string;
+  /** 规范化后的用途说明。 */
   description: string;
+  /** 系统提示词。 */
   systemPrompt: string;
+  /** 模型配置 ID；创建校验前允许暂存 null。 */
   modelConfigId: string | null;
+  /** 模型采样温度。 */
   temperature: number;
+  /** 生成 token 上限。 */
   maxTokens: number | null;
+  /** 调用超时秒数。 */
   timeoutSeconds: number;
+  /** 历史上下文轮数。 */
   historyTurns: number;
+  /** 会话保存模式。 */
   chatSessionMode: AgentChatSessionMode;
+  /** 模型扩展生成参数。 */
   generationParams: AgentGenerationParams | null;
+  /** Agent 启用状态。 */
   enabled: boolean;
 };
 
+/** 更新时允许部分提供的持久化数据；模型 ID 一旦提供必须是有效字符串。 */
 type AgentUpdateData = Partial<Omit<AgentCreateData, "modelConfigId">> & {
+  /** 新模型配置 ID。 */
   modelConfigId?: string;
 };
 
@@ -146,6 +180,7 @@ export class AgentsService {
     );
   }
 
+  /** 创建 Agent，并在同一事务中写入基础配置。 */
   async createAgent(payload: AgentCreateDto): Promise<AgentDetail> {
     const data = this.validateAgentCreate(payload);
     const modelConfigId = await this.resolveCreateModelConfigId(data.modelConfigId);
@@ -188,11 +223,13 @@ export class AgentsService {
     return this.toAgentDetail(agent);
   }
 
+  /** 读取 Agent 完整详情，已软删除记录视为不存在。 */
   async getAgent(id: string): Promise<AgentDetail> {
     const agent = await this.findAgentDetail(id);
     return this.toAgentDetail(agent);
   }
 
+  /** 更新 Agent 基础配置；模型引用在写入前由模型模块校验。 */
   async updateAgent(id: string, payload: AgentUpdateDto): Promise<AgentDetail> {
     await this.ensureAgentExists(id);
     const data = this.validateAgentUpdate(payload);
@@ -245,6 +282,7 @@ export class AgentsService {
     return this.toAgentDetail(agent);
   }
 
+  /** 软删除 Agent，保留审计与历史运行关联。 */
   async deleteAgent(id: string): Promise<void> {
     await this.ensureAgentExists(id);
 
@@ -257,6 +295,7 @@ export class AgentsService {
     });
   }
 
+  /** 发布 Agent 并生成不可预测的公开分享令牌。 */
   async publishAgent(id: string): Promise<AgentPublishResult> {
     await this.ensureAgentExists(id);
     const existing = await this.prisma.agent.findUnique({
@@ -305,6 +344,7 @@ export class AgentsService {
     };
   }
 
+  /** 取消发布并使现有公开链接立即失效。 */
   async unpublishAgent(id: string): Promise<AgentPublishResult> {
     await this.ensureAgentExists(id);
 
@@ -416,6 +456,7 @@ export class AgentsService {
     };
   }
 
+  /** 通过分享令牌读取匿名页面所需的最小公开信息。 */
   async getSharedAgent(token: string): Promise<SharedAgentDetail> {
     const agent = await this.getPublicAccessRuntime(token);
 
@@ -471,6 +512,7 @@ export class AgentsService {
     };
   }
 
+  /** 返回 Chat/Runtime 使用的跨模块 DTO，不泄露 Prisma 实体和供应商密钥。 */
   async getAgentRuntimeConfig(id: string): Promise<AgentRuntimeConfig> {
     const agent = await this.findAgentDetail(id);
 
@@ -507,6 +549,7 @@ export class AgentsService {
     };
   }
 
+  /** 读取 Agent 已绑定的工具 ID。 */
   async getAgentTools(id: string): Promise<AgentToolBindingResult> {
     await this.ensureAgentExists(id);
 
@@ -590,6 +633,7 @@ export class AgentsService {
     };
   }
 
+  /** 原子替换工具绑定；写入前确认工具存在且可绑定。 */
   async updateAgentTools(
     id: string,
     payload: AgentToolBindingDto
@@ -622,6 +666,7 @@ export class AgentsService {
     };
   }
 
+  /** 读取 Agent 已绑定的知识库 ID。 */
   async getAgentKnowledgeBases(id: string): Promise<AgentKnowledgeBaseBindingResult> {
     await this.ensureAgentExists(id);
 
@@ -640,6 +685,7 @@ export class AgentsService {
     };
   }
 
+  /** 原子替换知识库绑定；知识库状态与归属由 knowledge 模块校验。 */
   async updateAgentKnowledgeBases(
     id: string,
     payload: AgentKnowledgeBaseBindingDto
@@ -672,6 +718,7 @@ export class AgentsService {
     };
   }
 
+  /** 将创建输入归一为可安全写库的数据。 */
   private validateAgentCreate(payload: AgentCreateDto): AgentCreateData {
     return {
       name: this.requireNonEmptyString(payload.name, "name"),
@@ -688,6 +735,7 @@ export class AgentsService {
     };
   }
 
+  /** 仅归一化更新请求中实际出现的字段，避免误覆盖原值。 */
   private validateAgentUpdate(payload: AgentUpdateDto): AgentUpdateData {
     return {
       ...(payload.name !== undefined
@@ -861,6 +909,7 @@ export class AgentsService {
     return value;
   }
 
+  /** 规范化工具 ID、去重并拒绝非字符串成员。 */
   private normalizeToolIds(value: unknown): string[] {
     if (value === undefined || value === null) {
       return [];
@@ -885,6 +934,7 @@ export class AgentsService {
     return [...new Set(toolIds)];
   }
 
+  /** 规范化知识库 ID、去重并拒绝非字符串成员。 */
   private normalizeKnowledgeBaseIds(value: unknown): string[] {
     if (value === undefined || value === null) {
       return [];
@@ -918,6 +968,7 @@ export class AgentsService {
     return [...new Set(knowledgeBaseIds)];
   }
 
+  /** 通过 tools 模块确认所有目标工具存在，避免跨模块直接查工具表。 */
   private async ensureToolIdsExist(toolIds: string[]): Promise<void> {
     if (toolIds.length === 0) {
       return;
@@ -936,6 +987,7 @@ export class AgentsService {
     }
   }
 
+  /** 将查询字符串严格解析为布尔值。 */
   private parseEnabled(value: string): boolean {
     if (value === "true") {
       return true;
@@ -948,6 +1000,7 @@ export class AgentsService {
     throw new AppError(ErrorCodes.common.badRequest, "enabled must be true or false");
   }
 
+  /** 确认 Agent 存在且未软删除。 */
   private async ensureAgentExists(id: string): Promise<void> {
     const existing = await this.prisma.agent.findFirst({
       where: {
@@ -964,10 +1017,12 @@ export class AgentsService {
     }
   }
 
+  /** 生成具有足够熵的 URL 安全分享令牌。 */
   private createShareToken(): string {
     return randomBytes(18).toString("base64url");
   }
 
+  /** 创建时解析显式模型配置或系统默认 Chat 模型。 */
   private async resolveCreateModelConfigId(modelConfigId: string | null): Promise<string> {
     if (modelConfigId) {
       return modelConfigId;
@@ -985,6 +1040,7 @@ export class AgentsService {
     return defaultModelConfigId;
   }
 
+  /** 委托模型模块确认配置存在、启用且类型为 Chat。 */
   private async ensureChatModelConfig(id: string): Promise<void> {
     const modelConfig = await this.prisma.modelConfig.findFirst({
       where: {
@@ -1029,6 +1085,7 @@ export class AgentsService {
     return knowledgeBase.knowledgeBase.enabled && !knowledgeBase.knowledgeBase.deletedAt;
   }
 
+  /** 查询 Agent 详情并集中维护关联加载范围。 */
   private async findAgentDetail(id: string): Promise<AgentWithModelConfig> {
     const agent = await this.prisma.agent.findFirst({
       where: {
@@ -1060,6 +1117,7 @@ export class AgentsService {
     return agent;
   }
 
+  /** 将模块内部 Prisma 投影转换为列表 DTO。 */
   private toAgentListItem(agent: AgentWithModelConfig): AgentListItem {
     return {
       id: agent.id,
@@ -1084,6 +1142,7 @@ export class AgentsService {
     };
   }
 
+  /** 将模块内部 Prisma 投影转换为详情 DTO。 */
   private toAgentDetail(agent: AgentWithModelConfig): AgentDetail {
     return {
       ...this.toAgentListItem(agent),

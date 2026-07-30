@@ -2,9 +2,13 @@ import { Alert, Checkbox, Empty, Tag } from "antd";
 
 import type { KnowledgeBaseListItem } from "../../knowledge/api";
 
+/** Agent 知识库选择器的受控组件参数。 */
 type AgentKnowledgeBaseSelectorProps = {
+  /** 可供选择的全部知识库。 */
   knowledgeBases: KnowledgeBaseListItem[];
+  /** 当前已绑定的知识库 ID。 */
   value?: string[];
+  /** 绑定选择发生变化时回传完整 ID 集合。 */
   onChange?: (value: string[]) => void;
 };
 

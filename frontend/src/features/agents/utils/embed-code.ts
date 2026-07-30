@@ -2,6 +2,19 @@ import type { EmbedScenario } from "../types";
 
 const widgetScriptName = "mia-agent-widget.min.js";
 
+/** 生成 Widget 嵌入代码所需参数。 */
+type EmbedCodeOptions = {
+  /** Mia 站点 Origin。 */
+  origin: string;
+  /** 已发布 Agent 的分享令牌。 */
+  shareToken: string | null;
+  /** 目标部署场景。 */
+  scenario: EmbedScenario;
+  /** 多 Agent 入口中展示的可选名称。 */
+  agentName?: string;
+};
+
+/** 根据站点 Origin 与分享令牌生成公开页面地址。 */
 export function getShareUrl(origin: string, shareToken: string | null): string {
   if (!shareToken) {
     return "";
@@ -10,17 +23,13 @@ export function getShareUrl(origin: string, shareToken: string | null): string {
   return `${origin}/share/agents/${shareToken}`;
 }
 
+/** 根据部署场景生成可直接复制的 Widget 嵌入代码。 */
 export function getEmbedCode({
   origin,
   shareToken,
   scenario,
   agentName
-}: {
-  origin: string;
-  shareToken: string | null;
-  scenario: EmbedScenario;
-  agentName?: string;
-}): string {
+}: EmbedCodeOptions): string {
   if (!shareToken) {
     return "";
   }

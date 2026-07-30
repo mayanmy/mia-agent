@@ -4,6 +4,23 @@ import type { AgentTableItem, EmbedScenario } from "../types";
 import { getEmbedCode } from "../utils/embed-code";
 import { EmbedCodePanel } from "./EmbedCodePanel";
 
+/** Agent 嵌入代码弹窗参数。 */
+type AgentEmbedModalProps = {
+  /** 当前 Agent；null 表示关闭弹窗。 */
+  agent: AgentTableItem | null;
+  /** 当前选中的嵌入场景。 */
+  scenario: EmbedScenario;
+  /** 用于拼接脚本和分享地址的站点 Origin。 */
+  origin: string;
+  /** 切换嵌入场景回调。 */
+  onScenarioChange: (scenario: EmbedScenario) => void;
+  /** 关闭弹窗回调。 */
+  onCancel: () => void;
+  /** 复制生成代码回调。 */
+  onCopy: (code: string) => void;
+};
+
+/** 按部署场景生成并展示 Agent Widget 嵌入代码。 */
 export function AgentEmbedModal({
   agent,
   scenario,
@@ -11,14 +28,7 @@ export function AgentEmbedModal({
   onScenarioChange,
   onCancel,
   onCopy
-}: {
-  agent: AgentTableItem | null;
-  scenario: EmbedScenario;
-  origin: string;
-  onScenarioChange: (scenario: EmbedScenario) => void;
-  onCancel: () => void;
-  onCopy: (code: string) => void;
-}) {
+}: AgentEmbedModalProps) {
   const shareToken = agent?.shareToken ?? null;
   const agentName = agent?.name;
   const codeFor = (nextScenario: EmbedScenario) =>

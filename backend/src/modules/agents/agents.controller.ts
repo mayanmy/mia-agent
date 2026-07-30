@@ -27,6 +27,7 @@ import { AgentsService } from "./agents.service";
 export class AgentsController {
   constructor(private readonly agentsService: AgentsService) {}
 
+  /** 按权限返回 Agent 管理或成员可用列表。 */
   @Get()
   @Roles(UserRole.ADMIN, UserRole.USER)
   async listAgents(
@@ -36,6 +37,7 @@ export class AgentsController {
     return this.agentsService.listAgents(query, currentUser);
   }
 
+  /** 创建 Agent 基础配置。 */
   @Post()
   @Roles(UserRole.ADMIN, UserRole.USER)
   async createAgent(@Body() payload: AgentCreateDto): Promise<AgentDetail> {
@@ -43,17 +45,20 @@ export class AgentsController {
   }
 
   @Get("shared/:token")
+  /** 无需登录的分享页元数据入口。 */
   @Public()
   async getSharedAgent(@Param("token") token: string): Promise<SharedAgentDetail> {
     return this.agentsService.getSharedAgent(token);
   }
 
+  /** 获取 Agent 编辑详情。 */
   @Get(":id")
   @Roles(UserRole.ADMIN, UserRole.USER)
   async getAgent(@Param("id") id: string): Promise<AgentDetail> {
     return this.agentsService.getAgent(id);
   }
 
+  /** 更新 Agent 基础配置。 */
   @Put(":id")
   @Roles(UserRole.ADMIN, UserRole.USER)
   async updateAgent(
@@ -63,6 +68,7 @@ export class AgentsController {
     return this.agentsService.updateAgent(id, payload);
   }
 
+  /** 软删除 Agent。 */
   @Delete(":id")
   @Roles(UserRole.ADMIN, UserRole.USER)
   async deleteAgent(@Param("id") id: string): Promise<null> {
@@ -70,24 +76,28 @@ export class AgentsController {
     return null;
   }
 
+  /** 发布 Agent 并返回分享令牌。 */
   @Post(":id/publish")
   @Roles(UserRole.ADMIN, UserRole.USER)
   async publishAgent(@Param("id") id: string): Promise<AgentPublishResult> {
     return this.agentsService.publishAgent(id);
   }
 
+  /** 取消发布并作废分享入口。 */
   @Delete(":id/publish")
   @Roles(UserRole.ADMIN, UserRole.USER)
   async unpublishAgent(@Param("id") id: string): Promise<AgentPublishResult> {
     return this.agentsService.unpublishAgent(id);
   }
 
+  /** 获取 Agent 工具绑定。 */
   @Get(":id/tools")
   @Roles(UserRole.ADMIN, UserRole.USER)
   async getAgentTools(@Param("id") id: string): Promise<AgentToolBindingResult> {
     return this.agentsService.getAgentTools(id);
   }
 
+  /** 批量替换 Agent 工具绑定。 */
   @Put(":id/tools")
   @Roles(UserRole.ADMIN, UserRole.USER)
   async updateAgentTools(
@@ -97,12 +107,14 @@ export class AgentsController {
     return this.agentsService.updateAgentTools(id, payload);
   }
 
+  /** 获取 Agent 知识库绑定。 */
   @Get(":id/knowledge-bases")
   @Roles(UserRole.ADMIN, UserRole.USER)
   async getAgentKnowledgeBases(@Param("id") id: string): Promise<AgentKnowledgeBaseBindingResult> {
     return this.agentsService.getAgentKnowledgeBases(id);
   }
 
+  /** 批量替换 Agent 知识库绑定。 */
   @Put(":id/knowledge-bases")
   @Roles(UserRole.ADMIN, UserRole.USER)
   async updateAgentKnowledgeBases(
@@ -112,12 +124,14 @@ export class AgentsController {
     return this.agentsService.updateAgentKnowledgeBases(id, payload);
   }
 
+  /** 获取 Agent 工作流执行策略。 */
   @Get(":id/workflow")
   @Roles(UserRole.ADMIN)
   async getAgentWorkflow(@Param("id") id: string): Promise<AgentWorkflowBindingResult> {
     return this.agentsService.getAgentWorkflow(id);
   }
 
+  /** 更新 Agent 工作流执行策略。 */
   @Put(":id/workflow")
   @Roles(UserRole.ADMIN)
   async updateAgentWorkflow(

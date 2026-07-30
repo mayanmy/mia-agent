@@ -8,6 +8,45 @@ import { defaultAgentFormValues } from "../utils/agent-form";
 import { AgentKnowledgeBaseSelector } from "./AgentKnowledgeBaseSelector";
 import { AgentToolSelector } from "./AgentToolSelector";
 
+/** 分组模型下拉框中的单个选项。 */
+type AgentModelOption = {
+  /** 模型展示名称。 */
+  label: string;
+  /** 模型配置 ID。 */
+  value: string;
+};
+
+/** 按供应商组织的模型选项组。 */
+type AgentModelOptionGroup = {
+  /** 供应商分组名称。 */
+  label: string;
+  /** 该供应商下可绑定的 Chat 模型。 */
+  options: AgentModelOption[];
+};
+
+/** Agent 表单弹窗参数。 */
+type AgentFormModalProps = {
+  /** 由页面持有的 Ant Design 表单实例。 */
+  form: FormInstance<AgentFormValues>;
+  /** 弹窗是否打开。 */
+  open: boolean;
+  /** 是否正在编辑已有 Agent。 */
+  editing: boolean;
+  /** 是否正在保存。 */
+  saving: boolean;
+  /** 按供应商分组的可选模型。 */
+  modelOptions: AgentModelOptionGroup[];
+  /** 可绑定工具列表。 */
+  tools: ToolListItem[];
+  /** 可绑定知识库列表。 */
+  knowledgeBases: KnowledgeBaseListItem[];
+  /** 取消编辑回调。 */
+  onCancel: () => void;
+  /** 表单校验通过后的提交回调。 */
+  onSubmit: (values: AgentFormValues) => void;
+};
+
+/** 编辑 Agent 基础配置及工具、知识库绑定。 */
 export function AgentFormModal({
   form,
   open,
@@ -18,17 +57,7 @@ export function AgentFormModal({
   knowledgeBases,
   onCancel,
   onSubmit
-}: {
-  form: FormInstance<AgentFormValues>;
-  open: boolean;
-  editing: boolean;
-  saving: boolean;
-  modelOptions: Array<{ label: string; options: Array<{ label: string; value: string }> }>;
-  tools: ToolListItem[];
-  knowledgeBases: KnowledgeBaseListItem[];
-  onCancel: () => void;
-  onSubmit: (values: AgentFormValues) => void;
-}) {
+}: AgentFormModalProps) {
   // Tabs 会延迟挂载非活动页签；preserve 让标签在字段尚未挂载时也能读取已加载的绑定值。
   const selectedToolIds = Form.useWatch("toolIds", { form, preserve: true }) ?? [];
   const selectedKnowledgeBaseIds =

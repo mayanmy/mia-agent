@@ -15,6 +15,7 @@ export const defaultAgentFormValues: AgentFormValues = {
   knowledgeBaseIds: []
 };
 
+/** 将表单值转换为后端基础配置载荷，绑定关系由独立接口保存。 */
 export function toAgentPayload(values: AgentFormValues): AgentPayload {
   return {
     name: values.name.trim(),
@@ -29,6 +30,7 @@ export function toAgentPayload(values: AgentFormValues): AgentPayload {
   };
 }
 
+/** 将 Agent 详情映射为表单初始值。 */
 export function toAgentFormValues(agent: AgentDetail): AgentFormValues {
   return {
     name: agent.name,

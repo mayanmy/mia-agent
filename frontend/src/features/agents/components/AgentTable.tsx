@@ -4,6 +4,47 @@ import { MoreOutlined } from "@ant-design/icons";
 
 import type { AgentTableItem } from "../types";
 
+/** Agent 表格的分页状态。 */
+type AgentTablePagination = {
+  /** 当前页码。 */
+  page: number;
+  /** 每页记录数。 */
+  pageSize: number;
+  /** 服务端记录总数。 */
+  total: number;
+};
+
+/** Agent 表格的展示数据与操作回调。 */
+type AgentTableProps = {
+  /** 当前页 Agent 数据。 */
+  agents: AgentTableItem[];
+  /** 是否正在加载列表。 */
+  loading: boolean;
+  /** 服务端分页状态。 */
+  pagination: AgentTablePagination;
+  /** 页码或每页数量变化回调。 */
+  onPageChange: (page: number, pageSize: number) => void;
+  /** 打开 Agent 测试对话。 */
+  onTest: (agentId: string) => void;
+  /** 发布 Agent。 */
+  onPublish: (agentId: string) => void;
+  /** 复制 Agent 分享链接。 */
+  onCopyLink: (agent: AgentTableItem) => void;
+  /** 打开嵌入代码弹窗。 */
+  onOpenEmbed: (agent: AgentTableItem) => void;
+  /** 打开 API Key 管理弹窗。 */
+  onOpenApiKeys: (agent: AgentTableItem) => void;
+  /** 打开公开访问安全设置。 */
+  onOpenPublicAccess: (agent: AgentTableItem) => void;
+  /** 取消发布 Agent。 */
+  onUnpublish: (agentId: string) => void;
+  /** 打开 Agent 编辑弹窗。 */
+  onEdit: (agentId: string) => void;
+  /** 删除 Agent。 */
+  onDelete: (agentId: string) => void;
+};
+
+/** 展示 Agent 状态、绑定摘要及管理操作。 */
 export function AgentTable({
   agents,
   loading,
@@ -18,21 +59,7 @@ export function AgentTable({
   onUnpublish,
   onEdit,
   onDelete
-}: {
-  agents: AgentTableItem[];
-  loading: boolean;
-  pagination: { page: number; pageSize: number; total: number };
-  onPageChange: (page: number, pageSize: number) => void;
-  onTest: (agentId: string) => void;
-  onPublish: (agentId: string) => void;
-  onCopyLink: (agent: AgentTableItem) => void;
-  onOpenEmbed: (agent: AgentTableItem) => void;
-  onOpenApiKeys: (agent: AgentTableItem) => void;
-  onOpenPublicAccess: (agent: AgentTableItem) => void;
-  onUnpublish: (agentId: string) => void;
-  onEdit: (agentId: string) => void;
-  onDelete: (agentId: string) => void;
-}) {
+}: AgentTableProps) {
   const columns: TableProps<AgentTableItem>["columns"] = [
     {
       title: "名称",

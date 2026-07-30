@@ -12,14 +12,26 @@ import {
 } from "../api";
 import type { AgentTableItem } from "../types";
 
+/** API Key 创建表单值。 */
+type AgentApiKeyFormValues = {
+  /** 便于管理员识别用途的 Key 名称。 */
+  name: string;
+};
+
+/** API Key 管理弹窗参数。 */
+type AgentApiKeysModalProps = {
+  /** 当前管理的 Agent；null 表示关闭弹窗。 */
+  agent: AgentTableItem | null;
+  /** 关闭弹窗回调。 */
+  onCancel: () => void;
+};
+
+/** 管理 Agent API Key 生命周期，完整密钥仅在创建或轮换后短暂展示。 */
 export function AgentApiKeysModal({
   agent,
   onCancel
-}: {
-  agent: AgentTableItem | null;
-  onCancel: () => void;
-}) {
-  const [form] = Form.useForm<{ name: string }>();
+}: AgentApiKeysModalProps) {
+  const [form] = Form.useForm<AgentApiKeyFormValues>();
   const [keys, setKeys] = useState<AgentApiKeyListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);

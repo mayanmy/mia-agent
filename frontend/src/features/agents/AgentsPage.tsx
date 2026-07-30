@@ -29,6 +29,7 @@ import { defaultAgentFormValues, toAgentFormValues, toAgentPayload } from "./uti
 import { getEmbedCode, getShareUrl } from "./utils/embed-code";
 import "./agents.less";
 
+/** Agents 路由页，负责编排列表、编辑、绑定与发布流程。 */
 export function AgentsPage() {
   const navigate = useNavigate();
   const [form] = Form.useForm<AgentFormValues>();
@@ -147,6 +148,7 @@ export function AgentsPage() {
     return modelOptions[0]?.options[0]?.value || "";
   }
 
+  /** 打开编辑弹窗前并行读取完整详情及其绑定数据。 */
   async function openEditDialog(id: string) {
     setLoading(true);
 
@@ -172,6 +174,10 @@ export function AgentsPage() {
     }
   }
 
+  /**
+   * 先保存 Agent 基础配置，再更新工具与知识库绑定。
+   * 绑定使用独立模块接口，页面负责汇总失败并刷新服务端最终状态。
+   */
   async function handleSubmit(values: AgentFormValues) {
     setSaving(true);
 

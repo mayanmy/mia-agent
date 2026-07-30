@@ -9,11 +9,26 @@ import {
 } from "../api";
 import type { AgentTableItem } from "../types";
 
+/** 公开访问安全设置表单值。 */
 type PublicAccessFormValues = {
+  /** 本地日期时间字符串；为空表示不修改。 */
   publicExpiresAt?: string;
+  /** 每行一个的 Widget 来源白名单文本。 */
   allowedOrigins?: string;
+  /** 待设置的新访问密码。 */
   password?: string;
+  /** 是否明确清除已有访问密码。 */
   clearPassword?: boolean;
+};
+
+/** 公开访问设置弹窗参数。 */
+type AgentPublicAccessModalProps = {
+  /** 当前 Agent；null 表示关闭弹窗。 */
+  agent: AgentTableItem | null;
+  /** 关闭弹窗回调。 */
+  onCancel: () => void;
+  /** 分享令牌轮换成功后的列表刷新回调。 */
+  onTokenRotated: () => void;
 };
 
 /** Agent 发布后的安全设置独立于编辑表单，避免普通 Prompt 修改误触公开访问策略。 */
@@ -21,11 +36,7 @@ export function AgentPublicAccessModal({
   agent,
   onCancel,
   onTokenRotated
-}: {
-  agent: AgentTableItem | null;
-  onCancel: () => void;
-  onTokenRotated: () => void;
-}) {
+}: AgentPublicAccessModalProps) {
   const [form] = Form.useForm<PublicAccessFormValues>();
   const [config, setConfig] = useState<AgentPublicAccessConfig | null>(null);
   const [loading, setLoading] = useState(false);
