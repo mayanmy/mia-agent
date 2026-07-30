@@ -136,6 +136,7 @@ function getToolDetailPreview(text: string): string {
   return text.length > 800 ? `${text.slice(0, 800)}...` : text;
 }
 
+/** 将底层工具错误归一化为面向用户展示的标题和说明。 */
 type ToolFailureSummary = {
   title: string;
   typeLabel: string;

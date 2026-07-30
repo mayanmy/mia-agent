@@ -1,7 +1,9 @@
 import { fetchWithAuth, request } from "../../shared/api/client";
 
+/** Chat 当前支持的消息角色。 */
 export type ChatRole = "user" | "assistant";
 
+/** 浏览器侧图片附件；id 仅用于本地列表稳定渲染。 */
 export type ChatImageAttachment = {
   id?: string;
   name: string;
@@ -9,6 +11,7 @@ export type ChatImageAttachment = {
   dataUrl: string;
 };
 
+/** 浏览器侧文本文件附件，content 保存提交给后端的文本内容。 */
 export type ChatFileAttachment = {
   id?: string;
   name: string;
@@ -17,6 +20,7 @@ export type ChatFileAttachment = {
   content: string;
 };
 
+/** 可进入对话历史的标准消息。 */
 export type ChatMessage = {
   role: ChatRole;
   content: string;
@@ -24,6 +28,7 @@ export type ChatMessage = {
   files?: ChatFileAttachment[];
 };
 
+/** 发起对话补全时提交给 API 的完整载荷。 */
 export type ChatCompletionPayload = {
   agentId: string;
   sessionId?: string;
@@ -33,6 +38,7 @@ export type ChatCompletionPayload = {
   history: ChatMessage[];
 };
 
+/** 服务端持久化并返回的会话消息。 */
 export type ChatSessionMessage = {
   id: string;
   role: ChatRole;
@@ -40,14 +46,17 @@ export type ChatSessionMessage = {
   createdAt: string;
 };
 
+/** 兼容旧单会话接口的响应结构。 */
 export type ChatSessionResponse = {
   mode: "EPHEMERAL" | "PERSISTENT";
   sessionId: string | null;
   messages: ChatSessionMessage[];
 };
 
+/** 持久会话的生命周期状态。 */
 export type ChatSessionStatus = "ACTIVE" | "ARCHIVED";
 
+/** 会话侧栏使用的列表项摘要。 */
 export type ChatSessionListItem = {
   id: string;
   agentId: string;
@@ -58,18 +67,21 @@ export type ChatSessionListItem = {
   updatedAt: string;
 };
 
+/** 一页会话列表及后续分页信息。 */
 export type ChatSessionListResponse = {
   list: ChatSessionListItem[];
   nextCursor: string | null;
   hasMore: boolean;
 };
 
+/** 向前加载历史消息时返回的一页数据。 */
 export type ChatSessionMessagePage = {
   list: ChatSessionMessage[];
   nextBefore: string | null;
   hasMore: boolean;
 };
 
+/** 非流式对话完成后的模型与内容摘要。 */
 export type ChatCompletionResult = {
   agentId: string;
   modelConfigId: string;
@@ -78,6 +90,7 @@ export type ChatCompletionResult = {
   content: string;
 };
 
+/** RAG 检索命中的可展示来源。 */
 export type ChatRetrievalSource = {
   knowledgeBaseId: string;
   documentId: string;
@@ -88,6 +101,7 @@ export type ChatRetrievalSource = {
   contentPreview?: string;
 };
 
+/** 与后端约定一致的 Chat SSE 事件名称。 */
 export type ChatStreamEventType =
   | "message_start"
   | "retrieval_start"
@@ -99,6 +113,7 @@ export type ChatStreamEventType =
   | "error"
   | "ping";
 
+/** 浏览器消费的 SSE 事件；data 汇总各事件可能携带的字段。 */
 export type ChatStreamEvent = {
   type: ChatStreamEventType;
   data: {
@@ -156,6 +171,7 @@ export function createChatSession(agentId: string): Promise<ChatSessionListItem>
   });
 }
 
+/** 分页读取指定会话的历史消息。 */
 export function getChatSessionMessages(
   sessionId: string,
   options: { before?: string; pageSize?: number } = {}
@@ -171,6 +187,7 @@ export function getChatSessionMessages(
   );
 }
 
+/** 更新会话标题，并返回刷新后的列表摘要。 */
 export function updateChatSessionTitle(
   sessionId: string,
   title: string
@@ -181,6 +198,7 @@ export function updateChatSessionTitle(
   });
 }
 
+/** 将活跃会话移入归档区，保留其中的消息。 */
 export function archiveChatSession(sessionId: string): Promise<ChatSessionListItem> {
   return request<ChatSessionListItem>(`/api/v1/chat/sessions/${sessionId}/archive`, {
     method: "POST"
@@ -201,6 +219,7 @@ export function deleteChatSession(sessionId: string): Promise<null> {
   });
 }
 
+/** 发起非流式对话，主要供无需逐 token 展示的调用方使用。 */
 export function createChatCompletion(
   payload: ChatCompletionPayload
 ): Promise<ChatCompletionResult> {
@@ -210,6 +229,10 @@ export function createChatCompletion(
   });
 }
 
+/**
+ * 消费 Chat SSE 字节流并逐事件回调。
+ * 分块边界不保证与事件边界一致，因此使用 buffer 保留尚未接收完整的尾部事件。
+ */
 export async function streamChatCompletion(
   payload: ChatCompletionPayload,
   options: {
@@ -266,6 +289,7 @@ export async function streamChatCompletion(
   }
 }
 
+/** 尽量读取后端统一错误消息，响应体异常时回退到稳定文案。 */
 async function readErrorMessage(response: Response): Promise<string> {
   try {
     const result = (await response.json()) as { message?: string };
@@ -275,6 +299,7 @@ async function readErrorMessage(response: Response): Promise<string> {
   }
 }
 
+/** 将单个 SSE 文本块解析为前端事件；畸形 JSON 会转换为可展示的 error 事件。 */
 function parseSseEvent(rawEvent: string): ChatStreamEvent | null {
   const lines = rawEvent.split(/\r?\n/u);
   const eventTypeLine = lines.find((line) => line.startsWith("event:"));

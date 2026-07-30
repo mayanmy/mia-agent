@@ -13,11 +13,13 @@ import {
   readFileAsText
 } from "../utils";
 
+/** Hook 使用的最小消息提示能力，避免直接耦合 Ant Design 的完整实例类型。 */
 type MessageApi = {
   success: (content: string) => void;
   warning: (content: string) => void;
 };
 
+/** 统一管理图片与文本附件的校验、读取、粘贴和移除状态。 */
 export function useChatAttachments(messageApi: MessageApi) {
   const [images, setImages] = useState<ChatImageAttachment[]>([]);
   const [files, setFiles] = useState<ChatFileAttachment[]>([]);
@@ -32,6 +34,7 @@ export function useChatAttachments(messageApi: MessageApi) {
     };
   }, []);
 
+  /** 校验并读取单张图片；返回值表示是否成功加入附件列表。 */
   async function addImageFile(file: File): Promise<boolean> {
     if (!file.type?.startsWith("image/")) {
       messageApi.warning("只能上传图片");
@@ -86,6 +89,7 @@ export function useChatAttachments(messageApi: MessageApi) {
     void addPastedImages(pastedFiles);
   }
 
+  /** 依次处理剪贴板图片，达到数量上限后停止继续读取。 */
   async function addPastedImages(pastedFiles: File[]) {
     const remainingSlots = maxAttachmentCount - images.length;
     const filesToAdd = pastedFiles.slice(0, Math.max(remainingSlots, 0));
@@ -116,6 +120,7 @@ export function useChatAttachments(messageApi: MessageApi) {
     setImages((current) => current.filter((item) => item.id !== id));
   }
 
+  /** 校验并读取单个文本文件，避免大文件占满对话上下文。 */
   async function addTextFile(file: File): Promise<boolean> {
     if (!isSupportedTextFile(file)) {
       messageApi.warning("当前只支持文本类文件，例如 txt、md、json、csv、代码文件");

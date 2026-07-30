@@ -19,12 +19,15 @@ const DEFAULT_SESSION_TITLE = "新对话";
 const MAX_SESSION_TITLE_LENGTH = 80;
 const MAX_GENERATED_TITLE_LENGTH = 40;
 
+/** 用于限定会话数据归属，所有读写都必须同时匹配 Agent 和当前用户。 */
 type SessionOwner = {
   agentId: string;
   userId: string;
 };
 
+/** 消息按创建时间倒序翻页时使用的复合游标，id 用于解决同毫秒排序冲突。 */
 type CreatedAtCursor = { id: string; createdAt: Date };
+/** 会话按最近更新时间倒序翻页时使用的复合游标。 */
 type UpdatedAtCursor = { id: string; updatedAt: Date };
 
 @Injectable()
@@ -165,6 +168,7 @@ export class ChatSessionsService {
     return this.toSessionListItem(session);
   }
 
+  /** 恢复已归档会话；活跃会话重复恢复时保持幂等结果。 */
   async restoreSession(sessionId: string, owner: SessionOwner): Promise<ChatSessionListItem> {
     await this.requireSession(sessionId, owner);
     const session = await this.prisma.chatSession.update({
@@ -285,6 +289,7 @@ export class ChatSessionsService {
     });
   }
 
+  /** 按复合归属读取会话，避免只凭可猜测 ID 越权访问。 */
   private async requireSession(sessionId: string, owner: SessionOwner) {
     const session = await this.prisma.chatSession.findFirst({
       where: {
@@ -302,6 +307,7 @@ export class ChatSessionsService {
     return session;
   }
 
+  /** 将字符串页大小归一到安全范围，拒绝非法分页输入。 */
   private normalizePageSize(value: string | undefined, fallback: number): number {
     if (value === undefined || value === "") {
       return fallback;
@@ -319,6 +325,7 @@ export class ChatSessionsService {
     return pageSize;
   }
 
+  /** 清洗用户标题并限制长度。 */
   private normalizeTitle(value: unknown): string {
     if (typeof value !== "string") {
       throw new AppError(ErrorCodes.common.badRequest, "title is required");
@@ -336,21 +343,25 @@ export class ChatSessionsService {
     return title;
   }
 
+  /** 从首条消息生成简短标题，去除连续空白和附件上下文。 */
   private createTitleFromMessage(content: string): string {
     const normalized = content.replace(/\s+/gu, " ").trim();
     return normalized.slice(0, MAX_GENERATED_TITLE_LENGTH) || DEFAULT_SESSION_TITLE;
   }
 
+  /** 解码消息分页游标。 */
   private decodeCreatedAtCursor(value: string | undefined): CreatedAtCursor | null {
     const decoded = this.decodeCursor(value, "createdAt");
     return decoded ? { id: decoded.id, createdAt: decoded.date } : null;
   }
 
+  /** 解码会话分页游标。 */
   private decodeUpdatedAtCursor(value: string | undefined): UpdatedAtCursor | null {
     const decoded = this.decodeCursor(value, "updatedAt");
     return decoded ? { id: decoded.id, updatedAt: decoded.date } : null;
   }
 
+  /** 校验 Base64 JSON 游标的字段和值，防止畸形游标影响查询条件。 */
   private decodeCursor(
     value: string | undefined,
     field: "createdAt" | "updatedAt"
@@ -375,10 +386,12 @@ export class ChatSessionsService {
     }
   }
 
+  /** 将游标编码为 URL 安全的 Base64 字符串。 */
   private encodeCursor(cursor: Record<string, string>): string {
     return Buffer.from(JSON.stringify(cursor)).toString("base64url");
   }
 
+  /** 隔离 Prisma 结果并返回稳定的跨层 DTO。 */
   private toSessionListItem(session: {
     id: string;
     agentId: string;

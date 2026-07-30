@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { isNearScrollBottom } from "../utils";
 
+/** 管理消息列表的自动跟随；用户主动向上浏览时暂停抢占滚动位置。 */
 export function useAutoScroll(dependencies: unknown[]) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const autoScrollRef = useRef(true);

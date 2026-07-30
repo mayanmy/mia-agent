@@ -25,6 +25,7 @@ import type { ChatRetrievalEvent, ChatToolEvent, ChatUiMessage } from "./types";
 import { createMessageId, findLastToolEventIndex, isLikelyVisionModel } from "./utils";
 import "./chat.less";
 
+/** Chat 路由页，负责编排 Agent、会话、附件与 SSE 状态。 */
 export function ChatPage() {
   const { message: messageApi } = AntdApp.useApp();
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -207,6 +208,7 @@ export function ChatPage() {
     resetAutoScroll();
   }
 
+  /** 切换会话时先读取完整首屏消息，再提交选中状态，避免短暂混用旧上下文。 */
   async function handleSessionChange(nextSessionId: string) {
     if (nextSessionId === sessionId || sending) {
       return;
@@ -234,6 +236,7 @@ export function ChatPage() {
     }
   }
 
+  /** 创建持久会话并立即切换；临时模式不会调用此入口。 */
   async function handleCreateSession() {
     if (!selectedAgentId || sending) {
       return;
@@ -373,6 +376,10 @@ export function ChatPage() {
     }
   }
 
+  /**
+   * 提交用户消息并把 SSE 过程事件合并到当前 assistant 气泡。
+   * AbortController 同时承担用户停止生成和页面切换时的上游取消。
+   */
   async function handleSend() {
     if (disposedRef.current) {
       return;
@@ -809,6 +816,7 @@ export function ChatPage() {
 }
 
 /** 将接口返回的持久化消息映射成现有消息组件使用的视图模型。 */
+/** 将服务端历史消息补齐为前端渲染模型。 */
 function toChatUiMessage(message: {
   id: string;
   role: "user" | "assistant";
@@ -824,6 +832,7 @@ function toChatUiMessage(message: {
 }
 
 /** 用首条用户消息生成简短会话标题，完整标题仍由服务端持久化为准。 */
+/** 使用首条用户消息生成乐观会话标题，服务端持久化后会返回最终值。 */
 function createSessionTitle(content: string): string {
   const normalized = content.replace(/\s+/gu, " ").trim();
 

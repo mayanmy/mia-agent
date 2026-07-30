@@ -33,6 +33,10 @@ const MAX_IMAGE_DATA_URL_LENGTH = 7 * 1024 * 1024;
 const MAX_FILE_COUNT = 4;
 const MAX_FILE_CONTENT_LENGTH = 200_000;
 
+/**
+ * 一次 Chat 调用在模块间传递的请求上下文。
+ * 字段保持可序列化，便于后续将运行链路拆为远程调用并继续透传 requestId。
+ */
 export type ChatRequestContext = {
   requestId?: string;
   source?: AgentRunSource;
@@ -106,6 +110,7 @@ export class ChatService {
     };
   }
 
+  /** 创建独立持久会话，并校验 Agent 确实启用了保留型会话模式。 */
   async createSession(payload: CreateChatSessionDto, context: ChatRequestContext) {
     const agentId = this.requireNonEmptyString(payload.agentId, "agentId");
     const agent = await this.requirePersistentAgent(agentId);
@@ -116,6 +121,7 @@ export class ChatService {
     });
   }
 
+  /** 分页读取归属于当前用户的会话消息。 */
   async getSessionMessages(
     sessionId: string,
     query: ChatMessageQueryDto,
@@ -129,6 +135,7 @@ export class ChatService {
     return sessions.getMessagePage(sessionId, { agentId: session.agentId, userId }, query);
   }
 
+  /** 更新会话标题；归属和标题合法性由会话 Service 统一保证。 */
   async updateSession(
     sessionId: string,
     payload: UpdateChatSessionDto,
@@ -142,6 +149,7 @@ export class ChatService {
     return sessions.updateSession(sessionId, { agentId: session.agentId, userId }, payload);
   }
 
+  /** 归档会话但保留消息记录。 */
   async archiveSession(sessionId: string, context: ChatRequestContext) {
     const userId = this.requireSessionUserId(context);
     const sessions = this.requireChatSessionsService();
@@ -151,6 +159,7 @@ export class ChatService {
     return sessions.archiveSession(sessionId, { agentId: session.agentId, userId });
   }
 
+  /** 恢复归档会话，使其重新允许追加消息。 */
   async restoreSession(sessionId: string, context: ChatRequestContext) {
     const userId = this.requireSessionUserId(context);
     const sessions = this.requireChatSessionsService();
@@ -378,6 +387,7 @@ export class ChatService {
     return id;
   }
 
+  /** 确保传入 Agent 使用持久会话模式，阻止临时 Agent 进入会话管理流程。 */
   private async requirePersistentAgent(agentId: string) {
     const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
 
@@ -392,6 +402,7 @@ export class ChatService {
     return agent;
   }
 
+  /** 获取持久会话所需用户 ID；外部匿名访问不得写入内部 ChatSession。 */
   private requireSessionUserId(context?: ChatRequestContext): string {
     if (!context?.userId) {
       throw new AppError(
@@ -404,6 +415,7 @@ export class ChatService {
     return context.userId;
   }
 
+  /** 在可选依赖缺失时返回明确配置错误，兼容模块拆分期间的旧单测构造方式。 */
   private requireChatSessionsService(): ChatSessionsService {
     if (!this.chatSessionsService) {
       // 旧单测只覆盖单次模式，不需要构造会话服务；真实 Nest 容器会始终注入该 Provider。
@@ -413,6 +425,7 @@ export class ChatService {
     return this.chatSessionsService;
   }
 
+  /** 清洗并限制历史轮次，避免客户端绕过上下文窗口限制。 */
   private normalizeHistory(history: ChatMessageDto[] | undefined, maxTurns: number): ChatMessage[] {
     if (!Array.isArray(history) || maxTurns <= 0) {
       return [];
@@ -437,6 +450,7 @@ export class ChatService {
     return normalized.slice(-maxTurns * 2);
   }
 
+  /** 校验必填字符串并去除首尾空白。 */
   private requireNonEmptyString(value: unknown, fieldName: string): string {
     if (typeof value !== "string" || value.trim().length === 0) {
       throw new AppError(
@@ -449,6 +463,7 @@ export class ChatService {
     return value.trim();
   }
 
+  /** 统一校验用户正文与附件，确保至少包含一种有效输入。 */
   private normalizeUserMessage(
     value: unknown,
     images: ChatImageAttachmentDto[],
@@ -473,6 +488,7 @@ export class ChatService {
     );
   }
 
+  /** 校验图片数量、格式和 Data URL 体积，避免超大载荷进入模型网关。 */
   private normalizeImages(value: unknown): ChatImageAttachmentDto[] {
     if (value === undefined || value === null) {
       return [];
@@ -514,6 +530,7 @@ export class ChatService {
     });
   }
 
+  /** 校验文本附件数量与内容大小，并生成稳定的附件 DTO。 */
   private normalizeFiles(value: unknown): ChatFileAttachmentDto[] {
     if (value === undefined || value === null) {
       return [];
@@ -553,6 +570,7 @@ export class ChatService {
     });
   }
 
+  /** 将正文、图片和文件上下文转换为模型供应商使用的统一消息。 */
   private buildUserMessage(
     content: string,
     images: ChatImageAttachmentDto[],
@@ -584,6 +602,7 @@ export class ChatService {
     };
   }
 
+  /** 将文本附件包裹为有边界的上下文，降低文件内容与用户指令混淆的风险。 */
   private appendFileContext(content: string, files: ChatFileAttachmentDto[]): string {
     if (files.length === 0) {
       return content;
@@ -605,6 +624,7 @@ export class ChatService {
     return `${content}\n\n以下是用户上传的文件内容，请作为上下文参考：\n\n${fileContext}`;
   }
 
+  /** 在调用模型前快速拒绝明显不支持视觉输入的模型配置。 */
   private ensureImageInputSupported(modelName: string, images: ChatImageAttachmentDto[]): void {
     if (images.length === 0) {
       return;
@@ -621,6 +641,7 @@ export class ChatService {
     );
   }
 
+  /** 根据常见模型命名识别视觉能力；这是配置保护，不替代供应商能力校验。 */
   private isLikelyVisionModel(modelName: string): boolean {
     const normalized = modelName.toLowerCase();
     const visionModelKeywords = [

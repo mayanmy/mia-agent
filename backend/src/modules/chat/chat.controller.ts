@@ -20,6 +20,7 @@ import {
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
+  /** 非流式对话入口，透传当前用户与 requestId 给编排层。 */
   @Post("completions")
   async createCompletion(
     @Body() payload: ChatCompletionDto,
@@ -32,6 +33,7 @@ export class ChatController {
     });
   }
 
+  /** 查询当前用户在指定 Agent 下的会话。 */
   @Get("sessions")
   async listSessions(
     @Query() query: ChatSessionListQueryDto,
@@ -40,6 +42,7 @@ export class ChatController {
     return this.chatService.listSessions(query, { userId: currentUser.id });
   }
 
+  /** 创建新的独立持久会话。 */
   @Post("sessions")
   async createSession(
     @Body() payload: CreateChatSessionDto,
@@ -48,6 +51,7 @@ export class ChatController {
     return this.chatService.createSession(payload, { userId: currentUser.id });
   }
 
+  /** 兼容旧前端的单会话读取入口。 */
   @Get("sessions/:agentId")
   async getLegacySession(
     @Param("agentId") agentId: string,
@@ -56,6 +60,7 @@ export class ChatController {
     return this.chatService.getSession(agentId, { userId: currentUser.id });
   }
 
+  /** 分页读取指定会话的历史消息。 */
   @Get("sessions/:sessionId/messages")
   async getSessionMessages(
     @Param("sessionId") sessionId: string,
@@ -65,6 +70,7 @@ export class ChatController {
     return this.chatService.getSessionMessages(sessionId, query, { userId: currentUser.id });
   }
 
+  /** 更新会话标题。 */
   @Patch("sessions/:sessionId")
   async updateSession(
     @Param("sessionId") sessionId: string,
@@ -74,6 +80,7 @@ export class ChatController {
     return this.chatService.updateSession(sessionId, payload, { userId: currentUser.id });
   }
 
+  /** 将会话归档为只读状态。 */
   @Post("sessions/:sessionId/archive")
   async archiveSession(
     @Param("sessionId") sessionId: string,
@@ -82,6 +89,7 @@ export class ChatController {
     return this.chatService.archiveSession(sessionId, { userId: currentUser.id });
   }
 
+  /** 恢复归档会话。 */
   @Post("sessions/:sessionId/restore")
   async restoreSession(
     @Param("sessionId") sessionId: string,
@@ -90,8 +98,8 @@ export class ChatController {
     return this.chatService.restoreSession(sessionId, { userId: currentUser.id });
   }
 
-  @Delete("sessions/:sessionId")
   /** 永久删除归档会话及其消息；Controller 只传递当前用户，归属校验由 Service 完成。 */
+  @Delete("sessions/:sessionId")
   async deleteSession(
     @Param("sessionId") sessionId: string,
     @CurrentUser() currentUser: CurrentUserDto
@@ -100,6 +108,10 @@ export class ChatController {
     return null;
   }
 
+  /**
+   * 建立 SSE 响应并把客户端断开转换为 AbortSignal。
+   * 心跳用于穿透反向代理空闲超时，事件内容由 ChatService 统一定义。
+   */
   @Post("stream")
   async streamCompletion(
     @Body() payload: ChatCompletionDto,
