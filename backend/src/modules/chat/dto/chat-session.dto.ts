@@ -2,63 +2,90 @@ import { ChatSessionStatus } from "@prisma/client";
 
 /** 会话列表查询参数；cursor 与 pageSize 由 service 统一校验和归一化。 */
 export type ChatSessionListQueryDto = {
+  /** 限定查询的 Agent ID。 */
   agentId?: string;
+  /** 会话生命周期状态，默认查询活跃会话。 */
   status?: ChatSessionStatus;
+  /** 下一页复合游标。 */
   cursor?: string;
+  /** 每页记录数的原始查询字符串。 */
   pageSize?: string;
 };
 
 /** 创建持久会话所需参数。 */
 export type CreateChatSessionDto = {
+  /** 要创建会话的持久模式 Agent ID。 */
   agentId?: string;
 };
 
 /** 当前允许修改的会话元数据。 */
 export type UpdateChatSessionDto = {
+  /** 新会话标题。 */
   title?: string;
 };
 
 /** 会话消息向前翻页的查询参数。 */
 export type ChatMessageQueryDto = {
+  /** 向更早消息翻页的复合游标。 */
   before?: string;
+  /** 每页记录数的原始查询字符串。 */
   pageSize?: string;
 };
 
 /** 会话列表游标的可序列化结构。 */
 export type ChatSessionCursor = {
+  /** 游标排序时间的 ISO 字符串。 */
   createdAt: string;
+  /** 同一时间下用于稳定排序的会话 ID。 */
   id: string;
 };
 
 /** 会话侧栏展示所需的稳定摘要。 */
 export type ChatSessionListItem = {
+  /** 会话 ID。 */
   id: string;
+  /** 会话所属 Agent ID。 */
   agentId: string;
+  /** 会话展示标题。 */
   title: string;
+  /** 会话当前生命周期状态。 */
   status: ChatSessionStatus;
+  /** 最近一条消息时间；空会话为 null。 */
   lastMessageAt: Date | null;
+  /** 会话创建时间。 */
   createdAt: Date;
+  /** 会话最近更新时间。 */
   updatedAt: Date;
 };
 
 /** 一页会话列表及下一页游标。 */
 export type ChatSessionListResponse = {
+  /** 当前页会话摘要。 */
   list: ChatSessionListItem[];
+  /** 下一页游标；没有下一页时为 null。 */
   nextCursor: string | null;
+  /** 是否仍有后续会话。 */
   hasMore: boolean;
 };
 
 /** 持久会话中的单条历史消息。 */
 export type ChatSessionMessageListItem = {
+  /** 消息 ID。 */
   id: string;
+  /** 消息发送方。 */
   role: "user" | "assistant";
+  /** 消息正文。 */
   content: string;
+  /** 消息创建时间。 */
   createdAt: Date;
 };
 
 /** 一页历史消息；nextBefore 用于继续向更早的消息翻页。 */
 export type ChatSessionMessagePage = {
+  /** 当前页消息，返回给页面时按时间正序排列。 */
   list: ChatSessionMessageListItem[];
+  /** 继续加载更早消息的游标。 */
   nextBefore: string | null;
+  /** 是否仍有更早消息。 */
   hasMore: boolean;
 };

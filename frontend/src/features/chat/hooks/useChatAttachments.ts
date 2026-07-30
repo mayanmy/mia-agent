@@ -15,7 +15,9 @@ import {
 
 /** Hook 使用的最小消息提示能力，避免直接耦合 Ant Design 的完整实例类型。 */
 type MessageApi = {
+  /** 展示成功提示。 */
   success: (content: string) => void;
+  /** 展示警告提示。 */
   warning: (content: string) => void;
 };
 

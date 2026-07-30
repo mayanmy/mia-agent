@@ -5,6 +5,31 @@ import { ArrowDownOutlined } from "@ant-design/icons";
 import type { ChatUiMessage } from "../types";
 import { ChatMessageItem } from "./ChatMessageItem";
 
+/** Chat 消息时间线参数。 */
+type ChatTranscriptProps = {
+  /** 按显示顺序排列的消息。 */
+  messages: ChatUiMessage[];
+  /** 可滚动消息容器引用。 */
+  messagesRef: RefObject<HTMLDivElement | null>;
+  /** 是否正在生成回答。 */
+  sending: boolean;
+  /** 是否还有更早的持久消息。 */
+  hasMoreHistory: boolean;
+  /** 是否正在加载更早消息。 */
+  loadingHistory: boolean;
+  /** 是否展示返回底部按钮。 */
+  showScrollBottom: boolean;
+  /** 消息容器滚动回调。 */
+  onScroll: () => void;
+  /** 加载更早消息回调。 */
+  onLoadMoreHistory: () => void;
+  /** 滚动至最新消息回调。 */
+  onScrollBottom: () => void;
+  /** 复制消息正文回调。 */
+  onCopyMessage: (content: string) => void;
+};
+
+/** 展示消息时间线并协调历史分页和滚动跟随。 */
 export function ChatTranscript({
   messages,
   messagesRef,
@@ -16,18 +41,7 @@ export function ChatTranscript({
   onLoadMoreHistory,
   onScrollBottom,
   onCopyMessage
-}: {
-  messages: ChatUiMessage[];
-  messagesRef: RefObject<HTMLDivElement | null>;
-  sending: boolean;
-  hasMoreHistory: boolean;
-  loadingHistory: boolean;
-  showScrollBottom: boolean;
-  onScroll: () => void;
-  onLoadMoreHistory: () => void;
-  onScrollBottom: () => void;
-  onCopyMessage: (content: string) => void;
-}) {
+}: ChatTranscriptProps) {
   return (
     <>
       <div

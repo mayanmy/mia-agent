@@ -38,16 +38,29 @@ const MAX_FILE_CONTENT_LENGTH = 200_000;
  * 字段保持可序列化，便于后续将运行链路拆为远程调用并继续透传 requestId。
  */
 export type ChatRequestContext = {
+  /** 贯穿 Chat、Runtime、模型调用和日志的请求追踪 ID。 */
   requestId?: string;
+  /** 运行来源，用于区分工作台、API 和公开访问。 */
   source?: AgentRunSource;
+  /** 外部访问模块管理的会话 ID。 */
   externalConversationId?: string;
+  /** 工作台当前登录用户 ID；匿名外部访问可以为空。 */
   userId?: string;
   /**
    * 外部访问模块会自行保存 ExternalConversation。这里仅接收已校验的历史，避免 Chat
    * 直接依赖 external_access 表，同时也不会误把外部访客写入工作台 ChatSession。
    */
   externalHistory?: ChatMessageDto[];
+  /** 是否禁止写入内部 ChatSession，外部会话必须开启。 */
   skipInternalSessionPersistence?: boolean;
+};
+
+/** 解析持久会话时只需要的最小 Agent 配置。 */
+type PersistentSessionAgent = {
+  /** Agent ID。 */
+  agentId: string;
+  /** Agent 当前会话模式。 */
+  chatSessionMode: AgentChatSessionMode;
 };
 
 @Injectable()
@@ -370,7 +383,7 @@ export class ChatService {
    * 传入 SSE，使用户意图和数据归属都可验证。
    */
   private async resolvePersistentSessionId(
-    agent: { agentId: string; chatSessionMode: AgentChatSessionMode },
+    agent: PersistentSessionAgent,
     sessionId: string | undefined,
     context?: ChatRequestContext
   ): Promise<string | null> {

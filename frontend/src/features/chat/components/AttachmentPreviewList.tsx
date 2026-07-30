@@ -2,17 +2,25 @@ import { CloseOutlined } from "@ant-design/icons";
 
 import type { ChatFileAttachment, ChatImageAttachment } from "../api";
 
+/** 附件预览列表参数。 */
+type AttachmentPreviewListProps = {
+  /** 待发送图片。 */
+  images: ChatImageAttachment[];
+  /** 待发送文本文件。 */
+  files: ChatFileAttachment[];
+  /** 移除图片回调。 */
+  onRemoveImage: (id: string | undefined) => void;
+  /** 移除文本文件回调。 */
+  onRemoveFile: (id: string | undefined) => void;
+};
+
+/** 展示本轮尚未发送的附件并提供移除入口。 */
 export function AttachmentPreviewList({
   images,
   files,
   onRemoveImage,
   onRemoveFile
-}: {
-  images: ChatImageAttachment[];
-  files: ChatFileAttachment[];
-  onRemoveImage: (id: string | undefined) => void;
-  onRemoveFile: (id: string | undefined) => void;
-}) {
+}: AttachmentPreviewListProps) {
   return (
     <>
       {images.length > 0 ? (

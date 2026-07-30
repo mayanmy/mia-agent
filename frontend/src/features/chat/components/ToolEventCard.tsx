@@ -2,7 +2,14 @@ import { useState } from "react";
 
 import type { ChatToolEvent } from "../types";
 
-export function ToolEventCard({ toolEvent }: { toolEvent: ChatToolEvent }) {
+/** 工具事件卡片参数。 */
+type ToolEventCardProps = {
+  /** 待展示的工具调用事件。 */
+  toolEvent: ChatToolEvent;
+};
+
+/** 展示工具调用状态，并按需展开输入、输出或错误详情。 */
+export function ToolEventCard({ toolEvent }: ToolEventCardProps) {
   const failureSummary = getFailureSummary(toolEvent);
 
   return (
@@ -49,13 +56,19 @@ function formatToolStatus(toolEvent: ChatToolEvent): string {
   return toolEvent.status === "success" ? `完成${elapsed}` : `失败${elapsed}`;
 }
 
+/** 工具失败详情参数。 */
+type ToolFailureDetailProps = {
+  /** 原始工具调用事件。 */
+  toolEvent: ChatToolEvent;
+  /** 归一化后的错误摘要。 */
+  summary: ToolFailureSummary;
+};
+
+/** 展示工具错误分类、失败原因和可选失败返回。 */
 function ToolFailureDetail({
   toolEvent,
   summary
-}: {
-  toolEvent: ChatToolEvent;
-  summary: ToolFailureSummary;
-}) {
+}: ToolFailureDetailProps) {
   const details = [
     ["工具", formatToolName(toolEvent.name)],
     ["错误类型", summary.typeLabel],
@@ -81,7 +94,16 @@ function ToolFailureDetail({
   );
 }
 
-function ToolEventDetail({ label, value }: { label: string; value: unknown }) {
+/** 工具输入或输出详情参数。 */
+type ToolEventDetailProps = {
+  /** 折叠区域标签。 */
+  label: string;
+  /** 待格式化展示的任意值。 */
+  value: unknown;
+};
+
+/** 对较长工具详情提供折叠预览。 */
+function ToolEventDetail({ label, value }: ToolEventDetailProps) {
   const text = formatToolJson(value);
   const shouldCollapse = isLongToolDetail(text);
   const [expanded, setExpanded] = useState(!shouldCollapse);
@@ -138,8 +160,11 @@ function getToolDetailPreview(text: string): string {
 
 /** 将底层工具错误归一化为面向用户展示的标题和说明。 */
 type ToolFailureSummary = {
+  /** 卡片标题使用的简短错误名称。 */
   title: string;
+  /** 详情区域使用的错误分类。 */
   typeLabel: string;
+  /** 未返回具体错误消息时的默认说明。 */
   description: string;
 };
 

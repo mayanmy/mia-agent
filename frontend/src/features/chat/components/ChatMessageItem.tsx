@@ -9,15 +9,22 @@ import { formatMessageTime } from "../utils";
 import { RetrievalEventCard } from "./RetrievalEventCard";
 import { ToolEventCard } from "./ToolEventCard";
 
+/** 单条聊天消息组件参数。 */
+type ChatMessageItemProps = {
+  /** 包含附件和过程事件的 UI 消息。 */
+  item: ChatUiMessage;
+  /** 该消息是否仍在接收流式内容。 */
+  generating: boolean;
+  /** 复制消息正文回调。 */
+  onCopy: (content: string) => void;
+};
+
+/** 渲染用户或 Agent 消息及其检索、工具和引用信息。 */
 export function ChatMessageItem({
   item,
   generating,
   onCopy
-}: {
-  item: ChatUiMessage;
-  generating: boolean;
-  onCopy: (content: string) => void;
-}) {
+}: ChatMessageItemProps) {
   const citationSources = getCitationSources(item);
 
   return (
@@ -85,7 +92,14 @@ export function ChatMessageItem({
  * ReactMarkdown 默认不会解析原始 HTML，因此模型输出的 HTML 不会直接注入 DOM；复制按钮
  * 继续使用 item.content，确保用户拿到的是可复用的 Markdown 源文，而不是渲染后的纯文本。
  */
-function MarkdownMessageContent({ content }: { content: string }) {
+/** Markdown 消息正文参数。 */
+type MarkdownMessageContentProps = {
+  /** 待渲染的 Markdown 文本。 */
+  content: string;
+};
+
+/** 使用 GFM 规则渲染模型 Markdown 输出。 */
+function MarkdownMessageContent({ content }: MarkdownMessageContentProps) {
   if (!content) {
     return null;
   }
@@ -130,7 +144,14 @@ function getCitationSources(item: ChatUiMessage): ChatRetrievalSource[] {
   return retrievalEvent?.sources ?? [];
 }
 
-function CitationSourceList({ sources }: { sources: ChatRetrievalSource[] }) {
+/** 引用来源列表参数。 */
+type CitationSourceListProps = {
+  /** 去重后的检索来源。 */
+  sources: ChatRetrievalSource[];
+};
+
+/** 展示回答使用的文档来源。 */
+function CitationSourceList({ sources }: CitationSourceListProps) {
   return (
     <div className="chatCitationSources">
       <div className="chatCitationTitle">引用来源</div>

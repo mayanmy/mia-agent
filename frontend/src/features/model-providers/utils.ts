@@ -108,17 +108,27 @@ export const providerTemplates: ProviderTemplate[] = [
     baseUrl: "https://api.openai.com/v1",
     logo: "O",
     accent: "#16c784"
+  },
+  {
+    name: "Anthropic",
+    author: "mia",
+    downloads: "173,537",
+    description: "Anthropic 的强大模型。",
+    providerType: "ANTHROPIC",
+    baseUrl: "https://api.anthropic.com/v1",
+    logo: "AI",
+    accent: "#d6a170"
+  },
+  {
+    name: "Gemini",
+    author: "mia",
+    downloads: "347,369",
+    description: "谷歌提供的 Gemini 模型。",
+    providerType: "GEMINI",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    logo: "✦",
+    accent: "#4f7cff"
   }
-  // {
-  //   name: "Anthropic",
-  //   author: "mia",
-  //   downloads: "173,537",
-  //   description: "Anthropic 的强大模型。",
-  //   providerType: "ANTHROPIC",
-  //   baseUrl: "https://api.anthropic.com/v1",
-  //   logo: "AI",
-  //   accent: "#d6a170"
-  // },
   // {
   //   name: "Amazon Bedrock",
   //   author: "mia",
@@ -128,16 +138,6 @@ export const providerTemplates: ProviderTemplate[] = [
   //   baseUrl: "https://bedrock-runtime.example.com/v1",
   //   logo: "B",
   //   accent: "#2f9e83"
-  // },
-  // {
-  //   name: "Gemini",
-  //   author: "mia",
-  //   downloads: "347,369",
-  //   description: "谷歌提供的 Gemini 模型。",
-  //   providerType: "GEMINI",
-  //   baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-  //   logo: "✦",
-  //   accent: "#4f7cff"
   // },
   // {
   //   name: "Azure OpenAI",

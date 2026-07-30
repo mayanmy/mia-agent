@@ -2,7 +2,14 @@ import { useState } from "react";
 
 import type { ChatRetrievalEvent } from "../types";
 
-export function RetrievalEventCard({ retrievalEvent }: { retrievalEvent: ChatRetrievalEvent }) {
+/** 检索事件卡片参数。 */
+type RetrievalEventCardProps = {
+  /** 待展示的检索过程事件。 */
+  retrievalEvent: ChatRetrievalEvent;
+};
+
+/** 展示知识检索状态、耗时和命中来源。 */
+export function RetrievalEventCard({ retrievalEvent }: RetrievalEventCardProps) {
   const [expandedSourceKeys, setExpandedSourceKeys] = useState<Set<string>>(() => new Set());
 
   function toggleSource(key: string) {

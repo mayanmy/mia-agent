@@ -815,14 +815,20 @@ export function ChatPage() {
   );
 }
 
-/** 将接口返回的持久化消息映射成现有消息组件使用的视图模型。 */
-/** 将服务端历史消息补齐为前端渲染模型。 */
-function toChatUiMessage(message: {
+/** 服务端历史消息映射所需字段。 */
+type PersistedChatMessage = {
+  /** 服务端消息 ID。 */
   id: string;
+  /** 消息发送方。 */
   role: "user" | "assistant";
+  /** 消息正文。 */
   content: string;
+  /** ISO 格式创建时间。 */
   createdAt: string;
-}): ChatUiMessage {
+};
+
+/** 将接口返回的持久化消息映射成消息组件使用的视图模型。 */
+function toChatUiMessage(message: PersistedChatMessage): ChatUiMessage {
   return {
     id: message.id,
     role: message.role,
@@ -831,7 +837,6 @@ function toChatUiMessage(message: {
   };
 }
 
-/** 用首条用户消息生成简短会话标题，完整标题仍由服务端持久化为准。 */
 /** 使用首条用户消息生成乐观会话标题，服务端持久化后会返回最终值。 */
 function createSessionTitle(content: string): string {
   const normalized = content.replace(/\s+/gu, " ").trim();

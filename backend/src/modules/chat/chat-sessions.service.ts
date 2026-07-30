@@ -21,14 +21,52 @@ const MAX_GENERATED_TITLE_LENGTH = 40;
 
 /** 用于限定会话数据归属，所有读写都必须同时匹配 Agent 和当前用户。 */
 type SessionOwner = {
+  /** 会话所属 Agent ID。 */
   agentId: string;
+  /** 会话所属内部用户 ID。 */
   userId: string;
 };
 
 /** 消息按创建时间倒序翻页时使用的复合游标，id 用于解决同毫秒排序冲突。 */
-type CreatedAtCursor = { id: string; createdAt: Date };
+type CreatedAtCursor = {
+  /** 同一创建时间下用于稳定排序的消息 ID。 */
+  id: string;
+  /** 消息创建时间。 */
+  createdAt: Date;
+};
 /** 会话按最近更新时间倒序翻页时使用的复合游标。 */
-type UpdatedAtCursor = { id: string; updatedAt: Date };
+type UpdatedAtCursor = {
+  /** 同一更新时间下用于稳定排序的会话 ID。 */
+  id: string;
+  /** 会话最近更新时间。 */
+  updatedAt: Date;
+};
+
+/** 解码并校验后的通用复合游标。 */
+type DecodedCursor = {
+  /** 同一时间下用于稳定排序的记录 ID。 */
+  id: string;
+  /** 已转换为 Date 的排序时间。 */
+  date: Date;
+};
+
+/** 转换会话列表 DTO 所需的最小数据库记录。 */
+type SessionListRecord = {
+  /** 会话 ID。 */
+  id: string;
+  /** 会话所属 Agent ID。 */
+  agentId: string;
+  /** 会话标题。 */
+  title: string;
+  /** 会话生命周期状态。 */
+  status: ChatSessionStatus;
+  /** 最近消息时间。 */
+  lastMessageAt: Date | null;
+  /** 会话创建时间。 */
+  createdAt: Date;
+  /** 会话最近更新时间。 */
+  updatedAt: Date;
+};
 
 @Injectable()
 export class ChatSessionsService {
@@ -365,7 +403,7 @@ export class ChatSessionsService {
   private decodeCursor(
     value: string | undefined,
     field: "createdAt" | "updatedAt"
-  ): { id: string; date: Date } | null {
+  ): DecodedCursor | null {
     if (!value) {
       return null;
     }
@@ -392,15 +430,7 @@ export class ChatSessionsService {
   }
 
   /** 隔离 Prisma 结果并返回稳定的跨层 DTO。 */
-  private toSessionListItem(session: {
-    id: string;
-    agentId: string;
-    title: string;
-    status: ChatSessionStatus;
-    lastMessageAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-  }): ChatSessionListItem {
+  private toSessionListItem(session: SessionListRecord): ChatSessionListItem {
     return {
       id: session.id,
       agentId: session.agentId,

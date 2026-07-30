@@ -5,51 +5,77 @@ export type ChatRole = "user" | "assistant";
 
 /** 浏览器侧图片附件；id 仅用于本地列表稳定渲染。 */
 export type ChatImageAttachment = {
+  /** 浏览器侧列表渲染 ID。 */
   id?: string;
+  /** 原始文件名。 */
   name: string;
+  /** 图片 MIME 类型。 */
   mimeType: string;
+  /** 图片预览及提交使用的 Data URL。 */
   dataUrl: string;
 };
 
 /** 浏览器侧文本文件附件，content 保存提交给后端的文本内容。 */
 export type ChatFileAttachment = {
+  /** 浏览器侧列表渲染 ID。 */
   id?: string;
+  /** 原始文件名。 */
   name: string;
+  /** 文件 MIME 类型。 */
   mimeType: string;
+  /** 文件字节数。 */
   size: number;
+  /** 已读取的纯文本内容。 */
   content: string;
 };
 
 /** 可进入对话历史的标准消息。 */
 export type ChatMessage = {
+  /** 消息发送方。 */
   role: ChatRole;
+  /** 消息文本正文。 */
   content: string;
+  /** 可选图片附件。 */
   images?: ChatImageAttachment[];
+  /** 可选文本附件。 */
   files?: ChatFileAttachment[];
 };
 
 /** 发起对话补全时提交给 API 的完整载荷。 */
 export type ChatCompletionPayload = {
+  /** 要运行的 Agent ID。 */
   agentId: string;
+  /** 持久会话 ID；临时模式不传。 */
   sessionId?: string;
+  /** 本轮用户输入。 */
   message: string;
+  /** 本轮图片附件。 */
   images: ChatImageAttachment[];
+  /** 本轮文本附件。 */
   files: ChatFileAttachment[];
+  /** 临时会话由前端维护的上下文历史。 */
   history: ChatMessage[];
 };
 
 /** 服务端持久化并返回的会话消息。 */
 export type ChatSessionMessage = {
+  /** 服务端消息 ID。 */
   id: string;
+  /** 消息发送方。 */
   role: ChatRole;
+  /** 消息正文。 */
   content: string;
+  /** ISO 格式创建时间。 */
   createdAt: string;
 };
 
 /** 兼容旧单会话接口的响应结构。 */
 export type ChatSessionResponse = {
+  /** Agent 的会话模式。 */
   mode: "EPHEMERAL" | "PERSISTENT";
+  /** 当前持久会话 ID；临时模式为 null。 */
   sessionId: string | null;
+  /** 当前会话历史消息。 */
   messages: ChatSessionMessage[];
 };
 
@@ -58,46 +84,71 @@ export type ChatSessionStatus = "ACTIVE" | "ARCHIVED";
 
 /** 会话侧栏使用的列表项摘要。 */
 export type ChatSessionListItem = {
+  /** 会话 ID。 */
   id: string;
+  /** 所属 Agent ID。 */
   agentId: string;
+  /** 会话标题。 */
   title: string;
+  /** 会话生命周期状态。 */
   status: ChatSessionStatus;
+  /** 最近消息时间；空会话为 null。 */
   lastMessageAt: string | null;
+  /** ISO 格式创建时间。 */
   createdAt: string;
+  /** ISO 格式更新时间。 */
   updatedAt: string;
 };
 
 /** 一页会话列表及后续分页信息。 */
 export type ChatSessionListResponse = {
+  /** 当前页会话。 */
   list: ChatSessionListItem[];
+  /** 下一页游标。 */
   nextCursor: string | null;
+  /** 是否仍有后续会话。 */
   hasMore: boolean;
 };
 
 /** 向前加载历史消息时返回的一页数据。 */
 export type ChatSessionMessagePage = {
+  /** 当前页消息。 */
   list: ChatSessionMessage[];
+  /** 继续加载更早消息的游标。 */
   nextBefore: string | null;
+  /** 是否仍有更早消息。 */
   hasMore: boolean;
 };
 
 /** 非流式对话完成后的模型与内容摘要。 */
 export type ChatCompletionResult = {
+  /** 实际运行的 Agent ID。 */
   agentId: string;
+  /** 实际模型配置 ID。 */
   modelConfigId: string;
+  /** 实际模型名称。 */
   modelName: string;
+  /** 实际供应商名称。 */
   providerName: string;
+  /** 最终生成正文。 */
   content: string;
 };
 
 /** RAG 检索命中的可展示来源。 */
 export type ChatRetrievalSource = {
+  /** 来源知识库 ID。 */
   knowledgeBaseId: string;
+  /** 来源文档 ID。 */
   documentId: string;
+  /** 来源文档名称。 */
   documentName: string;
+  /** 命中的 Chunk ID。 */
   chunkId: string;
+  /** Chunk 在文档中的顺序。 */
   chunkIndex: number;
+  /** 向量检索相关度分数。 */
   score: number;
+  /** 可选内容摘要，避免前端接收完整 Chunk。 */
   contentPreview?: string;
 };
 
@@ -113,29 +164,78 @@ export type ChatStreamEventType =
   | "error"
   | "ping";
 
-/** 浏览器消费的 SSE 事件；data 汇总各事件可能携带的字段。 */
+/** Chat SSE 各事件可能携带的字段集合。 */
+export type ChatStreamEventData = {
+  /** 检索开始时计划查询的知识库 ID。 */
+  knowledgeBaseIds?: string[];
+  /** 检索完成后的来源列表。 */
+  sources?: ChatRetrievalSource[];
+  /** 工具调用或运行事件 ID。 */
+  id?: string;
+  /** 工具注册名称。 */
+  name?: string;
+  /** 工具调用参数。 */
+  arguments?: Record<string, unknown>;
+  /** 与 tool_result 对应的工具调用 ID。 */
+  toolId?: string;
+  /** 工具是否执行成功。 */
+  ok?: boolean;
+  /** 工具结构化输出。 */
+  output?: unknown;
+  /** 工具或运行错误分类。 */
+  errorType?: string;
+  /** 工具或运行错误说明。 */
+  errorMessage?: string;
+  /** 当前阶段耗时毫秒数。 */
+  elapsedMs?: number;
+  /** token 增量或最终消息正文。 */
+  content?: string;
+  /** 面向用户的错误消息。 */
+  message?: string;
+  /** 实际运行的 Agent ID。 */
+  agentId?: string;
+  /** 实际模型配置 ID。 */
+  modelConfigId?: string;
+  /** 实际模型名称。 */
+  modelName?: string;
+  /** 实际供应商名称。 */
+  providerName?: string;
+  /** 服务端创建或确认的持久会话 ID。 */
+  sessionId?: string;
+};
+
+/** 浏览器消费的单个 Chat SSE 事件。 */
 export type ChatStreamEvent = {
+  /** 决定 UI 状态流转方式的事件名称。 */
   type: ChatStreamEventType;
-  data: {
-    knowledgeBaseIds?: string[];
-    sources?: ChatRetrievalSource[];
-    id?: string;
-    name?: string;
-    arguments?: Record<string, unknown>;
-    toolId?: string;
-    ok?: boolean;
-    output?: unknown;
-    errorType?: string;
-    errorMessage?: string;
-    elapsedMs?: number;
-    content?: string;
-    message?: string;
-    agentId?: string;
-    modelConfigId?: string;
-    modelName?: string;
-    providerName?: string;
-    sessionId?: string;
-  };
+  /** 与事件类型对应的可选字段集合。 */
+  data: ChatStreamEventData;
+};
+
+/** 会话列表分页选项。 */
+export type ListChatSessionsOptions = {
+  /** 下一页复合游标。 */
+  cursor?: string;
+  /** 每页会话数量。 */
+  pageSize?: number;
+  /** 活跃或归档状态筛选。 */
+  status?: ChatSessionStatus;
+};
+
+/** 会话消息分页选项。 */
+export type GetChatSessionMessagesOptions = {
+  /** 加载更早消息的复合游标。 */
+  before?: string;
+  /** 每页消息数量。 */
+  pageSize?: number;
+};
+
+/** 流式对话消费选项。 */
+export type StreamChatCompletionOptions = {
+  /** 用于停止读取并取消上游请求的信号。 */
+  signal?: AbortSignal;
+  /** 每解析出一个完整 SSE 事件时调用。 */
+  onEvent: (event: ChatStreamEvent) => void;
 };
 
 /** 获取当前成员在保留型 Agent 下的个人会话；单次模式会返回空会话。 */
@@ -146,7 +246,7 @@ export function getChatSession(agentId: string): Promise<ChatSessionResponse> {
 /** 读取一个保留型 Agent 的活跃会话列表；列表与消息都采用 Cursor，避免深页 Offset 扫描。 */
 export function listChatSessions(
   agentId: string,
-  options: { cursor?: string; pageSize?: number; status?: ChatSessionStatus } = {}
+  options: ListChatSessionsOptions = {}
 ): Promise<ChatSessionListResponse> {
   const params = new URLSearchParams({
     agentId,
@@ -174,7 +274,7 @@ export function createChatSession(agentId: string): Promise<ChatSessionListItem>
 /** 分页读取指定会话的历史消息。 */
 export function getChatSessionMessages(
   sessionId: string,
-  options: { before?: string; pageSize?: number } = {}
+  options: GetChatSessionMessagesOptions = {}
 ): Promise<ChatSessionMessagePage> {
   const params = new URLSearchParams({ pageSize: String(options.pageSize ?? 50) });
 
@@ -235,10 +335,7 @@ export function createChatCompletion(
  */
 export async function streamChatCompletion(
   payload: ChatCompletionPayload,
-  options: {
-    signal?: AbortSignal;
-    onEvent: (event: ChatStreamEvent) => void;
-  }
+  options: StreamChatCompletionOptions
 ): Promise<void> {
   const response = await fetchWithAuth("/api/v1/chat/stream", {
     method: "POST",

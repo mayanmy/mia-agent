@@ -11,6 +11,35 @@ import { useState } from "react";
 
 import type { ChatSessionListItem } from "../api";
 
+/** Chat 会话侧栏参数。 */
+type ChatSessionListProps = {
+  /** 当前状态筛选下的会话列表。 */
+  sessions: ChatSessionListItem[];
+  /** 当前选中会话 ID。 */
+  activeSessionId: string | null;
+  /** 是否禁止创建和编辑会话。 */
+  disabled: boolean;
+  /** 会话列表是否正在加载。 */
+  loading: boolean;
+  /** 创建新会话回调。 */
+  onCreate: () => void;
+  /** 选择会话回调。 */
+  onSelect: (sessionId: string) => void;
+  /** 重命名会话回调。 */
+  onRename: (sessionId: string, title: string) => void;
+  /** 归档会话回调。 */
+  onArchive: (sessionId: string) => void;
+  /** 恢复会话回调。 */
+  onRestore: (sessionId: string) => void;
+  /** 永久删除归档会话回调。 */
+  onDelete: (sessionId: string) => void;
+  /** 当前是否展示归档会话。 */
+  showingArchived: boolean;
+  /** 切换活跃/归档视图回调。 */
+  onToggleArchived: () => void;
+};
+
+/** 展示并管理当前 Agent 的持久会话。 */
 export function ChatSessionList({
   sessions,
   activeSessionId,
@@ -24,20 +53,7 @@ export function ChatSessionList({
   onDelete,
   showingArchived,
   onToggleArchived
-}: {
-  sessions: ChatSessionListItem[];
-  activeSessionId: string | null;
-  disabled: boolean;
-  loading: boolean;
-  onCreate: () => void;
-  onSelect: (sessionId: string) => void;
-  onRename: (sessionId: string, title: string) => void;
-  onArchive: (sessionId: string) => void;
-  onRestore: (sessionId: string) => void;
-  onDelete: (sessionId: string) => void;
-  showingArchived: boolean;
-  onToggleArchived: () => void;
-}) {
+}: ChatSessionListProps) {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
 
