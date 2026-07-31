@@ -42,7 +42,7 @@ export function LoginPage() {
     <main className="loginPage">
       <section className="loginPanel" aria-label="Mia 登录">
         <div className="loginBrand">
-          <div className="brandMark">M</div>
+          <img src="/mia-logo.png" alt="Mia" className="brandLogo" />
           <div>
             <div className="brandName">Mia</div>
             <div className="brandMeta">AI Agent 平台</div>

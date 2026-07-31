@@ -212,7 +212,7 @@ function WorkspaceLayout() {
       <aside className="sidebar">
         <div className="sidebarHeader">
           <div className="brand">
-            <div className="brandMark">M</div>
+            <img src="/mia-logo.png" alt="Mia" className="brandLogo" />
             <div className="brandText">
               <div className="brandName">Mia</div>
               <div className="brandMeta">AI Agent 平台</div>
