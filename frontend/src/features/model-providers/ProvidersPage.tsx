@@ -408,9 +408,16 @@ export function ProvidersPage() {
       <div className="providerToolbar">
         <Input.Search
           allowClear
+          autoComplete="off"
           placeholder="搜索模型..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
+          onAnimationStart={(ev) => {
+            // 捕获浏览器自动填充事件，清空自动填入内容
+            if ((ev as React.AnimationEvent<HTMLInputElement>).animationName === "autofill") {
+              ev.currentTarget.value = "";
+            }
+          }}
         />
         <Button type="primary" onClick={() => openCreateProvider()}>
           安装
