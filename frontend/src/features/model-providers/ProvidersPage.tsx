@@ -408,7 +408,7 @@ export function ProvidersPage() {
       <div className="providerToolbar">
         <Input.Search
           allowClear
-          autoComplete="off"
+          autoComplete="one-time-code"
           placeholder="搜索模型..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
