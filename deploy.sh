@@ -7,4 +7,4 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # set -e 会在后端部署失败时立即退出，避免前端已经更新而 API 仍停留在旧版本。
 # 前后端分服务器部署时不要运行本脚本，应分别执行两个子脚本。
 "${SCRIPT_DIR}/deploy-backend.sh"
-"${SCRIPT_DIR}/deploy-frontend.sh"
+# "${SCRIPT_DIR}/deploy-frontend.sh"
