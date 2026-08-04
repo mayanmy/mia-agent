@@ -3,15 +3,23 @@ import { Button, Empty, Tag, Tooltip } from "antd";
 
 import type { WorkflowListItem } from "../types";
 
-type Props = {
+/** Workflow 列表侧栏参数。 */
+type WorkflowSidebarProps = {
+  /** 当前可编辑 Workflow 列表。 */
   workflows: WorkflowListItem[];
+  /** 当前选中的 Workflow ID。 */
   selectedId: string | null;
+  /** 列表是否正在加载。 */
   loading: boolean;
+  /** 打开创建弹窗回调。 */
   onCreate: () => void;
+  /** 选择 Workflow 回调。 */
   onSelect: (id: string) => void;
+  /** 归档 Workflow 回调。 */
   onArchive: (workflow: WorkflowListItem) => void;
 };
 
+/** 展示 Workflow 列表、发布版本和归档入口。 */
 export function WorkflowSidebar({
   workflows,
   selectedId,
@@ -19,7 +27,7 @@ export function WorkflowSidebar({
   onCreate,
   onSelect,
   onArchive
-}: Props) {
+}: WorkflowSidebarProps) {
   return (
     <aside className="workflowSidebar">
       <div className="workflowSidebarHeader">

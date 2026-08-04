@@ -7,33 +7,54 @@ import type {
   WorkflowValidationResult
 } from "./types";
 
+/** 创建 Workflow 的请求载荷。 */
+export type CreateWorkflowPayload = {
+  /** Workflow 名称。 */
+  name: string;
+  /** Workflow 用途说明。 */
+  description: string;
+  /** 初始草稿 Graph。 */
+  graph: WorkflowGraph;
+};
+
+/** 保存草稿后返回的新修订信息。 */
+export type WorkflowDraftUpdateResult = {
+  /** Workflow ID。 */
+  workflowId: string;
+  /** 保存后递增的草稿修订号。 */
+  draftRevision: number;
+  /** ISO 格式更新时间。 */
+  updatedAt: string;
+};
+
+/** 分页读取 Workflow 管理列表。 */
 export function listWorkflows(page = 1, pageSize = 100): Promise<PageResult<WorkflowListItem>> {
   return request(`/api/v1/workflows?page=${page}&pageSize=${pageSize}`);
 }
 
-export function createWorkflow(payload: {
-  name: string;
-  description: string;
-  graph: WorkflowGraph;
-}): Promise<WorkflowDetail> {
+/** 创建 Workflow 及其初始草稿。 */
+export function createWorkflow(payload: CreateWorkflowPayload): Promise<WorkflowDetail> {
   return request("/api/v1/workflows", { method: "POST", body: JSON.stringify(payload) });
 }
 
+/** 获取 Workflow 编辑详情。 */
 export function getWorkflow(id: string): Promise<WorkflowDetail> {
   return request(`/api/v1/workflows/${encodeURIComponent(id)}`);
 }
 
+/** 使用乐观锁保存完整草稿 Graph。 */
 export function updateWorkflowDraft(
   id: string,
   expectedRevision: number,
   graph: WorkflowGraph
-): Promise<{ workflowId: string; draftRevision: number; updatedAt: string }> {
+): Promise<WorkflowDraftUpdateResult> {
   return request(`/api/v1/workflows/${encodeURIComponent(id)}/draft`, {
     method: "PUT",
     body: JSON.stringify({ expectedRevision, graph })
   });
 }
 
+/** 编译校验当前页面 Graph，不直接修改草稿。 */
 export function validateWorkflow(
   id: string,
   graph: WorkflowGraph
@@ -44,6 +65,7 @@ export function validateWorkflow(
   });
 }
 
+/** 将指定草稿修订发布为不可变版本。 */
 export function publishWorkflow(
   id: string,
   expectedRevision: number
@@ -54,6 +76,7 @@ export function publishWorkflow(
   });
 }
 
+/** 归档 Workflow 并从默认管理列表移除。 */
 export function archiveWorkflow(id: string): Promise<null> {
   return request(`/api/v1/workflows/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

@@ -49,6 +49,12 @@ const temperatureExample = `[
   }
 ]`;
 
+/** 条件分支帮助正文参数。 */
+type ConditionBranchGuideContentProps = {
+  /** 是否使用适合嵌入其他帮助区域的紧凑布局。 */
+  compact?: boolean;
+};
+
 /** 条件节点旁提供就地帮助，用户不需要离开当前配置上下文。 */
 export function ConditionBranchGuide() {
   const [open, setOpen] = useState(false);
@@ -76,7 +82,8 @@ export function ConditionBranchGuide() {
   );
 }
 
-export function ConditionBranchGuideContent({ compact = false }: { compact?: boolean }) {
+/** 展示 Condition 配置字段、操作符和变量引用示例。 */
+export function ConditionBranchGuideContent({ compact = false }: ConditionBranchGuideContentProps) {
   return (
     <div className={`conditionBranchGuide${compact ? " compact" : ""}`}>
       <Alert

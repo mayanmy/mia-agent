@@ -28,6 +28,60 @@ import {
 } from "./dto/workflow-validation.dto";
 import { WorkflowCompiler } from "./workflow-compiler";
 
+/** 转换 Workflow 列表 DTO 所需的最小数据库投影。 */
+type WorkflowListRecord = {
+  /** Workflow ID。 */
+  id: string;
+  /** Workflow 名称。 */
+  name: string;
+  /** Workflow 用途说明。 */
+  description: string;
+  /** 当前管理状态。 */
+  status: WorkflowStatus;
+  /** 当前草稿修订号。 */
+  draftRevision: number;
+  /** 最近发布版本号。 */
+  publishedVersion: number | null;
+  /** 创建管理员 ID。 */
+  createdByUserId: string;
+  /** 创建时间。 */
+  createdAt: Date;
+  /** 最近更新时间。 */
+  updatedAt: Date;
+};
+
+/** 转换 Workflow 详情 DTO 所需的数据库投影。 */
+type WorkflowDetailRecord = WorkflowListRecord & {
+  /** 数据库中保存的 JSON Graph。 */
+  draftGraph: unknown;
+};
+
+/** 转换 Workflow Version 列表 DTO 所需的数据库投影。 */
+type WorkflowVersionListRecord = {
+  /** 不可变版本 ID。 */
+  id: string;
+  /** 所属 Workflow ID。 */
+  workflowId: string;
+  /** Workflow 内版本号。 */
+  version: number;
+  /** Graph Schema 版本。 */
+  graphSchemaVersion: number;
+  /** 编译计划内容摘要。 */
+  checksum: string;
+  /** 发布管理员 ID。 */
+  publishedByUserId: string;
+  /** 版本创建时间。 */
+  createdAt: Date;
+};
+
+/** 转换 Workflow Version 详情 DTO 所需的数据库投影。 */
+type WorkflowVersionDetailRecord = WorkflowVersionListRecord & {
+  /** 原始 Graph JSON。 */
+  graph: unknown;
+  /** 编译计划 JSON。 */
+  compiledPlan: unknown;
+};
+
 const EMPTY_WORKFLOW_GRAPH: WorkflowGraph = {
   schemaVersion: 1,
   nodes: [],
@@ -87,6 +141,7 @@ export class WorkflowsService {
     return this.toDetail(workflow, workflow._count.versions);
   }
 
+  /** 读取未归档 Workflow 的完整草稿详情。 */
   async getWorkflow(id: string): Promise<WorkflowDetail> {
     const workflow = await this.prisma.workflow.findFirst({
       where: { id: this.requireId(id, "workflowId"), deletedAt: null },
@@ -262,6 +317,7 @@ export class WorkflowsService {
     });
   }
 
+  /** 返回指定 Workflow 的全部不可变版本，按版本号倒序排列。 */
   async listVersions(workflowId: string): Promise<WorkflowVersionListItem[]> {
     const normalizedWorkflowId = this.requireId(workflowId, "workflowId");
     await this.ensureExists(normalizedWorkflowId);
@@ -272,6 +328,7 @@ export class WorkflowsService {
     return versions.map((version) => this.toVersionListItem(version));
   }
 
+  /** 读取属于指定 Workflow 的单个不可变版本。 */
   async getVersion(workflowId: string, versionId: string): Promise<WorkflowVersionDetail> {
     const version = await this.prisma.workflowVersion.findFirst({
       where: {
@@ -322,6 +379,7 @@ export class WorkflowsService {
     };
   }
 
+  /** 确认 Workflow 存在且未软删除。 */
   private async ensureExists(id: string): Promise<void> {
     const workflow = await this.prisma.workflow.findFirst({
       where: { id, deletedAt: null },
@@ -330,6 +388,7 @@ export class WorkflowsService {
     if (!workflow) throw this.notFound();
   }
 
+  /** 将数据库或请求中的未知 JSON 归一为 Workflow V1 Graph。 */
   private normalizeGraph(value: unknown): WorkflowGraph {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       throw new AppError(ErrorCodes.workflow.invalidGraph, "graph 必须是对象");
@@ -354,6 +413,7 @@ export class WorkflowsService {
     };
   }
 
+  /** 校验并规范化 Workflow 名称。 */
   private requireName(value: unknown): string {
     if (typeof value !== "string" || !value.trim()) {
       throw new AppError(ErrorCodes.common.badRequest, "name is required");
@@ -365,6 +425,7 @@ export class WorkflowsService {
     return name;
   }
 
+  /** 规范化可选描述并限制长度。 */
   private normalizeDescription(value: unknown): string {
     if (value === undefined || value === null) return "";
     if (typeof value !== "string") {
@@ -380,6 +441,7 @@ export class WorkflowsService {
     return description;
   }
 
+  /** 校验必填字符串 ID。 */
   private requireId(value: unknown, field: string): string {
     if (typeof value !== "string" || !value.trim()) {
       throw new AppError(ErrorCodes.common.badRequest, `${field} is required`);
@@ -387,6 +449,7 @@ export class WorkflowsService {
     return value.trim();
   }
 
+  /** 校验发布和草稿乐观锁使用的正整数。 */
   private requirePositiveInteger(value: unknown, field: string): number {
     if (!Number.isInteger(value) || Number(value) < 1) {
       throw new AppError(ErrorCodes.common.badRequest, `${field} 必须是正整数`);
@@ -394,6 +457,7 @@ export class WorkflowsService {
     return Number(value);
   }
 
+  /** 严格解析可选 Workflow 状态筛选。 */
   private parseOptionalStatus(value: unknown): WorkflowStatus | undefined {
     if (value === undefined || value === null || value === "") return undefined;
     if (Object.values(WorkflowStatus).includes(value as WorkflowStatus)) {
@@ -402,51 +466,26 @@ export class WorkflowsService {
     throw new AppError(ErrorCodes.common.badRequest, "status 无效");
   }
 
-  private toListItem(
-    workflow: {
-      id: string;
-      name: string;
-      description: string;
-      status: WorkflowStatus;
-      draftRevision: number;
-      publishedVersion: number | null;
-      createdByUserId: string;
-      createdAt: Date;
-      updatedAt: Date;
-    },
-    versionCount: number
-  ): WorkflowListItem {
+  /** 隔离数据库投影并补充版本数量。 */
+  private toListItem(workflow: WorkflowListRecord, versionCount: number): WorkflowListItem {
     return { ...workflow, versionCount };
   }
 
-  private toDetail(
-    workflow: Parameters<WorkflowsService["toListItem"]>[0] & { draftGraph: unknown },
-    versionCount: number
-  ): WorkflowDetail {
+  /** 将数据库 Graph JSON 转换为稳定详情 DTO。 */
+  private toDetail(workflow: WorkflowDetailRecord, versionCount: number): WorkflowDetail {
     return {
       ...this.toListItem(workflow, versionCount),
       draftGraph: this.normalizeGraph(workflow.draftGraph)
     };
   }
 
-  private toVersionListItem(version: {
-    id: string;
-    workflowId: string;
-    version: number;
-    graphSchemaVersion: number;
-    checksum: string;
-    publishedByUserId: string;
-    createdAt: Date;
-  }): WorkflowVersionListItem {
+  /** 将版本数据库投影转换为列表 DTO。 */
+  private toVersionListItem(version: WorkflowVersionListRecord): WorkflowVersionListItem {
     return version;
   }
 
-  private toVersionDetail(
-    version: Parameters<WorkflowsService["toVersionListItem"]>[0] & {
-      graph: unknown;
-      compiledPlan: unknown;
-    }
-  ): WorkflowVersionDetail {
+  /** 将版本 Graph 和编译计划 JSON 转换为详情 DTO。 */
+  private toVersionDetail(version: WorkflowVersionDetailRecord): WorkflowVersionDetail {
     return {
       ...this.toVersionListItem(version),
       graph: this.normalizeGraph(version.graph),
@@ -454,6 +493,7 @@ export class WorkflowsService {
     };
   }
 
+  /** 确认数据库 JSON 是普通对象。 */
   private toObject(value: unknown, field: string): Record<string, unknown> {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       throw new AppError(ErrorCodes.workflow.invalidGraph, `${field} 必须是对象`);
@@ -461,10 +501,12 @@ export class WorkflowsService {
     return value as Record<string, unknown>;
   }
 
+  /** 构造统一的 Workflow 不存在错误。 */
   private notFound(): AppError {
     return new AppError(ErrorCodes.workflow.notFound, "Workflow 不存在", HttpStatus.NOT_FOUND);
   }
 
+  /** 构造草稿修订冲突错误。 */
   private revisionConflict(): AppError {
     return new AppError(
       ErrorCodes.workflow.revisionConflict,

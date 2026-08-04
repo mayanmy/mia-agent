@@ -27,13 +27,21 @@ const RUNTIME_FIELDS = new Set(["requestId", "userId", "agentId", "sessionId", "
 const INPUT_TYPES = new Set(["string", "number", "boolean", "object", "array"]);
 const CONDITION_OPERATORS = new Set(["eq", "neq", "gt", "gte", "lt", "lte", "contains", "exists"]);
 
+/** Graph 完成基础解析后供各校验阶段复用的索引结构。 */
 type ParsedGraph = {
+  /** 已完成基础结构归一化的 Graph。 */
   graph: WorkflowGraph;
+  /** 按节点 ID 索引的节点。 */
   nodeById: Map<string, WorkflowNode>;
+  /** 按起点节点 ID 索引的出边。 */
   outgoing: Map<string, WorkflowEdge[]>;
+  /** 按终点节点 ID 索引的入边。 */
   incoming: Map<string, WorkflowEdge[]>;
+  /** DAG 的稳定拓扑顺序。 */
   topologicalOrder: string[];
+  /** 唯一 Start 节点；校验失败前可能为空。 */
   startNode?: WorkflowNode;
+  /** Graph 中的全部 End 节点。 */
   endNodes: WorkflowNode[];
 };
 
@@ -859,6 +867,7 @@ export class WorkflowCompiler {
 }
 
 /** 对对象键递归排序后再计算摘要，保证相同 Plan 不受属性插入顺序影响。 */
+/** 对递归排序后的 JSON 计算 SHA-256，确保相同计划得到稳定摘要。 */
 export function checksumJson(value: unknown): string {
   return createHash("sha256")
     .update(JSON.stringify(sortJson(value)))
@@ -866,6 +875,7 @@ export function checksumJson(value: unknown): string {
 }
 
 /** 对 JSON 容器递归排序对象键；数组顺序具有执行语义，因此保持不变。 */
+/** 递归排序对象键，消除 JSON 属性插入顺序对 checksum 的影响。 */
 function sortJson(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortJson);
   if (value && typeof value === "object") {

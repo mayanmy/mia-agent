@@ -13,7 +13,21 @@ import { Button, Tooltip } from "antd";
 import type { WorkflowNodeType } from "../types";
 import { NODE_LABELS } from "../utils";
 
-const items: Array<{ type: WorkflowNodeType; icon: ReactNode }> = [
+/** 节点库中的单个可添加项。 */
+type NodePaletteItem = {
+  /** 要创建的节点类型。 */
+  type: WorkflowNodeType;
+  /** 节点类型图标。 */
+  icon: ReactNode;
+};
+
+/** 节点库参数。 */
+type NodePaletteProps = {
+  /** 点击节点类型后的添加回调。 */
+  onAdd: (type: WorkflowNodeType) => void;
+};
+
+const items: NodePaletteItem[] = [
   { type: "start", icon: <PlayCircleOutlined /> },
   { type: "llm", icon: <RobotOutlined /> },
   { type: "retrieval", icon: <DatabaseOutlined /> },
@@ -23,7 +37,8 @@ const items: Array<{ type: WorkflowNodeType; icon: ReactNode }> = [
   { type: "end", icon: <FlagOutlined /> }
 ];
 
-export function NodePalette({ onAdd }: { onAdd: (type: WorkflowNodeType) => void }) {
+/** 展示当前 Workflow 支持的节点类型。 */
+export function NodePalette({ onAdd }: NodePaletteProps) {
   return (
     <aside className="workflowPalette" aria-label="节点库">
       <div className="workflowPaneTitle">节点</div>

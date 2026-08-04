@@ -25,23 +25,37 @@ import type {
 } from "../types";
 import { NODE_LABELS, validateConnection } from "../utils";
 
+/** 传入 React Flow 自定义节点卡片的视图数据。 */
 type WorkflowNodeData = {
+  /** Mia Graph 中的原始节点。 */
   workflowNode: WorkflowNode;
+  /** 关联校验问题数量。 */
   issueCount: number;
+  /** Trace 回放时的节点执行状态。 */
   traceStatus?: WorkflowTraceNodeStatus;
 };
+/** React Flow 使用的 Workflow 节点类型。 */
 type CanvasNode = Node<WorkflowNodeData, "workflow">;
 
+/** Workflow 画布参数。 */
 export type WorkflowCanvasProps = {
+  /** 当前完整 Graph。 */
   graph: WorkflowGraph;
+  /** 当前选中的节点 ID。 */
   selectedNodeId: string | null;
+  /** 当前 Graph 的校验问题。 */
   issues: WorkflowValidationIssue[];
+  /** 按节点 ID 索引的 Trace 回放状态。 */
   traceStatuses: Record<string, WorkflowTraceNodeStatus>;
+  /** Graph 结构或节点位置变化回调。 */
   onGraphChange: (graph: WorkflowGraph) => void;
+  /** 节点选择变化回调。 */
   onSelectNode: (nodeId: string | null) => void;
+  /** 非法连接提示回调。 */
   onConnectionRejected: (message: string) => void;
 };
 
+/** 在 React Flow 上编辑 Mia Graph，并隔离画布视图状态与持久化 DTO。 */
 export function WorkflowCanvas({
   graph,
   selectedNodeId,
@@ -123,6 +137,7 @@ export function WorkflowCanvas({
     setSelectedEdgeId(null);
   }
 
+  /** 创建连线前先执行浏览器侧快速校验，再更新 Mia Graph。 */
   function handleConnect(connection: Connection) {
     const error = validateConnection(graph, connection);
     if (error) {
@@ -189,6 +204,7 @@ export function WorkflowCanvas({
 }
 
 /** 节点卡只展示执行语义和状态；业务配置全部留在右侧属性面板。 */
+/** 将 Mia 节点、校验问题和 Trace 状态渲染为画布卡片。 */
 function WorkflowNodeCard({ data, selected }: NodeProps<CanvasNode>) {
   const { workflowNode, issueCount, traceStatus } = data;
   const branches =
@@ -238,6 +254,7 @@ function WorkflowNodeCard({ data, selected }: NodeProps<CanvasNode>) {
   );
 }
 
+/** 根据 Trace 或校验状态为小地图节点选择颜色。 */
 function miniMapColor(node: Node<WorkflowNodeData>) {
   if (node.data.traceStatus === "FAILED") return "#d14343";
   if (node.data.traceStatus === "COMPLETED") return "#2f855a";

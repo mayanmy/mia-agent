@@ -2,15 +2,18 @@ import { CheckCircleOutlined, CloseCircleOutlined, WarningOutlined } from "@ant-
 
 import type { WorkflowValidationIssue } from "../types";
 
-export function ValidationPanel({
-  issues,
-  valid,
-  onSelectNode
-}: {
+/** Workflow 校验结果浮层参数。 */
+type ValidationPanelProps = {
+  /** 后端 Compiler 返回的错误和警告。 */
   issues: WorkflowValidationIssue[];
+  /** null 表示尚未校验。 */
   valid: boolean | null;
+  /** 点击节点级问题时定位画布节点。 */
   onSelectNode: (nodeId: string) => void;
-}) {
+};
+
+/** 展示校验摘要，并允许从问题直接定位节点。 */
+export function ValidationPanel({ issues, valid, onSelectNode }: ValidationPanelProps) {
   if (valid === null && issues.length === 0) return null;
   return (
     <section className={`workflowValidation${valid ? " valid" : " invalid"}`}>

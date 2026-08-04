@@ -43,6 +43,7 @@ import "./workflows.less";
 
 const emptyResources: WorkflowResources = { models: [], knowledgeBases: [], tools: [] };
 
+/** Workflow 路由页，负责编排资源、草稿、画布校验、发布和 Trace 状态。 */
 export function WorkflowsPage() {
   const { message, modal } = AntdApp.useApp();
   const [workflows, setWorkflows] = useState<WorkflowListItem[]>([]);
@@ -68,6 +69,7 @@ export function WorkflowsPage() {
     void loadInitialData();
   }, []);
 
+  /** 并行加载 Workflow 与跨模块资源，并默认打开第一条记录。 */
   async function loadInitialData() {
     setLoading(true);
     try {
@@ -106,6 +108,7 @@ export function WorkflowsPage() {
     }
   }
 
+  /** 切换 Workflow 前保护尚未保存的画布修改。 */
   function requestOpenWorkflow(id: string) {
     if (!dirty) {
       void openWorkflow(id);
@@ -120,6 +123,7 @@ export function WorkflowsPage() {
     });
   }
 
+  /** 用服务端 Graph 替换编辑状态，并清空旧 Workflow 的校验和 Trace 状态。 */
   async function openWorkflow(id: string, manageLoading = true) {
     if (manageLoading) setLoading(true);
     try {
@@ -138,6 +142,7 @@ export function WorkflowsPage() {
     }
   }
 
+  /** 所有画布修改统一经过该入口，以同步 dirty 和失效派生状态。 */
   function changeGraph(next: WorkflowGraph) {
     setGraph(next);
     setDirty(true);
@@ -145,6 +150,7 @@ export function WorkflowsPage() {
     setTraceStatuses({});
   }
 
+  /** 创建带最小默认配置的节点，并为资源节点选择首个可用资源。 */
   function addNode(type: WorkflowNodeType) {
     if ((type === "start" || type === "end") && graph.nodes.some((node) => node.type === type)) {
       message.warning(type === "start" ? "只能有一个开始节点" : "当前已有结束节点");
@@ -167,6 +173,7 @@ export function WorkflowsPage() {
     });
   }
 
+  /** 删除节点时同步清理全部关联边，避免保存悬空连接。 */
   function deleteNode(nodeId: string) {
     changeGraph({
       ...graph,
@@ -176,6 +183,7 @@ export function WorkflowsPage() {
     setSelectedNodeId(null);
   }
 
+  /** 使用当前 draftRevision 保存完整 Graph，并更新页面和侧栏的修订号。 */
   async function saveDraft(showSuccess = true): Promise<number> {
     if (!workflow) throw new Error("请先选择 Workflow");
     setSaving(true);
@@ -203,6 +211,7 @@ export function WorkflowsPage() {
     }
   }
 
+  /** 调用后端 Compiler 并将首个节点级问题定位到画布。 */
   async function runValidation() {
     if (!workflow) return null;
     setSaving(true);
@@ -225,6 +234,7 @@ export function WorkflowsPage() {
     }
   }
 
+  /** 发布前保存未提交修改并再次校验，确保版本来自确定草稿。 */
   async function publish() {
     if (!workflow) return;
     try {

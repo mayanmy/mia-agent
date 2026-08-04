@@ -10,14 +10,25 @@ import {
 } from "../../agent-runs/api";
 import type { WorkflowTraceNodeStatus } from "../types";
 
-type Props = {
+/** Workflow Trace 回放抽屉参数。 */
+type WorkflowTraceDrawerProps = {
+  /** 抽屉是否打开。 */
   open: boolean;
+  /** 要查询运行记录的 Workflow ID。 */
   workflowId: string | null;
+  /** 关闭抽屉回调。 */
   onClose: () => void;
+  /** 将历史步骤状态映射回画布节点。 */
   onReplay: (statuses: Record<string, WorkflowTraceNodeStatus>) => void;
 };
 
-export function WorkflowTraceDrawer({ open, workflowId, onClose, onReplay }: Props) {
+/** 查询历史 Agent Run，并将节点步骤状态回放到 Workflow 画布。 */
+export function WorkflowTraceDrawer({
+  open,
+  workflowId,
+  onClose,
+  onReplay
+}: WorkflowTraceDrawerProps) {
   const { message } = App.useApp();
   const [runs, setRuns] = useState<AgentRunListItem[]>([]);
   const [detail, setDetail] = useState<AgentRunDetail | null>(null);
@@ -34,6 +45,7 @@ export function WorkflowTraceDrawer({ open, workflowId, onClose, onReplay }: Pro
       .finally(() => setLoading(false));
   }, [open, workflowId]);
 
+  /** 读取 Run 详情并把每个步骤的最终状态映射到画布节点。 */
   async function selectRun(runId: string) {
     setLoading(true);
     try {
@@ -127,6 +139,7 @@ export function WorkflowTraceDrawer({ open, workflowId, onClose, onReplay }: Pro
   );
 }
 
+/** 将 Agent Run Step 状态收敛为画布支持的节点状态。 */
 function normalizeStatus(status: string): WorkflowTraceNodeStatus {
   if (status === "FAILED") return "FAILED";
   if (status === "CANCELED") return "CANCELED";
@@ -135,6 +148,7 @@ function normalizeStatus(status: string): WorkflowTraceNodeStatus {
   return "COMPLETED";
 }
 
+/** 为 Trace 状态选择统一的 Ant Design 标签颜色。 */
 function statusColor(status: string) {
   if (status === "COMPLETED") return "green";
   if (status === "FAILED") return "red";

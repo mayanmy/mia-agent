@@ -32,6 +32,7 @@ const canvasActions = [
   ["缩放画布", "使用鼠标滚轮或画布左下角的缩放控件。"]
 ] as const;
 
+/** 展示 Workflow 节点、变量表达式和发布流程的编辑器内帮助。 */
 export function WorkflowGuide() {
   const [open, setOpen] = useState(false);
 

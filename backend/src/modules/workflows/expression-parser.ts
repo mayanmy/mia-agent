@@ -6,8 +6,11 @@ const DANGEROUS_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
 
 export class WorkflowExpressionError extends Error {}
 
+/** 单个配置值编译后的安全值及其引用清单。 */
 export type CompiledExpressionValue = {
+  /** Runtime 可以安全求值的结构化值。 */
   value: CompiledValue;
+  /** 当前值中出现的全部变量引用，用于 Compiler 做拓扑校验。 */
   references: CompiledReference[];
 };
 

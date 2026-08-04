@@ -6,14 +6,20 @@ import type { WorkflowNode, WorkflowResources } from "../types";
 import { NODE_LABELS } from "../utils";
 import { ConditionBranchGuide } from "./ConditionBranchGuide";
 
-type Props = {
+/** Workflow 节点属性面板参数。 */
+type NodeInspectorProps = {
+  /** 当前选中节点；未选择时为 null。 */
   node: WorkflowNode | null;
+  /** 模型、知识库和工具下拉资源。 */
   resources: WorkflowResources;
+  /** 节点名称或配置变化回调。 */
   onChange: (node: WorkflowNode) => void;
+  /** 删除当前节点回调。 */
   onDelete: (nodeId: string) => void;
 };
 
-export function NodeInspector({ node, resources, onChange, onDelete }: Props) {
+/** 根据节点类型展示对应配置字段。 */
+export function NodeInspector({ node, resources, onChange, onDelete }: NodeInspectorProps) {
   if (!node) {
     return (
       <aside className="workflowInspector workflowInspectorEmpty">
@@ -229,7 +235,16 @@ export function NodeInspector({ node, resources, onChange, onDelete }: Props) {
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/** 属性面板通用字段布局参数。 */
+type FieldProps = {
+  /** 字段展示名称。 */
+  label: string;
+  /** 字段编辑控件。 */
+  children: ReactNode;
+};
+
+/** 统一属性面板字段标签与控件布局。 */
+function Field({ label, children }: FieldProps) {
   return (
     <label className="workflowField">
       <span>{label}</span>
@@ -239,15 +254,17 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** JSON 字段允许暂存未完成文本，只在语法有效时提交到 Graph。 */
-function JsonField({
-  label,
-  value,
-  onChange
-}: {
+/** 可暂存非法文本的 JSON 配置字段参数。 */
+type JsonFieldProps = {
+  /** 字段展示名称。 */
   label: string;
+  /** 当前已提交的结构化值。 */
   value: unknown;
+  /** JSON 语法有效时提交新值。 */
   onChange: (value: unknown) => void;
-}) {
+};
+
+function JsonField({ label, value, onChange }: JsonFieldProps) {
   const serialized = JSON.stringify(value ?? {}, null, 2);
   const [draft, setDraft] = useState(serialized);
   const [error, setError] = useState("");
@@ -257,6 +274,7 @@ function JsonField({
     setError("");
   }, [serialized]);
 
+  /** 仅在 JSON 语法有效时提交，允许用户在输入过程中保留未完成文本。 */
   function commit() {
     try {
       onChange(JSON.parse(draft) as unknown);
@@ -280,14 +298,17 @@ function JsonField({
   );
 }
 
+/** 从未知配置值安全读取字符串。 */
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+/** 从未知配置值安全读取有限数字。 */
 function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+/** 从未知配置值中过滤字符串数组。 */
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")

@@ -2,6 +2,7 @@ import type { Connection } from "@xyflow/react";
 
 import type { WorkflowGraph, WorkflowNode, WorkflowNodeType } from "./types";
 
+/** 节点类型到中文展示名称的稳定映射。 */
 export const NODE_LABELS: Record<WorkflowNodeType, string> = {
   start: "开始",
   llm: "模型",
