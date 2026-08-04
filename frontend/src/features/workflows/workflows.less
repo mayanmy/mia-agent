@@ -319,6 +319,71 @@
   top: 6px;
 }
 
+// 输出端口的 Handle 负责拖拽连线，旁边的按钮负责快捷创建，二者保持独立点击区域。
+.workflowNodeOutput {
+  align-items: center;
+  display: flex;
+  position: absolute;
+  right: -31px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+}
+
+.workflowNodeOutput .react-flow__handle {
+  left: -6px;
+  position: relative;
+  right: auto;
+  top: auto;
+  transform: none;
+}
+
+.workflowQuickAddButton.ant-btn {
+  background: #2563eb;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgb(37 99 235 / 28%);
+  color: #fff;
+  height: 24px;
+  min-width: 24px;
+  width: 24px;
+}
+
+.workflowQuickAddButton.ant-btn:hover {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.workflowEdgeInsert {
+  pointer-events: all;
+  position: absolute;
+  z-index: 6;
+}
+
+.workflowEdgeInsert .workflowQuickAddButton {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.workflowEdgeInsert:hover .workflowQuickAddButton,
+.react-flow__edge.selected + .workflowEdgeInsert .workflowQuickAddButton {
+  opacity: 1;
+}
+
+.workflowVariableInput {
+  position: relative;
+}
+
+.workflowVariableInput > .ant-btn {
+  bottom: 7px;
+  position: absolute;
+  right: 7px;
+  z-index: 2;
+}
+
+.workflowVariableInput textarea.ant-input {
+  padding-bottom: 38px;
+}
+
 .workflowNodeIssue {
   background: #fff1d6;
   color: #9a5700;

@@ -68,11 +68,12 @@ export function validateWorkflow(
 /** 将指定草稿修订发布为不可变版本。 */
 export function publishWorkflow(
   id: string,
-  expectedRevision: number
+  expectedRevision: number,
+  expectedChecksum: string
 ): Promise<WorkflowPublishResult> {
   return request(`/api/v1/workflows/${encodeURIComponent(id)}/publish`, {
     method: "POST",
-    body: JSON.stringify({ expectedRevision })
+    body: JSON.stringify({ expectedRevision, expectedChecksum })
   });
 }
 

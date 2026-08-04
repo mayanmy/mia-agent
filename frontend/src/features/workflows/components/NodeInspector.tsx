@@ -2,14 +2,18 @@ import { useEffect, useState, type ReactNode } from "react";
 import { DeleteOutlined } from "@ant-design/icons";
 import { Button, Input, InputNumber, Select } from "antd";
 
-import type { WorkflowNode, WorkflowResources } from "../types";
+import type { WorkflowGraph, WorkflowNode, WorkflowResources } from "../types";
+import { buildVariableCatalog } from "../editor/variables";
 import { NODE_LABELS } from "../utils";
 import { ConditionBranchGuide } from "./ConditionBranchGuide";
+import { VariableTextArea } from "./variables/VariableTextArea";
 
 /** Workflow 节点属性面板参数。 */
 type NodeInspectorProps = {
   /** 当前选中节点；未选择时为 null。 */
   node: WorkflowNode | null;
+  /** 当前完整 Graph，用于计算合法上游变量。 */
+  graph: WorkflowGraph;
   /** 模型、知识库和工具下拉资源。 */
   resources: WorkflowResources;
   /** 节点名称或配置变化回调。 */
@@ -19,7 +23,7 @@ type NodeInspectorProps = {
 };
 
 /** 根据节点类型展示对应配置字段。 */
-export function NodeInspector({ node, resources, onChange, onDelete }: NodeInspectorProps) {
+export function NodeInspector({ node, graph, resources, onChange, onDelete }: NodeInspectorProps) {
   if (!node) {
     return (
       <aside className="workflowInspector workflowInspectorEmpty">
@@ -31,6 +35,7 @@ export function NodeInspector({ node, resources, onChange, onDelete }: NodeInspe
 
   const updateConfig = (field: string, value: unknown) =>
     onChange({ ...node, config: { ...node.config, [field]: value } });
+  const variables = buildVariableCatalog(graph, node.id);
 
   return (
     <aside className="workflowInspector">
@@ -74,17 +79,19 @@ export function NodeInspector({ node, resources, onChange, onDelete }: NodeInspe
             />
           </Field>
           <Field label="System Prompt">
-            <Input.TextArea
+            <VariableTextArea
               autoSize={{ minRows: 3, maxRows: 8 }}
               value={stringValue(node.config.systemPrompt)}
-              onChange={(event) => updateConfig("systemPrompt", event.target.value)}
+              variables={variables}
+              onChange={(value) => updateConfig("systemPrompt", value)}
             />
           </Field>
           <Field label="Prompt">
-            <Input.TextArea
+            <VariableTextArea
               autoSize={{ minRows: 5, maxRows: 12 }}
               value={stringValue(node.config.prompt)}
-              onChange={(event) => updateConfig("prompt", event.target.value)}
+              variables={variables}
+              onChange={(value) => updateConfig("prompt", value)}
             />
           </Field>
           <div className="workflowInspectorGrid">
@@ -133,10 +140,11 @@ export function NodeInspector({ node, resources, onChange, onDelete }: NodeInspe
             />
           </Field>
           <Field label="查询表达式">
-            <Input.TextArea
+            <VariableTextArea
               autoSize={{ minRows: 3, maxRows: 8 }}
               value={stringValue(node.config.query)}
-              onChange={(event) => updateConfig("query", event.target.value)}
+              variables={variables}
+              onChange={(value) => updateConfig("query", value)}
             />
           </Field>
           <div className="workflowInspectorGrid">
@@ -207,10 +215,11 @@ export function NodeInspector({ node, resources, onChange, onDelete }: NodeInspe
 
       {node.type === "template" ? (
         <Field label="模板">
-          <Input.TextArea
+          <VariableTextArea
             autoSize={{ minRows: 7, maxRows: 16 }}
             value={stringValue(node.config.template)}
-            onChange={(event) => updateConfig("template", event.target.value)}
+            variables={variables}
+            onChange={(value) => updateConfig("template", value)}
           />
         </Field>
       ) : null}
@@ -218,10 +227,11 @@ export function NodeInspector({ node, resources, onChange, onDelete }: NodeInspe
       {node.type === "end" ? (
         <>
           <Field label="Chat Answer">
-            <Input.TextArea
+            <VariableTextArea
               autoSize={{ minRows: 4, maxRows: 10 }}
               value={stringValue(node.config.answer)}
-              onChange={(event) => updateConfig("answer", event.target.value)}
+              variables={variables}
+              onChange={(value) => updateConfig("answer", value)}
             />
           </Field>
           <JsonField

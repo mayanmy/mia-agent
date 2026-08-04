@@ -1,16 +1,22 @@
 import { useRef, useState, type KeyboardEvent } from "react";
+import { PlusOutlined } from "@ant-design/icons";
+import { Button, Dropdown, type MenuProps } from "antd";
 import {
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   Handle,
   MarkerType,
   MiniMap,
   Position,
   ReactFlow,
   applyNodeChanges,
+  getSmoothStepPath,
   type Connection,
   type Edge,
   type EdgeChange,
+  type EdgeProps,
   type Node,
   type NodeChange,
   type NodeProps
@@ -20,6 +26,7 @@ import "@xyflow/react/dist/style.css";
 import type {
   WorkflowGraph,
   WorkflowNode,
+  WorkflowNodeType,
   WorkflowTraceNodeStatus,
   WorkflowValidationIssue
 } from "../types";
@@ -33,9 +40,23 @@ type WorkflowNodeData = {
   issueCount: number;
   /** Trace 回放时的节点执行状态。 */
   traceStatus?: WorkflowTraceNodeStatus;
+  /** 从指定出口追加节点。 */
+  onAppendNode: (
+    sourceNodeId: string,
+    sourceHandle: string | undefined,
+    type: WorkflowNodeType
+  ) => void;
 };
 /** React Flow 使用的 Workflow 节点类型。 */
 type CanvasNode = Node<WorkflowNodeData, "workflow">;
+
+/** 自定义连线携带的快捷插入动作。 */
+type WorkflowEdgeData = Record<string, unknown> & {
+  /** 在当前连线中间插入节点。 */
+  onInsertNode: (edgeId: string, type: WorkflowNodeType) => void;
+};
+/** React Flow 使用的 Workflow 连线类型。 */
+type CanvasEdge = Edge<WorkflowEdgeData, "workflow">;
 
 /** Workflow 画布参数。 */
 export type WorkflowCanvasProps = {
@@ -53,7 +74,30 @@ export type WorkflowCanvasProps = {
   onSelectNode: (nodeId: string | null) => void;
   /** 非法连接提示回调。 */
   onConnectionRejected: (message: string) => void;
+  /** 从节点出口追加并连接新节点。 */
+  onAppendNode: (
+    sourceNodeId: string,
+    sourceHandle: string | undefined,
+    type: WorkflowNodeType
+  ) => void;
+  /** 在已有连线中间插入节点。 */
+  onInsertNode: (edgeId: string, type: WorkflowNodeType) => void;
 };
+
+/** 快捷菜单不提供第二个开始节点。 */
+const QUICK_ADD_TYPES: WorkflowNodeType[] = [
+  "llm",
+  "retrieval",
+  "tool",
+  "condition",
+  "template",
+  "end"
+];
+
+/** React Flow 节点类型必须保持引用稳定，避免每次渲染重新注册。 */
+const NODE_TYPES = { workflow: WorkflowNodeCard };
+/** React Flow 连线类型必须保持引用稳定。 */
+const EDGE_TYPES = { workflow: WorkflowQuickInsertEdge };
 
 /** 在 React Flow 上编辑 Mia Graph，并隔离画布视图状态与持久化 DTO。 */
 export function WorkflowCanvas({
@@ -63,7 +107,9 @@ export function WorkflowCanvas({
   traceStatuses,
   onGraphChange,
   onSelectNode,
-  onConnectionRejected
+  onConnectionRejected,
+  onAppendNode,
+  onInsertNode
 }: WorkflowCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -78,14 +124,16 @@ export function WorkflowCanvas({
     data: {
       workflowNode: node,
       issueCount: issues.filter((issue) => issue.nodeId === node.id).length,
-      traceStatus: traceStatuses[node.id]
+      traceStatus: traceStatuses[node.id],
+      onAppendNode
     }
   }));
-  const edges: Edge[] = graph.edges.map((edge) => ({
+  const edges: CanvasEdge[] = graph.edges.map((edge) => ({
     ...edge,
     interactionWidth: 24,
     selected: edge.id === activeSelectedEdgeId,
-    type: "smoothstep",
+    type: "workflow",
+    data: { onInsertNode },
     markerEnd: { type: MarkerType.ArrowClosed },
     style: { strokeWidth: 1.6 }
   }));
@@ -93,9 +141,8 @@ export function WorkflowCanvas({
   /** React Flow change 先作用到视图模型，再投影回稳定的 Mia Graph DTO。 */
   function handleNodeChanges(changes: NodeChange<CanvasNode>[]) {
     // 选择态由页面单独管理，不能因为点击节点就把草稿误标记为已修改。
-    const graphChanges = changes.filter(
-      (change) => change.type === "position" || change.type === "remove"
-    );
+    // 拖动过程由 React Flow 内部展示，只有 drag stop 才提交快照，避免一次拖动污染 Undo 栈。
+    const graphChanges = changes.filter((change) => change.type === "remove");
     if (graphChanges.length === 0) return;
     const next = applyNodeChanges(graphChanges, nodes);
     const remainingIds = new Set(next.map((node) => node.id));
@@ -112,7 +159,7 @@ export function WorkflowCanvas({
   }
 
   /** 删除连线只更新 Graph DTO，发布时仍由后端重新构建邻接表。 */
-  function handleEdgeChanges(changes: EdgeChange<Edge>[]) {
+  function handleEdgeChanges(changes: EdgeChange<CanvasEdge>[]) {
     const removedIds = new Set(
       changes.filter((change) => change.type === "remove").map((change) => change.id)
     );
@@ -168,7 +215,7 @@ export function WorkflowCanvas({
       tabIndex={0}
       onKeyDown={handleCanvasKeyDown}
     >
-      <ReactFlow<CanvasNode, Edge>
+      <ReactFlow<CanvasNode, CanvasEdge>
         colorMode="light"
         deleteKeyCode={null}
         edges={edges}
@@ -176,7 +223,8 @@ export function WorkflowCanvas({
         fitViewOptions={{ padding: 0.25 }}
         minZoom={0.35}
         maxZoom={1.6}
-        nodeTypes={{ workflow: WorkflowNodeCard }}
+        nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
         nodes={nodes}
         onConnect={handleConnect}
         onEdgeClick={(_, edge) => {
@@ -188,6 +236,14 @@ export function WorkflowCanvas({
         onNodeClick={(_, node) => {
           setSelectedEdgeId(null);
           onSelectNode(node.id);
+        }}
+        onNodeDragStop={(_, flowNode) => {
+          onGraphChange({
+            ...graph,
+            nodes: graph.nodes.map((node) =>
+              node.id === flowNode.id ? { ...node, position: flowNode.position } : node
+            )
+          });
         }}
         onNodesChange={handleNodeChanges}
         onPaneClick={() => {
@@ -203,10 +259,9 @@ export function WorkflowCanvas({
   );
 }
 
-/** 节点卡只展示执行语义和状态；业务配置全部留在右侧属性面板。 */
 /** 将 Mia 节点、校验问题和 Trace 状态渲染为画布卡片。 */
 function WorkflowNodeCard({ data, selected }: NodeProps<CanvasNode>) {
-  const { workflowNode, issueCount, traceStatus } = data;
+  const { workflowNode, issueCount, traceStatus, onAppendNode } = data;
   const branches =
     workflowNode.type === "condition" && Array.isArray(workflowNode.config.branches)
       ? workflowNode.config.branches
@@ -235,22 +290,83 @@ function WorkflowNodeCard({ data, selected }: NodeProps<CanvasNode>) {
       {issueCount ? <span className="workflowNodeIssue">{issueCount}</span> : null}
       {traceStatus ? <span className="workflowNodeTrace">{traceStatus}</span> : null}
       {workflowNode.type !== "end"
-        ? handles.map((handle, index) => (
-            <Handle
-              id={handle || undefined}
-              key={handle || "default-source"}
-              position={Position.Right}
-              style={
-                handles.length > 1
-                  ? { top: `${((index + 1) / (handles.length + 1)) * 100}%` }
-                  : undefined
-              }
-              title={handle || "下一步"}
-              type="source"
-            />
-          ))
+        ? handles.map((handle, index) => {
+            const top = `${((index + 1) / (handles.length + 1)) * 100}%`;
+            return (
+              <div
+                className="workflowNodeOutput"
+                key={handle || "default-source"}
+                style={handles.length > 1 ? { top } : undefined}
+              >
+                <Handle
+                  id={handle || undefined}
+                  position={Position.Right}
+                  title={handle || "下一步"}
+                  type="source"
+                />
+                <NodeTypeMenuButton
+                  title={handle ? `从 ${handle} 分支添加节点` : "添加下一节点"}
+                  onSelect={(type) => onAppendNode(workflowNode.id, handle || undefined, type)}
+                />
+              </div>
+            );
+          })
         : null}
     </div>
+  );
+}
+
+/** 在连线中点渲染快捷插入入口，并保留 React Flow 的完整交互宽度。 */
+function WorkflowQuickInsertEdge(props: EdgeProps<CanvasEdge>) {
+  const [path, labelX, labelY] = getSmoothStepPath(props);
+  return (
+    <>
+      <BaseEdge id={props.id} path={path} markerEnd={props.markerEnd} style={props.style} />
+      <EdgeLabelRenderer>
+        <div
+          className="workflowEdgeInsert nodrag nopan"
+          style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+        >
+          <NodeTypeMenuButton
+            title="在连线中插入节点"
+            onSelect={(type) => props.data?.onInsertNode(props.id, type)}
+          />
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+/** 节点类型快捷选择按钮。 */
+function NodeTypeMenuButton({
+  title,
+  onSelect
+}: {
+  /** 按钮辅助说明。 */
+  title: string;
+  /** 选中节点类型回调。 */
+  onSelect: (type: WorkflowNodeType) => void;
+}) {
+  const items: MenuProps["items"] = QUICK_ADD_TYPES.map((type) => ({
+    key: type,
+    label: NODE_LABELS[type]
+  }));
+  return (
+    <Dropdown
+      menu={{ items, onClick: ({ key }) => onSelect(key as WorkflowNodeType) }}
+      placement="bottomLeft"
+      trigger={["click"]}
+    >
+      <Button
+        aria-label={title}
+        className="workflowQuickAddButton"
+        icon={<PlusOutlined />}
+        shape="circle"
+        size="small"
+        title={title}
+        onClick={(event) => event.stopPropagation()}
+      />
+    </Dropdown>
   );
 }
 
