@@ -142,6 +142,7 @@ export function App() {
             <Route element={<RequireRole roles={["ADMIN"]} />}>
               <Route path="/tools" element={<ToolsPage />} />
               <Route path="/workflows" element={<WorkflowsPage />} />
+              <Route path="/workflows/:workflowId" element={<WorkflowsPage />} />
               <Route path="/agent-runs" element={<AgentRunsPage />} />
               <Route path="/users" element={<UsersPage />} />
             </Route>
@@ -238,7 +239,7 @@ function WorkspaceLayout() {
               <NavLink
                 aria-label={item.label}
                 className={({ isActive }) => `navItem${isActive ? " active" : ""}`}
-                end
+                end={item.path !== "/workflows"}
                 to={item.path}
               >
                 <span className="navItemIcon">{item.icon}</span>

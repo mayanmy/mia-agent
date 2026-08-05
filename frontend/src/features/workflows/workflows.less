@@ -18,6 +18,118 @@
   overflow: hidden;
 }
 
+.workflowWorkbench.sidebarCollapsed {
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+
+.workflowWorkbench.detailOnly {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workflowGallery {
+  min-height: 420px;
+}
+
+.workflowGalleryToolbar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.workflowGalleryToolbar .ant-input-search {
+  max-width: 340px;
+}
+
+.workflowGalleryGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.workflowGalleryCard {
+  background: #fff;
+  border: 1px solid #e1e6ed;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 4%);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  min-height: 210px;
+  padding: 20px;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.workflowGalleryCard:hover,
+.workflowGalleryCard:focus-visible {
+  border-color: #9bbcf2;
+  box-shadow: 0 10px 24px rgb(37 99 235 / 10%);
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.workflowGalleryCardHeader {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
+.workflowGalleryCardHeader strong,
+.workflowGalleryCardHeader small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflowGalleryCardHeader strong {
+  font-size: 16px;
+}
+
+.workflowGalleryCardHeader small {
+  color: #758196;
+  font-size: 11px;
+  margin-top: 3px;
+  text-transform: uppercase;
+}
+
+.workflowGalleryCardIcon {
+  align-items: center;
+  background: linear-gradient(145deg, #e8f2ff, #f0eaff);
+  border-radius: 11px;
+  color: #2866c7;
+  display: inline-flex;
+  font-size: 21px;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.workflowGalleryCard > p {
+  color: #64748b;
+  display: -webkit-box;
+  flex: 1;
+  line-height: 1.65;
+  margin: 18px 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.workflowGalleryCardFooter {
+  align-items: center;
+  color: #7b8798;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  justify-content: space-between;
+}
+
 .workflowSidebar {
   border-right: 1px solid #e2e7ee;
   display: flex;
@@ -33,6 +145,17 @@
   justify-content: space-between;
   min-height: 58px;
   padding: 12px 14px;
+}
+
+.workflowPaneActions {
+  align-items: center;
+  display: flex;
+  margin-left: auto;
+}
+
+.workflowSidebar.collapsed .workflowSidebarHeader {
+  justify-content: center;
+  padding: 8px 4px;
 }
 
 .workflowSidebarHeader strong {
@@ -140,8 +263,20 @@
 
 .workflowEditorBody {
   display: grid;
-  grid-template-columns: 104px minmax(360px, 1fr) 320px;
+  grid-template-columns: 148px minmax(360px, 1fr) 320px;
   min-height: 0;
+}
+
+.workflowEditorBody.paletteCollapsed {
+  grid-template-columns: 48px minmax(360px, 1fr) 320px;
+}
+
+.workflowEditorBody.inspectorCollapsed {
+  grid-template-columns: 148px minmax(360px, 1fr) 48px;
+}
+
+.workflowEditorBody.paletteCollapsed.inspectorCollapsed {
+  grid-template-columns: 48px minmax(360px, 1fr) 48px;
 }
 
 .workflowPalette {
@@ -155,11 +290,47 @@
   padding: 12px 9px;
 }
 
+.workflowPaletteHeader {
+  align-items: center;
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  min-height: 30px;
+  padding: 0 2px 4px 4px;
+}
+
+.workflowPaletteHeader .workflowPaneTitle {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.workflowPalette .workflowPaletteHeader .ant-btn {
+  flex: none;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  width: 28px;
+}
+
+.workflowPalette.collapsed {
+  align-items: center;
+  padding: 12px 4px;
+}
+
 .workflowPalette .ant-btn {
   height: 42px;
   justify-content: flex-start;
+  min-width: 0;
+  overflow: hidden;
   padding: 0 10px;
   width: 100%;
+}
+
+.workflowPalette .ant-btn > span:not(.anticon) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workflowPaneTitle {
@@ -201,34 +372,34 @@
 .workflowNode {
   background: #ffffff;
   border: 1px solid #94a3b8;
-  border-left: 4px solid #64748b;
-  border-radius: 6px;
-  box-shadow: 0 3px 10px rgb(15 23 42 / 9%);
-  min-height: 78px;
-  padding: 10px 28px 10px 12px;
+  border-left: 3px solid #64748b;
+  border-radius: 5px;
+  box-shadow: 0 2px 7px rgb(15 23 42 / 8%);
+  min-height: 62px;
+  padding: 8px 23px 8px 10px;
   position: relative;
-  width: 178px;
+  width: 150px;
 }
 
 .workflowNode .react-flow__handle {
   background: #2563eb;
-  border: 3px solid #ffffff;
+  border: 2px solid #ffffff;
   box-shadow:
     0 0 0 1px #2563eb,
     0 2px 5px rgb(15 23 42 / 20%);
-  height: 16px;
-  min-height: 16px;
-  min-width: 16px;
+  height: 12px;
+  min-height: 12px;
+  min-width: 12px;
   transition:
     background-color 120ms ease,
     box-shadow 120ms ease;
-  width: 16px;
+  width: 12px;
 }
 
 /* 扩大透明命中区，让拖拽连线不必精确落在可见圆点内。 */
 .workflowNode .react-flow__handle::after {
   content: "";
-  inset: -7px;
+  inset: -8px;
   position: absolute;
 }
 
@@ -289,9 +460,14 @@
 
 .workflowNodeType {
   color: #67758a;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+}
+
+.workflowNode strong {
+  font-size: 13px;
+  line-height: 19px;
 }
 
 .workflowNode strong,
@@ -304,8 +480,8 @@
 
 .workflowNode code {
   color: #748195;
-  font-size: 10px;
-  margin-top: 5px;
+  font-size: 9px;
+  margin-top: 3px;
 }
 
 .workflowNodeIssue,
@@ -324,7 +500,7 @@
   align-items: center;
   display: flex;
   position: absolute;
-  right: -31px;
+  right: -25px;
   top: 50%;
   transform: translateY(-50%);
   z-index: 5;
@@ -339,13 +515,26 @@
 }
 
 .workflowQuickAddButton.ant-btn {
+  align-items: center;
+  aspect-ratio: 1;
   background: #2563eb;
   border: 2px solid #fff;
+  border-radius: 50%;
+  box-sizing: border-box;
   box-shadow: 0 2px 8px rgb(37 99 235 / 28%);
   color: #fff;
-  height: 24px;
-  min-width: 24px;
-  width: 24px;
+  display: inline-flex;
+  flex: 0 0 20px;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  min-width: 20px;
+  padding: 0;
+  width: 20px;
+}
+
+.workflowQuickAddButton.ant-btn .anticon {
+  font-size: 11px;
 }
 
 .workflowQuickAddButton.ant-btn:hover {
@@ -400,6 +589,14 @@
   min-height: 0;
   overflow-y: auto;
   padding: 14px;
+}
+
+.workflowInspector.collapsed {
+  align-items: flex-start;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: 10px 4px;
 }
 
 .workflowInspectorEmpty p {
@@ -736,7 +933,19 @@
   }
 
   .workflowEditorBody {
-    grid-template-columns: 88px minmax(320px, 1fr) 280px;
+    grid-template-columns: 132px minmax(320px, 1fr) 280px;
+  }
+
+  .workflowEditorBody.paletteCollapsed {
+    grid-template-columns: 48px minmax(320px, 1fr) 280px;
+  }
+
+  .workflowEditorBody.inspectorCollapsed {
+    grid-template-columns: 132px minmax(320px, 1fr) 48px;
+  }
+
+  .workflowEditorBody.paletteCollapsed.inspectorCollapsed {
+    grid-template-columns: 48px minmax(320px, 1fr) 48px;
   }
 
   .workflowPalette .ant-btn {

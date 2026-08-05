@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckOutlined,
   CloudUploadOutlined,
+  ArrowLeftOutlined,
   HistoryOutlined,
   PlusOutlined,
   RedoOutlined,
@@ -9,6 +10,7 @@ import {
   SaveOutlined
 } from "@ant-design/icons";
 import { App as AntdApp, Button, Space, Spin, Tag } from "antd";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { listKnowledgeBases } from "../knowledge/api";
 import { listModelConfigs } from "../model-providers/api";
@@ -28,7 +30,7 @@ import { CreateWorkflowModal, type WorkflowCreateValues } from "./components/Cre
 import { ValidationPanel } from "./components/ValidationPanel";
 import { WorkflowCanvas } from "./components/WorkflowCanvas";
 import { WorkflowGuide } from "./components/WorkflowGuide";
-import { WorkflowSidebar } from "./components/WorkflowSidebar";
+import { WorkflowGallery } from "./components/WorkflowGallery";
 import { WorkflowTraceDrawer } from "./components/WorkflowTraceDrawer";
 import { appendNodeToGraph, insertNodeOnEdge } from "./editor/graph-commands";
 import { useWorkflowEditor } from "./editor/useWorkflowEditor";
@@ -46,6 +48,8 @@ import { createDefaultGraph, createWorkflowNode } from "./utils";
 import "./workflows.less";
 
 const emptyResources: WorkflowResources = { models: [], knowledgeBases: [], tools: [] };
+const WORKFLOW_PALETTE_COLLAPSED_KEY = "mia.workflow.palette.collapsed";
+const WORKFLOW_INSPECTOR_COLLAPSED_KEY = "mia.workflow.inspector.collapsed";
 
 /** 草稿自动保存状态。 */
 type DraftSaveStatus = "idle" | "dirty" | "saving" | "saved" | "conflict" | "failed";
@@ -53,6 +57,8 @@ type DraftSaveStatus = "idle" | "dirty" | "saving" | "saved" | "conflict" | "fai
 /** Workflow 路由页，负责编排资源、草稿、画布校验、发布和 Trace 状态。 */
 export function WorkflowsPage() {
   const { message, modal } = AntdApp.useApp();
+  const navigate = useNavigate();
+  const { workflowId } = useParams<{ workflowId?: string }>();
   const [workflows, setWorkflows] = useState<WorkflowListItem[]>([]);
   const [workflow, setWorkflow] = useState<WorkflowDetail | null>(null);
   const { graph, commitGraph, resetGraph, undo, redo, canUndo, canRedo } =
@@ -69,6 +75,12 @@ export function WorkflowsPage() {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
+  const [paletteCollapsed, setPaletteCollapsed] = useState(() =>
+    readCollapsedState(WORKFLOW_PALETTE_COLLAPSED_KEY)
+  );
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(() =>
+    readCollapsedState(WORKFLOW_INSPECTOR_COLLAPSED_KEY)
+  );
   const workflowRef = useRef<WorkflowDetail | null>(null);
   const graphRef = useRef(graph);
   const saveInFlightRef = useRef<Promise<number> | null>(null);
@@ -83,7 +95,7 @@ export function WorkflowsPage() {
 
   useEffect(() => {
     void loadInitialData();
-  }, []);
+  }, [workflowId]);
 
   /** 非表单区域支持标准 Undo/Redo 快捷键，避免覆盖文本框自身的撤销栈。 */
   useEffect(() => {
@@ -105,6 +117,12 @@ export function WorkflowsPage() {
   async function loadInitialData() {
     setLoading(true);
     try {
+      if (!workflowId) {
+        const workflowPage = await listWorkflows();
+        setWorkflows(workflowPage.list);
+        setWorkflow(null);
+        return;
+      }
       const [workflowPage, modelPage, knowledgePage, tools] = await Promise.all([
         listWorkflows(),
         listModelConfigs(),
@@ -123,7 +141,7 @@ export function WorkflowsPage() {
           .filter((item) => item.enabled)
           .map((item) => ({ id: item.id, label: item.name }))
       });
-      if (workflowPage.list[0]) await openWorkflow(workflowPage.list[0].id, false);
+      await openWorkflow(workflowId, false);
     } catch (error) {
       message.error(error instanceof Error ? error.message : "加载 Workflow 失败");
     } finally {
@@ -138,21 +156,6 @@ export function WorkflowsPage() {
       const detail = await getWorkflow(selectedId);
       setWorkflow(detail);
     }
-  }
-
-  /** 切换 Workflow 前保护尚未保存的画布修改。 */
-  function requestOpenWorkflow(id: string) {
-    if (!dirty) {
-      void openWorkflow(id);
-      return;
-    }
-    modal.confirm({
-      title: "放弃未保存修改？",
-      content: "切换 Workflow 会丢失当前画布尚未保存的修改。",
-      okText: "放弃并切换",
-      cancelText: "继续编辑",
-      onOk: () => openWorkflow(id)
-    });
   }
 
   /** 用服务端 Graph 替换编辑状态，并清空旧 Workflow 的校验和 Trace 状态。 */
@@ -408,8 +411,7 @@ export function WorkflowsPage() {
     try {
       const created = await createWorkflow({ ...values, graph: createDefaultGraph() });
       setCreateOpen(false);
-      await refreshList();
-      await openWorkflow(created.id);
+      navigate(`/workflows/${created.id}`);
       message.success("Workflow 已创建");
     } catch (error) {
       message.error(error instanceof Error ? error.message : "创建失败");
@@ -432,6 +434,7 @@ export function WorkflowsPage() {
         if (workflow?.id === item.id) {
           setWorkflow(null);
           setSelectedNodeId(null);
+          navigate("/workflows");
         }
       }
     });
@@ -441,8 +444,12 @@ export function WorkflowsPage() {
     <section className="workspace workflowWorkspace">
       <header className="compactPageHeader workflowPageHeader">
         <div>
-          <h1>Workflow 编排</h1>
-          <p>构建确定性 Agent 流程，校验后发布为不可变版本。</p>
+          <h1>{workflowId ? "Workflow 编排" : "Workflow 工作室"}</h1>
+          <p>
+            {workflowId
+              ? "构建确定性 Agent 流程，校验后发布为不可变版本。"
+              : "创建和管理团队的确定性 Agent 流程。"}
+          </p>
         </div>
         <Space size={8}>
           <WorkflowGuide />
@@ -452,131 +459,165 @@ export function WorkflowsPage() {
         </Space>
       </header>
 
-      <div className="workflowWorkbench">
-        <WorkflowSidebar
+      {!workflowId ? (
+        <WorkflowGallery
           loading={loading}
-          selectedId={workflow?.id ?? null}
           workflows={workflows}
           onArchive={confirmArchive}
           onCreate={() => setCreateOpen(true)}
-          onSelect={requestOpenWorkflow}
+          onOpen={(id) => navigate(`/workflows/${id}`)}
         />
+      ) : null}
 
-        {workflow ? (
-          <main className="workflowEditor">
-            <header className="workflowToolbar">
-              <div className="workflowToolbarTitle">
-                <strong>{workflow.name}</strong>
-                <Tag color={workflow.status === "PUBLISHED" ? "green" : "default"}>
-                  {workflow.publishedVersion ? `已发布 v${workflow.publishedVersion}` : "未发布"}
-                </Tag>
-                <span>{formatSaveStatus(saveStatus, workflow.draftRevision, lastSavedAt)}</span>
-              </div>
-              <Space wrap size={8}>
-                {saveStatus === "conflict" ? (
-                  <>
-                    <Button onClick={() => void openWorkflow(workflow.id)}>
-                      重新加载服务端草稿
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        void navigator.clipboard
-                          .writeText(JSON.stringify(graph, null, 2))
-                          .then(() => message.success("本地 Graph 已复制"))
-                          .catch(() => message.error("复制失败，请使用浏览器剪贴板权限后重试"));
-                      }}
-                    >
-                      复制本地 Graph
-                    </Button>
-                  </>
-                ) : null}
-                <Button
-                  disabled={!canUndo}
-                  icon={<UndoOutlined />}
-                  title="撤销（Cmd/Ctrl+Z）"
-                  onClick={() => {
-                    undo();
-                    setDirty(true);
-                    setSaveStatus("dirty");
-                  }}
+      {workflowId ? (
+        <div className="workflowWorkbench detailOnly">
+          {workflow ? (
+            <main className="workflowEditor">
+              <header className="workflowToolbar">
+                <div className="workflowToolbarTitle">
+                  <Button
+                    icon={<ArrowLeftOutlined />}
+                    title="返回 Workflow 工作室"
+                    type="text"
+                    onClick={() => navigate("/workflows")}
+                  />
+                  <strong>{workflow.name}</strong>
+                  <Tag color={workflow.status === "PUBLISHED" ? "green" : "default"}>
+                    {workflow.publishedVersion ? `已发布 v${workflow.publishedVersion}` : "未发布"}
+                  </Tag>
+                  <span>{formatSaveStatus(saveStatus, workflow.draftRevision, lastSavedAt)}</span>
+                </div>
+                <Space wrap size={8}>
+                  {saveStatus === "conflict" ? (
+                    <>
+                      <Button onClick={() => void openWorkflow(workflow.id)}>
+                        重新加载服务端草稿
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          void navigator.clipboard
+                            .writeText(JSON.stringify(graph, null, 2))
+                            .then(() => message.success("本地 Graph 已复制"))
+                            .catch(() => message.error("复制失败，请使用浏览器剪贴板权限后重试"));
+                        }}
+                      >
+                        复制本地 Graph
+                      </Button>
+                    </>
+                  ) : null}
+                  <Button
+                    disabled={!canUndo}
+                    icon={<UndoOutlined />}
+                    title="撤销（Cmd/Ctrl+Z）"
+                    onClick={() => {
+                      undo();
+                      setDirty(true);
+                      setSaveStatus("dirty");
+                    }}
+                  />
+                  <Button
+                    disabled={!canRedo}
+                    icon={<RedoOutlined />}
+                    title="重做（Cmd/Ctrl+Shift+Z）"
+                    onClick={() => {
+                      redo();
+                      setDirty(true);
+                      setSaveStatus("dirty");
+                    }}
+                  />
+                  <Button
+                    disabled={!workflow}
+                    icon={<HistoryOutlined />}
+                    onClick={() => setTraceOpen(true)}
+                  >
+                    Trace
+                  </Button>
+                  <Button
+                    icon={<CheckOutlined />}
+                    loading={saving}
+                    onClick={() => void runValidation()}
+                  >
+                    校验
+                  </Button>
+                  <Button
+                    icon={<SaveOutlined />}
+                    loading={saving}
+                    onClick={() => void saveDraftWithFeedback()}
+                  >
+                    保存
+                  </Button>
+                  <Button
+                    icon={<CloudUploadOutlined />}
+                    loading={saving}
+                    type="primary"
+                    onClick={() => void publish()}
+                  >
+                    发布
+                  </Button>
+                </Space>
+              </header>
+              <div
+                className={`workflowEditorBody${paletteCollapsed ? " paletteCollapsed" : ""}${inspectorCollapsed ? " inspectorCollapsed" : ""}`}
+              >
+                <NodePalette
+                  collapsed={paletteCollapsed}
+                  onAdd={addNode}
+                  onToggleCollapsed={() =>
+                    toggleCollapsedState(
+                      WORKFLOW_PALETTE_COLLAPSED_KEY,
+                      paletteCollapsed,
+                      setPaletteCollapsed
+                    )
+                  }
                 />
-                <Button
-                  disabled={!canRedo}
-                  icon={<RedoOutlined />}
-                  title="重做（Cmd/Ctrl+Shift+Z）"
-                  onClick={() => {
-                    redo();
-                    setDirty(true);
-                    setSaveStatus("dirty");
-                  }}
-                />
-                <Button
-                  disabled={!workflow}
-                  icon={<HistoryOutlined />}
-                  onClick={() => setTraceOpen(true)}
-                >
-                  Trace
-                </Button>
-                <Button
-                  icon={<CheckOutlined />}
-                  loading={saving}
-                  onClick={() => void runValidation()}
-                >
-                  校验
-                </Button>
-                <Button
-                  icon={<SaveOutlined />}
-                  loading={saving}
-                  onClick={() => void saveDraftWithFeedback()}
-                >
-                  保存
-                </Button>
-                <Button
-                  icon={<CloudUploadOutlined />}
-                  loading={saving}
-                  type="primary"
-                  onClick={() => void publish()}
-                >
-                  发布
-                </Button>
-              </Space>
-            </header>
-            <div className="workflowEditorBody">
-              <NodePalette onAdd={addNode} />
-              <div className="workflowCanvasRegion">
-                <WorkflowCanvas
+                <div className="workflowCanvasRegion">
+                  <WorkflowCanvas
+                    graph={graph}
+                    issues={issues}
+                    selectedNodeId={selectedNodeId}
+                    traceStatuses={traceStatuses}
+                    onConnectionRejected={(reason) => message.warning(reason)}
+                    onGraphChange={changeGraph}
+                    onAppendNode={appendNode}
+                    onInsertNode={insertNode}
+                    onOpenNodeInspector={(nodeId) => {
+                      setSelectedNodeId(nodeId);
+                      window.localStorage.setItem(WORKFLOW_INSPECTOR_COLLAPSED_KEY, "false");
+                      setInspectorCollapsed(false);
+                    }}
+                    onSelectNode={setSelectedNodeId}
+                  />
+                  <ValidationPanel
+                    issues={issues}
+                    valid={validationValid}
+                    onSelectNode={setSelectedNodeId}
+                  />
+                </div>
+                <NodeInspector
+                  collapsed={inspectorCollapsed}
                   graph={graph}
-                  issues={issues}
-                  selectedNodeId={selectedNodeId}
-                  traceStatuses={traceStatuses}
-                  onConnectionRejected={(reason) => message.warning(reason)}
-                  onGraphChange={changeGraph}
-                  onAppendNode={appendNode}
-                  onInsertNode={insertNode}
-                  onSelectNode={setSelectedNodeId}
-                />
-                <ValidationPanel
-                  issues={issues}
-                  valid={validationValid}
-                  onSelectNode={setSelectedNodeId}
+                  node={selectedNode}
+                  resources={resources}
+                  onChange={updateNode}
+                  onDelete={deleteNode}
+                  onToggleCollapsed={() =>
+                    toggleCollapsedState(
+                      WORKFLOW_INSPECTOR_COLLAPSED_KEY,
+                      inspectorCollapsed,
+                      setInspectorCollapsed
+                    )
+                  }
                 />
               </div>
-              <NodeInspector
-                graph={graph}
-                node={selectedNode}
-                resources={resources}
-                onChange={updateNode}
-                onDelete={deleteNode}
-              />
-            </div>
-          </main>
-        ) : (
-          <main className="workflowEmptyEditor">
-            <Spin spinning={loading} />
-            {!loading ? <p>选择或新建 Workflow 开始编排</p> : null}
-          </main>
-        )}
-      </div>
+            </main>
+          ) : (
+            <main className="workflowEmptyEditor">
+              <Spin spinning={loading} />
+              {!loading ? <p>选择或新建 Workflow 开始编排</p> : null}
+            </main>
+          )}
+        </div>
+      ) : null}
 
       <CreateWorkflowModal
         open={createOpen}
@@ -605,4 +646,16 @@ function formatSaveStatus(status: DraftSaveStatus, revision: number, savedAt: st
     return `已保存 ${new Date(savedAt).toLocaleTimeString("zh-CN", { hour12: false })} · r${revision}`;
   }
   return `草稿 r${revision}`;
+}
+
+/** 从本地存储恢复单个面板的折叠状态。 */
+function readCollapsedState(key: string): boolean {
+  return window.localStorage.getItem(key) === "true";
+}
+
+/** 切换并持久化面板折叠状态，刷新页面后继续沿用管理员布局。 */
+function toggleCollapsedState(key: string, current: boolean, update: (collapsed: boolean) => void) {
+  const next = !current;
+  window.localStorage.setItem(key, String(next));
+  update(next);
 }
