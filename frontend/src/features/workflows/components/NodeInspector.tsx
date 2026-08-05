@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { DeleteOutlined } from "@ant-design/icons";
-import { Button, Input, InputNumber, Select } from "antd";
+import { DeleteOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
+import { Button, Input, InputNumber, Select, Tooltip } from "antd";
 
 import type { WorkflowGraph, WorkflowNode, WorkflowResources } from "../types";
 import { buildVariableCatalog } from "../editor/variables";
@@ -20,14 +20,40 @@ type NodeInspectorProps = {
   onChange: (node: WorkflowNode) => void;
   /** 删除当前节点回调。 */
   onDelete: (nodeId: string) => void;
+  /** 是否折叠属性面板。 */
+  collapsed: boolean;
+  /** 切换折叠状态。 */
+  onToggleCollapsed: () => void;
 };
 
 /** 根据节点类型展示对应配置字段。 */
-export function NodeInspector({ node, graph, resources, onChange, onDelete }: NodeInspectorProps) {
+export function NodeInspector({
+  node,
+  graph,
+  resources,
+  onChange,
+  onDelete,
+  collapsed,
+  onToggleCollapsed
+}: NodeInspectorProps) {
+  if (collapsed) {
+    return (
+      <aside className="workflowInspector collapsed">
+        <Tooltip placement="left" title="展开属性面板">
+          <Button icon={<MenuFoldOutlined />} type="text" onClick={onToggleCollapsed} />
+        </Tooltip>
+      </aside>
+    );
+  }
   if (!node) {
     return (
       <aside className="workflowInspector workflowInspectorEmpty">
-        <div className="workflowPaneTitle">属性</div>
+        <div className="workflowInspectorHeader">
+          <div className="workflowPaneTitle">属性</div>
+          <Tooltip title="折叠属性面板">
+            <Button icon={<MenuUnfoldOutlined />} type="text" onClick={onToggleCollapsed} />
+          </Tooltip>
+        </div>
         <p>选择节点后编辑配置</p>
       </aside>
     );
@@ -44,13 +70,18 @@ export function NodeInspector({ node, graph, resources, onChange, onDelete }: No
           <div className="workflowPaneTitle">{NODE_LABELS[node.type]}</div>
           <code>{node.id}</code>
         </div>
-        <Button
-          danger
-          icon={<DeleteOutlined />}
-          title="删除节点"
-          type="text"
-          onClick={() => onDelete(node.id)}
-        />
+        <div className="workflowPaneActions">
+          <Button
+            danger
+            icon={<DeleteOutlined />}
+            title="删除节点"
+            type="text"
+            onClick={() => onDelete(node.id)}
+          />
+          <Tooltip title="折叠属性面板">
+            <Button icon={<MenuUnfoldOutlined />} type="text" onClick={onToggleCollapsed} />
+          </Tooltip>
+        </div>
       </div>
 
       <Field label="名称">

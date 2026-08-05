@@ -72,6 +72,8 @@ export type WorkflowCanvasProps = {
   onGraphChange: (graph: WorkflowGraph) => void;
   /** 节点选择变化回调。 */
   onSelectNode: (nodeId: string | null) => void;
+  /** 双击节点时打开其属性面板。 */
+  onOpenNodeInspector: (nodeId: string) => void;
   /** 非法连接提示回调。 */
   onConnectionRejected: (message: string) => void;
   /** 从节点出口追加并连接新节点。 */
@@ -107,6 +109,7 @@ export function WorkflowCanvas({
   traceStatuses,
   onGraphChange,
   onSelectNode,
+  onOpenNodeInspector,
   onConnectionRejected,
   onAppendNode,
   onInsertNode
@@ -235,7 +238,11 @@ export function WorkflowCanvas({
         onEdgesChange={handleEdgeChanges}
         onNodeClick={(_, node) => {
           setSelectedEdgeId(null);
-          onSelectNode(node.id);
+          onOpenNodeInspector(node.id);
+        }}
+        onNodeDoubleClick={(_, node) => {
+          setSelectedEdgeId(null);
+          onOpenNodeInspector(node.id);
         }}
         onNodeDragStop={(_, flowNode) => {
           onGraphChange({

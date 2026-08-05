@@ -1,4 +1,9 @@
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  PlusOutlined
+} from "@ant-design/icons";
 import { Button, Empty, Tag, Tooltip } from "antd";
 
 import type { WorkflowListItem } from "../types";
@@ -17,6 +22,10 @@ type WorkflowSidebarProps = {
   onSelect: (id: string) => void;
   /** 归档 Workflow 回调。 */
   onArchive: (workflow: WorkflowListItem) => void;
+  /** 是否折叠为窄侧栏。 */
+  collapsed: boolean;
+  /** 切换折叠状态。 */
+  onToggleCollapsed: () => void;
 };
 
 /** 展示 Workflow 列表、发布版本和归档入口。 */
@@ -26,51 +35,68 @@ export function WorkflowSidebar({
   loading,
   onCreate,
   onSelect,
-  onArchive
+  onArchive,
+  collapsed,
+  onToggleCollapsed
 }: WorkflowSidebarProps) {
   return (
-    <aside className="workflowSidebar">
+    <aside className={`workflowSidebar${collapsed ? " collapsed" : ""}`}>
       <div className="workflowSidebarHeader">
-        <div className="workflowPaneTitle">Workflows</div>
-        <Tooltip title="新建 Workflow">
-          <Button icon={<PlusOutlined />} type="text" onClick={onCreate} />
-        </Tooltip>
+        {!collapsed ? <div className="workflowPaneTitle">Workflows</div> : null}
+        <div className="workflowPaneActions">
+          {!collapsed ? (
+            <Tooltip title="新建 Workflow">
+              <Button icon={<PlusOutlined />} type="text" onClick={onCreate} />
+            </Tooltip>
+          ) : null}
+          <Tooltip title={collapsed ? "展开 Workflow 列表" : "折叠 Workflow 列表"}>
+            <Button
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              type="text"
+              onClick={onToggleCollapsed}
+            />
+          </Tooltip>
+        </div>
       </div>
-      <div className="workflowSidebarList" aria-busy={loading}>
-        {!loading && workflows.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> : null}
-        {workflows.map((workflow) => (
-          <div
-            className={`workflowSidebarItem${selectedId === workflow.id ? " active" : ""}`}
-            key={workflow.id}
-          >
-            <button
-              className="workflowSidebarItemMain"
-              type="button"
-              onClick={() => onSelect(workflow.id)}
+      {!collapsed ? (
+        <div className="workflowSidebarList" aria-busy={loading}>
+          {!loading && workflows.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          ) : null}
+          {workflows.map((workflow) => (
+            <div
+              className={`workflowSidebarItem${selectedId === workflow.id ? " active" : ""}`}
+              key={workflow.id}
             >
-              <strong>{workflow.name}</strong>
-              <small>{workflow.description || "无描述"}</small>
-            </button>
-            <span className="workflowSidebarItemMeta">
-              <Tag color={workflow.status === "PUBLISHED" ? "green" : "default"}>
-                {workflow.publishedVersion ? `v${workflow.publishedVersion}` : "草稿"}
-              </Tag>
-              <Tooltip title="归档 Workflow">
-                <Button
-                  danger
-                  icon={<DeleteOutlined />}
-                  size="small"
-                  type="text"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onArchive(workflow);
-                  }}
-                />
-              </Tooltip>
-            </span>
-          </div>
-        ))}
-      </div>
+              <button
+                className="workflowSidebarItemMain"
+                type="button"
+                onClick={() => onSelect(workflow.id)}
+              >
+                <strong>{workflow.name}</strong>
+                <small>{workflow.description || "无描述"}</small>
+              </button>
+              <span className="workflowSidebarItemMeta">
+                <Tag color={workflow.status === "PUBLISHED" ? "green" : "default"}>
+                  {workflow.publishedVersion ? `v${workflow.publishedVersion}` : "草稿"}
+                </Tag>
+                <Tooltip title="归档 Workflow">
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    size="small"
+                    type="text"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onArchive(workflow);
+                    }}
+                  />
+                </Tooltip>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </aside>
   );
 }
