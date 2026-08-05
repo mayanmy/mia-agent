@@ -259,6 +259,13 @@ export class WorkflowsService {
       const summary = compilation.issues.map((issue) => issue.message).join("；");
       throw new AppError(ErrorCodes.workflow.validationFailed, summary || "Workflow 编译校验失败");
     }
+    if (!payload.expectedChecksum || payload.expectedChecksum !== compilation.checksum) {
+      throw new AppError(
+        ErrorCodes.workflow.validationFailed,
+        "Workflow 草稿内容已变化，请重新校验后发布",
+        HttpStatus.CONFLICT
+      );
+    }
     const nextVersion = (workflow.publishedVersion ?? 0) + 1;
     const compiledPlan = compilation.compiledPlan;
     const checksum = compilation.checksum;

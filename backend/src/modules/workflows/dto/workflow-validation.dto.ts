@@ -28,6 +28,8 @@ export type WorkflowValidateDto = {
 export type WorkflowPublishDto = {
   /** 客户端最后读取的草稿修订号。 */
   expectedRevision?: number;
+  /** 客户端刚刚校验通过的编译摘要，用于绑定校验结果与发布内容。 */
+  expectedChecksum?: string;
 };
 
 /** Compiler 返回的校验、计划和内容摘要。 */

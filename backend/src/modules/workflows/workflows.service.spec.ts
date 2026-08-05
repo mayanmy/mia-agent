@@ -178,7 +178,7 @@ export const tests = [
 
       const result = await new WorkflowsService(prisma as never, compiler as never).publishWorkflow(
         "workflow-1",
-        { expectedRevision: 3 },
+        { expectedRevision: 3, expectedChecksum: "compiled-checksum" },
         "user-1"
       );
 
