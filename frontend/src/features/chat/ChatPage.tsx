@@ -16,6 +16,7 @@ import {
   type ChatSessionStatus
 } from "./api";
 import { ChatComposer } from "./components/ChatComposer";
+import { ChatAgentGallery } from "./components/ChatAgentGallery";
 import { ChatHeader } from "./components/ChatHeader";
 import { ChatSessionList } from "./components/ChatSessionList";
 import { ChatTranscript } from "./components/ChatTranscript";
@@ -163,8 +164,10 @@ export function ChatPage() {
     try {
       const page = await listAgents(1, 100);
       const enabledAgents = page.list.filter((agent) => agent.enabled);
-      const nextAgentId =
-        searchParams.get("agentId") || selectedAgentId || enabledAgents[0]?.id || "";
+      const requestedAgentId = searchParams.get("agentId") || selectedAgentId;
+      const nextAgentId = enabledAgents.some((agent) => agent.id === requestedAgentId)
+        ? requestedAgentId
+        : "";
 
       if (isActive()) {
         setAgents(enabledAgents);
@@ -189,6 +192,13 @@ export function ChatPage() {
     } else {
       setSearchParams({});
     }
+  }
+
+  /** 返回卡片列表时中止生成并清空 URL 选择，详情状态由现有切换 Effect 统一复位。 */
+  function handleBackToAgents() {
+    abortControllerRef.current?.abort();
+    setSelectedAgentId("");
+    setSearchParams({});
   }
 
   async function loadSessionMessages(
@@ -561,7 +571,8 @@ export function ChatPage() {
         return current;
       }
 
-      const nextTitle = currentSession.title === "新对话" ? createSessionTitle(firstMessage) : currentSession.title;
+      const nextTitle =
+        currentSession.title === "新对话" ? createSessionTitle(firstMessage) : currentSession.title;
       const updatedSession = {
         ...currentSession,
         title: nextTitle,
@@ -719,98 +730,111 @@ export function ChatPage() {
 
   return (
     <section className="workspace chatWorkspace">
-      <ChatHeader loadingAgents={loadingAgents} onRefreshAgents={() => void refreshAgents()} />
+      <ChatHeader
+        detail={Boolean(selectedAgentId)}
+        loadingAgents={loadingAgents}
+        onBack={handleBackToAgents}
+        onRefreshAgents={() => void refreshAgents()}
+      />
 
-      <div className="chatLayout">
-        <aside className="chatSide panel">
-          <div className="panelHeader">
-            <h2>Agent</h2>
-          </div>
-          <div className="chatSideBody">
-            <Select
-              className="chatAgentSelect"
-              loading={loadingAgents}
-              options={agents.map((agent) => ({
-                label: `${agent.name} · ${agent.providerName} / ${agent.modelName}`,
-                value: agent.id
-              }))}
-              placeholder="请选择 Agent"
-              value={selectedAgentId || undefined}
-              onChange={handleAgentChange}
+      {!selectedAgentId ? (
+        <ChatAgentGallery agents={agents} loading={loadingAgents} onOpen={handleAgentChange} />
+      ) : null}
+
+      {selectedAgentId ? (
+        <div className="chatLayout">
+          <aside className="chatSide panel">
+            <div className="panelHeader">
+              <h2>Agent</h2>
+            </div>
+            <div className="chatSideBody">
+              <Select
+                className="chatAgentSelect"
+                loading={loadingAgents}
+                options={agents.map((agent) => ({
+                  label: `${agent.name} · ${agent.providerName} / ${agent.modelName}`,
+                  value: agent.id
+                }))}
+                placeholder="请选择 Agent"
+                value={selectedAgentId || undefined}
+                onChange={handleAgentChange}
+              />
+              {selectedAgent ? (
+                <div className="chatAgentMeta">
+                  <div className="chatAgentName">{selectedAgent.name}</div>
+                  <div className="chatAgentModel">
+                    {selectedAgent.providerName} / {selectedAgent.modelName}
+                  </div>
+                  <div className="chatAgentBindings">
+                    <span>知识库 {selectedAgent.knowledgeBaseCount}</span>
+                    <span>工具 {selectedAgent.toolCount}</span>
+                  </div>
+                  <div className="chatAgentStatus">
+                    <Tag color="green">已启用</Tag>
+                    <Tag
+                      color={selectedAgent.chatSessionMode === "PERSISTENT" ? "blue" : "default"}
+                    >
+                      {selectedAgent.chatSessionMode === "PERSISTENT" ? "保留会话" : "单次会话"}
+                    </Tag>
+                  </div>
+                  {selectedAgent.chatSessionMode === "PERSISTENT" ? (
+                    <ChatSessionList
+                      activeSessionId={sessionId}
+                      disabled={sending}
+                      loading={loadingSessions}
+                      sessions={sessions}
+                      showingArchived={sessionStatus === "ARCHIVED"}
+                      onArchive={(targetSessionId) => void handleArchiveSession(targetSessionId)}
+                      onCreate={() => void handleCreateSession()}
+                      onDelete={(targetSessionId) => void handleDeleteSession(targetSessionId)}
+                      onRename={(targetSessionId, title) =>
+                        void handleRenameSession(targetSessionId, title)
+                      }
+                      onRestore={(targetSessionId) => void handleRestoreSession(targetSessionId)}
+                      onSelect={(targetSessionId) => void handleSessionChange(targetSessionId)}
+                      onToggleArchived={handleToggleArchivedSessions}
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <Empty description="暂无可用 Agent" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              )}
+            </div>
+          </aside>
+
+          <div className="chatPanel panel">
+            <ChatTranscript
+              messages={messages}
+              messagesRef={messagesRef}
+              sending={sending}
+              hasMoreHistory={Boolean(historyCursor)}
+              loadingHistory={loadingHistory}
+              showScrollBottom={showScrollBottom}
+              onCopyMessage={(content) => void copyMessageContent(content)}
+              onLoadMoreHistory={() => void loadOlderMessages()}
+              onScroll={releaseAutoScrollIfNeeded}
+              onScrollBottom={scrollMessagesToBottom}
             />
-            {selectedAgent ? (
-              <div className="chatAgentMeta">
-                <div className="chatAgentName">{selectedAgent.name}</div>
-                <div className="chatAgentModel">
-                  {selectedAgent.providerName} / {selectedAgent.modelName}
-                </div>
-                <div className="chatAgentBindings">
-                  <span>知识库 {selectedAgent.knowledgeBaseCount}</span>
-                  <span>工具 {selectedAgent.toolCount}</span>
-                </div>
-                <div className="chatAgentStatus">
-                  <Tag color="green">已启用</Tag>
-                  <Tag color={selectedAgent.chatSessionMode === "PERSISTENT" ? "blue" : "default"}>
-                    {selectedAgent.chatSessionMode === "PERSISTENT" ? "保留会话" : "单次会话"}
-                  </Tag>
-                </div>
-                {selectedAgent.chatSessionMode === "PERSISTENT" ? (
-                  <ChatSessionList
-                    activeSessionId={sessionId}
-                    disabled={sending}
-                    loading={loadingSessions}
-                    sessions={sessions}
-                    showingArchived={sessionStatus === "ARCHIVED"}
-                    onArchive={(targetSessionId) => void handleArchiveSession(targetSessionId)}
-                    onCreate={() => void handleCreateSession()}
-                    onDelete={(targetSessionId) => void handleDeleteSession(targetSessionId)}
-                    onRename={(targetSessionId, title) =>
-                      void handleRenameSession(targetSessionId, title)
-                    }
-                    onRestore={(targetSessionId) => void handleRestoreSession(targetSessionId)}
-                    onSelect={(targetSessionId) => void handleSessionChange(targetSessionId)}
-                    onToggleArchived={handleToggleArchivedSessions}
-                  />
-                ) : null}
-              </div>
-            ) : (
-              <Empty description="暂无可用 Agent" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            )}
+            <ChatComposer
+              files={files}
+              images={images}
+              input={input}
+              selectedAgentId={selectedAgentId}
+              disabled={sessionStatus === "ARCHIVED"}
+              sendButtonDisabled={sendButtonDisabled}
+              sending={sending}
+              onFileBeforeUpload={handleFileBeforeUpload}
+              onImageBeforeUpload={handleBeforeUpload}
+              onInputChange={setInput}
+              onPaste={handlePaste}
+              onRemoveFile={removeFile}
+              onRemoveImage={removeImage}
+              onSend={() => void handleSend()}
+              onStop={handleStop}
+            />
           </div>
-        </aside>
-
-        <div className="chatPanel panel">
-          <ChatTranscript
-            messages={messages}
-            messagesRef={messagesRef}
-            sending={sending}
-            hasMoreHistory={Boolean(historyCursor)}
-            loadingHistory={loadingHistory}
-            showScrollBottom={showScrollBottom}
-            onCopyMessage={(content) => void copyMessageContent(content)}
-            onLoadMoreHistory={() => void loadOlderMessages()}
-            onScroll={releaseAutoScrollIfNeeded}
-            onScrollBottom={scrollMessagesToBottom}
-          />
-          <ChatComposer
-            files={files}
-            images={images}
-            input={input}
-            selectedAgentId={selectedAgentId}
-            disabled={sessionStatus === "ARCHIVED"}
-            sendButtonDisabled={sendButtonDisabled}
-            sending={sending}
-            onFileBeforeUpload={handleFileBeforeUpload}
-            onImageBeforeUpload={handleBeforeUpload}
-            onInputChange={setInput}
-            onPaste={handlePaste}
-            onRemoveFile={removeFile}
-            onRemoveImage={removeImage}
-            onSend={() => void handleSend()}
-            onStop={handleStop}
-          />
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }

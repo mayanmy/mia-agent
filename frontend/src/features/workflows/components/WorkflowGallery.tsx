@@ -40,6 +40,7 @@ export function WorkflowGallery({
       <div className="workflowGalleryToolbar">
         <Input.Search
           allowClear
+          autoComplete="one-time-code"
           placeholder="搜索 Workflow"
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}

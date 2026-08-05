@@ -5,6 +5,122 @@
   height: calc(100vh - 64px);
 }
 
+.chatAgentGallery {
+  flex: 1;
+  min-height: 0;
+}
+
+.chatAgentGalleryToolbar {
+  margin-bottom: 20px;
+}
+
+.chatAgentGalleryToolbar .ant-input-search {
+  max-width: 340px;
+}
+
+.chatAgentGalleryGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.chatAgentCard {
+  background: #fff;
+  border: 1px solid #e1e6ed;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 4%);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  min-height: 230px;
+  padding: 20px;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.chatAgentCard:hover,
+.chatAgentCard:focus-visible {
+  border-color: #9bbcf2;
+  box-shadow: 0 10px 24px rgb(37 99 235 / 10%);
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.chatAgentCardHeader {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 46px minmax(0, 1fr);
+}
+
+.chatAgentCardHeader strong,
+.chatAgentCardHeader small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatAgentCardHeader strong {
+  color: #172033;
+  font-size: 16px;
+}
+
+.chatAgentCardHeader small {
+  color: #758196;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.chatAgentCardIcon {
+  align-items: center;
+  background: linear-gradient(145deg, #e8f2ff, #f0eaff);
+  border-radius: 12px;
+  color: #2866c7;
+  display: inline-flex;
+  font-size: 22px;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+
+.chatAgentCard > p {
+  color: #64748b;
+  display: -webkit-box;
+  flex: 1;
+  line-height: 1.65;
+  margin: 18px 0 14px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.chatAgentCardBindings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.chatAgentCardBindings span {
+  background: #f3f6fa;
+  border-radius: 6px;
+  color: #526175;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.chatAgentCardFooter {
+  align-items: center;
+  color: #7b8798;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  justify-content: space-between;
+}
+
 .chatLayout {
   display: grid;
   flex: 1;
