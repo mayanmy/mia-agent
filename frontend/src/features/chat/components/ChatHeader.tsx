@@ -1,5 +1,7 @@
-import { ArrowLeftOutlined } from "@ant-design/icons";
-import { Button, Space } from "antd";
+import { Button, Tag } from "antd";
+
+import type { AgentListItem } from "../../agents/api";
+import { WorkspacePageHeader } from "../../../shared/components/WorkspacePageHeader";
 
 /** Chat 页面标题栏参数。 */
 type ChatHeaderProps = {
@@ -11,26 +13,42 @@ type ChatHeaderProps = {
   detail: boolean;
   /** 返回 Agent 卡片列表。 */
   onBack: () => void;
+  /** 详情页当前选中的 Agent。 */
+  agent: AgentListItem | null;
 };
 
-/** 展示 Chat 测试页说明与 Agent 刷新入口。 */
-export function ChatHeader({ loadingAgents, onRefreshAgents, detail, onBack }: ChatHeaderProps) {
+/** 使用统一页面骨架展示 Chat 工作室或 Agent 对话详情。 */
+export function ChatHeader({
+  loadingAgents,
+  onRefreshAgents,
+  detail,
+  onBack,
+  agent
+}: ChatHeaderProps) {
   return (
-    <header className="compactPageHeader">
-      <div>
-        <h1>{detail ? "测试对话" : "对话工作室"}</h1>
-        <p>{detail ? "验证 Prompt、工具调用和模型回复效果。" : "选择一个 Agent 开始对话。"}</p>
-      </div>
-      <Space>
-        {detail ? (
-          <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
-            返回 Agent 列表
-          </Button>
-        ) : null}
+    <WorkspacePageHeader
+      actions={
         <Button disabled={loadingAgents} onClick={onRefreshAgents}>
           刷新 Agent
         </Button>
-      </Space>
-    </header>
+      }
+      backLabel="返回 Agent 列表"
+      description={
+        detail && agent ? `${agent.providerName} / ${agent.modelName}` : "选择一个 Agent 开始对话。"
+      }
+      eyebrow={detail ? "测试对话" : undefined}
+      meta={
+        detail && agent ? (
+          <>
+            <Tag color="green">已启用</Tag>
+            <Tag color={agent.chatSessionMode === "PERSISTENT" ? "blue" : "default"}>
+              {agent.chatSessionMode === "PERSISTENT" ? "保留会话" : "单次会话"}
+            </Tag>
+          </>
+        ) : undefined
+      }
+      title={detail ? agent?.name || "测试对话" : "对话工作室"}
+      onBack={detail ? onBack : undefined}
+    />
   );
 }

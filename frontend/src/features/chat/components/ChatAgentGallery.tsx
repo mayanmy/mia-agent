@@ -33,6 +33,7 @@ export function ChatAgentGallery({ agents, loading, onOpen }: ChatAgentGalleryPr
         <Input.Search
           allowClear
           placeholder="搜索 Agent"
+          autoComplete="one-time-code"
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
         />

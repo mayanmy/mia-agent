@@ -731,6 +731,7 @@ export function ChatPage() {
   return (
     <section className="workspace chatWorkspace">
       <ChatHeader
+        agent={selectedAgent}
         detail={Boolean(selectedAgentId)}
         loadingAgents={loadingAgents}
         onBack={handleBackToAgents}
