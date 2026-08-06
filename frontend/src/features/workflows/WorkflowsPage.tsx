@@ -2,19 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckOutlined,
   CloudUploadOutlined,
-  ArrowLeftOutlined,
   HistoryOutlined,
   PlusOutlined,
   RedoOutlined,
   UndoOutlined,
   SaveOutlined
 } from "@ant-design/icons";
-import { App as AntdApp, Button, Space, Spin, Tag } from "antd";
+import { App as AntdApp, Button, Spin, Tag } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { listKnowledgeBases } from "../knowledge/api";
 import { listModelConfigs } from "../model-providers/api";
 import { listTools } from "../tools/api";
+import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
 import {
   archiveWorkflow,
   createWorkflow,
@@ -442,22 +442,104 @@ export function WorkflowsPage() {
 
   return (
     <section className="workspace workflowWorkspace">
-      <header className="compactPageHeader workflowPageHeader">
-        <div>
-          <h1>{workflowId ? "Workflow 编排" : "Workflow 工作室"}</h1>
-          <p>
-            {workflowId
-              ? "构建确定性 Agent 流程，校验后发布为不可变版本。"
-              : "创建和管理团队的确定性 Agent 流程。"}
-          </p>
-        </div>
-        <Space size={8}>
-          <WorkflowGuide />
-          <Button icon={<PlusOutlined />} type="primary" onClick={() => setCreateOpen(true)}>
-            新建 Workflow
-          </Button>
-        </Space>
-      </header>
+      <WorkspacePageHeader
+        actions={
+          !workflowId ? (
+            <>
+              <WorkflowGuide />
+              <Button icon={<PlusOutlined />} type="primary" onClick={() => setCreateOpen(true)}>
+                新建 Workflow
+              </Button>
+            </>
+          ) : workflow ? (
+            <>
+              {saveStatus === "conflict" ? (
+                <>
+                  <Button onClick={() => void openWorkflow(workflow.id)}>重新加载草稿</Button>
+                  <Button
+                    onClick={() => {
+                      void navigator.clipboard
+                        .writeText(JSON.stringify(graph, null, 2))
+                        .then(() => message.success("本地 Graph 已复制"))
+                        .catch(() => message.error("复制失败，请使用浏览器剪贴板权限后重试"));
+                    }}
+                  >
+                    复制本地 Graph
+                  </Button>
+                </>
+              ) : null}
+              <Button
+                disabled={!canUndo}
+                icon={<UndoOutlined />}
+                title="撤销（Cmd/Ctrl+Z）"
+                type="text"
+                onClick={() => {
+                  undo();
+                  setDirty(true);
+                  setSaveStatus("dirty");
+                }}
+              />
+              <Button
+                disabled={!canRedo}
+                icon={<RedoOutlined />}
+                title="重做（Cmd/Ctrl+Shift+Z）"
+                type="text"
+                onClick={() => {
+                  redo();
+                  setDirty(true);
+                  setSaveStatus("dirty");
+                }}
+              />
+              <Button icon={<HistoryOutlined />} onClick={() => setTraceOpen(true)}>
+                Trace
+              </Button>
+              <Button
+                icon={<CheckOutlined />}
+                loading={saving}
+                onClick={() => void runValidation()}
+              >
+                校验
+              </Button>
+              {saveStatus === "failed" ? (
+                <Button
+                  icon={<SaveOutlined />}
+                  loading={saving}
+                  onClick={() => void saveDraftWithFeedback()}
+                >
+                  重试保存
+                </Button>
+              ) : null}
+              <Button
+                icon={<CloudUploadOutlined />}
+                loading={saving}
+                type="primary"
+                onClick={() => void publish()}
+              >
+                发布
+              </Button>
+            </>
+          ) : undefined
+        }
+        backLabel="返回 Workflow 工作室"
+        description={
+          workflowId
+            ? workflow?.description || "构建确定性 Agent 流程，校验后发布为不可变版本。"
+            : "创建和管理团队的确定性 Agent 流程。"
+        }
+        eyebrow={workflowId ? "Workflow 编排" : undefined}
+        meta={
+          workflow ? (
+            <>
+              <Tag color={workflow.status === "PUBLISHED" ? "green" : "default"}>
+                {workflow.publishedVersion ? `已发布 v${workflow.publishedVersion}` : "未发布"}
+              </Tag>
+              <span>{formatSaveStatus(saveStatus, workflow.draftRevision, lastSavedAt)}</span>
+            </>
+          ) : undefined
+        }
+        title={workflowId ? workflow?.name || "正在加载 Workflow…" : "Workflow 工作室"}
+        onBack={workflowId ? () => navigate("/workflows") : undefined}
+      />
 
       {!workflowId ? (
         <WorkflowGallery
@@ -473,89 +555,6 @@ export function WorkflowsPage() {
         <div className="workflowWorkbench detailOnly">
           {workflow ? (
             <main className="workflowEditor">
-              <header className="workflowToolbar">
-                <div className="workflowToolbarTitle">
-                  <Button
-                    icon={<ArrowLeftOutlined />}
-                    title="返回 Workflow 工作室"
-                    type="text"
-                    onClick={() => navigate("/workflows")}
-                  />
-                  <strong>{workflow.name}</strong>
-                  <Tag color={workflow.status === "PUBLISHED" ? "green" : "default"}>
-                    {workflow.publishedVersion ? `已发布 v${workflow.publishedVersion}` : "未发布"}
-                  </Tag>
-                  <span>{formatSaveStatus(saveStatus, workflow.draftRevision, lastSavedAt)}</span>
-                </div>
-                <Space wrap size={8}>
-                  {saveStatus === "conflict" ? (
-                    <>
-                      <Button onClick={() => void openWorkflow(workflow.id)}>
-                        重新加载服务端草稿
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          void navigator.clipboard
-                            .writeText(JSON.stringify(graph, null, 2))
-                            .then(() => message.success("本地 Graph 已复制"))
-                            .catch(() => message.error("复制失败，请使用浏览器剪贴板权限后重试"));
-                        }}
-                      >
-                        复制本地 Graph
-                      </Button>
-                    </>
-                  ) : null}
-                  <Button
-                    disabled={!canUndo}
-                    icon={<UndoOutlined />}
-                    title="撤销（Cmd/Ctrl+Z）"
-                    onClick={() => {
-                      undo();
-                      setDirty(true);
-                      setSaveStatus("dirty");
-                    }}
-                  />
-                  <Button
-                    disabled={!canRedo}
-                    icon={<RedoOutlined />}
-                    title="重做（Cmd/Ctrl+Shift+Z）"
-                    onClick={() => {
-                      redo();
-                      setDirty(true);
-                      setSaveStatus("dirty");
-                    }}
-                  />
-                  <Button
-                    disabled={!workflow}
-                    icon={<HistoryOutlined />}
-                    onClick={() => setTraceOpen(true)}
-                  >
-                    Trace
-                  </Button>
-                  <Button
-                    icon={<CheckOutlined />}
-                    loading={saving}
-                    onClick={() => void runValidation()}
-                  >
-                    校验
-                  </Button>
-                  <Button
-                    icon={<SaveOutlined />}
-                    loading={saving}
-                    onClick={() => void saveDraftWithFeedback()}
-                  >
-                    保存
-                  </Button>
-                  <Button
-                    icon={<CloudUploadOutlined />}
-                    loading={saving}
-                    type="primary"
-                    onClick={() => void publish()}
-                  >
-                    发布
-                  </Button>
-                </Space>
-              </header>
               <div
                 className={`workflowEditorBody${paletteCollapsed ? " paletteCollapsed" : ""}${inspectorCollapsed ? " inspectorCollapsed" : ""}`}
               >
