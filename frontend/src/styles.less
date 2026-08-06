@@ -257,6 +257,84 @@ a {
   margin: 0;
 }
 
+// 工作室首页与对象详情共用同一标题骨架，避免各业务模块重复定义视觉层级。
+.workspacePageHeader {
+  align-items: center;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  min-height: 64px;
+  min-width: 0;
+}
+
+.workspacePageHeaderIdentity {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workspacePageBack.ant-btn {
+  flex: none;
+  height: 36px;
+  width: 36px;
+}
+
+.workspacePageHeading {
+  min-width: 0;
+}
+
+.workspacePageEyebrow {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 3px;
+}
+
+.workspacePageTitleRow {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workspacePageTitleRow h1 {
+  font-size: 28px;
+  line-height: 1.2;
+  max-width: 520px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspacePageHeading > p {
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 5px 0 0;
+}
+
+.workspacePageMeta,
+.workspacePageActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspacePageMeta {
+  color: #667085;
+  font-size: 12px;
+}
+
+.workspacePageActions {
+  flex: none;
+  justify-content: flex-end;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   color: #64748b;
@@ -589,6 +667,21 @@ td {
   .compactPageHeader {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .workspacePageHeader {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .workspacePageActions {
+    justify-content: flex-start;
+  }
+
+  .workspacePageTitleRow h1 {
+    font-size: 24px;
+    max-width: calc(100vw - 100px);
   }
 
   .healthGrid {

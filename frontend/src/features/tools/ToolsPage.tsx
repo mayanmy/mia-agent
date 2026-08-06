@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { App as AntdApp, Button, Form, Input, Modal, Space, Table, Tag } from "antd";
 import type { TableProps } from "antd";
 
+import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+
 import {
   createHttpTool,
   deleteHttpTool,
@@ -253,20 +255,20 @@ export function ToolsPage() {
 
   return (
     <section className="workspace toolsWorkspace">
-      <header className="compactPageHeader">
-        <div>
-          <h1>工具</h1>
-          <p>配置受控 HTTP API，让 Agent 只填写业务参数。</p>
-        </div>
-        <div className="toolsHeaderActions">
-          <Button disabled={loading} onClick={() => void refresh()}>
-            刷新
-          </Button>
-          <Button type="primary" onClick={openCreate}>
-            新增 HTTP 工具
-          </Button>
-        </div>
-      </header>
+      <WorkspacePageHeader
+        actions={
+          <>
+            <Button disabled={loading} onClick={() => void refresh()}>
+              刷新
+            </Button>
+            <Button type="primary" onClick={openCreate}>
+              新增 HTTP 工具
+            </Button>
+          </>
+        }
+        description="配置受控 HTTP API，让 Agent 只填写业务参数。"
+        title="工具"
+      />
       <section className="panel toolsTablePanel">
         <Table
           columns={columns}

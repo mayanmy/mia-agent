@@ -15,6 +15,8 @@ import { ReloadOutlined } from "@ant-design/icons";
 import type { TableProps } from "antd";
 import type { Dayjs } from "dayjs";
 
+import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+
 import { listToolCallLogs, type ToolCallLogListItem, type ToolCallLogQuery } from "./api";
 import "./logs.less";
 
@@ -206,19 +208,19 @@ export function LogsPage() {
 
   return (
     <section className="workspace logsWorkspace">
-      <header className="compactPageHeader">
-        <div>
-          <h1>工具调用日志</h1>
-          <p>查看工具选择、执行结果和失败原因。</p>
-        </div>
-        <Button
-          icon={<ReloadOutlined />}
-          loading={loading}
-          onClick={() => void refresh(pagination.page, pagination.pageSize)}
-        >
-          刷新
-        </Button>
-      </header>
+      <WorkspacePageHeader
+        actions={
+          <Button
+            icon={<ReloadOutlined />}
+            loading={loading}
+            onClick={() => void refresh(pagination.page, pagination.pageSize)}
+          >
+            刷新
+          </Button>
+        }
+        description="查看工具选择、执行结果和失败原因。"
+        title="工具调用日志"
+      />
 
       <section className="panel logsFilterPanel">
         <Input

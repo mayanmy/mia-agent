@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { App as AntdApp, Button, Form, Modal } from "antd";
 
+import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+
 import { listModelConfigs } from "../model-providers/api";
 import type { ModelConfigListItem } from "../model-providers/api";
 import {
@@ -257,7 +259,11 @@ export function KnowledgePage() {
       await deleteKnowledgeDocument(activeKnowledgeBase.id, documentId);
       message.success("文档已删除");
       await Promise.all([
-        refreshDocuments(activeKnowledgeBase.id, documentPagination.page, documentPagination.pageSize),
+        refreshDocuments(
+          activeKnowledgeBase.id,
+          documentPagination.page,
+          documentPagination.pageSize
+        ),
         refresh(pagination.page, pagination.pageSize)
       ]);
     } catch (error) {
@@ -283,7 +289,11 @@ export function KnowledgePage() {
 
       message.success("文档已重新索引");
       await Promise.all([
-        refreshDocuments(activeKnowledgeBase.id, documentPagination.page, documentPagination.pageSize),
+        refreshDocuments(
+          activeKnowledgeBase.id,
+          documentPagination.page,
+          documentPagination.pageSize
+        ),
         refresh(pagination.page, pagination.pageSize)
       ]);
     } catch (error) {
@@ -312,20 +322,20 @@ export function KnowledgePage() {
 
   return (
     <section className="workspace knowledgeWorkspace">
-      <header className="compactPageHeader">
-        <div>
-          <h1>知识库</h1>
-          <p>管理团队文档资料，为 Agent 提供 RAG 知识来源。</p>
-        </div>
-        <div className="knowledgeHeaderActions">
-          <Button disabled={loading} onClick={() => void refresh()}>
-            刷新
-          </Button>
-          <Button type="primary" onClick={openCreateDialog}>
-            新增知识库
-          </Button>
-        </div>
-      </header>
+      <WorkspacePageHeader
+        actions={
+          <>
+            <Button disabled={loading} onClick={() => void refresh()}>
+              刷新
+            </Button>
+            <Button type="primary" onClick={openCreateDialog}>
+              新增知识库
+            </Button>
+          </>
+        }
+        description="管理团队文档资料，为 Agent 提供 RAG 知识来源。"
+        title="知识库"
+      />
 
       <section className="panel knowledgeTablePanel">
         <KnowledgeBaseTable

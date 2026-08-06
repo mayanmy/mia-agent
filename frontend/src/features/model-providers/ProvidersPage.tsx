@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { App as AntdApp, Button, Card, Empty, Input } from "antd";
+import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
 import {
   checkModelCapability,
   createModelConfig,
@@ -392,18 +393,18 @@ export function ProvidersPage() {
 
   return (
     <section className="workspace providersWorkspace">
-      <header className="providersHero">
-        <div>
-          <h1>模型供应商</h1>
-          <p>选择一个为应用提供能力的语言模型。在工作室中开始构建前，至少需要配置一个。</p>
-        </div>
-        <div className="providersHeroActions">
-          <Button onClick={() => void openDefaultModelDialog()}>默认模型设置</Button>
-          <Button onClick={() => void refresh()}>
-            自动更新 <span className="latestBadge">最新</span>
-          </Button>
-        </div>
-      </header>
+      <WorkspacePageHeader
+        actions={
+          <>
+            <Button onClick={() => void openDefaultModelDialog()}>默认模型设置</Button>
+            <Button onClick={() => void refresh()}>
+              自动更新 <span className="latestBadge">最新</span>
+            </Button>
+          </>
+        }
+        description="选择一个为应用提供能力的语言模型。在工作室中开始构建前，至少需要配置一个。"
+        title="模型供应商"
+      />
 
       <div className="providerToolbar">
         <Input.Search

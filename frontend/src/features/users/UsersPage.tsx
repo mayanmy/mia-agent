@@ -14,6 +14,7 @@ import {
 } from "antd";
 
 import type { UserRole } from "../auth/types";
+import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
 import {
   createUser,
   createUserInvitation,
@@ -175,25 +176,25 @@ export function UsersPage() {
 
   return (
     <section className="workspace">
-      <header className="compactPageHeader">
-        <div>
-          <h1>成员管理</h1>
-          <p>管理工作台成员、角色和登录会话。</p>
-        </div>
-        <Space>
-          <Input
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-            onPressEnter={() => void loadUsers()}
-            placeholder="搜索邮箱或名称"
-          />
-          <Button onClick={() => void loadUsers()}>查询</Button>
-          <Button type="primary" onClick={() => setCreateOpen(true)}>
-            新增成员
-          </Button>
-          <Button onClick={() => setInviteOpen(true)}>邀请成员</Button>
-        </Space>
-      </header>
+      <WorkspacePageHeader
+        actions={
+          <>
+            <Input
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              onPressEnter={() => void loadUsers()}
+              placeholder="搜索邮箱或名称"
+            />
+            <Button onClick={() => void loadUsers()}>查询</Button>
+            <Button type="primary" onClick={() => setCreateOpen(true)}>
+              新增成员
+            </Button>
+            <Button onClick={() => setInviteOpen(true)}>邀请成员</Button>
+          </>
+        }
+        description="管理工作台成员、角色和登录会话。"
+        title="成员管理"
+      />
       <Table
         rowKey="id"
         loading={loading}

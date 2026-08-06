@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Form, Modal, Space, message } from "antd";
+import { Button, Form, Modal, message } from "antd";
+
+import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
 
 import { listKnowledgeBases, type KnowledgeBaseListItem } from "../knowledge/api";
 import { getDefaultModelSettings, listModelConfigs, listProviders } from "../model-providers/api";
@@ -380,20 +382,20 @@ export function AgentsPage() {
 
   return (
     <section className="workspace">
-      <header className="compactPageHeader">
-        <div>
-          <h1>Agent 管理</h1>
-          <p>创建、配置和发布团队内部 AI 助手。</p>
-        </div>
-        <Space>
-          <Button disabled={loading} onClick={() => void refresh()}>
-            刷新
-          </Button>
-          <Button type="primary" onClick={openCreateDialog}>
-            新增 Agent
-          </Button>
-        </Space>
-      </header>
+      <WorkspacePageHeader
+        actions={
+          <>
+            <Button disabled={loading} onClick={() => void refresh()}>
+              刷新
+            </Button>
+            <Button type="primary" onClick={openCreateDialog}>
+              新增 Agent
+            </Button>
+          </>
+        }
+        description="创建、配置和发布团队内部 AI 助手。"
+        title="Agent 管理"
+      />
 
       <AgentTable
         agents={agents}
