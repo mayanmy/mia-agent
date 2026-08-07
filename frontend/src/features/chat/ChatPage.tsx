@@ -35,7 +35,8 @@ export function ChatPage() {
   const historyLoadVersionRef = useRef(0);
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState(searchParams.get("agentId") || "");
+  // URL 是详情选择的唯一事实来源；浏览器前进/后退更新查询参数后，页面会随之重新渲染。
+  const selectedAgentId = searchParams.get("agentId") || "";
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionStatus, setSessionStatus] = useState<ChatSessionStatus>("ACTIVE");
   const [sessions, setSessions] = useState<ChatSessionListItem[]>([]);
@@ -164,14 +165,15 @@ export function ChatPage() {
     try {
       const page = await listAgents(1, 100);
       const enabledAgents = page.list.filter((agent) => agent.enabled);
-      const requestedAgentId = searchParams.get("agentId") || selectedAgentId;
-      const nextAgentId = enabledAgents.some((agent) => agent.id === requestedAgentId)
-        ? requestedAgentId
-        : "";
+      const requestedAgentId = searchParams.get("agentId") || "";
+      const hasRequestedAgent = enabledAgents.some((agent) => agent.id === requestedAgentId);
 
       if (isActive()) {
         setAgents(enabledAgents);
-        setSelectedAgentId(nextAgentId);
+        // 无效或已禁用的 Agent 不应让 URL 长期停留在一个无法展示的详情状态。
+        if (requestedAgentId && !hasRequestedAgent) {
+          setSearchParams({}, { replace: true });
+        }
       }
     } catch (error) {
       if (isActive()) {
@@ -185,8 +187,6 @@ export function ChatPage() {
   }
 
   function handleAgentChange(agentId: string) {
-    setSelectedAgentId(agentId);
-
     if (agentId) {
       setSearchParams({ agentId });
     } else {
@@ -197,7 +197,6 @@ export function ChatPage() {
   /** 返回卡片列表时中止生成并清空 URL 选择，详情状态由现有切换 Effect 统一复位。 */
   function handleBackToAgents() {
     abortControllerRef.current?.abort();
-    setSelectedAgentId("");
     setSearchParams({});
   }
 
