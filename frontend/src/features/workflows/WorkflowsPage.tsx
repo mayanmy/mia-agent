@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  CheckOutlined,
-  CloudUploadOutlined,
-  HistoryOutlined,
-  PlusOutlined,
-  RedoOutlined,
-  UndoOutlined,
-  SaveOutlined
-} from "@ant-design/icons";
+import { PlusOutlined } from "@ant-design/icons";
 import { App as AntdApp, Button, Spin, Tag } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -29,6 +21,7 @@ import { NodePalette } from "./components/NodePalette";
 import { CreateWorkflowModal, type WorkflowCreateValues } from "./components/CreateWorkflowModal";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { WorkflowCanvas } from "./components/WorkflowCanvas";
+import { WorkflowEditorActions } from "./components/WorkflowEditorActions";
 import { WorkflowGuide } from "./components/WorkflowGuide";
 import { WorkflowGallery } from "./components/WorkflowGallery";
 import { WorkflowTraceDrawer } from "./components/WorkflowTraceDrawer";
@@ -452,72 +445,35 @@ export function WorkflowsPage() {
               </Button>
             </>
           ) : workflow ? (
-            <>
-              {saveStatus === "conflict" ? (
-                <>
-                  <Button onClick={() => void openWorkflow(workflow.id)}>重新加载草稿</Button>
-                  <Button
-                    onClick={() => {
-                      void navigator.clipboard
-                        .writeText(JSON.stringify(graph, null, 2))
-                        .then(() => message.success("本地 Graph 已复制"))
-                        .catch(() => message.error("复制失败，请使用浏览器剪贴板权限后重试"));
-                    }}
-                  >
-                    复制本地 Graph
-                  </Button>
-                </>
-              ) : null}
-              <Button
-                disabled={!canUndo}
-                icon={<UndoOutlined />}
-                title="撤销（Cmd/Ctrl+Z）"
-                type="text"
-                onClick={() => {
-                  undo();
-                  setDirty(true);
-                  setSaveStatus("dirty");
-                }}
-              />
-              <Button
-                disabled={!canRedo}
-                icon={<RedoOutlined />}
-                title="重做（Cmd/Ctrl+Shift+Z）"
-                type="text"
-                onClick={() => {
-                  redo();
-                  setDirty(true);
-                  setSaveStatus("dirty");
-                }}
-              />
-              <Button icon={<HistoryOutlined />} onClick={() => setTraceOpen(true)}>
-                Trace
-              </Button>
-              <Button
-                icon={<CheckOutlined />}
-                loading={saving}
-                onClick={() => void runValidation()}
-              >
-                校验
-              </Button>
-              {saveStatus === "failed" ? (
-                <Button
-                  icon={<SaveOutlined />}
-                  loading={saving}
-                  onClick={() => void saveDraftWithFeedback()}
-                >
-                  重试保存
-                </Button>
-              ) : null}
-              <Button
-                icon={<CloudUploadOutlined />}
-                loading={saving}
-                type="primary"
-                onClick={() => void publish()}
-              >
-                发布
-              </Button>
-            </>
+            <WorkflowEditorActions
+              canRedo={canRedo}
+              canUndo={canUndo}
+              conflicted={saveStatus === "conflict"}
+              saveFailed={saveStatus === "failed"}
+              saveNeeded={saveStatus === "dirty" || saveStatus === "failed"}
+              saving={saving}
+              onCopyConflictGraph={() => {
+                void navigator.clipboard
+                  .writeText(JSON.stringify(graph, null, 2))
+                  .then(() => message.success("本地 Graph 已复制"))
+                  .catch(() => message.error("复制失败，请使用浏览器剪贴板权限后重试"));
+              }}
+              onOpenTrace={() => setTraceOpen(true)}
+              onPublish={() => void publish()}
+              onRedo={() => {
+                redo();
+                setDirty(true);
+                setSaveStatus("dirty");
+              }}
+              onReloadConflict={() => void openWorkflow(workflow.id)}
+              onSave={() => void saveDraftWithFeedback()}
+              onUndo={() => {
+                undo();
+                setDirty(true);
+                setSaveStatus("dirty");
+              }}
+              onValidate={() => void runValidation()}
+            />
           ) : undefined
         }
         backLabel="返回 Workflow 工作室"
