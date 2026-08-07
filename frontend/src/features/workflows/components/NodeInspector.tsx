@@ -1,4 +1,3 @@
-import { useEffect, useState, type ReactNode } from "react";
 import { DeleteOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
 import { Button, Input, InputNumber, Select, Tooltip } from "antd";
 
@@ -6,6 +5,12 @@ import type { WorkflowGraph, WorkflowNode, WorkflowResources } from "../types";
 import { buildVariableCatalog } from "../editor/variables";
 import { NODE_LABELS } from "../utils";
 import { ConditionBranchGuide } from "./ConditionBranchGuide";
+import { InspectorField as Field, InspectorSection } from "./inspectors/InspectorFields";
+import {
+  ConditionBranchesEditor,
+  KeyValueEditor,
+  StartInputsEditor
+} from "./inspectors/StructuredConfigEditors";
 import { VariableTextArea } from "./variables/VariableTextArea";
 
 /** Workflow 节点属性面板参数。 */
@@ -92,15 +97,14 @@ export function NodeInspector({
       </Field>
 
       {node.type === "start" ? (
-        <JsonField
-          label="输入定义"
+        <StartInputsEditor
           value={node.config.inputs}
           onChange={(value) => updateConfig("inputs", value)}
         />
       ) : null}
 
       {node.type === "llm" ? (
-        <>
+        <InspectorSection title="模型调用" description="配置提示词、采样参数和输出格式">
           <Field label="模型">
             <Select
               options={resources.models.map((item) => ({ value: item.id, label: item.label }))}
@@ -153,11 +157,11 @@ export function NodeInspector({
               onChange={(value) => updateConfig("responseFormat", value)}
             />
           </Field>
-        </>
+        </InspectorSection>
       ) : null}
 
       {node.type === "retrieval" ? (
-        <>
+        <InspectorSection title="检索设置" description="从指定知识库召回与问题相关的内容">
           <Field label="知识库">
             <Select
               mode="multiple"
@@ -196,7 +200,7 @@ export function NodeInspector({
               />
             </Field>
           </div>
-        </>
+        </InspectorSection>
       ) : null}
 
       {node.type === "tool" ? (
@@ -209,9 +213,11 @@ export function NodeInspector({
               onChange={(value) => updateConfig("toolId", value)}
             />
           </Field>
-          <JsonField
-            label="参数"
+          <KeyValueEditor
+            title="工具参数"
+            description="参数值支持引用上游变量"
             value={node.config.arguments}
+            variables={variables}
             onChange={(value) => updateConfig("arguments", value)}
           />
           <Field label="失败策略">
@@ -230,9 +236,9 @@ export function NodeInspector({
       {node.type === "condition" ? (
         <>
           <ConditionBranchGuide />
-          <JsonField
-            label="分支规则"
+          <ConditionBranchesEditor
             value={node.config.branches}
+            variables={variables}
             onChange={(value) => updateConfig("branches", value)}
           />
           <Field label="默认 Handle">
@@ -265,77 +271,16 @@ export function NodeInspector({
               onChange={(value) => updateConfig("answer", value)}
             />
           </Field>
-          <JsonField
-            label="结构化输出"
+          <KeyValueEditor
+            title="结构化输出"
+            description="定义 Workflow 返回对象，可引用任意上游结果"
             value={node.config.output}
+            variables={variables}
             onChange={(value) => updateConfig("output", value)}
           />
         </>
       ) : null}
     </aside>
-  );
-}
-
-/** 属性面板通用字段布局参数。 */
-type FieldProps = {
-  /** 字段展示名称。 */
-  label: string;
-  /** 字段编辑控件。 */
-  children: ReactNode;
-};
-
-/** 统一属性面板字段标签与控件布局。 */
-function Field({ label, children }: FieldProps) {
-  return (
-    <label className="workflowField">
-      <span>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-/** JSON 字段允许暂存未完成文本，只在语法有效时提交到 Graph。 */
-/** 可暂存非法文本的 JSON 配置字段参数。 */
-type JsonFieldProps = {
-  /** 字段展示名称。 */
-  label: string;
-  /** 当前已提交的结构化值。 */
-  value: unknown;
-  /** JSON 语法有效时提交新值。 */
-  onChange: (value: unknown) => void;
-};
-
-function JsonField({ label, value, onChange }: JsonFieldProps) {
-  const serialized = JSON.stringify(value ?? {}, null, 2);
-  const [draft, setDraft] = useState(serialized);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    setDraft(serialized);
-    setError("");
-  }, [serialized]);
-
-  /** 仅在 JSON 语法有效时提交，允许用户在输入过程中保留未完成文本。 */
-  function commit() {
-    try {
-      onChange(JSON.parse(draft) as unknown);
-      setError("");
-    } catch {
-      setError("JSON 格式不正确");
-    }
-  }
-
-  return (
-    <Field label={label}>
-      <Input.TextArea
-        className={error ? "workflowJsonInvalid" : ""}
-        rows={7}
-        value={draft}
-        onBlur={commit}
-        onChange={(event) => setDraft(event.target.value)}
-      />
-      {error ? <small className="workflowFieldError">{error}</small> : null}
-    </Field>
   );
 }
 

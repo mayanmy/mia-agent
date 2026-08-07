@@ -636,6 +636,82 @@
   font-weight: 600;
 }
 
+.workflowFieldHint {
+  color: #8a95a5;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.workflowInspectorSection {
+  border-top: 1px solid #edf0f4;
+  margin-top: 4px;
+  padding-top: 14px;
+}
+
+.workflowInspectorSection > header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.workflowInspectorSection > header strong,
+.workflowInspectorSection > header small {
+  display: block;
+}
+
+.workflowInspectorSection > header strong {
+  color: #27364a;
+  font-size: 13px;
+}
+
+.workflowInspectorSection > header small {
+  color: #8a95a5;
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 3px;
+}
+
+.workflowConfigList {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.workflowConfigCard {
+  background: #f8fafc;
+  border: 1px solid #e4e9f0;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.workflowConfigCard .workflowField:last-of-type {
+  margin-bottom: 8px;
+}
+
+.workflowConfigCardHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.workflowConfigCardHeader strong {
+  color: #526176;
+  font-size: 12px;
+}
+
+.workflowKeyValueRow {
+  align-items: start;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(82px, 0.7fr) minmax(120px, 1.3fr) 28px;
+}
+
+.workflowKeyValueRow .workflowVariableInput {
+  min-width: 0;
+}
+
 .workflowField .ant-select,
 .workflowField .ant-input-number {
   width: 100%;
