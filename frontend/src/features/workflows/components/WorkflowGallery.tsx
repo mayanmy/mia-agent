@@ -1,4 +1,4 @@
-import { ApartmentOutlined, DeleteOutlined } from "@ant-design/icons";
+import { ApartmentOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import { Button, Empty, Input, Spin, Tag, Tooltip } from "antd";
 import { useMemo, useState } from "react";
 
@@ -14,6 +14,8 @@ type WorkflowGalleryProps = {
   onCreate: () => void;
   /** 进入指定 Workflow 编排详情。 */
   onOpen: (workflowId: string) => void;
+  /** 编辑指定 Workflow 的名称和描述。 */
+  onEdit: (workflow: WorkflowListItem) => void;
   /** 归档指定 Workflow。 */
   onArchive: (workflow: WorkflowListItem) => void;
 };
@@ -24,6 +26,7 @@ export function WorkflowGallery({
   loading,
   onCreate,
   onOpen,
+  onEdit,
   onArchive
 }: WorkflowGalleryProps) {
   const [keyword, setKeyword] = useState("");
@@ -76,17 +79,31 @@ export function WorkflowGallery({
                   <strong>{workflow.name}</strong>
                   <small>Workflow</small>
                 </div>
-                <Tooltip title="归档 Workflow">
-                  <Button
-                    danger
-                    icon={<DeleteOutlined />}
-                    type="text"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onArchive(workflow);
-                    }}
-                  />
-                </Tooltip>
+                <div className="workflowGalleryCardActions">
+                  <Tooltip title="编辑信息">
+                    <Button
+                      aria-label={`编辑 ${workflow.name}`}
+                      icon={<EditOutlined />}
+                      type="text"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEdit(workflow);
+                      }}
+                    />
+                  </Tooltip>
+                  <Tooltip title="归档 Workflow">
+                    <Button
+                      danger
+                      aria-label={`归档 ${workflow.name}`}
+                      icon={<DeleteOutlined />}
+                      type="text"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onArchive(workflow);
+                      }}
+                    />
+                  </Tooltip>
+                </div>
               </div>
               <p>{workflow.description || "暂无描述"}</p>
               <div className="workflowGalleryCardFooter">

@@ -13,12 +13,17 @@ import {
   getWorkflow,
   listWorkflows,
   publishWorkflow,
+  updateWorkflow,
   updateWorkflowDraft,
   validateWorkflow
 } from "./api";
 import { NodeInspector } from "./components/NodeInspector";
 import { NodePalette } from "./components/NodePalette";
 import { CreateWorkflowModal, type WorkflowCreateValues } from "./components/CreateWorkflowModal";
+import {
+  EditWorkflowModal,
+  type WorkflowMetadataValues
+} from "./components/EditWorkflowModal";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { WorkflowCanvas } from "./components/WorkflowCanvas";
 import { WorkflowEditorActions } from "./components/WorkflowEditorActions";
@@ -67,6 +72,8 @@ export function WorkflowsPage() {
   const [saveStatus, setSaveStatus] = useState<DraftSaveStatus>("idle");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingWorkflow, setEditingWorkflow] = useState<WorkflowListItem | null>(null);
+  const [metadataSaving, setMetadataSaving] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
   const [paletteCollapsed, setPaletteCollapsed] = useState(() =>
     readCollapsedState(WORKFLOW_PALETTE_COLLAPSED_KEY)
@@ -413,6 +420,25 @@ export function WorkflowsPage() {
     }
   }
 
+  /** 元信息更新不触碰 Graph 修订，避免与画布自动保存的乐观锁互相干扰。 */
+  async function submitMetadataUpdate(values: WorkflowMetadataValues) {
+    if (!editingWorkflow) return;
+    setMetadataSaving(true);
+    try {
+      const updated = await updateWorkflow(editingWorkflow.id, values);
+      setWorkflows((current) =>
+        current.map((item) => (item.id === updated.id ? { ...item, ...updated } : item))
+      );
+      setWorkflow((current) => (current?.id === updated.id ? updated : current));
+      setEditingWorkflow(null);
+      message.success("Workflow 信息已更新");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "更新 Workflow 信息失败");
+    } finally {
+      setMetadataSaving(false);
+    }
+  }
+
   function confirmArchive(item: WorkflowListItem) {
     modal.confirm({
       title: "归档 Workflow",
@@ -503,6 +529,7 @@ export function WorkflowsPage() {
           workflows={workflows}
           onArchive={confirmArchive}
           onCreate={() => setCreateOpen(true)}
+          onEdit={setEditingWorkflow}
           onOpen={(id) => navigate(`/workflows/${id}`)}
         />
       ) : null}
@@ -579,6 +606,13 @@ export function WorkflowsPage() {
         saving={saving}
         onCancel={() => setCreateOpen(false)}
         onSubmit={submitCreate}
+      />
+
+      <EditWorkflowModal
+        saving={metadataSaving}
+        workflow={editingWorkflow}
+        onCancel={() => setEditingWorkflow(null)}
+        onSubmit={submitMetadataUpdate}
       />
 
       <WorkflowTraceDrawer

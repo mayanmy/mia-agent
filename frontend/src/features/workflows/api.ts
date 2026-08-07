@@ -17,6 +17,14 @@ export type CreateWorkflowPayload = {
   graph: WorkflowGraph;
 };
 
+/** 更新 Workflow 基础信息的请求载荷。 */
+export type UpdateWorkflowPayload = {
+  /** 新 Workflow 名称。 */
+  name: string;
+  /** 新 Workflow 用途说明。 */
+  description: string;
+};
+
 /** 保存草稿后返回的新修订信息。 */
 export type WorkflowDraftUpdateResult = {
   /** Workflow ID。 */
@@ -40,6 +48,17 @@ export function createWorkflow(payload: CreateWorkflowPayload): Promise<Workflow
 /** 获取 Workflow 编辑详情。 */
 export function getWorkflow(id: string): Promise<WorkflowDetail> {
   return request(`/api/v1/workflows/${encodeURIComponent(id)}`);
+}
+
+/** 更新名称和描述；该操作不改变 Graph 和草稿修订号。 */
+export function updateWorkflow(
+  id: string,
+  payload: UpdateWorkflowPayload
+): Promise<WorkflowDetail> {
+  return request(`/api/v1/workflows/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
 }
 
 /** 使用乐观锁保存完整草稿 Graph。 */
