@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { App as AntdApp, Empty, Select, Tag } from "antd";
+import { App as AntdApp } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
 import {
@@ -743,65 +743,39 @@ export function ChatPage() {
       ) : null}
 
       {selectedAgentId ? (
-        <div className="chatLayout">
-          <aside className="chatSide panel">
-            <div className="panelHeader">
-              <h2>Agent</h2>
-            </div>
-            <div className="chatSideBody">
-              <Select
-                className="chatAgentSelect"
-                loading={loadingAgents}
-                options={agents.map((agent) => ({
-                  label: `${agent.name} · ${agent.providerName} / ${agent.modelName}`,
-                  value: agent.id
-                }))}
-                placeholder="请选择 Agent"
-                value={selectedAgentId || undefined}
-                onChange={handleAgentChange}
-              />
-              {selectedAgent ? (
-                <div className="chatAgentMeta">
-                  <div className="chatAgentName">{selectedAgent.name}</div>
-                  <div className="chatAgentModel">
-                    {selectedAgent.providerName} / {selectedAgent.modelName}
-                  </div>
-                  <div className="chatAgentBindings">
-                    <span>知识库 {selectedAgent.knowledgeBaseCount}</span>
-                    <span>工具 {selectedAgent.toolCount}</span>
-                  </div>
-                  <div className="chatAgentStatus">
-                    <Tag color="green">已启用</Tag>
-                    <Tag
-                      color={selectedAgent.chatSessionMode === "PERSISTENT" ? "blue" : "default"}
-                    >
-                      {selectedAgent.chatSessionMode === "PERSISTENT" ? "保留会话" : "单次会话"}
-                    </Tag>
-                  </div>
-                  {selectedAgent.chatSessionMode === "PERSISTENT" ? (
-                    <ChatSessionList
-                      activeSessionId={sessionId}
-                      disabled={sending}
-                      loading={loadingSessions}
-                      sessions={sessions}
-                      showingArchived={sessionStatus === "ARCHIVED"}
-                      onArchive={(targetSessionId) => void handleArchiveSession(targetSessionId)}
-                      onCreate={() => void handleCreateSession()}
-                      onDelete={(targetSessionId) => void handleDeleteSession(targetSessionId)}
-                      onRename={(targetSessionId, title) =>
-                        void handleRenameSession(targetSessionId, title)
-                      }
-                      onRestore={(targetSessionId) => void handleRestoreSession(targetSessionId)}
-                      onSelect={(targetSessionId) => void handleSessionChange(targetSessionId)}
-                      onToggleArchived={handleToggleArchivedSessions}
-                    />
-                  ) : null}
+        <div
+          className={`chatLayout${
+            selectedAgent?.chatSessionMode === "PERSISTENT" ? "" : " chatLayoutSingle"
+          }`}
+        >
+          {selectedAgent?.chatSessionMode === "PERSISTENT" ? (
+            <aside className="chatSide panel">
+              <div className="panelHeader chatSideHeader">
+                <div>
+                  <h2>会话</h2>
+                  <span>你的历史对话</span>
                 </div>
-              ) : (
-                <Empty description="暂无可用 Agent" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              )}
-            </div>
-          </aside>
+              </div>
+              <div className="chatSideBody">
+                <ChatSessionList
+                  activeSessionId={sessionId}
+                  disabled={sending}
+                  loading={loadingSessions}
+                  sessions={sessions}
+                  showingArchived={sessionStatus === "ARCHIVED"}
+                  onArchive={(targetSessionId) => void handleArchiveSession(targetSessionId)}
+                  onCreate={() => void handleCreateSession()}
+                  onDelete={(targetSessionId) => void handleDeleteSession(targetSessionId)}
+                  onRename={(targetSessionId, title) =>
+                    void handleRenameSession(targetSessionId, title)
+                  }
+                  onRestore={(targetSessionId) => void handleRestoreSession(targetSessionId)}
+                  onSelect={(targetSessionId) => void handleSessionChange(targetSessionId)}
+                  onToggleArchived={handleToggleArchivedSessions}
+                />
+              </div>
+            </aside>
+          ) : null}
 
           <div className="chatPanel panel">
             <ChatTranscript

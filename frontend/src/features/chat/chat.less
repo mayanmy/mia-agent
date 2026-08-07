@@ -124,9 +124,20 @@
 .chatLayout {
   display: grid;
   flex: 1;
-  gap: 18px;
-  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+  grid-template-columns: 260px minmax(0, 1fr);
   min-height: 0;
+}
+
+.chatLayoutSingle {
+  display: flex;
+  justify-content: center;
+}
+
+.chatLayoutSingle .chatPanel {
+  flex: 1;
+  max-width: 960px;
+  width: 100%;
 }
 
 .chatSide {
@@ -134,67 +145,26 @@
 }
 
 .chatSideBody {
-  display: grid;
-  gap: 18px;
+  display: block;
   min-width: 0;
-  padding: 18px;
+  padding: 10px;
 }
 
-.chatAgentSelect {
-  max-width: 100%;
+.chatSideHeader > div {
   min-width: 0;
 }
 
-.chatAgentSelect .ant-select-selector {
-  min-width: 0;
-}
-
-.chatAgentSelect .ant-select-selection-item,
-.chatAgentSelect .ant-select-selection-placeholder {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chatAgentMeta {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.chatAgentName {
-  color: #111827;
-  font-size: 18px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
-.chatAgentModel {
-  color: #64748b;
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.chatAgentBindings {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chatAgentStatus {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.chatSideHeader span {
+  color: #94a3b8;
+  display: block;
+  font-size: 11px;
+  margin-top: 2px;
 }
 
 .chatSessionSection {
-  border-top: 1px solid #e5e7eb;
   display: grid;
   gap: 8px;
-  margin-top: 4px;
   min-height: 0;
-  padding-top: 14px;
 }
 
 .chatSessionHeader {
@@ -273,15 +243,6 @@
 .chatSessionEmpty .ant-empty-description {
   color: #94a3b8;
   font-size: 12px;
-}
-
-.chatAgentBindings span {
-  background: #f1f5f9;
-  border-radius: 6px;
-  color: #475569;
-  font-size: 12px;
-  line-height: 1;
-  padding: 6px 8px;
 }
 
 .chatPanel {
