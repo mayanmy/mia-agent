@@ -30,6 +30,14 @@
   min-height: 420px;
 }
 
+.workflowAppsWorkspace {
+  min-width: 0;
+}
+
+.workflowAppCard {
+  cursor: default;
+}
+
 .workflowGalleryToolbar {
   align-items: center;
   display: flex;
@@ -84,6 +92,30 @@
   display: inline-flex;
   flex: none;
   gap: 2px;
+}
+
+.workflowRunResult {
+  border-top: 1px solid #e5eaf0;
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.workflowRunResult pre {
+  background: #f7f9fc;
+  border: 1px solid #e1e6ed;
+  border-radius: 8px;
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.workflowRunResult small {
+  color: #7b8798;
+  overflow-wrap: anywhere;
 }
 
 .workflowGalleryCardHeader strong,

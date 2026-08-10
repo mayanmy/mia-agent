@@ -1,4 +1,9 @@
-import { ApartmentOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
+import {
+  ApartmentOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlayCircleOutlined
+} from "@ant-design/icons";
 import { Button, Empty, Input, Spin, Tag, Tooltip } from "antd";
 import { useMemo, useState } from "react";
 
@@ -16,6 +21,8 @@ type WorkflowGalleryProps = {
   onOpen: (workflowId: string) => void;
   /** 编辑指定 Workflow 的名称和描述。 */
   onEdit: (workflow: WorkflowListItem) => void;
+  /** 独立运行指定 Workflow 的当前发布版本。 */
+  onRun: (workflow: WorkflowListItem) => void;
   /** 归档指定 Workflow。 */
   onArchive: (workflow: WorkflowListItem) => void;
 };
@@ -27,6 +34,7 @@ export function WorkflowGallery({
   onCreate,
   onOpen,
   onEdit,
+  onRun,
   onArchive
 }: WorkflowGalleryProps) {
   const [keyword, setKeyword] = useState("");
@@ -80,6 +88,19 @@ export function WorkflowGallery({
                   <small>Workflow</small>
                 </div>
                 <div className="workflowGalleryCardActions">
+                  {workflow.publishedVersion ? (
+                    <Tooltip title="运行 Workflow">
+                      <Button
+                        aria-label={`运行 ${workflow.name}`}
+                        icon={<PlayCircleOutlined />}
+                        type="text"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onRun(workflow);
+                        }}
+                      />
+                    </Tooltip>
+                  ) : null}
                   <Tooltip title="编辑信息">
                     <Button
                       aria-label={`编辑 ${workflow.name}`}

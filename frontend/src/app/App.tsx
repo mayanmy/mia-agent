@@ -8,6 +8,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   MessageOutlined,
+  PlaySquareOutlined,
   RobotOutlined,
   TeamOutlined,
   ToolOutlined,
@@ -60,6 +61,11 @@ const WorkflowsPage = lazy(() =>
     default: module.WorkflowsPage
   }))
 );
+const WorkflowAppsPage = lazy(() =>
+  import("../features/workflows/WorkflowAppsPage").then((module) => ({
+    default: module.WorkflowAppsPage
+  }))
+);
 const KnowledgePage = lazy(() =>
   import("../features/knowledge/KnowledgePage").then((module) => ({
     default: module.KnowledgePage
@@ -100,6 +106,12 @@ const navConfig: NavConfig[] = [
   },
   { label: "工具", path: "/tools", roles: ["ADMIN"], icon: <ToolOutlined /> },
   { label: "Workflow", path: "/workflows", roles: ["ADMIN"], icon: <ApartmentOutlined /> },
+  {
+    label: "Workflow 应用",
+    path: "/workflow-apps",
+    roles: ["ADMIN", "USER"],
+    icon: <PlaySquareOutlined />
+  },
   { label: "对话", path: "/chat", roles: ["ADMIN", "USER"], icon: <MessageOutlined /> },
   { label: "日志", path: "/logs", roles: ["ADMIN", "USER"], icon: <FileSearchOutlined /> },
   {
@@ -136,6 +148,7 @@ export function App() {
               />
               <Route path="/agents" element={<AgentsPage />} />
               <Route path="/knowledge" element={<KnowledgePage />} />
+              <Route path="/workflow-apps" element={<WorkflowAppsPage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/logs" element={<LogsPage />} />
             </Route>

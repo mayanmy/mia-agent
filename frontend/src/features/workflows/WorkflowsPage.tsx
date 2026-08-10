@@ -10,25 +10,26 @@ import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader
 import {
   archiveWorkflow,
   createWorkflow,
+  getPublishedWorkflowApp,
   getWorkflow,
   listWorkflows,
   publishWorkflow,
+  runPublishedWorkflow,
   updateWorkflow,
   updateWorkflowDraft,
   validateWorkflow
 } from "./api";
+import type { PublishedWorkflowApp, WorkflowAppRunResult } from "./api";
 import { NodeInspector } from "./components/NodeInspector";
 import { NodePalette } from "./components/NodePalette";
 import { CreateWorkflowModal, type WorkflowCreateValues } from "./components/CreateWorkflowModal";
-import {
-  EditWorkflowModal,
-  type WorkflowMetadataValues
-} from "./components/EditWorkflowModal";
+import { EditWorkflowModal, type WorkflowMetadataValues } from "./components/EditWorkflowModal";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { WorkflowCanvas } from "./components/WorkflowCanvas";
 import { WorkflowEditorActions } from "./components/WorkflowEditorActions";
 import { WorkflowGuide } from "./components/WorkflowGuide";
 import { WorkflowGallery } from "./components/WorkflowGallery";
+import { WorkflowRunModal } from "./components/WorkflowRunModal";
 import { WorkflowTraceDrawer } from "./components/WorkflowTraceDrawer";
 import { appendNodeToGraph, insertNodeOnEdge } from "./editor/graph-commands";
 import { useWorkflowEditor } from "./editor/useWorkflowEditor";
@@ -74,6 +75,9 @@ export function WorkflowsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<WorkflowListItem | null>(null);
   const [metadataSaving, setMetadataSaving] = useState(false);
+  const [runningApp, setRunningApp] = useState<PublishedWorkflowApp | null>(null);
+  const [runResult, setRunResult] = useState<WorkflowAppRunResult | null>(null);
+  const [runningWorkflow, setRunningWorkflow] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
   const [paletteCollapsed, setPaletteCollapsed] = useState(() =>
     readCollapsedState(WORKFLOW_PALETTE_COLLAPSED_KEY)
@@ -439,6 +443,34 @@ export function WorkflowsPage() {
     }
   }
 
+  /** 卡片只持有摘要，打开运行弹窗前读取发布版本和 Start 输入定义。 */
+  async function openRunDialog(item: WorkflowListItem) {
+    setLoading(true);
+    try {
+      setRunResult(null);
+      setRunningApp(await getPublishedWorkflowApp(item.id));
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载 Workflow 运行表单失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /** 独立入口明确传递页面读取到的版本 ID，发布变化时由后端拒绝旧表单。 */
+  async function submitWorkflowRun(inputs: Record<string, unknown>) {
+    if (!runningApp) return;
+    setRunningWorkflow(true);
+    try {
+      const result = await runPublishedWorkflow(runningApp, inputs);
+      setRunResult(result);
+      if (!result.ok) message.error(result.error?.message || "Workflow 运行失败");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "Workflow 运行失败");
+    } finally {
+      setRunningWorkflow(false);
+    }
+  }
+
   function confirmArchive(item: WorkflowListItem) {
     modal.confirm({
       title: "归档 Workflow",
@@ -531,6 +563,7 @@ export function WorkflowsPage() {
           onCreate={() => setCreateOpen(true)}
           onEdit={setEditingWorkflow}
           onOpen={(id) => navigate(`/workflows/${id}`)}
+          onRun={(item) => void openRunDialog(item)}
         />
       ) : null}
 
@@ -613,6 +646,17 @@ export function WorkflowsPage() {
         workflow={editingWorkflow}
         onCancel={() => setEditingWorkflow(null)}
         onSubmit={submitMetadataUpdate}
+      />
+
+      <WorkflowRunModal
+        app={runningApp}
+        result={runResult}
+        running={runningWorkflow}
+        onCancel={() => {
+          setRunningApp(null);
+          setRunResult(null);
+        }}
+        onRun={submitWorkflowRun}
       />
 
       <WorkflowTraceDrawer

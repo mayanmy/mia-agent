@@ -35,6 +35,68 @@ export type WorkflowDraftUpdateResult = {
   updatedAt: string;
 };
 
+/** 已发布 Workflow 的单个运行输入。 */
+export type PublishedWorkflowInput = {
+  /** Start 节点变量名。 */
+  name: string;
+  /** Runtime 支持的 JSON 类型。 */
+  type: "string" | "number" | "boolean" | "object" | "array";
+  /** 是否必填。 */
+  required: boolean;
+  /** 输入说明。 */
+  description: string;
+  /** 可选默认值。 */
+  defaultValue?: unknown;
+};
+
+/** 独立运行页面使用的已发布 Workflow 摘要。 */
+export type PublishedWorkflowApp = {
+  /** Workflow ID。 */
+  workflowId: string;
+  /** Workflow 名称。 */
+  name: string;
+  /** Workflow 描述。 */
+  description: string;
+  /** 当前不可变版本 ID。 */
+  workflowVersionId: string;
+  /** 当前版本号。 */
+  version: number;
+  /** 动态运行表单定义。 */
+  inputs: PublishedWorkflowInput[];
+  /** ISO 格式发布时间。 */
+  publishedAt: string;
+};
+
+/** 独立运行返回的错误。 */
+export type WorkflowRunError = {
+  /** 稳定错误类型。 */
+  type: string;
+  /** 面向用户的错误说明。 */
+  message: string;
+  /** 是否适合重试。 */
+  retryable: boolean;
+  /** 发生错误的节点 ID。 */
+  nodeId?: string;
+};
+
+/** 独立 Workflow 阻塞运行结果。 */
+export type WorkflowAppRunResult = {
+  /** 请求链路 ID。 */
+  requestId: string;
+  /** Workflow ID。 */
+  workflowId: string;
+  /** 实际运行版本。 */
+  workflowVersionId: string;
+  /** 是否成功。 */
+  ok: boolean;
+  /** End 节点输出。 */
+  output?: Record<string, unknown>;
+  /** 失败详情。 */
+  error?: WorkflowRunError;
+  /** Runtime 事件，用于展示节点摘要。 */
+  events: Array<{ type: string; data: Record<string, unknown> }>;
+};
+
 /** 分页读取 Workflow 管理列表。 */
 export function listWorkflows(page = 1, pageSize = 100): Promise<PageResult<WorkflowListItem>> {
   return request(`/api/v1/workflows?page=${page}&pageSize=${pageSize}`);
@@ -48,6 +110,32 @@ export function createWorkflow(payload: CreateWorkflowPayload): Promise<Workflow
 /** 获取 Workflow 编辑详情。 */
 export function getWorkflow(id: string): Promise<WorkflowDetail> {
   return request(`/api/v1/workflows/${encodeURIComponent(id)}`);
+}
+
+/** 读取已发布 Workflow 的独立运行表单。 */
+export function getPublishedWorkflowApp(id: string): Promise<PublishedWorkflowApp> {
+  return request(`/api/v1/workflow-apps/${encodeURIComponent(id)}`);
+}
+
+/** 返回可被 Agent 绑定的全部已发布 Workflow。 */
+export function listPublishedWorkflowApps(): Promise<PublishedWorkflowApp[]> {
+  return request("/api/v1/workflow-apps");
+}
+
+/** 独立运行明确的已发布 Workflow 版本。 */
+export function runPublishedWorkflow(
+  app: PublishedWorkflowApp,
+  inputs: Record<string, unknown>
+): Promise<WorkflowAppRunResult> {
+  return request(`/api/v1/workflow-apps/${encodeURIComponent(app.workflowId)}/runs`, {
+    method: "POST",
+    body: JSON.stringify({ workflowVersionId: app.workflowVersionId, inputs })
+  });
+}
+
+/** 生成与后端一致的版本化 Workflow Tool ID。 */
+export function workflowToolId(app: PublishedWorkflowApp): string {
+  return `workflow:${app.workflowId}:${app.workflowVersionId}`;
 }
 
 /** 更新名称和描述；该操作不改变 Graph 和草稿修订号。 */
