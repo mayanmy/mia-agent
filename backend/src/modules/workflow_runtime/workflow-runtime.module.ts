@@ -14,9 +14,11 @@ import { ToolNodeExecutor } from "./executors/tool.executor";
 import { WorkflowExpressionResolver } from "./expression-resolver";
 import { WorkflowNodeExecutorRegistry } from "./node-executor.registry";
 import { WorkflowRuntimeService } from "./workflow-runtime.service";
+import { WorkflowAppsController } from "./workflow-apps.controller";
 
 @Module({
   imports: [WorkflowsModule, ModelProvidersModule, RetrievalModule, ToolsModule],
+  controllers: [WorkflowAppsController],
   providers: [
     WorkflowExpressionResolver,
     StartNodeExecutor,

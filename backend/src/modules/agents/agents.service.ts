@@ -968,15 +968,21 @@ export class AgentsService {
     return [...new Set(knowledgeBaseIds)];
   }
 
-  /** 通过 tools 模块确认所有目标工具存在，避免跨模块直接查工具表。 */
+  /** 普通工具由 tools 校验，版本化 Workflow Tool 由 workflows 校验。 */
   private async ensureToolIdsExist(toolIds: string[]): Promise<void> {
     if (toolIds.length === 0) {
       return;
     }
 
-    const availableToolIds = new Set(
-      (await this.toolsService.getToolDefinitions(toolIds)).map((tool) => tool.id)
-    );
+    const workflowToolIds = toolIds.filter((toolId) => toolId.startsWith("workflow:"));
+    const regularToolIds = toolIds.filter((toolId) => !toolId.startsWith("workflow:"));
+    const [regularTools, workflowTools] = await Promise.all([
+      this.toolsService.getToolDefinitions(regularToolIds),
+      workflowToolIds.length
+        ? this.workflowsService.getWorkflowToolDefinitions(workflowToolIds)
+        : Promise.resolve([])
+    ]);
+    const availableToolIds = new Set([...regularTools, ...workflowTools].map((tool) => tool.id));
     const missingToolIds = toolIds.filter((toolId) => !availableToolIds.has(toolId));
 
     if (missingToolIds.length > 0) {

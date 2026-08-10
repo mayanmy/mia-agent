@@ -1,8 +1,15 @@
 import { Injectable } from "@nestjs/common";
 import { WorkflowRunMode } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 
 import { CompiledWorkflowNode, CompiledWorkflowPlan } from "../workflows/dto/compiled-plan.dto";
 import { WorkflowsService } from "../workflows/workflows.service";
+import {
+  ToolDefinition,
+  ToolExecutionRequest,
+  ToolExecutionResult,
+  ToolJsonValue
+} from "../tools/dto/tool.dto";
 import {
   NodeExecutionEvent,
   NodeExecutionResult,
@@ -174,6 +181,71 @@ export class WorkflowRuntimeService {
       }
       yield { type: "workflow_failed", data: { error: this.toErrorData(runtimeError) } };
     }
+  }
+
+  /** Agent Runtime 通过该边界读取 Workflow Tool，避免反向依赖 workflows 内部实现。 */
+  getWorkflowToolDefinitions(toolIds: string[]): Promise<ToolDefinition[]> {
+    return this.workflowsService.getWorkflowToolDefinitions(toolIds);
+  }
+
+  /** 判断工具 ID 是否属于版本化 Workflow Tool。 */
+  isWorkflowTool(toolId: string): boolean {
+    return Boolean(this.workflowsService.parseWorkflowToolId(toolId));
+  }
+
+  /** 将已发布 Workflow 适配成 Agent Tool，执行内核仍保持唯一实现。 */
+  async executeAsTool(request: ToolExecutionRequest): Promise<ToolExecutionResult> {
+    const startedAt = Date.now();
+    const binding = this.workflowsService.parseWorkflowToolId(request.toolId);
+    if (!binding) {
+      return {
+        toolId: request.toolId,
+        ok: false,
+        errorType: "workflow_tool_id_invalid",
+        errorMessage: "Workflow Tool ID 无效",
+        elapsedMs: Date.now() - startedAt
+      };
+    }
+    let output: Record<string, unknown> | undefined;
+    let failure: { type: string; message: string } | undefined;
+    for await (const event of this.runWorkflow({
+      requestId: request.requestId ?? randomUUID(),
+      runId: request.runId,
+      agentId: request.agentId,
+      userId: request.userId,
+      workflowId: binding.workflowId,
+      workflowVersionId: binding.workflowVersionId,
+      mode: WorkflowRunMode.PUBLISHED,
+      inputs: request.input,
+      signal: request.signal
+    })) {
+      if (event.type === "workflow_completed") {
+        const value = event.data.output;
+        output =
+          value && typeof value === "object" && !Array.isArray(value)
+            ? (value as Record<string, unknown>)
+            : { result: value };
+      }
+      if (event.type === "workflow_failed") failure = event.data.error;
+      if (event.type === "workflow_canceled") {
+        failure = { type: "canceled", message: "Workflow 已取消" };
+      }
+    }
+    return output
+      ? {
+          toolId: request.toolId,
+          ok: true,
+          // Workflow Runtime 已拒绝非 JSON 输出，这里只收窄到 Tool 协议的递归 JSON 类型。
+          output: output as ToolJsonValue,
+          elapsedMs: Date.now() - startedAt
+        }
+      : {
+          toolId: request.toolId,
+          ok: false,
+          errorType: failure?.type ?? "workflow_tool_failed",
+          errorMessage: failure?.message ?? "Workflow 未返回结果",
+          elapsedMs: Date.now() - startedAt
+        };
   }
 
   /** 节点执行使用组合 AbortSignal；超时会先通知 Executor 取消上游操作，再返回分类错误。 */

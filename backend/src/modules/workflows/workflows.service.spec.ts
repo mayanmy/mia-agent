@@ -3,6 +3,7 @@ import { WorkflowStatus } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
 import { WorkflowsController } from "./workflows.controller";
+import { WorkflowAppsController } from "../workflow_runtime/workflow-apps.controller";
 import { WorkflowGraph } from "./dto/workflow-graph.dto";
 import { WorkflowsService } from "./workflows.service";
 
@@ -15,6 +16,12 @@ export const tests = [
     name: "WorkflowsController restricts Workflow management to administrators",
     run: () => {
       assert.deepEqual(Reflect.getMetadata("mia:roles", WorkflowsController), ["ADMIN"]);
+    }
+  },
+  {
+    name: "WorkflowAppsController exposes published apps to administrators and members",
+    run: () => {
+      assert.deepEqual(Reflect.getMetadata("mia:roles", WorkflowAppsController), ["ADMIN", "USER"]);
     }
   },
   {
@@ -105,7 +112,7 @@ export const tests = [
     }
   },
   {
-    name: "WorkflowsService only exposes the current published version to runtimes",
+    name: "WorkflowsService exposes an immutable version while its Workflow remains published",
     run: async () => {
       const prisma = {
         workflowVersion: {
@@ -127,6 +134,54 @@ export const tests = [
 
       assert.equal(result.workflowVersionId, "version-2");
       assert.deepEqual(result.compiledPlan, { startNodeId: "start" });
+    }
+  },
+  {
+    name: "WorkflowsService restores an Agent tool from its pinned historical version",
+    run: async () => {
+      const workflowId = "11111111-1111-4111-8111-111111111111";
+      const versionId = "22222222-2222-4222-8222-222222222222";
+      const prisma = {
+        workflowVersion: {
+          findMany: async () => [
+            {
+              id: versionId,
+              workflowId,
+              version: 1,
+              graph: {
+                schemaVersion: 1,
+                nodes: [
+                  {
+                    id: "start",
+                    type: "start",
+                    name: "开始",
+                    config: {
+                      inputs: [
+                        { name: "city", type: "string", required: true, description: "城市" }
+                      ]
+                    }
+                  }
+                ],
+                edges: []
+              },
+              createdAt: now,
+              workflow: { id: workflowId, name: "天气流程", description: "查询天气" }
+            }
+          ]
+        }
+      };
+      const toolId = `workflow:${workflowId}:${versionId}`;
+      const definitions = await new WorkflowsService(
+        prisma as never,
+        unusedCompiler as never
+      ).getWorkflowToolDefinitions([toolId]);
+
+      assert.equal(definitions[0]?.id, toolId);
+      assert.deepEqual(definitions[0]?.inputSchema.required, ["city"]);
+      assert.deepEqual(definitions[0]?.inputSchema.properties?.city, {
+        type: "string",
+        description: "城市"
+      });
     }
   },
   {

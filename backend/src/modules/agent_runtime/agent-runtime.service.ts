@@ -103,7 +103,21 @@ export class AgentRuntimeService {
         return;
       }
 
-      const toolDefinitions = await this.requireToolsService().getToolDefinitions(agent.toolIds);
+      const workflowToolIds = agent.toolIds.filter((toolId) => toolId.startsWith("workflow:"));
+      const [regularTools, workflowTools] = await Promise.all([
+        this.requireToolsService().getToolDefinitions(agent.toolIds),
+        workflowToolIds.length
+          ? this.requireWorkflowRuntimeService().getWorkflowToolDefinitions(workflowToolIds)
+          : Promise.resolve([])
+      ]);
+      const definitions = new Map(
+        [...regularTools, ...workflowTools].map((definition) => [definition.id, definition])
+      );
+      // Agent 的绑定顺序决定模型看到的工具顺序，不能按来源分组后隐式重排。
+      const toolDefinitions = agent.toolIds.flatMap((toolId) => {
+        const definition = definitions.get(toolId);
+        return definition ? [definition] : [];
+      });
       const llmTools = this.toLLMToolDefinitions(toolDefinitions);
       await this.recordToolAvailability({
         requestId: request.requestId,
@@ -1176,7 +1190,7 @@ export class AgentRuntimeService {
         type: "tool_started",
         data: { id: toolCall.id, name: toolCall.name, arguments: sanitizedInput }
       };
-      const result = await this.requireToolsService().executeTool({
+      const executionRequest = {
         toolId: toolCall.name,
         input,
         toolCallId: toolCall.id,
@@ -1186,7 +1200,30 @@ export class AgentRuntimeService {
         agentId,
         userId: request.userId,
         signal: request.signal
-      });
+      };
+      const isWorkflowTool = toolCall.name.startsWith("workflow:");
+      const result = isWorkflowTool
+        ? await this.requireWorkflowRuntimeService().executeAsTool(executionRequest)
+        : await this.requireToolsService().executeTool(executionRequest);
+      // 普通工具由 ToolsService 写完成日志；Workflow 绕过该 Service，必须在编排层补齐同一审计闭环。
+      if (isWorkflowTool) {
+        await this.recordToolCallLog({
+          requestId: request.requestId,
+          runId: trace?.runId,
+          stepId: step?.stepId,
+          agentId,
+          userId: request.userId,
+          toolCallId: toolCall.id,
+          toolId: toolCall.name,
+          status: result.ok ? "completed" : "failed",
+          source,
+          input: sanitizedInput,
+          output: result.output,
+          errorType: result.errorType,
+          errorMessage: result.errorMessage,
+          elapsedMs: result.elapsedMs
+        });
+      }
       if (result.ok)
         await this.completeStep(step, {
           ok: true,

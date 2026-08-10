@@ -8,7 +8,8 @@ export type WorkflowContext = {
   runtime: {
     requestId: string;
     runId?: string;
-    agentId: string;
+    /** 独立 Workflow 运行不属于 Agent。 */
+    agentId?: string;
     userId?: string;
     sessionId?: string;
     now: string;
@@ -19,7 +20,8 @@ export type WorkflowContext = {
 export function createWorkflowContext(request: {
   requestId: string;
   runId?: string;
-  agentId: string;
+  /** Agent Tool 调用时存在，独立运行时为空。 */
+  agentId?: string;
   userId?: string;
   sessionId?: string;
   inputs: Record<string, unknown>;

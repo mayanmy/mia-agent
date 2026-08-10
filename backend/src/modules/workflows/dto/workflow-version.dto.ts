@@ -41,3 +41,35 @@ export type PublishedWorkflowRuntimeConfig = {
   /** Runtime 可直接读取的编译计划。 */
   compiledPlan: Record<string, unknown>;
 };
+
+/** 独立运行页面和 Workflow Tool 共同使用的输入字段。 */
+export type PublishedWorkflowInput = {
+  /** Start 节点中的稳定变量名。 */
+  name: string;
+  /** Runtime 支持的 JSON 输入类型。 */
+  type: "string" | "number" | "boolean" | "object" | "array";
+  /** 是否必须由调用方提供。 */
+  required: boolean;
+  /** 面向成员和模型的输入说明。 */
+  description: string;
+  /** 可选默认值。 */
+  defaultValue?: unknown;
+};
+
+/** 已发布 Workflow 的独立应用摘要。 */
+export type PublishedWorkflowApp = {
+  /** Workflow ID。 */
+  workflowId: string;
+  /** Workflow 展示名称。 */
+  name: string;
+  /** Workflow 用途说明。 */
+  description: string;
+  /** 当前不可变发布版本 ID。 */
+  workflowVersionId: string;
+  /** 当前发布版本号。 */
+  version: number;
+  /** Start 节点派生的运行输入表单。 */
+  inputs: PublishedWorkflowInput[];
+  /** ISO 格式发布时间。 */
+  publishedAt: Date;
+};

@@ -5,6 +5,7 @@ import { AppError, ErrorCodes } from "../../core/errors";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PageResult } from "../../core/result";
 import { PrismaService } from "../prisma/prisma.service";
+import { ToolDefinition } from "../tools/dto/tool.dto";
 import {
   WorkflowCreateDto,
   WorkflowDetail,
@@ -17,6 +18,8 @@ import {
 } from "./dto/workflow.dto";
 import {
   PublishedWorkflowRuntimeConfig,
+  PublishedWorkflowApp,
+  PublishedWorkflowInput,
   WorkflowVersionDetail,
   WorkflowVersionListItem
 } from "./dto/workflow-version.dto";
@@ -353,7 +356,10 @@ export class WorkflowsService {
     return this.toVersionDetail(version);
   }
 
-  /** Agent 绑定和未来 Runtime 只能读取当前已发布且未归档的不可变版本。 */
+  /**
+   * Runtime 可读取仍处于发布状态 Workflow 的任一不可变版本。
+   * 独立入口会传当前版本，而 Agent Tool 会传绑定时的历史版本，从而避免重新发布后静默漂移。
+   */
   async getPublishedRuntimeConfig(
     workflowId: string,
     versionId: string
@@ -369,7 +375,7 @@ export class WorkflowsService {
       },
       include: { workflow: { select: { publishedVersion: true } } }
     });
-    if (!version || version.workflow.publishedVersion !== version.version) {
+    if (!version) {
       throw new AppError(
         ErrorCodes.workflow.notPublished,
         "Workflow Version 未发布或已失效",
@@ -384,6 +390,171 @@ export class WorkflowsService {
       checksum: version.checksum,
       compiledPlan: this.toObject(version.compiledPlan, "compiledPlan")
     };
+  }
+
+  /** 返回所有当前可运行的 Workflow 应用，普通成员无需读取草稿 Graph。 */
+  async listPublishedApps(): Promise<PublishedWorkflowApp[]> {
+    const workflows = await this.prisma.workflow.findMany({
+      where: { deletedAt: null, status: WorkflowStatus.PUBLISHED, publishedVersion: { not: null } },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      include: { versions: { orderBy: { version: "desc" }, take: 1 } }
+    });
+    return workflows.flatMap((workflow) => {
+      const version = workflow.versions[0];
+      if (!version || version.version !== workflow.publishedVersion) return [];
+      return [
+        this.toPublishedApp(
+          workflow.id,
+          workflow.name,
+          workflow.description,
+          version.id,
+          version.version,
+          version.graph,
+          version.createdAt
+        )
+      ];
+    });
+  }
+
+  /** 读取单个当前发布应用；历史版本不能从独立入口直接运行。 */
+  async getPublishedApp(workflowId: string): Promise<PublishedWorkflowApp> {
+    const id = this.requireId(workflowId, "workflowId");
+    const workflow = await this.prisma.workflow.findFirst({
+      where: { id, deletedAt: null, status: WorkflowStatus.PUBLISHED },
+      include: { versions: { orderBy: { version: "desc" }, take: 1 } }
+    });
+    const version = workflow?.versions[0];
+    if (!workflow || !version || version.version !== workflow.publishedVersion) {
+      throw new AppError(
+        ErrorCodes.workflow.notPublished,
+        "Workflow 尚未发布",
+        HttpStatus.CONFLICT
+      );
+    }
+    return this.toPublishedApp(
+      workflow.id,
+      workflow.name,
+      workflow.description,
+      version.id,
+      version.version,
+      version.graph,
+      version.createdAt
+    );
+  }
+
+  /** Workflow Tool 固定绑定发布版本，避免后续发布静默改变 Agent 行为。 */
+  async getWorkflowToolDefinitions(toolIds?: string[]): Promise<ToolDefinition[]> {
+    const requested = toolIds ? new Set(toolIds) : null;
+    const apps = requested
+      ? await this.getPublishedAppsByToolIds([...requested])
+      : await this.listPublishedApps();
+    return apps.flatMap((app) => {
+      const id = this.formatWorkflowToolId(app.workflowId, app.workflowVersionId);
+      if (requested && !requested.has(id)) return [];
+      return [
+        {
+          id,
+          name: `workflow_${app.workflowId.replaceAll("-", "_")}`,
+          description: `${app.description || app.name}（Workflow v${app.version}）`,
+          enabled: true,
+          inputSchema: {
+            type: "object",
+            properties: Object.fromEntries(
+              app.inputs.map((input) => [
+                input.name,
+                {
+                  type: input.type,
+                  description: input.description || input.name,
+                  ...(input.defaultValue === undefined ? {} : { default: input.defaultValue })
+                }
+              ])
+            ),
+            required: app.inputs.filter((input) => input.required).map((input) => input.name),
+            additionalProperties: false
+          }
+        }
+      ];
+    });
+  }
+
+  /** 按 Agent 保存的版本化 Tool ID 恢复定义，历史发布版本同样保持可执行。 */
+  private async getPublishedAppsByToolIds(toolIds: string[]): Promise<PublishedWorkflowApp[]> {
+    const bindings = toolIds.flatMap((toolId) => {
+      const parsed = this.parseWorkflowToolId(toolId);
+      return parsed ? [parsed] : [];
+    });
+    if (bindings.length === 0) return [];
+
+    const versions = await this.prisma.workflowVersion.findMany({
+      where: {
+        OR: bindings.map((binding) => ({
+          id: binding.workflowVersionId,
+          workflowId: binding.workflowId
+        })),
+        workflow: { deletedAt: null, status: WorkflowStatus.PUBLISHED }
+      },
+      include: {
+        workflow: { select: { id: true, name: true, description: true } }
+      }
+    });
+    return versions.map((version) =>
+      this.toPublishedApp(
+        version.workflow.id,
+        version.workflow.name,
+        version.workflow.description,
+        version.id,
+        version.version,
+        version.graph,
+        version.createdAt
+      )
+    );
+  }
+
+  /** 解析版本化 Workflow Tool ID；普通工具返回 null。 */
+  parseWorkflowToolId(toolId: string): { workflowId: string; workflowVersionId: string } | null {
+    const match = /^workflow:([0-9a-f-]{36}):([0-9a-f-]{36})$/i.exec(toolId.trim());
+    return match ? { workflowId: match[1], workflowVersionId: match[2] } : null;
+  }
+
+  /** 生成 AgentTool 可持久化的版本化 ID。 */
+  formatWorkflowToolId(workflowId: string, workflowVersionId: string): string {
+    return `workflow:${workflowId}:${workflowVersionId}`;
+  }
+
+  /** 从版本 Graph 提取 Start 输入；发布版本是表单与 Tool Schema 的唯一来源。 */
+  private toPublishedApp(
+    workflowId: string,
+    name: string,
+    description: string,
+    workflowVersionId: string,
+    version: number,
+    graphValue: unknown,
+    publishedAt: Date
+  ): PublishedWorkflowApp {
+    const graph = this.normalizeGraph(graphValue);
+    const start = graph.nodes.find((node) => node.type === "start");
+    const rawInputs = Array.isArray(start?.config.inputs) ? start.config.inputs : [];
+    const inputs: PublishedWorkflowInput[] = rawInputs.flatMap((value) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+      const input = value as Record<string, unknown>;
+      const inputType = String(input.type);
+      if (
+        typeof input.name !== "string" ||
+        !["string", "number", "boolean", "object", "array"].includes(inputType)
+      ) {
+        return [];
+      }
+      return [
+        {
+          name: input.name,
+          type: inputType as PublishedWorkflowInput["type"],
+          required: input.required === true,
+          description: typeof input.description === "string" ? input.description : "",
+          ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue })
+        }
+      ];
+    });
+    return { workflowId, name, description, workflowVersionId, version, inputs, publishedAt };
   }
 
   /** 确认 Workflow 存在且未软删除。 */
