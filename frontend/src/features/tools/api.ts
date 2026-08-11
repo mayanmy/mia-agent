@@ -1,10 +1,18 @@
 import { request } from "../../shared/api/client";
 
 export type ToolListItem = {
+  /** Runtime 使用的稳定工具 ID。 */
   id: string;
+  /** 工具展示名称。 */
   name: string;
+  /** 提供给管理员和模型的用途说明。 */
   description: string;
+  /** 是否允许 Agent 绑定。 */
   enabled: boolean;
+  /** 前端分组来源；后端普通工具缺省为 standard。 */
+  source?: "standard" | "workflow";
+  /** Workflow Tool 固定绑定的版本号。 */
+  workflowVersion?: number;
 };
 
 export type HttpToolMethod = "GET" | "POST";

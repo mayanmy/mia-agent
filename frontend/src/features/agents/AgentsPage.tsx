@@ -8,6 +8,7 @@ import { listKnowledgeBases, type KnowledgeBaseListItem } from "../knowledge/api
 import { getDefaultModelSettings, listModelConfigs, listProviders } from "../model-providers/api";
 import type { ModelConfigListItem, ProviderListItem } from "../model-providers/api";
 import { listTools, type ToolListItem } from "../tools/api";
+import { listPublishedWorkflowApps, workflowToolId } from "../workflows/api";
 import {
   createAgent,
   deleteAgent,
@@ -97,9 +98,10 @@ export function AgentsPage() {
         listModelConfigs(1, 100),
         listKnowledgeBases(1, 100)
       ]);
-      const [defaultSettings, toolList] = await Promise.all([
+      const [defaultSettings, toolList, workflowApps] = await Promise.all([
         getDefaultModelSettings().catch(() => null),
-        listTools()
+        listTools(),
+        listPublishedWorkflowApps()
       ]);
 
       if (isActive()) {
@@ -107,7 +109,17 @@ export function AgentsPage() {
         setProviders(providerPage.list);
         setModelConfigs(modelConfigPage.list);
         setKnowledgeBases(knowledgeBasePage.list);
-        setTools(toolList);
+        setTools([
+          ...toolList.map((tool) => ({ ...tool, source: "standard" as const })),
+          ...workflowApps.map((app) => ({
+            id: workflowToolId(app),
+            name: app.name,
+            description: app.description || `运行 Workflow v${app.version}`,
+            enabled: true,
+            source: "workflow" as const,
+            workflowVersion: app.version
+          }))
+        ]);
         setDefaultChatModelConfigId(defaultSettings?.chatModelConfigId ?? null);
         setPagination({
           page: agentPage.page,
