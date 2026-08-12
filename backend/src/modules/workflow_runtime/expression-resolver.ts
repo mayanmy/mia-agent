@@ -61,6 +61,11 @@ export class WorkflowExpressionResolver {
   ): unknown {
     let current: unknown = context[reference.source];
     for (const segment of reference.path) {
+      const compatibleValue = this.resolveLegacyOutputAlias(current, segment);
+      if (compatibleValue.found) {
+        current = compatibleValue.value;
+        continue;
+      }
       if (
         !current ||
         typeof current !== "object" ||
@@ -76,6 +81,36 @@ export class WorkflowExpressionResolver {
       current = (current as Record<string, unknown>)[segment];
     }
     return current;
+  }
+
+  /**
+   * 兼容早期发布版本使用的 output.body。
+   * 新编辑器公开 Tool.result 和 LLM.structured，旧 Compiled Plan 无需重新发布也能继续运行。
+   */
+  private resolveLegacyOutputAlias(
+    current: unknown,
+    segment: string
+  ): { found: boolean; value?: unknown } {
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return { found: false };
+    }
+    const record = current as Record<string, unknown>;
+    if (Object.prototype.hasOwnProperty.call(record, segment)) {
+      return { found: true, value: record[segment] };
+    }
+    if (segment === "result" && Object.prototype.hasOwnProperty.call(record, "body")) {
+      return { found: true, value: record.body };
+    }
+    if (segment === "structured" && Object.prototype.hasOwnProperty.call(record, "body")) {
+      return { found: true, value: record.body };
+    }
+    if (segment === "body" && Object.prototype.hasOwnProperty.call(record, "result")) {
+      return { found: true, value: record.result };
+    }
+    if (segment === "body" && Object.prototype.hasOwnProperty.call(record, "structured")) {
+      return { found: true, value: record.structured };
+    }
+    return { found: false };
   }
 
   /** 混合模板中的对象和数组使用 JSON 序列化，避免出现 [object Object]。 */

@@ -54,7 +54,8 @@ export class ToolNodeExecutor implements WorkflowNodeExecutor {
       if (failurePolicy === "continue") {
         return {
           status: "completed",
-          output: { ok: false, toolId, error, elapsedMs: result.elapsedMs }
+          // continue 策略仍提供稳定的 result 字段，避免后续节点把可处理失败误判成变量缺失。
+          output: { ok: false, toolId, result: null, error, elapsedMs: result.elapsedMs }
         };
       }
       throw new WorkflowRuntimeError("workflow_tool_failed", error.message, request.node.id);
@@ -65,7 +66,7 @@ export class ToolNodeExecutor implements WorkflowNodeExecutor {
       output: {
         ok: true,
         toolId,
-        body: result.output ?? null,
+        result: result.output ?? null,
         elapsedMs: result.elapsedMs
       }
     };

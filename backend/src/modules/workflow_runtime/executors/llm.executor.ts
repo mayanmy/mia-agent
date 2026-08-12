@@ -22,7 +22,7 @@ export class LlmNodeExecutor implements WorkflowNodeExecutor {
     private readonly expressionResolver: WorkflowExpressionResolver
   ) {}
 
-  /** 流式 Token 直接交给 Workflow Runtime，最终 result 保存稳定的 text/body 输出协议。 */
+  /** 流式 Token 直接交给 Workflow Runtime，最终 result 保存稳定的 text/structured 输出协议。 */
   async *execute(request: WorkflowNodeExecutionRequest): AsyncIterable<NodeExecutionEvent> {
     const config = this.expressionResolver.resolveConfig(
       request.node.config,
@@ -102,7 +102,7 @@ export class LlmNodeExecutor implements WorkflowNodeExecutor {
 
     const output: Record<string, unknown> = { text: content };
     if (responseFormat === "json_object")
-      output.body = this.parseJsonObject(content, request.node.id);
+      output.structured = this.parseJsonObject(content, request.node.id);
     yield { type: "result", data: { status: "completed", output } };
   }
 

@@ -73,7 +73,38 @@ export const tests = [
         events.filter((event) => event.type === "token").map((event) => event.data.content),
         ['{"answer":', '"Mia"}']
       );
-      assert.deepEqual(result?.data.output.body, { answer: "Mia" });
+      assert.deepEqual(result?.data.output.structured, { answer: "Mia" });
+    }
+  },
+  {
+    name: "WorkflowExpressionResolver keeps legacy body references compatible with public outputs",
+    run: () => {
+      const context = createContext();
+      context.nodes.currentTool = { output: { result: { weather: "sunny" } } };
+      context.nodes.legacyTool = { output: { body: { weather: "cloudy" } } };
+
+      assert.deepEqual(
+        resolver.resolve(
+          {
+            kind: "reference",
+            source: "nodes",
+            path: ["currentTool", "output", "body"]
+          },
+          context
+        ),
+        { weather: "sunny" }
+      );
+      assert.deepEqual(
+        resolver.resolve(
+          {
+            kind: "reference",
+            source: "nodes",
+            path: ["legacyTool", "output", "result"]
+          },
+          context
+        ),
+        { weather: "cloudy" }
+      );
     }
   },
   {
@@ -184,7 +215,7 @@ export const tests = [
       assert.equal(toolRequest?.requestId, "request-1");
       assert.equal(toolRequest?.runId, "run-1");
       assert.equal(toolRequest?.signal, signal);
-      assert.deepEqual(result.output.body, { weather: "sunny" });
+      assert.deepEqual(result.output.result, { weather: "sunny" });
     }
   },
   {
