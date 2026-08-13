@@ -1,4 +1,4 @@
-import { Form, Input, InputNumber, Modal, Select, Slider, Switch, Tabs } from "antd";
+import { Alert, Form, Input, InputNumber, Modal, Select, Slider, Switch, Tabs } from "antd";
 import type { FormInstance } from "antd";
 
 import type { KnowledgeBaseListItem } from "../../knowledge/api";
@@ -60,6 +60,10 @@ export function AgentFormModal({
 }: AgentFormModalProps) {
   // Tabs 会延迟挂载非活动页签；preserve 让标签在字段尚未挂载时也能读取已加载的绑定值。
   const selectedToolIds = Form.useWatch("toolIds", { form, preserve: true }) ?? [];
+  const selectedWorkflowIds = selectedToolIds.filter((toolId) => toolId.startsWith("workflow:"));
+  const selectedStandardToolIds = selectedToolIds.filter(
+    (toolId) => !toolId.startsWith("workflow:")
+  );
   const selectedKnowledgeBaseIds =
     Form.useWatch("knowledgeBaseIds", { form, preserve: true }) ?? [];
 
@@ -80,6 +84,10 @@ export function AgentFormModal({
         layout="vertical"
         onFinish={onSubmit}
       >
+        {/* 两个展示页签共同编辑 toolIds；保留一个字段注册点，确保 onFinish 始终提交合并后的数组。 */}
+        <Form.Item name="toolIds" noStyle>
+          <BindingField />
+        </Form.Item>
         <Tabs
           items={[
             {
@@ -158,11 +166,35 @@ export function AgentFormModal({
             },
             {
               key: "tools",
-              label: `工具绑定 (${selectedToolIds.length})`,
+              label: `工具绑定 (${selectedStandardToolIds.length})`,
               children: (
-                <Form.Item className="agentFormFull" name="toolIds">
-                  <AgentToolSelector tools={tools} />
-                </Form.Item>
+                <AgentToolSelector
+                  bindingType="tool"
+                  tools={tools}
+                  value={selectedToolIds}
+                  onChange={(toolIds) => form.setFieldValue("toolIds", toolIds)}
+                />
+              )
+            },
+            {
+              key: "workflows",
+              label: `Workflow 绑定 (${selectedWorkflowIds.length})`,
+              children: (
+                <div className="workflowBindingPane">
+                  <Alert
+                    showIcon
+                    className="workflowBindingIntro"
+                    message="Workflow 将作为 Agent 的可调用能力"
+                    description="Agent 会根据用户意图决定是否执行，并使用 Workflow 的结果继续回答；绑定后并不代表每轮对话都会运行。"
+                    type="info"
+                  />
+                  <AgentToolSelector
+                    bindingType="workflow"
+                    tools={tools}
+                    value={selectedToolIds}
+                    onChange={(toolIds) => form.setFieldValue("toolIds", toolIds)}
+                  />
+                </div>
               )
             }
           ]}
@@ -170,4 +202,14 @@ export function AgentFormModal({
       </Form>
     </Modal>
   );
+}
+
+/** 仅注册由两个平级选择器共同维护的绑定字段，不产生额外 DOM。 */
+function BindingField(_props: {
+  /** 当前完整工具绑定。 */
+  value?: string[];
+  /** Ant Form 注入的字段更新回调。 */
+  onChange?: (value: string[]) => void;
+}) {
+  return null;
 }

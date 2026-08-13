@@ -4,6 +4,8 @@ import type { ToolListItem } from "../../tools/api";
 
 /** Agent 工具选择器的受控组件参数。 */
 type AgentToolSelectorProps = {
+  /** 当前页签只展示普通工具或 Workflow。 */
+  bindingType: "tool" | "workflow";
   /** 可供选择的全部工具。 */
   tools: ToolListItem[];
   /** 当前已绑定的工具 ID。 */
@@ -12,26 +14,39 @@ type AgentToolSelectorProps = {
   onChange?: (value: string[]) => void;
 };
 
-export function AgentToolSelector({ tools, value = [], onChange }: AgentToolSelectorProps) {
+export function AgentToolSelector({
+  bindingType,
+  tools,
+  value = [],
+  onChange
+}: AgentToolSelectorProps) {
+  const workflowBinding = bindingType === "workflow";
+  const belongsToCurrentTab = (toolId: string) =>
+    toolId.startsWith("workflow:") === workflowBinding;
+  const availableTools = tools.filter(
+    (tool) => (tool.source === "workflow" || tool.id.startsWith("workflow:")) === workflowBinding
+  );
+  const selectedIds = value.filter(belongsToCurrentTab);
   // 当前发布列表不会返回历史版本；把已绑定版本补成可见选项，防止编辑 Agent 时被无声丢弃。
-  const missingBindings: ToolListItem[] = value
-    .filter((toolId) => !tools.some((tool) => tool.id === toolId))
+  const missingBindings: ToolListItem[] = selectedIds
+    .filter((toolId) => !availableTools.some((tool) => tool.id === toolId))
     .map((toolId) => ({
       id: toolId,
-      name: toolId.startsWith("workflow:") ? "已绑定 Workflow 历史版本" : "已绑定工具",
+      name: workflowBinding ? "已绑定 Workflow 历史版本" : "已绑定工具",
       description: "该绑定不在当前可选列表中；可继续保留，或取消后选择当前发布版本。",
       enabled: true,
-      source: toolId.startsWith("workflow:") ? "workflow" : "standard"
+      source: workflowBinding ? "workflow" : "standard"
     }));
-  const visibleTools = [...tools, ...missingBindings];
+  const visibleTools = [...availableTools, ...missingBindings];
   const enabledTools = visibleTools.filter((tool) => tool.enabled);
-  const standardTools = visibleTools.filter((tool) => tool.source !== "workflow");
-  const workflowTools = visibleTools.filter((tool) => tool.source === "workflow");
 
   if (visibleTools.length === 0) {
     return (
       <div className="toolSelectorEmpty">
-        <Empty description="暂无可绑定工具" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty
+          description={workflowBinding ? "暂无已发布的 Workflow" : "暂无可绑定工具"}
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
       </div>
     );
   }
@@ -39,37 +54,38 @@ export function AgentToolSelector({ tools, value = [], onChange }: AgentToolSele
   return (
     <div className="toolSelector">
       <div className="toolSelectorSummary">
-        <span>已绑定 {value.length} 个工具</span>
+        <span>
+          已绑定 {selectedIds.length} 个{workflowBinding ? " Workflow" : "工具"}
+        </span>
         <span>
           可用 {enabledTools.length} / 全部 {visibleTools.length}
         </span>
       </div>
       <Checkbox.Group
         className="toolCheckboxGroup"
-        value={value}
-        onChange={(checkedValues) => onChange?.(checkedValues.map(String))}
+        value={selectedIds}
+        onChange={(checkedValues) => {
+          // 两个平级页签仍共享后端 toolIds；这里只替换当前类别，保留另一页签的选择。
+          const otherBindings = value.filter((toolId) => !belongsToCurrentTab(toolId));
+          onChange?.([...otherBindings, ...checkedValues.map(String)]);
+        }}
       >
-        <ToolGroup label="普通工具" tools={standardTools} />
-        <ToolGroup label="Workflow" tools={workflowTools} />
+        <ToolOptions tools={visibleTools} />
       </Checkbox.Group>
     </div>
   );
 }
 
 /** 工具选择器内的来源分组参数。 */
-type ToolGroupProps = {
-  /** 分组标题。 */
-  label: string;
-  /** 分组内工具。 */
+type ToolOptionsProps = {
+  /** 当前页签内的工具或 Workflow。 */
   tools: ToolListItem[];
 };
 
-/** Workflow 作为 Tool 展示，但仍提交到统一 toolIds，避免形成第二套绑定事务。 */
-function ToolGroup({ label, tools }: ToolGroupProps) {
-  if (tools.length === 0) return null;
+/** 普通工具与 Workflow 复用同一卡片结构，来源语义由平级页签负责表达。 */
+function ToolOptions({ tools }: ToolOptionsProps) {
   return (
-    <div className="toolOptionGroup">
-      <div className="toolOptionGroupTitle">{label}</div>
+    <>
       {tools.map((tool) => (
         <Checkbox className="toolOptionCard" disabled={!tool.enabled} key={tool.id} value={tool.id}>
           <div className="toolOption">
@@ -92,6 +108,6 @@ function ToolGroup({ label, tools }: ToolGroupProps) {
           </div>
         </Checkbox>
       ))}
-    </div>
+    </>
   );
 }
