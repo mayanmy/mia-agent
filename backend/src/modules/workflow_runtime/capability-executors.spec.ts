@@ -136,6 +136,45 @@ export const tests = [
     }
   },
   {
+    name: "LlmNodeExecutor serializes a pure object variable used as Prompt",
+    run: async () => {
+      let modelMessages: Array<{ role: string; content: string }> = [];
+      const executor = new LlmNodeExecutor(
+        {
+          streamChatCompletion: async function* (request: {
+            messages: Array<{ role: string; content: string }>;
+          }) {
+            modelMessages = request.messages;
+            yield { type: "token", content: "完成" };
+          }
+        } as never,
+        resolver
+      );
+      const context = createContext();
+      context.nodes.tool = { output: { result: { weather: "sunny", temperature: 26 } } };
+      const node: CompiledWorkflowNode = {
+        id: "llm",
+        type: "llm",
+        name: "模型",
+        config: {
+          modelConfigId: "model-1",
+          prompt: {
+            kind: "reference",
+            source: "nodes",
+            path: ["tool", "output", "result"]
+          },
+          responseFormat: "text"
+        }
+      };
+
+      await collectNodeEvents(
+        executor.execute({ node, context, signal: new AbortController().signal })
+      );
+
+      assert.equal(modelMessages[0]?.content, '{"weather":"sunny","temperature":26}');
+    }
+  },
+  {
     name: "RetrievalNodeExecutor resolves query and returns chunks with source summaries",
     run: async () => {
       let retrievalRequest: Record<string, unknown> | undefined;

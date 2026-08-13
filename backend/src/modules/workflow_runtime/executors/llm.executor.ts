@@ -34,8 +34,12 @@ export class LlmNodeExecutor implements WorkflowNodeExecutor {
       "modelConfigId",
       request.node.id
     );
-    const prompt = this.requireString(config.prompt, "prompt", request.node.id, true);
-    const systemPrompt = this.optionalString(config.systemPrompt, "systemPrompt", request.node.id);
+    const prompt = this.requirePromptText(config.prompt, "prompt", request.node.id, true);
+    const systemPrompt = this.optionalPromptText(
+      config.systemPrompt,
+      "systemPrompt",
+      request.node.id
+    );
     const responseFormat = config.responseFormat ?? "text";
     if (responseFormat !== "text" && responseFormat !== "json_object") {
       throw this.invalid(request.node.id, "responseFormat 只支持 text 或 json_object");
@@ -125,9 +129,34 @@ export class LlmNodeExecutor implements WorkflowNodeExecutor {
     return value;
   }
 
-  /** 可选字符串存在时必须保持类型，避免 Provider 请求收到对象。 */
-  private optionalString(value: unknown, field: string, nodeId: string): string | undefined {
-    return value === undefined ? undefined : this.requireString(value, field, nodeId, true);
+  /**
+   * Prompt 中的纯变量可能解析为对象或数组；文本模板会自动 JSON 化，纯变量也必须保持相同行为。
+   * 这里只转换标准 JSON 值，undefined 仍代表配置缺失并明确报错。
+   */
+  private requirePromptText(
+    value: unknown,
+    field: string,
+    nodeId: string,
+    allowEmpty = false
+  ): string {
+    if (typeof value === "string") return this.requireString(value, field, nodeId, allowEmpty);
+    if (value === undefined) throw this.invalid(nodeId, `${field} 必须是字符串`);
+    if (value === null || typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+    if (typeof value === "object") {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        throw this.invalid(nodeId, `${field} 包含不可序列化值`);
+      }
+    }
+    throw this.invalid(nodeId, `${field} 必须是字符串`);
+  }
+
+  /** System Prompt 与 Prompt 使用同一套纯变量文本化规则。 */
+  private optionalPromptText(value: unknown, field: string, nodeId: string): string | undefined {
+    return value === undefined ? undefined : this.requirePromptText(value, field, nodeId, true);
   }
 
   /** temperature 等浮点参数保持显式范围，不进行字符串数值转换。 */
