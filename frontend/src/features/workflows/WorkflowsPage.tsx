@@ -492,7 +492,9 @@ export function WorkflowsPage() {
   }
 
   return (
-    <section className="workspace workflowWorkspace">
+    <section
+      className={`workspace workflowWorkspace${workflowId ? " workflowWorkspaceDetail" : ""}`}
+    >
       <WorkspacePageHeader
         actions={
           !workflowId ? (

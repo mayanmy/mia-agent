@@ -3,6 +3,26 @@
   min-width: 0;
 }
 
+// 详情页由工作台内部承担滚动，避免标题、画布和属性面板共同撑高主页面。
+.workflowWorkspaceDetail {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workflowWorkspaceDetail .workflowPageHeader {
+  flex: none;
+}
+
+.workflowWorkspaceDetail .workflowWorkbench.detailOnly {
+  display: grid;
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
 .workflowPageHeader {
   min-height: 54px;
 }
@@ -1150,6 +1170,11 @@
 
   .workflowConflictActions {
     flex-basis: 100%;
+  }
+
+  // 窄屏仍锁定页面视口，编辑区内容改为在工作台内部滚动。
+  .workflowWorkspaceDetail .workflowEditorBody {
+    overflow-y: auto;
   }
 }
 
