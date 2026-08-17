@@ -3,6 +3,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import { Button, Dropdown, type MenuProps } from "antd";
 import {
   Background,
+  BackgroundVariant,
   BaseEdge,
   Controls,
   EdgeLabelRenderer,
@@ -258,7 +259,12 @@ export function WorkflowCanvas({
           onSelectNode(null);
         }}
       >
-        <Background color="#d7dde7" gap={20} size={1} />
+        <Background
+          color="#dfe5ed"
+          gap={24}
+          size={1}
+          variant={BackgroundVariant.Lines}
+        />
         <MiniMap
           pannable
           zoomable
