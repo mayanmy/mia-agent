@@ -259,18 +259,8 @@ export function WorkflowCanvas({
           onSelectNode(null);
         }}
       >
-        <Background
-          color="#dfe5ed"
-          gap={24}
-          size={1}
-          variant={BackgroundVariant.Lines}
-        />
-        <MiniMap
-          pannable
-          zoomable
-          nodeColor={miniMapColor}
-          style={{ width: 128, height: 88 }}
-        />
+        <Background color="#c2c9d2" gap={12} size={1.2} variant={BackgroundVariant.Dots} />
+        <MiniMap pannable zoomable nodeColor={miniMapColor} style={{ width: 128, height: 88 }} />
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>
