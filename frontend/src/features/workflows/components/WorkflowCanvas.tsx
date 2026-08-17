@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { PlusOutlined } from "@ant-design/icons";
 import { Button, Dropdown, type MenuProps } from "antd";
 import {
@@ -116,31 +116,64 @@ export function WorkflowCanvas({
   onInsertNode
 }: WorkflowCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const onAppendNodeRef = useRef(onAppendNode);
+  const onInsertNodeRef = useRef(onInsertNode);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const activeSelectedEdgeId = graph.edges.some((edge) => edge.id === selectedEdgeId)
-    ? selectedEdgeId
-    : null;
-  const nodes: CanvasNode[] = graph.nodes.map((node) => ({
-    id: node.id,
-    type: "workflow",
-    position: node.position ?? { x: 0, y: 0 },
-    selected: node.id === selectedNodeId,
-    data: {
-      workflowNode: node,
-      issueCount: issues.filter((issue) => issue.nodeId === node.id).length,
-      traceStatus: traceStatuses[node.id],
-      onAppendNode
+  // 父页面的业务回调会随页面渲染产生新引用，通过稳定代理避免击穿节点和连线 memo。
+  onAppendNodeRef.current = onAppendNode;
+  onInsertNodeRef.current = onInsertNode;
+  const handleAppendNode = useCallback<WorkflowNodeData["onAppendNode"]>(
+    (sourceNodeId, sourceHandle, type) =>
+      onAppendNodeRef.current(sourceNodeId, sourceHandle, type),
+    []
+  );
+  const handleInsertNode = useCallback<WorkflowEdgeData["onInsertNode"]>(
+    (edgeId, type) => onInsertNodeRef.current(edgeId, type),
+    []
+  );
+  const activeSelectedEdgeId = useMemo(
+    () =>
+      graph.edges.some((edge) => edge.id === selectedEdgeId) ? selectedEdgeId : null,
+    [graph.edges, selectedEdgeId]
+  );
+  // 先将校验问题聚合为 O(1) 查询，避免每个节点重复扫描完整 issues 数组。
+  const issueCountByNodeId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const issue of issues) {
+      if (!issue.nodeId) continue;
+      counts.set(issue.nodeId, (counts.get(issue.nodeId) ?? 0) + 1);
     }
-  }));
-  const edges: CanvasEdge[] = graph.edges.map((edge) => ({
-    ...edge,
-    interactionWidth: 24,
-    selected: edge.id === activeSelectedEdgeId,
-    type: "workflow",
-    data: { onInsertNode },
-    markerEnd: { type: MarkerType.ArrowClosed },
-    style: { strokeWidth: 1.6 }
-  }));
+    return counts;
+  }, [issues]);
+  const nodes: CanvasNode[] = useMemo(
+    () =>
+      graph.nodes.map((node) => ({
+        id: node.id,
+        type: "workflow",
+        position: node.position ?? { x: 0, y: 0 },
+        selected: node.id === selectedNodeId,
+        data: {
+          workflowNode: node,
+          issueCount: issueCountByNodeId.get(node.id) ?? 0,
+          traceStatus: traceStatuses[node.id],
+          onAppendNode: handleAppendNode
+        }
+      })),
+    [graph.nodes, handleAppendNode, issueCountByNodeId, selectedNodeId, traceStatuses]
+  );
+  const edges: CanvasEdge[] = useMemo(
+    () =>
+      graph.edges.map((edge) => ({
+        ...edge,
+        interactionWidth: 24,
+        selected: edge.id === activeSelectedEdgeId,
+        type: "workflow",
+        data: { onInsertNode: handleInsertNode },
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { strokeWidth: 1.6 }
+      })),
+    [graph.edges, activeSelectedEdgeId, handleInsertNode]
+  );
 
   /** React Flow change 先作用到视图模型，再投影回稳定的 Mia Graph DTO。 */
   function handleNodeChanges(changes: NodeChange<CanvasNode>[]) {
