@@ -433,21 +433,47 @@ function NodeTypeMenuButtonComponent({
   title,
   onSelect
 }: NodeTypeMenuButtonProps) {
+  const [menuMounted, setMenuMounted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const button = (
+    <Button
+      aria-label={title}
+      className="workflowQuickAddButton"
+      icon={<PlusOutlined />}
+      shape="circle"
+      size="small"
+      title={title}
+      onFocus={() => setMenuMounted(true)}
+      onMouseEnter={() => setMenuMounted(true)}
+      onClick={(event) => {
+        event.stopPropagation();
+        // 触屏没有 hover，首次点击时同时挂载并打开菜单，避免需要点击两次。
+        if (!menuMounted) {
+          setMenuMounted(true);
+          setMenuOpen(true);
+        }
+      }}
+    />
+  );
+
+  // 初始只保留轻量按钮；用户表达交互意图后才创建 AntD Dropdown 及其菜单状态。
+  if (!menuMounted) return button;
   return (
     <Dropdown
-      menu={{ items: QUICK_ADD_MENU_ITEMS, onClick: ({ key }) => onSelect(key as WorkflowNodeType) }}
+      destroyOnHidden
+      menu={{
+        items: QUICK_ADD_MENU_ITEMS,
+        onClick: ({ key }) => {
+          setMenuOpen(false);
+          onSelect(key as WorkflowNodeType);
+        }
+      }}
+      open={menuOpen}
       placement="bottomLeft"
       trigger={["click"]}
+      onOpenChange={setMenuOpen}
     >
-      <Button
-        aria-label={title}
-        className="workflowQuickAddButton"
-        icon={<PlusOutlined />}
-        shape="circle"
-        size="small"
-        title={title}
-        onClick={(event) => event.stopPropagation()}
-      />
+      {button}
     </Dropdown>
   );
 }
