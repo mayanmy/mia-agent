@@ -655,14 +655,9 @@
   z-index: 6;
 }
 
-.workflowEdgeInsert .workflowQuickAddButton {
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-
-.workflowEdgeInsert:hover .workflowQuickAddButton,
-.react-flow__edge.selected + .workflowEdgeInsert .workflowQuickAddButton {
-  opacity: 1;
+.workflowEdgeHoverTarget {
+  cursor: pointer;
+  pointer-events: stroke;
 }
 
 .workflowVariableInput {

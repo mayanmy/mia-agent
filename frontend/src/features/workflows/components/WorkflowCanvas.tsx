@@ -1,4 +1,12 @@
-import { memo, useCallback, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent
+} from "react";
 import { PlusOutlined } from "@ant-design/icons";
 import { Button, Dropdown, type MenuProps } from "antd";
 import {
@@ -383,21 +391,59 @@ function areWorkflowNodeCardPropsEqual(
 
 /** 在连线中点渲染快捷插入入口，并保留 React Flow 的完整交互宽度。 */
 function WorkflowQuickInsertEdge(props: EdgeProps<CanvasEdge>) {
+  const [hovered, setHovered] = useState(false);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [path, labelX, labelY] = getSmoothStepPath(props);
+  const showInsertAction = () => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = null;
+    setHovered(true);
+  };
+  const scheduleHideInsertAction = () => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    // EdgeLabelRenderer 位于 HTML Portal，短暂延迟让指针可以从 SVG 连线移动到按钮。
+    hideTimerRef.current = setTimeout(() => setHovered(false), 120);
+  };
+  useEffect(
+    () => () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    },
+    []
+  );
+  const shouldRenderInsertAction = Boolean(props.selected || hovered);
   return (
     <>
-      <BaseEdge id={props.id} path={path} markerEnd={props.markerEnd} style={props.style} />
-      <EdgeLabelRenderer>
-        <div
-          className="workflowEdgeInsert nodrag nopan"
-          style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
-        >
-          <NodeTypeMenuButton
-            title="在连线中插入节点"
-            onSelect={(type) => props.data?.onInsertNode(props.id, type)}
-          />
-        </div>
-      </EdgeLabelRenderer>
+      <BaseEdge
+        id={props.id}
+        interactionWidth={0}
+        markerEnd={props.markerEnd}
+        path={path}
+        style={props.style}
+      />
+      <path
+        className="workflowEdgeHoverTarget"
+        d={path}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={24}
+        onMouseEnter={showInsertAction}
+        onMouseLeave={scheduleHideInsertAction}
+      />
+      {shouldRenderInsertAction ? (
+        <EdgeLabelRenderer>
+          <div
+            className="workflowEdgeInsert nodrag nopan"
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+            onMouseEnter={showInsertAction}
+            onMouseLeave={scheduleHideInsertAction}
+          >
+            <NodeTypeMenuButton
+              title="在连线中插入节点"
+              onSelect={(type) => props.data?.onInsertNode(props.id, type)}
+            />
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
     </>
   );
 }
@@ -415,6 +461,7 @@ function areWorkflowEdgePropsEqual(
     previous.targetY === next.targetY &&
     previous.sourcePosition === next.sourcePosition &&
     previous.targetPosition === next.targetPosition &&
+    previous.selected === next.selected &&
     previous.markerEnd === next.markerEnd &&
     previous.style === next.style &&
     previous.data?.onInsertNode === next.data?.onInsertNode
