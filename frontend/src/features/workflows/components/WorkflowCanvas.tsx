@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { PlusOutlined } from "@ant-design/icons";
 import { Button, Dropdown, type MenuProps } from "antd";
 import {
@@ -96,11 +96,21 @@ const QUICK_ADD_TYPES: WorkflowNodeType[] = [
   "template",
   "end"
 ];
+const QUICK_ADD_MENU_ITEMS: MenuProps["items"] = QUICK_ADD_TYPES.map((type) => ({
+  key: type,
+  label: NODE_LABELS[type]
+}));
+const WORKFLOW_EDGE_MARKER_END = { type: MarkerType.ArrowClosed } as const;
+const WORKFLOW_EDGE_STYLE = { strokeWidth: 1.6 } as const;
 
 /** React Flow 节点类型必须保持引用稳定，避免每次渲染重新注册。 */
-const NODE_TYPES = { workflow: WorkflowNodeCard };
+const NODE_TYPES = {
+  workflow: memo(WorkflowNodeCard, areWorkflowNodeCardPropsEqual)
+};
 /** React Flow 连线类型必须保持引用稳定。 */
-const EDGE_TYPES = { workflow: WorkflowQuickInsertEdge };
+const EDGE_TYPES = {
+  workflow: memo(WorkflowQuickInsertEdge, areWorkflowEdgePropsEqual)
+};
 
 /** 在 React Flow 上编辑 Mia Graph，并隔离画布视图状态与持久化 DTO。 */
 export function WorkflowCanvas({
@@ -169,8 +179,8 @@ export function WorkflowCanvas({
         selected: edge.id === activeSelectedEdgeId,
         type: "workflow",
         data: { onInsertNode: handleInsertNode },
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { strokeWidth: 1.6 }
+        markerEnd: WORKFLOW_EDGE_MARKER_END,
+        style: WORKFLOW_EDGE_STYLE
       })),
     [graph.edges, activeSelectedEdgeId, handleInsertNode]
   );
@@ -357,6 +367,20 @@ function WorkflowNodeCard({ data, selected }: NodeProps<CanvasNode>) {
   );
 }
 
+/** 节点只在自身内容、状态或选中态变化时重绘，其他节点更新不会穿透到当前卡片。 */
+function areWorkflowNodeCardPropsEqual(
+  previous: NodeProps<CanvasNode>,
+  next: NodeProps<CanvasNode>
+) {
+  return (
+    previous.selected === next.selected &&
+    previous.data.workflowNode === next.data.workflowNode &&
+    previous.data.issueCount === next.data.issueCount &&
+    previous.data.traceStatus === next.data.traceStatus &&
+    previous.data.onAppendNode === next.data.onAppendNode
+  );
+}
+
 /** 在连线中点渲染快捷插入入口，并保留 React Flow 的完整交互宽度。 */
 function WorkflowQuickInsertEdge(props: EdgeProps<CanvasEdge>) {
   const [path, labelX, labelY] = getSmoothStepPath(props);
@@ -378,23 +402,40 @@ function WorkflowQuickInsertEdge(props: EdgeProps<CanvasEdge>) {
   );
 }
 
+/** Edge 只依赖路径坐标和插入动作，忽略 React Flow 传入但未参与渲染的其他字段。 */
+function areWorkflowEdgePropsEqual(
+  previous: EdgeProps<CanvasEdge>,
+  next: EdgeProps<CanvasEdge>
+) {
+  return (
+    previous.id === next.id &&
+    previous.sourceX === next.sourceX &&
+    previous.sourceY === next.sourceY &&
+    previous.targetX === next.targetX &&
+    previous.targetY === next.targetY &&
+    previous.sourcePosition === next.sourcePosition &&
+    previous.targetPosition === next.targetPosition &&
+    previous.markerEnd === next.markerEnd &&
+    previous.style === next.style &&
+    previous.data?.onInsertNode === next.data?.onInsertNode
+  );
+}
+
 /** 节点类型快捷选择按钮。 */
-function NodeTypeMenuButton({
-  title,
-  onSelect
-}: {
+type NodeTypeMenuButtonProps = {
   /** 按钮辅助说明。 */
   title: string;
   /** 选中节点类型回调。 */
   onSelect: (type: WorkflowNodeType) => void;
-}) {
-  const items: MenuProps["items"] = QUICK_ADD_TYPES.map((type) => ({
-    key: type,
-    label: NODE_LABELS[type]
-  }));
+};
+
+function NodeTypeMenuButtonComponent({
+  title,
+  onSelect
+}: NodeTypeMenuButtonProps) {
   return (
     <Dropdown
-      menu={{ items, onClick: ({ key }) => onSelect(key as WorkflowNodeType) }}
+      menu={{ items: QUICK_ADD_MENU_ITEMS, onClick: ({ key }) => onSelect(key as WorkflowNodeType) }}
       placement="bottomLeft"
       trigger={["click"]}
     >
@@ -410,6 +451,12 @@ function NodeTypeMenuButton({
     </Dropdown>
   );
 }
+
+// 按钮动作由所属节点/连线的稳定标识决定；标题不变时无需因闭包新引用重复渲染 AntD 菜单。
+const NodeTypeMenuButton = memo(
+  NodeTypeMenuButtonComponent,
+  (previous, next) => previous.title === next.title
+);
 
 /** 根据 Trace 或校验状态为小地图节点选择颜色。 */
 function miniMapColor(node: Node<WorkflowNodeData>) {
