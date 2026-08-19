@@ -111,18 +111,27 @@ export async function fetchWithAuth(
   // fetch 流式 SSE 同样复用此函数，因此在发起请求前预留有效期，避免长连接刚建立就过期。
   await ensureFreshAccessToken();
   const isFormData = init?.body instanceof FormData;
+  // 记录本次请求实际使用的 Token，用于识别刷新完成后才返回的迟到 401。
+  const requestAccessToken = getAccessToken();
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     credentials: "include",
     headers: {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),
+      ...(requestAccessToken ? { Authorization: `Bearer ${requestAccessToken}` } : {}),
       ...init?.headers
     }
   });
 
   if (response.status !== 401 || retried) {
     return response;
+  }
+
+  const latestAccessToken = getAccessToken();
+
+  if (latestAccessToken && latestAccessToken !== requestAccessToken) {
+    // 其他并发请求已经完成续期，直接使用新 Token 重试，避免再次轮换 Refresh Token。
+    return fetchWithAuth(path, init, true);
   }
 
   const token = await refreshAccessToken();

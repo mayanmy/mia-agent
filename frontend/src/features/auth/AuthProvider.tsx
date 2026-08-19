@@ -96,11 +96,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const refreshAheadMs = 60_000;
     const delay = Math.max(0, accessTokenExpiresAt - Date.now() - refreshAheadMs);
     const timer = window.setTimeout(() => {
-      void restoreAuthentication();
+      // 定时续期必须走统一入口，才能同时复用页内单飞和跨标签页刷新锁。
+      void refreshAccessToken();
     }, delay);
 
     return () => window.clearTimeout(timer);
-  }, [accessTokenExpiresAt, restoreAuthentication, status]);
+  }, [accessTokenExpiresAt, status]);
 
   /**
    * 页面从后台恢复时检查令牌剩余时间。

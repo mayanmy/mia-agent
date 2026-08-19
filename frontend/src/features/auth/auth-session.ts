@@ -7,6 +7,8 @@ let refreshHandler: RefreshHandler | null = null;
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 
+const AUTH_REFRESH_LOCK_NAME = "mia-auth-refresh";
+
 /** 配置由 AuthProvider 提供的刷新和失效回调，避免共享 API 层依赖 React。 */
 export function configureAuthSession(options: {
   refresh: RefreshHandler;
@@ -51,8 +53,9 @@ export function getAccessTokenExpiresAt(): number | null {
 /**
  * 刷新 Access Token，并把并发 401 合并为单一请求。
  *
- * Refresh Token 每次成功刷新都会轮换，因此多个请求分别刷新会互相使旧 Cookie 失效；
- * 单飞 Promise 保证它们复用同一次刷新结果。
+ * Refresh Token 每次成功刷新都会轮换，因此多个请求分别刷新会互相使旧 Cookie 失效。
+ * 当前标签页通过单飞 Promise 复用刷新结果，不同标签页则通过同源 Web Lock 串行刷新；
+ * 不支持 Web Locks 的浏览器继续退化为原有的页内单飞逻辑。
  */
 export async function refreshAccessToken(): Promise<string | null> {
   if (!refreshHandler) {
@@ -60,12 +63,24 @@ export async function refreshAccessToken(): Promise<string | null> {
   }
 
   if (!refreshPromise) {
-    refreshPromise = refreshHandler().finally(() => {
+    refreshPromise = refreshWithCrossTabLock(refreshHandler).finally(() => {
       refreshPromise = null;
     });
   }
 
   return refreshPromise;
+}
+
+/**
+ * 串行同源标签页的 Refresh Cookie 轮换，避免多个页面同时使用同一个旧 Token。
+ * 锁由浏览器在回调结束或页面关闭时自动释放，不在 localStorage 中维护易失效的租约。
+ */
+async function refreshWithCrossTabLock(handler: RefreshHandler): Promise<string | null> {
+  if (typeof navigator === "undefined" || !navigator.locks) {
+    return handler();
+  }
+
+  return navigator.locks.request(AUTH_REFRESH_LOCK_NAME, () => handler());
 }
 
 /**
