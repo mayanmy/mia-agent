@@ -1,12 +1,4 @@
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent
-} from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { PlusOutlined } from "@ant-design/icons";
 import { Button, Dropdown, type MenuProps } from "antd";
 import {
@@ -141,8 +133,7 @@ export function WorkflowCanvas({
   onAppendNodeRef.current = onAppendNode;
   onInsertNodeRef.current = onInsertNode;
   const handleAppendNode = useCallback<WorkflowNodeData["onAppendNode"]>(
-    (sourceNodeId, sourceHandle, type) =>
-      onAppendNodeRef.current(sourceNodeId, sourceHandle, type),
+    (sourceNodeId, sourceHandle, type) => onAppendNodeRef.current(sourceNodeId, sourceHandle, type),
     []
   );
   const handleInsertNode = useCallback<WorkflowEdgeData["onInsertNode"]>(
@@ -150,8 +141,7 @@ export function WorkflowCanvas({
     []
   );
   const activeSelectedEdgeId = useMemo(
-    () =>
-      graph.edges.some((edge) => edge.id === selectedEdgeId) ? selectedEdgeId : null,
+    () => (graph.edges.some((edge) => edge.id === selectedEdgeId) ? selectedEdgeId : null),
     [graph.edges, selectedEdgeId]
   );
   // 先将校验问题聚合为 O(1) 查询，避免每个节点重复扫描完整 issues 数组。
@@ -278,9 +268,13 @@ export function WorkflowCanvas({
         fitViewOptions={{ padding: 0.25 }}
         minZoom={0.35}
         maxZoom={1.6}
+        // 大型 Graph 只挂载视口内的节点与连线，减少平移缩放时的 DOM、布局和绘制开销。
+        onlyRenderVisibleElements
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
         nodes={nodes}
+        panOnDrag
+        zoomOnScroll
         onConnect={handleConnect}
         onEdgeClick={(_, edge) => {
           setSelectedEdgeId(edge.id);
@@ -449,10 +443,7 @@ function WorkflowQuickInsertEdge(props: EdgeProps<CanvasEdge>) {
 }
 
 /** Edge 只依赖路径坐标和插入动作，忽略 React Flow 传入但未参与渲染的其他字段。 */
-function areWorkflowEdgePropsEqual(
-  previous: EdgeProps<CanvasEdge>,
-  next: EdgeProps<CanvasEdge>
-) {
+function areWorkflowEdgePropsEqual(previous: EdgeProps<CanvasEdge>, next: EdgeProps<CanvasEdge>) {
   return (
     previous.id === next.id &&
     previous.sourceX === next.sourceX &&
@@ -476,10 +467,7 @@ type NodeTypeMenuButtonProps = {
   onSelect: (type: WorkflowNodeType) => void;
 };
 
-function NodeTypeMenuButtonComponent({
-  title,
-  onSelect
-}: NodeTypeMenuButtonProps) {
+function NodeTypeMenuButtonComponent({ title, onSelect }: NodeTypeMenuButtonProps) {
   const [menuMounted, setMenuMounted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const button = (
