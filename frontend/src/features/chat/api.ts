@@ -53,8 +53,8 @@ export type ChatCompletionPayload = {
   images: ChatImageAttachment[];
   /** 本轮文本附件。 */
   files: ChatFileAttachment[];
-  /** 临时会话由前端维护的上下文历史。 */
-  history: ChatMessage[];
+  /** 仅临时会话提交的受限上下文历史；保留会话由后端按 sessionId 读取。 */
+  history?: ChatMessage[];
 };
 
 /** 服务端持久化并返回的会话消息。 */

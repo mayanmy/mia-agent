@@ -22,6 +22,7 @@ import { ChatSessionList } from "./components/ChatSessionList";
 import { ChatTranscript } from "./components/ChatTranscript";
 import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useChatAttachments } from "./hooks/useChatAttachments";
+import { buildTransportHistory } from "./history";
 import type { ChatRetrievalEvent, ChatToolEvent, ChatUiMessage } from "./types";
 import { createMessageId, findLastToolEventIndex, isLikelyVisionModel } from "./utils";
 import "./chat.less";
@@ -443,10 +444,10 @@ export function ChatPage() {
       createdAt: Date.now()
     };
     const assistantMessageId = createMessageId();
-    const history = messages.map(({ role, content: messageContent }) => ({
-      role,
-      content: messageContent
-    }));
+    const history =
+      selectedAgent?.chatSessionMode === "EPHEMERAL"
+        ? buildTransportHistory(messages, { maxTurns: selectedAgent.historyTurns })
+        : undefined;
 
     resetAutoScroll();
     setMessages((current) => [
@@ -473,7 +474,7 @@ export function ChatPage() {
           message: content,
           images: currentImages,
           files: currentFiles,
-          history
+          ...(history !== undefined ? { history } : {})
         },
         {
           signal: controller.signal,

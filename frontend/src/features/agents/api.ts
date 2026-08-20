@@ -26,6 +26,8 @@ export type AgentListItem = {
   knowledgeBaseCount: number;
   /** 模型采样温度。 */
   temperature: number;
+  /** 模型上下文保留的历史轮数。 */
+  historyTurns: number;
   /** 临时或持久会话模式。 */
   chatSessionMode: AgentChatSessionMode;
   /** 是否允许团队成员使用。 */
