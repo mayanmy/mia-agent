@@ -393,7 +393,7 @@ export function AgentsPage() {
   }
 
   return (
-    <section className="workspace">
+    <section className="workspace agentWorkspace">
       <WorkspacePageHeader
         actions={
           <>
