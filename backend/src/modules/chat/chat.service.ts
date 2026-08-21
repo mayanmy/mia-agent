@@ -4,6 +4,7 @@ import { AgentChatSessionMode, AgentRunSource, ChatSessionMessageRole } from "@p
 import { AppError, ErrorCodes } from "../../core/errors";
 import { AgentRuntimeEvent, RuntimeCompletion } from "../agent_runtime/dto/runtime-event.dto";
 import { AgentRuntimeService } from "../agent_runtime/agent-runtime.service";
+import { MAX_TRANSPORT_HISTORY_BYTES, sanitizeHistory } from "../agent_runtime/history-policy";
 import { AgentPromptBuilder } from "../agent_runtime/prompt-builder";
 import { AgentsService } from "../agents/agents.service";
 import { AgentRunsService } from "../agent_runs/agent-runs.service";
@@ -269,11 +270,13 @@ export class ChatService {
     const sessionId = context?.skipInternalSessionPersistence
       ? null
       : await this.resolvePersistentSessionId(agent, payload.sessionId, context);
-    const history = context?.externalHistory
-      ? this.normalizeHistory(context.externalHistory, agent.historyTurns)
+    const rawHistory = context?.externalHistory
+      ? context.externalHistory
       : sessionId
         ? await this.requireChatSessionsService().buildModelHistory(sessionId, agent.historyTurns)
-        : this.normalizeHistory(payload.history, agent.historyTurns);
+        : payload.history;
+    // 无论历史来自客户端、外部会话还是数据库，都统一经过 Chat 权威策略后才进入 Runtime。
+    const history = this.normalizeHistory(rawHistory, agent.historyTurns);
 
     if (sessionId) {
       // 用户消息先于 Runtime 落库，模型失败或取消后仍可在会话中看到原始提问。
@@ -438,29 +441,13 @@ export class ChatService {
     return this.chatSessionsService;
   }
 
-  /** 清洗并限制历史轮次，避免客户端绕过上下文窗口限制。 */
+  /** 使用 Agent 权威配置清洗历史，客户端只能缩小而不能放大模型上下文。 */
   private normalizeHistory(history: ChatMessageDto[] | undefined, maxTurns: number): ChatMessage[] {
-    if (!Array.isArray(history) || maxTurns <= 0) {
-      return [];
-    }
-
-    const normalized = history.flatMap((item): ChatMessage[] => {
-      const role = item?.role;
-      const content = typeof item?.content === "string" ? item.content.trim() : "";
-
-      if ((role !== "user" && role !== "assistant") || content.length === 0) {
-        return [];
-      }
-
-      return [
-        {
-          role,
-          content
-        }
-      ];
-    });
-
-    return normalized.slice(-maxTurns * 2);
+    return sanitizeHistory(history, {
+      maxTurns,
+      maxTotalBytes: MAX_TRANSPORT_HISTORY_BYTES,
+      violationSource: "client"
+    }).messages;
   }
 
   /** 校验必填字符串并去除首尾空白。 */

@@ -51,6 +51,12 @@ export const ErrorCodes = {
     notFound: 6001,
     invalidState: 6002
   },
+  chat: {
+    historyInvalid: 8001,
+    historyMessageTooLarge: 8002,
+    historyPayloadTooLarge: 8003,
+    historyPolicyViolation: 8004
+  },
   workflow: {
     notFound: 7001,
     versionNotFound: 7002,
