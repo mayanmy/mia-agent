@@ -7,6 +7,7 @@ import {
   WorkflowRunMode
 } from "@prisma/client";
 
+import { ChatCompletionRequest } from "../model-providers/dto/llm.dto";
 import { AgentRuntimeService } from "./agent-runtime.service";
 
 export const tests = [
@@ -99,6 +100,78 @@ export const tests = [
         publicMessage: "provider timed out",
         retryable: true
       });
+    }
+  },
+  {
+    name: "AgentRuntimeService rechecks history against the authoritative Agent limit",
+    async run(): Promise<void> {
+      const modelRequests: ChatCompletionRequest[] = [];
+      const runtime = new AgentRuntimeService(
+        undefined,
+        {
+          getAgentRuntimeConfig: async () => ({
+            agentId: "agent-1",
+            name: "History Agent",
+            systemPrompt: "回答问题",
+            modelConfigId: "model-1",
+            modelName: "qwen",
+            providerId: "provider-1",
+            providerType: ModelProviderType.OPENAI_COMPATIBLE,
+            baseUrl: "https://example.com/v1",
+            temperature: 0.7,
+            maxTokens: null,
+            timeoutSeconds: 120,
+            historyTurns: 2,
+            executionMode: AgentExecutionMode.AGENT_LOOP,
+            workflow: null,
+            generationParams: null,
+            knowledgeBaseIds: [],
+            toolIds: []
+          })
+        } as never,
+        {
+          streamChatCompletion: async function* (request: ChatCompletionRequest) {
+            modelRequests.push(request);
+            yield { type: "token" as const, content: "完成" };
+            yield { type: "done" as const };
+          }
+        } as never,
+        {
+          getToolDefinitions: async () => [],
+          recordToolCallLog: async () => undefined
+        } as never
+      );
+
+      for await (const _event of runtime.runAgent({
+        requestId: "request-history",
+        source: AgentRunSource.INTERNAL_CHAT,
+        agentId: "agent-1",
+        message: { text: "本轮问题" },
+        history: [
+          { role: "user", content: "问题一" },
+          { role: "assistant", content: "回答一" },
+          { role: "user", content: "问题二" },
+          { role: "assistant", content: "回答二" },
+          { role: "user", content: "问题三" },
+          { role: "assistant", content: "回答三" }
+        ]
+      })) {
+        // 消费完整 Runtime 流后检查实际交给 Provider 的消息。
+      }
+
+      assert.deepEqual(
+        modelRequests[0].messages.map((message) =>
+          typeof message.content === "string" ? [message.role, message.content] : [message.role]
+        ),
+        [
+          ["system", "回答问题\n\n当前用户问题：\n本轮问题"],
+          ["user", "问题二"],
+          ["assistant", "回答二"],
+          ["user", "问题三"],
+          ["assistant", "回答三"],
+          ["user", "本轮问题"]
+        ]
+      );
     }
   },
   {

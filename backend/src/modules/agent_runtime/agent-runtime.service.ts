@@ -24,6 +24,7 @@ import { WorkflowRuntimeService } from "../workflow_runtime/workflow-runtime.ser
 import { AgentRunRequest } from "./dto/agent-run.dto";
 import { AgentRuntimeEvent } from "./dto/runtime-event.dto";
 import { AgentPromptBuilder } from "./prompt-builder";
+import { MAX_MODEL_HISTORY_BYTES, sanitizeHistory } from "./history-policy";
 
 const MAX_TOOL_ROUNDS = 3;
 const DEFAULT_TIMEZONE = "Asia/Shanghai";
@@ -63,6 +64,18 @@ export class AgentRuntimeService {
 
     try {
       const agent = await this.requireAgentsService().getAgentRuntimeConfig(request.agentId);
+      const historyResult = sanitizeHistory(request.history, {
+        maxTurns: agent.historyTurns,
+        maxTotalBytes: MAX_MODEL_HISTORY_BYTES,
+        violationSource: "runtime"
+      });
+
+      if (historyResult.droppedMessages > 0) {
+        this.logger.warn(
+          `Runtime history policy dropped ${historyResult.droppedMessages} message(s) for request ${request.requestId}`
+        );
+      }
+
       if (agent.executionMode !== AgentExecutionMode.WORKFLOW) {
         this.ensureImageInputSupported(agent.modelName, request.message.images ?? []);
       }
@@ -99,7 +112,7 @@ export class AgentRuntimeService {
       };
 
       if (agent.executionMode === AgentExecutionMode.WORKFLOW) {
-        yield* this.runWorkflowAgent(request, agent, trace);
+        yield* this.runWorkflowAgent({ ...request, history: historyResult.messages }, agent, trace);
         return;
       }
 
@@ -165,7 +178,7 @@ export class AgentRuntimeService {
             retrievalContext
           })
         },
-        ...request.history,
+        ...historyResult.messages,
         this.buildUserMessage(request.message)
       ];
       const promptRuleCall = this.inferPromptRuleToolCall(

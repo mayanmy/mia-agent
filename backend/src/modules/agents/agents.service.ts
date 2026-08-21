@@ -1137,6 +1137,7 @@ export class AgentsService {
         this.isActiveAgentKnowledgeBase(knowledgeBase)
       ).length,
       temperature: Number(agent.temperature),
+      historyTurns: agent.historyTurns,
       chatSessionMode: agent.chatSessionMode,
       executionMode: agent.executionMode,
       enabled: agent.enabled,

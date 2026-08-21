@@ -90,6 +90,8 @@ export type AgentListItem = {
   knowledgeBaseCount: number;
   /** 当前采样温度。 */
   temperature: number;
+  /** 模型上下文保留的历史轮数，供客户端提前最小化临时会话传输。 */
+  historyTurns: number;
   /** 当前会话持久化模式。 */
   chatSessionMode: AgentChatSessionMode;
   /** 直接模型调用或工作流执行模式。 */
