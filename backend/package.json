@@ -17,6 +17,7 @@
     "agent-runs:cleanup": "npm run build && node dist/scripts/cleanup-agent-runs.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
@@ -27,6 +28,8 @@
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.0",
