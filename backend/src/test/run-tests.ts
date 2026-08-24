@@ -9,6 +9,7 @@ import { tests as chatSessionTests } from "../modules/chat/chat-sessions.service
 import { tests as externalAccessTests } from "../modules/external_access/external-access.service.spec";
 import { tests as knowledgeTests } from "../modules/knowledge/knowledge.service.spec";
 import { tests as mcpProtocolClientTests } from "../modules/mcp/clients/mcp-protocol.client.spec";
+import { tests as mcpServiceTests } from "../modules/mcp/mcp.service.spec";
 import { tests as retrievalTests } from "../modules/retrieval/retrieval.service.spec";
 import { tests as toolTests } from "../modules/tools/tools.service.spec";
 import { tests as workflowTests } from "../modules/workflows/workflows.service.spec";
@@ -26,6 +27,7 @@ const tests: TestCase[] = [
   ...authTests,
   ...toolTests,
   ...mcpProtocolClientTests,
+  ...mcpServiceTests,
   ...agentRunTests,
   ...agentPromptBuilderTests,
   ...historyPolicyTests,

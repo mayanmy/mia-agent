@@ -10,6 +10,7 @@ import { HealthModule } from "./modules/health/health.module";
 import { KnowledgeModule } from "./modules/knowledge/knowledge.module";
 import { LogsModule } from "./modules/logs/logs.module";
 import { ModelProvidersModule } from "./modules/model-providers/model-providers.module";
+import { McpModule } from "./modules/mcp/mcp.module";
 import { PrismaModule } from "./modules/prisma/prisma.module";
 import { RetrievalModule } from "./modules/retrieval/retrieval.module";
 import { ToolsModule } from "./modules/tools/tools.module";
@@ -26,6 +27,7 @@ import { RolesGuard } from "./core/auth/roles.guard";
     AuthModule,
     HealthModule,
     ModelProvidersModule,
+    McpModule,
     AgentRunsModule,
     WorkflowsModule,
     WorkflowRuntimeModule,

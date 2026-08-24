@@ -70,6 +70,13 @@ export const ErrorCodes = {
     executionLimitExceeded: 7010,
     contextTooLarge: 7011,
     outputInvalid: 7012
+  },
+  mcp: {
+    notFound: 9001,
+    slugExists: 9002,
+    connectionFailed: 9003,
+    invalidConfiguration: 9004,
+    toolNotFound: 9005
   }
 } as const;
 
