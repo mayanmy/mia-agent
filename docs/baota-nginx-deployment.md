@@ -284,6 +284,17 @@ cd /www/wwwroot/mia
 ./deploy.sh
 ```
 
+如果只修改了 `.env.docker` 或只需要重启已有镜像，可以跳过镜像构建：
+
+```bash
+docker compose -p mia-backend --env-file .env.docker -f docker-compose.backend.yml \
+  up -d --no-build
+```
+
+后端 Dockerfile 会让迁移镜像与 API 镜像共享 OpenSSL 基础层，并为 apt、npm 下载启用
+BuildKit 缓存。不要在宝塔定时任务中执行 `docker builder prune -a` 或
+`docker system prune -a`，否则依赖会在下一次部署时重新下载。
+
 停止服务但保留数据：
 
 ```bash
