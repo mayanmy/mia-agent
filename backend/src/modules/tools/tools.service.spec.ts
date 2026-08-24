@@ -65,6 +65,54 @@ export const tests = [
       });
     }
   },
+  {
+    name: "ToolsService merges and executes MCP tools through the unified runtime path",
+    run: async () => {
+      const mcpService = {
+        listRuntimeTools: async () => [
+          {
+            id: "mcp_weather",
+            name: "Weather",
+            description: "实时天气",
+            enabled: true,
+            inputSchema: { type: "object" }
+          }
+        ],
+        getRuntimeToolDefinitions: async () => [
+          {
+            id: "mcp_weather",
+            name: "Weather",
+            description: "实时天气",
+            enabled: true,
+            inputSchema: { type: "object" }
+          }
+        ],
+        resolveRuntimeTool: async () => ({ runtimeId: "mcp_weather" })
+      };
+      const mcpExecutor = {
+        execute: async () => ({ temperature: 27 })
+      };
+      const service = new ToolsService(
+        undefined,
+        undefined,
+        undefined,
+        mcpService as never,
+        mcpExecutor as never
+      );
+
+      assert.ok((await service.listTools()).some((tool) => tool.id === "mcp_weather"));
+      assert.deepEqual(
+        (await service.getToolDefinitions(["mcp_weather"])).map((tool) => tool.id),
+        ["mcp_weather"]
+      );
+      const result = await service.executeTool({
+        toolId: "mcp_weather",
+        input: { city: "深圳" }
+      });
+      assert.equal(result.ok, true);
+      assert.deepEqual(result.output, { temperature: 27 });
+    }
+  },
 
   {
     name: "ToolsService logs tool execution results when prisma is available",

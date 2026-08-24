@@ -2,6 +2,8 @@ import { Injectable, Logger, Optional } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 
 import { PrismaService } from "../prisma/prisma.service";
+import { McpService } from "../mcp/mcp.service";
+import { McpToolExecutor } from "../mcp/mcp-tool.executor";
 import { ConfiguredHttpToolsService } from "./configured-http-tools.service";
 import {
   ToolCallLogRecord,
@@ -21,7 +23,9 @@ export class ToolsService {
   constructor(
     @Optional() private readonly prismaService?: PrismaService,
     @Optional() private readonly configuredHttpTools?: ConfiguredHttpToolsService,
-    @Optional() private readonly httpToolExecutor?: HttpToolExecutor
+    @Optional() private readonly httpToolExecutor?: HttpToolExecutor,
+    @Optional() private readonly mcpService?: McpService,
+    @Optional() private readonly mcpToolExecutor?: McpToolExecutor
   ) {}
 
   /** 合并内置工具与管理员预配置工具，供 Agent 绑定页统一展示。 */
@@ -40,7 +44,8 @@ export class ToolsService {
           enabled: tool.enabled
         }))
       : [];
-    return [...builtinTools, ...configuredTools];
+    const mcpTools = this.mcpService ? await this.mcpService.listRuntimeTools() : [];
+    return [...builtinTools, ...configuredTools, ...mcpTools];
   }
 
   /** Runtime 按 Agent 绑定顺序解析工具定义，并兼容同步测试替身。 */
@@ -50,8 +55,14 @@ export class ToolsService {
     const configuredDefinitions = this.configuredHttpTools
       ? await this.configuredHttpTools.getToolDefinitions(normalizedToolIds)
       : [];
+    const mcpDefinitions = this.mcpService
+      ? await this.mcpService.getRuntimeToolDefinitions(normalizedToolIds)
+      : [];
     const definitions = new Map(
-      [...builtinDefinitions, ...configuredDefinitions].map((tool) => [tool.id, tool])
+      [...builtinDefinitions, ...configuredDefinitions, ...mcpDefinitions].map((tool) => [
+        tool.id,
+        tool
+      ])
     );
     return normalizedToolIds.flatMap((toolId) => {
       const definition = definitions.get(toolId);
@@ -63,31 +74,38 @@ export class ToolsService {
     const startedAt = Date.now();
     const toolId = this.normalizeToolId(request.toolId);
     const tool = getBuiltinTool(toolId);
-    const configuredTool = !tool
-      ? await this.configuredHttpTools?.resolveRuntimeConfig(toolId)
-      : null;
-
-    if ((!tool || !tool.enabled) && !configuredTool) {
-      const result = this.toFailureResult(
-        toolId,
-        "tool_not_found",
-        "工具不存在或已停用",
-        startedAt
-      );
-      await this.recordExecutionResult({ request, toolId, result });
-      return result;
-    }
 
     try {
+      // 每次执行重新解析动态工具状态，管理员停用后无需等待 Agent 配置缓存失效。
+      const configuredTool = !tool
+        ? await this.configuredHttpTools?.resolveRuntimeConfig(toolId)
+        : null;
+      const mcpTool = !tool && !configuredTool
+        ? await this.mcpService?.resolveRuntimeTool(toolId)
+        : null;
+
+      if ((!tool || !tool.enabled) && !configuredTool && !mcpTool) {
+        const result = this.toFailureResult(
+          toolId,
+          "tool_not_found",
+          "工具不存在或已停用",
+          startedAt
+        );
+        await this.recordExecutionResult({ request, toolId, result });
+        return result;
+      }
+
       const input = this.normalizeInput(request.input);
-      const output = configuredTool
-        ? await this.requireHttpToolExecutor().execute(configuredTool, input, request.signal)
-        : await tool!.execute(input, {
-            requestId: request.requestId,
-            userId: request.userId,
-            agentId: request.agentId,
-            signal: request.signal
-          });
+      const output = mcpTool
+        ? await this.requireMcpToolExecutor().execute(mcpTool, input, request.signal)
+        : configuredTool
+          ? await this.requireHttpToolExecutor().execute(configuredTool, input, request.signal)
+          : await tool!.execute(input, {
+              requestId: request.requestId,
+              userId: request.userId,
+              agentId: request.agentId,
+              signal: request.signal
+            });
 
       const result: ToolExecutionResult = {
         toolId,
@@ -168,6 +186,11 @@ export class ToolsService {
       toolCallId: request.request.toolCallId,
       toolId: request.toolId,
       status: request.result.ok ? "completed" : "failed",
+      source: request.toolId.startsWith("mcp_")
+        ? "mcp"
+        : request.toolId.startsWith("http_")
+          ? "http"
+          : "builtin",
       input: sanitizedInput,
       output: request.result.output,
       errorType: request.result.errorType,
@@ -225,6 +248,9 @@ export class ToolsService {
 
   /** 参数错误、取消与执行故障映射为稳定错误类型。 */
   private getErrorType(error: unknown): string {
+    if (error && typeof error === "object" && "errorType" in error) {
+      return String(error.errorType);
+    }
     if (error && typeof error === "object" && "name" in error && error.name === "AbortError") {
       return "canceled";
     }
@@ -316,6 +342,14 @@ export class ToolsService {
       throw new Error("HTTP Tool Executor 未配置");
     }
     return this.httpToolExecutor;
+  }
+
+  /** MCP Tool 仍由 ToolsService 统一调度，Executor 只负责协议和资源治理。 */
+  private requireMcpToolExecutor(): McpToolExecutor {
+    if (!this.mcpToolExecutor) {
+      throw new Error("MCP Tool Executor 未配置");
+    }
+    return this.mcpToolExecutor;
   }
 
   /** 安全读取未知异常消息，避免把整个对象序列化进日志。 */

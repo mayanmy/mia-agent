@@ -10,6 +10,7 @@ import { tests as externalAccessTests } from "../modules/external_access/externa
 import { tests as knowledgeTests } from "../modules/knowledge/knowledge.service.spec";
 import { tests as mcpProtocolClientTests } from "../modules/mcp/clients/mcp-protocol.client.spec";
 import { tests as mcpServiceTests } from "../modules/mcp/mcp.service.spec";
+import { tests as mcpToolExecutorTests } from "../modules/mcp/mcp-tool.executor.spec";
 import { tests as retrievalTests } from "../modules/retrieval/retrieval.service.spec";
 import { tests as toolTests } from "../modules/tools/tools.service.spec";
 import { tests as workflowTests } from "../modules/workflows/workflows.service.spec";
@@ -28,6 +29,7 @@ const tests: TestCase[] = [
   ...toolTests,
   ...mcpProtocolClientTests,
   ...mcpServiceTests,
+  ...mcpToolExecutorTests,
   ...agentRunTests,
   ...agentPromptBuilderTests,
   ...historyPolicyTests,

@@ -30,6 +30,11 @@ import {
   McpClientRuntimeConfig
 } from "./clients/mcp-protocol-client.factory";
 import { McpProtocolTool } from "./clients/mcp-protocol.client";
+import {
+  McpRuntimeResolutionError,
+  McpRuntimeToolConfig,
+  McpRuntimeToolDefinition
+} from "./dto/mcp-runtime.dto";
 
 const SERVER_INCLUDE = {
   secret: { select: { id: true } },
@@ -66,6 +71,85 @@ export class McpService {
       where: { serverId: id, enabled: true }
     });
     return this.toDetail(server, enabledToolCount);
+  }
+
+  /** 只向统一工具目录暴露已启用、可用且无需人工确认的远程 Tool。 */
+  async listRuntimeTools(): Promise<McpRuntimeToolDefinition[]> {
+    const tools = await this.prisma.mcpServerTool.findMany({
+      where: this.runtimeToolWhere(),
+      orderBy: [{ server: { name: "asc" } }, { remoteName: "asc" }]
+    });
+    return tools.map((tool) => this.toRuntimeDefinition(tool));
+  }
+
+  /** 按 Agent 绑定顺序批量返回定义；不可运行的 Tool 会被自然过滤。 */
+  async getRuntimeToolDefinitions(runtimeIds: string[]): Promise<McpRuntimeToolDefinition[]> {
+    if (runtimeIds.length === 0) return [];
+    const tools = await this.prisma.mcpServerTool.findMany({
+      where: { ...this.runtimeToolWhere(), runtimeId: { in: runtimeIds } }
+    });
+    const byId = new Map(tools.map((tool) => [tool.runtimeId, this.toRuntimeDefinition(tool)]));
+    return runtimeIds.flatMap((runtimeId) => {
+      const tool = byId.get(runtimeId);
+      return tool ? [tool] : [];
+    });
+  }
+
+  /**
+   * 执行前重新读取 Server/Tool 状态，不能信任模型生成定义时的旧快照。
+   * 这样管理员停用 Server 或 Tool 后，进行中的会话也会立即阻止下一次调用。
+   */
+  async resolveRuntimeTool(runtimeId: string): Promise<McpRuntimeToolConfig | null> {
+    if (!runtimeId.startsWith("mcp_")) return null;
+    const tool = await this.prisma.mcpServerTool.findUnique({
+      where: { runtimeId },
+      include: { server: { include: { secret: { select: { encryptedValue: true } } } } }
+    });
+    if (!tool) return null;
+    if (!tool.server.enabled || tool.server.deletedAt) {
+      throw new McpRuntimeResolutionError("mcp_server_disabled", "MCP Server 已停用");
+    }
+    if (!tool.enabled || tool.unavailableAt) {
+      throw new McpRuntimeResolutionError("mcp_tool_unavailable", "MCP Tool 已停用或不可用");
+    }
+    if (tool.server.healthStatus === McpHealthStatus.AUTH_REQUIRED) {
+      throw new McpRuntimeResolutionError("mcp_auth_required", "MCP Server 需要重新鉴权");
+    }
+    if (
+      tool.approvalMode === McpApprovalMode.CONFIRM ||
+      (!tool.approvalMode && tool.server.approvalMode === McpApprovalMode.CONFIRM)
+    ) {
+      throw new McpRuntimeResolutionError("mcp_approval_required", "MCP Tool 需要人工确认");
+    }
+    if (
+      tool.approvalMode === McpApprovalMode.DISABLED ||
+      (!tool.approvalMode && tool.server.approvalMode === McpApprovalMode.DISABLED)
+    ) {
+      throw new McpRuntimeResolutionError("mcp_tool_unavailable", "MCP Tool 已被策略禁用");
+    }
+
+    return {
+      serverId: tool.serverId,
+      toolId: tool.id,
+      runtimeId: tool.runtimeId,
+      remoteName: tool.remoteName,
+      inputSchema: this.jsonRecord(tool.inputSchema),
+      schemaHash: tool.schemaHash,
+      maxResponseBytes: tool.server.maxResponseBytes,
+      maxOutputChars: tool.server.maxOutputChars,
+      maxConcurrency: tool.server.maxConcurrency,
+      client: {
+        endpoint: tool.server.endpoint,
+        authType: tool.server.authType.toLowerCase() as McpClientRuntimeConfig["authType"],
+        authConfig: this.jsonRecord(tool.server.authConfig),
+        secret: tool.server.secret
+          ? decryptSecret(tool.server.secret.encryptedValue)
+          : undefined,
+        allowPrivateNetwork: tool.server.allowPrivateNetwork,
+        connectTimeoutMs: tool.server.connectTimeoutMs,
+        toolTimeoutMs: tool.server.toolTimeoutMs
+      }
+    };
   }
 
   /** 创建仅持久化配置，不在事务中访问远端；管理员可随后显式测试和同步。 */
@@ -393,6 +477,38 @@ export class McpService {
     });
     if (!server) throw new AppError(ErrorCodes.mcp.notFound, "MCP Server 不存在", 404);
     return server;
+  }
+
+  private runtimeToolWhere(): Prisma.McpServerToolWhereInput {
+    return {
+      enabled: true,
+      unavailableAt: null,
+      server: {
+        enabled: true,
+        deletedAt: null,
+        healthStatus: { in: [McpHealthStatus.HEALTHY, McpHealthStatus.DEGRADED] }
+      },
+      OR: [
+        { approvalMode: McpApprovalMode.AUTO },
+        { approvalMode: null, server: { approvalMode: McpApprovalMode.AUTO } }
+      ]
+    };
+  }
+
+  private toRuntimeDefinition(
+    tool: Prisma.McpServerToolGetPayload<object>
+  ): McpRuntimeToolDefinition {
+    const schema = this.jsonRecord(tool.inputSchema);
+    return {
+      id: tool.runtimeId,
+      name: tool.title?.trim() || tool.remoteName,
+      description: tool.description,
+      enabled: true,
+      inputSchema: {
+        ...schema,
+        type: "object"
+      } as McpRuntimeToolDefinition["inputSchema"]
+    };
   }
 
   private normalizeCreate(payload: McpServerCreateDto): Prisma.McpServerUncheckedCreateInput {
