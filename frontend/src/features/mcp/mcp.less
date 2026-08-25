@@ -1,0 +1,74 @@
+.mcpTablePanel {
+  overflow: hidden;
+}
+
+.mcpServerIdentity,
+.mcpToolIdentity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mcpServerIdentity span,
+.mcpToolIdentity code,
+.mcpEndpoint {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.mcpEndpoint {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcpFormGrid,
+.mcpLimitsGrid,
+.mcpSwitchRow {
+  display: grid;
+  gap: 16px;
+}
+
+.mcpFormGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mcpLimitsGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mcpLimitsGrid .ant-input-number,
+.mcpPolicySelect {
+  width: 100%;
+}
+
+.mcpSwitchRow {
+  align-items: start;
+  grid-template-columns: 150px 150px minmax(180px, 1fr);
+}
+
+.mcpToolDrawerSummary {
+  margin-bottom: 12px;
+}
+
+.mcpToolNotice {
+  margin-bottom: 16px;
+}
+
+.mcpToolIdentity .ant-typography {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@media (max-width: 720px) {
+  .mcpFormGrid,
+  .mcpLimitsGrid,
+  .mcpSwitchRow {
+    grid-template-columns: 1fr;
+  }
+}

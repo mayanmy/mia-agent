@@ -84,30 +84,48 @@ type ToolOptionsProps = {
 
 /** 普通工具与 Workflow 复用同一卡片结构，来源语义由平级页签负责表达。 */
 function ToolOptions({ tools }: ToolOptionsProps) {
+  const mcpTools = tools.filter((tool) => tool.id.startsWith("mcp_"));
+  const localTools = tools.filter((tool) => !tool.id.startsWith("mcp_"));
+
   return (
     <>
-      {tools.map((tool) => (
-        <Checkbox className="toolOptionCard" disabled={!tool.enabled} key={tool.id} value={tool.id}>
-          <div className="toolOption">
-            <div className="toolOptionHeader">
-              <div>
-                <div className="toolOptionName">{tool.name}</div>
-                <div className="toolOptionId">
-                  {tool.source === "workflow"
-                    ? tool.workflowVersion
-                      ? `Workflow v${tool.workflowVersion}`
-                      : "已绑定历史版本"
-                    : tool.id}
-                </div>
-              </div>
-              <Tag color={tool.source === "workflow" ? "blue" : tool.enabled ? "green" : "default"}>
-                {tool.source === "workflow" ? "Workflow" : tool.enabled ? "可用" : "停用"}
-              </Tag>
-            </div>
-            <div className="toolOptionDescription">{tool.description}</div>
-          </div>
-        </Checkbox>
+      {localTools.length > 0 && mcpTools.length > 0 ? (
+        <div className="toolSelectorGroupTitle">本地与 HTTP 工具</div>
+      ) : null}
+      {localTools.map((tool) => (
+        <ToolOption key={tool.id} tool={tool} />
+      ))}
+      {mcpTools.length > 0 ? <div className="toolSelectorGroupTitle">MCP 工具</div> : null}
+      {mcpTools.map((tool) => (
+        <ToolOption key={tool.id} tool={tool} />
       ))}
     </>
+  );
+}
+
+function ToolOption({ tool }: { tool: ToolListItem }) {
+  const isWorkflow = tool.source === "workflow";
+  const isMcp = tool.id.startsWith("mcp_");
+  return (
+    <Checkbox className="toolOptionCard" disabled={!tool.enabled} value={tool.id}>
+      <div className="toolOption">
+        <div className="toolOptionHeader">
+          <div>
+            <div className="toolOptionName">{tool.name}</div>
+            <div className="toolOptionId">
+              {isWorkflow
+                ? tool.workflowVersion
+                  ? `Workflow v${tool.workflowVersion}`
+                  : "已绑定历史版本"
+                : tool.id}
+            </div>
+          </div>
+          <Tag color={isWorkflow ? "blue" : isMcp ? "cyan" : tool.enabled ? "green" : "default"}>
+            {isWorkflow ? "Workflow" : isMcp ? "MCP" : tool.enabled ? "可用" : "停用"}
+          </Tag>
+        </div>
+        <div className="toolOptionDescription">{tool.description}</div>
+      </div>
+    </Checkbox>
   );
 }

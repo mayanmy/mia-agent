@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, type ReactNode } from "react";
 import {
   ApiOutlined,
   ApartmentOutlined,
+  CloudServerOutlined,
   DatabaseOutlined,
   FileSearchOutlined,
   FundProjectionScreenOutlined,
@@ -77,6 +78,11 @@ const UsersPage = lazy(() =>
 const ToolsPage = lazy(() =>
   import("../features/tools/ToolsPage").then((module) => ({ default: module.ToolsPage }))
 );
+const McpServersPage = lazy(() =>
+  import("../features/mcp/McpServersPage").then((module) => ({
+    default: module.McpServersPage
+  }))
+);
 const ActivateInvitationPage = lazy(() =>
   import("../features/auth/ActivateInvitationPage").then((module) => ({
     default: module.ActivateInvitationPage
@@ -105,6 +111,7 @@ const navConfig: NavConfig[] = [
     icon: <DatabaseOutlined />
   },
   { label: "工具", path: "/tools", roles: ["ADMIN"], icon: <ToolOutlined /> },
+  { label: "MCP", path: "/mcp", roles: ["ADMIN"], icon: <CloudServerOutlined /> },
   { label: "Workflow", path: "/workflows", roles: ["ADMIN"], icon: <ApartmentOutlined /> },
   {
     label: "Workflow 应用",
@@ -154,6 +161,7 @@ export function App() {
             </Route>
             <Route element={<RequireRole roles={["ADMIN"]} />}>
               <Route path="/tools" element={<ToolsPage />} />
+              <Route path="/mcp" element={<McpServersPage />} />
               <Route path="/workflows" element={<WorkflowsPage />} />
               <Route path="/workflows/:workflowId" element={<WorkflowsPage />} />
               <Route path="/agent-runs" element={<AgentRunsPage />} />
