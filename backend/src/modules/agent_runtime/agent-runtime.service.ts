@@ -117,14 +117,44 @@ export class AgentRuntimeService {
       }
 
       const workflowToolIds = agent.toolIds.filter((toolId) => toolId.startsWith("workflow:"));
-      const [regularTools, workflowTools] = await Promise.all([
-        this.requireToolsService().getToolDefinitions(agent.toolIds),
+      const regularToolIds = agent.toolIds.filter((toolId) => !toolId.startsWith("workflow:"));
+      const toolSearchStep =
+        regularToolIds.length > 20
+          ? await this.startStep(trace, AgentRunStepType.TOOL_SEARCH, "tool_catalog_search", {
+              query: request.message.text,
+              boundToolCount: regularToolIds.length,
+              candidateLimit: 12
+            })
+          : undefined;
+      if (toolSearchStep) {
+        yield { type: "tool_search_started", data: { boundToolCount: regularToolIds.length } };
+      }
+      const [toolSearch, workflowTools] = await Promise.all([
+        this.searchToolDefinitions(regularToolIds, request.message.text, agent.systemPrompt),
         workflowToolIds.length
           ? this.requireWorkflowRuntimeService().getWorkflowToolDefinitions(workflowToolIds)
           : Promise.resolve([])
       ]);
+      if (toolSearchStep) {
+        await this.completeStep(toolSearchStep, {
+          boundToolCount: toolSearch.boundToolCount,
+          catalogMatchCount: toolSearch.catalogMatchCount,
+          selectedToolIds: toolSearch.selectedToolIds
+        });
+        yield {
+          type: "tool_search_completed",
+          data: {
+            boundToolCount: toolSearch.boundToolCount,
+            catalogMatchCount: toolSearch.catalogMatchCount,
+            selectedToolIds: toolSearch.selectedToolIds
+          }
+        };
+      }
       const definitions = new Map(
-        [...regularTools, ...workflowTools].map((definition) => [definition.id, definition])
+        [...toolSearch.definitions, ...workflowTools].map((definition) => [
+          definition.id,
+          definition
+        ])
       );
       // Agent 的绑定顺序决定模型看到的工具顺序，不能按来源分组后隐式重排。
       const toolDefinitions = agent.toolIds.flatMap((toolId) => {
@@ -913,6 +943,23 @@ export class AgentRuntimeService {
       reason,
       output: { boundToolIds: request.toolIds, enabledToolIds }
     });
+  }
+
+  /** 兼容精简测试替身；旧替身没有 Tool Search 时退回完整定义加载。 */
+  private async searchToolDefinitions(toolIds: string[], query: string, systemPrompt: string) {
+    const searcher = (this.toolsService as Partial<ToolsService> | undefined)
+      ?.searchToolDefinitions;
+    if (typeof searcher === "function") {
+      return searcher.call(this.toolsService, toolIds, query, systemPrompt);
+    }
+    const definitions = await this.requireToolsService().getToolDefinitions(toolIds);
+    return {
+      definitions,
+      searched: false,
+      boundToolCount: toolIds.length,
+      catalogMatchCount: definitions.length,
+      selectedToolIds: definitions.map((tool) => tool.id)
+    };
   }
 
   /** 兼容精简测试替身；工具审计缺失不能阻断模型回答。 */

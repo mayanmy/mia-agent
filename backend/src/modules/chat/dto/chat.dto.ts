@@ -87,6 +87,8 @@ export type ChatCompletionResult = {
 /** Chat SSE 对外公开的固定事件集合。 */
 export type ChatStreamEventType =
   | "message_start"
+  | "tool_search_start"
+  | "tool_search_result"
   | "retrieval_start"
   | "retrieval_result"
   | "token"

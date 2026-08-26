@@ -112,6 +112,7 @@ enum AgentRunStatus {
 
 /// Step 类型覆盖当前检索、模型和工具调用，并为后续 Hook、Subagent 保留稳定值。
 enum AgentRunStepType {
+  TOOL_SEARCH
   RETRIEVAL
   MODEL
   TOOL

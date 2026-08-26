@@ -643,11 +643,13 @@ Mia 当前会把 Agent 绑定工具的完整 Schema 发送给模型。首期采�
 
 ### M6：规模化能力
 
-- Tool Search / 延迟加载 Schema。
-- MCP Resources 只读预览与显式导入知识库。
-- Prompts 显式导入为 Mia Skill 草稿。
-- 按用户 OAuth 授权。
-- 评估 stdio 预置命令白名单和独立 Worker 沙箱。
+M6 按可独立上线的子阶段实施，避免资源导入、成员授权和本地进程执行同时扩大风险面：
+
+1. **M6-A Tool Catalog / Tool Search（已实现）**：绑定普通工具超过 20 个时，Runtime 先按用户问题和 System Prompt 检索轻量目录，最多选择 12 个候选，再延迟加载完整 Schema。检索写入 `TOOL_SEARCH` Step 和 Runtime Event；小规模 Agent 保持完整 Schema 行为。
+2. **M6-B Resources**：发现 Resource 与 Resource Template，管理端只读预览；只有管理员显式选择目标知识库后才复制内容并进入现有文档索引任务，不允许模型自动导入。
+3. **M6-C Prompts**：发现 Prompt、参数和消息预览，管理员显式导入为 Mia Skill 草稿；远端后续变化不得自动覆盖已导入 Skill。
+4. **M6-D 按用户 OAuth**：共享授权与成员授权使用独立数据模型和 Token 缓存键，运行时按调用用户选择授权；公开访问、Service API 和 Workflow 继续使用明确的非交互策略。
+5. **M6-E stdio 评估**：仅允许管理员选择平台预置命令，协议进程在独立 Worker/容器中运行。完成威胁模型、资源限制和审计验证前，不在 NestJS API 进程开放 stdio。
 
 ### M7：Mia 作为 MCP Server
 

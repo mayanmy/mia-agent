@@ -13,6 +13,16 @@ export type McpRuntimeToolDefinition = {
   };
 };
 
+/** 大规模 Tool Search 使用的轻量目录项，刻意不包含 input/output Schema。 */
+export type McpRuntimeToolCatalogItem = {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  source: "mcp";
+  tags: string[];
+};
+
 /** MCP 执行器需要的不可变快照；不返回给 Controller，也不进入日志。 */
 export type McpRuntimeToolConfig = {
   serverId: string;

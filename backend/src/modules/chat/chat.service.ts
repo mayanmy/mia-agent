@@ -323,6 +323,10 @@ export class ChatService {
     switch (event.type) {
       case "run_started":
         return { type: "message_start", data: event.data };
+      case "tool_search_started":
+        return { type: "tool_search_start", data: event.data };
+      case "tool_search_completed":
+        return { type: "tool_search_result", data: event.data };
       case "retrieval_started":
         return { type: "retrieval_start", data: event.data };
       case "retrieval_completed":

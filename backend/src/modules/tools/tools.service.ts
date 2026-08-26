@@ -9,11 +9,13 @@ import { McpToolApprovalDetail, McpToolApprovalDecision } from "../mcp/dto/mcp-a
 import { ConfiguredHttpToolsService } from "./configured-http-tools.service";
 import {
   ToolCallLogRecord,
+  ToolCatalogItem,
   ToolDefinition,
   ToolExecutionRequest,
   ToolExecutionResult,
   ToolJsonValue,
-  ToolListItem
+  ToolListItem,
+  ToolSearchResult
 } from "./dto/tool.dto";
 import { getBuiltinTool, getBuiltinToolDefinitions, listEnabledBuiltinTools } from "./registry";
 import { HttpToolExecutor } from "./http/http-tool.executor";
@@ -71,6 +73,93 @@ export class ToolsService {
       const definition = definitions.get(toolId);
       return definition ? [definition] : [];
     });
+  }
+
+  /**
+   * 绑定数量较小时保持完整 Schema 行为；超过阈值后先检索轻量目录，再延迟加载候选 Schema。
+   * 召回完全确定且不调用 LLM，避免 Tool Search 自身引入额外费用和不稳定远程依赖。
+   */
+  async searchToolDefinitions(
+    toolIds: string[],
+    query: string,
+    systemPrompt: string,
+    options: { threshold?: number; limit?: number } = {}
+  ): Promise<ToolSearchResult> {
+    const normalizedToolIds = this.normalizeToolIds(toolIds);
+    const threshold = options.threshold ?? 20;
+    const limit = Math.max(1, Math.min(options.limit ?? 12, threshold));
+    if (normalizedToolIds.length <= threshold) {
+      const definitions = await this.getToolDefinitions(normalizedToolIds);
+      return {
+        definitions,
+        searched: false,
+        boundToolCount: normalizedToolIds.length,
+        catalogMatchCount: definitions.length,
+        selectedToolIds: definitions.map((tool) => tool.id)
+      };
+    }
+
+    const catalog = await this.getToolCatalog(normalizedToolIds);
+    const order = new Map(normalizedToolIds.map((id, index) => [id, index]));
+    const queryTerms = this.searchTerms(query);
+    const promptTerms = this.searchTerms(systemPrompt);
+    const ranked = catalog
+      .map((tool) => ({ tool, score: this.scoreCatalogItem(tool, queryTerms, promptTerms) }))
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          (order.get(left.tool.id) ?? Number.MAX_SAFE_INTEGER) -
+            (order.get(right.tool.id) ?? Number.MAX_SAFE_INTEGER)
+      );
+    // 无文本命中时按绑定顺序兜底，保证宽泛问题仍保留一组稳定候选，而不是完全禁用工具。
+    const selectedToolIds = ranked.slice(0, limit).map(({ tool }) => tool.id);
+    const definitions = await this.getToolDefinitions(selectedToolIds);
+    return {
+      definitions,
+      searched: true,
+      boundToolCount: normalizedToolIds.length,
+      catalogMatchCount: catalog.length,
+      selectedToolIds: definitions.map((tool) => tool.id)
+    };
+  }
+
+  private async getToolCatalog(toolIds: string[]): Promise<ToolCatalogItem[]> {
+    const builtin = listEnabledBuiltinTools()
+      .filter((tool) => toolIds.includes(tool.id))
+      .map((tool) => ({ ...tool, source: "builtin" as const }));
+    const [configured, mcp] = await Promise.all([
+      this.configuredHttpTools?.getToolCatalog(toolIds) ?? Promise.resolve([]),
+      this.mcpService?.getRuntimeToolCatalog(toolIds) ?? Promise.resolve([])
+    ]);
+    const byId = new Map([...builtin, ...configured, ...mcp].map((tool) => [tool.id, tool]));
+    return toolIds.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
+  }
+
+  /** 中英文统一为单词、单字和二元片段，兼顾工具英文名与中文业务描述。 */
+  private searchTerms(value: string): Set<string> {
+    const normalized = value.toLocaleLowerCase().replace(/[_-]+/gu, " ");
+    const terms = new Set(normalized.match(/[a-z0-9]+|[\p{Script=Han}]/gu) ?? []);
+    const chinese = Array.from(normalized.replace(/[^\p{Script=Han}]/gu, ""));
+    for (let index = 0; index < chinese.length - 1; index += 1) {
+      terms.add(`${chinese[index]}${chinese[index + 1]}`);
+    }
+    return terms;
+  }
+
+  private scoreCatalogItem(
+    tool: ToolCatalogItem,
+    queryTerms: Set<string>,
+    promptTerms: Set<string>
+  ): number {
+    const toolTerms = this.searchTerms(
+      [tool.id, tool.name, tool.description, ...(tool.tags ?? [])].join(" ")
+    );
+    let score = 0;
+    for (const term of toolTerms) {
+      if (queryTerms.has(term)) score += term.length > 1 ? 8 : 2;
+      if (promptTerms.has(term)) score += term.length > 1 ? 2 : 0.5;
+    }
+    return score;
   }
 
   async executeTool(request: ToolExecutionRequest): Promise<ToolExecutionResult> {

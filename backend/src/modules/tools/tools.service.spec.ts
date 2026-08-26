@@ -66,6 +66,48 @@ export const tests = [
     }
   },
   {
+    name: "ToolsService searches a large catalog before loading candidate schemas",
+    run: async () => {
+      const catalog = Array.from({ length: 25 }, (_, index) => ({
+        id: `mcp_tool_${index}`,
+        name: index === 23 ? "深圳实时天气" : `订单工具 ${index}`,
+        description: index === 23 ? "查询天气、温度和降雨" : "查询订单状态和商品明细",
+        enabled: true,
+        source: "mcp" as const,
+        tags: index === 23 ? ["weather"] : ["orders"]
+      }));
+      let schemaRequestIds: string[] = [];
+      const service = new ToolsService(undefined, undefined, undefined, {
+        getRuntimeToolCatalog: async () => catalog,
+        getRuntimeToolDefinitions: async (ids: string[]) => {
+          schemaRequestIds = ids;
+          return ids.map((id) => {
+            const item = catalog.find((candidate) => candidate.id === id)!;
+            return {
+              id,
+              name: item.name,
+              description: item.description,
+              enabled: true,
+              inputSchema: { type: "object" as const }
+            };
+          });
+        }
+      } as never);
+
+      const result = await service.searchToolDefinitions(
+        catalog.map((tool) => tool.id),
+        "深圳今天会下雨吗，天气温度怎么样",
+        "需要实时信息时使用天气工具"
+      );
+
+      assert.equal(result.searched, true);
+      assert.equal(result.boundToolCount, 25);
+      assert.equal(schemaRequestIds.length, 12);
+      assert.equal(schemaRequestIds[0], "mcp_tool_23");
+      assert.equal(result.selectedToolIds[0], "mcp_tool_23");
+    }
+  },
+  {
     name: "ToolsService merges and executes MCP tools through the unified runtime path",
     run: async () => {
       const mcpService = {

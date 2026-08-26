@@ -19,7 +19,7 @@ import {
   HttpToolRuntimeConfig,
   HttpToolUpdateDto
 } from "./dto/http-tool.dto";
-import { ToolDefinition, ToolInputSchema, ToolJsonValue } from "./dto/tool.dto";
+import { ToolCatalogItem, ToolDefinition, ToolInputSchema, ToolJsonValue } from "./dto/tool.dto";
 
 const HTTP_TOOL_PREFIX = "http_";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -210,6 +210,26 @@ export class ConfiguredHttpToolsService {
       const tool = byId.get(id);
       return tool ? [this.toDefinition(tool)] : [];
     });
+  }
+
+  /** Tool Search 只读取名称和描述，命中后才由 getToolDefinitions 延迟加载参数 Schema。 */
+  async getToolCatalog(runtimeIds: string[]): Promise<ToolCatalogItem[]> {
+    const ids = runtimeIds
+      .filter((id) => id.startsWith(HTTP_TOOL_PREFIX))
+      .map((id) => id.slice(HTTP_TOOL_PREFIX.length))
+      .filter(Boolean);
+    if (ids.length === 0) return [];
+    const tools = await this.prisma.httpTool.findMany({
+      where: { id: { in: ids }, enabled: true, deletedAt: null },
+      select: { id: true, name: true, description: true }
+    });
+    return tools.map((tool) => ({
+      id: `${HTTP_TOOL_PREFIX}${tool.id}`,
+      name: tool.name,
+      description: tool.description,
+      enabled: true,
+      source: "http"
+    }));
   }
 
   /** 将 runtimeId 解析成不含明文凭据的数据库配置。 */

@@ -155,6 +155,8 @@ export type ChatRetrievalSource = {
 /** 与后端约定一致的 Chat SSE 事件名称。 */
 export type ChatStreamEventType =
   | "message_start"
+  | "tool_search_start"
+  | "tool_search_result"
   | "retrieval_start"
   | "retrieval_result"
   | "token"
@@ -170,6 +172,12 @@ export type ChatStreamEventType =
 export type ChatStreamEventData = {
   /** 检索开始时计划查询的知识库 ID。 */
   knowledgeBaseIds?: string[];
+  /** Tool Search 前的绑定数量。 */
+  boundToolCount?: number;
+  /** Tool Catalog 当前可召回数量。 */
+  catalogMatchCount?: number;
+  /** 本轮真正注入模型的工具 ID。 */
+  selectedToolIds?: string[];
   /** 检索完成后的来源列表。 */
   sources?: ChatRetrievalSource[];
   /** 工具调用或运行事件 ID。 */

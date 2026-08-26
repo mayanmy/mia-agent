@@ -33,6 +33,7 @@ import { McpProtocolTool } from "./clients/mcp-protocol.client";
 import { McpOAuthManager } from "./clients/mcp-oauth.manager";
 import {
   McpRuntimeResolutionError,
+  McpRuntimeToolCatalogItem,
   McpRuntimeToolConfig,
   McpRuntimeToolDefinition
 } from "./dto/mcp-runtime.dto";
@@ -117,6 +118,30 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       const tool = byId.get(runtimeId);
       return tool ? [tool] : [];
     });
+  }
+
+  /** 目录检索不读取 Schema；风险等级和 Server 名作为标签参与本地召回。 */
+  async getRuntimeToolCatalog(runtimeIds: string[]): Promise<McpRuntimeToolCatalogItem[]> {
+    if (runtimeIds.length === 0) return [];
+    const tools = await this.prisma.mcpServerTool.findMany({
+      where: { ...this.runtimeToolWhere(), runtimeId: { in: runtimeIds } },
+      select: {
+        runtimeId: true,
+        remoteName: true,
+        title: true,
+        description: true,
+        riskLevel: true,
+        server: { select: { name: true, slug: true } }
+      }
+    });
+    return tools.map((tool) => ({
+      id: tool.runtimeId,
+      name: tool.title?.trim() || tool.remoteName,
+      description: tool.description,
+      enabled: true,
+      source: "mcp",
+      tags: [tool.server.name, tool.server.slug, tool.riskLevel.toLowerCase()]
+    }));
   }
 
   /**

@@ -23,6 +23,20 @@ export type ToolDefinition = {
 
 export type ToolListItem = Pick<ToolDefinition, "id" | "name" | "description" | "enabled">;
 
+/** Tool Catalog 只保存召回需要的轻量文本，不携带可能很大的 JSON Schema。 */
+export type ToolCatalogItem = ToolListItem & {
+  source: "builtin" | "http" | "mcp";
+  tags?: string[];
+};
+
+export type ToolSearchResult = {
+  definitions: ToolDefinition[];
+  searched: boolean;
+  boundToolCount: number;
+  catalogMatchCount: number;
+  selectedToolIds: string[];
+};
+
 export type ToolExecutionRequest = {
   toolId: string;
   input: Record<string, ToolJsonValue>;

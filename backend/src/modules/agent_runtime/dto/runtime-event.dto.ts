@@ -34,6 +34,15 @@ export type RuntimeCompletion = {
 
 export type AgentRuntimeEvent =
   | { type: "run_started"; data: RuntimeRunStartedData }
+  | { type: "tool_search_started"; data: { boundToolCount: number } }
+  | {
+      type: "tool_search_completed";
+      data: {
+        boundToolCount: number;
+        catalogMatchCount: number;
+        selectedToolIds: string[];
+      };
+    }
   | { type: "retrieval_started"; data: Record<string, unknown> }
   | { type: "retrieval_completed"; data: Record<string, unknown> }
   | { type: "token"; data: { content: string } }
