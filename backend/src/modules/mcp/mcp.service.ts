@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import {
   McpApprovalMode,
   McpAuthType,
@@ -44,11 +44,32 @@ const SERVER_INCLUDE = {
 type ServerWithSummary = Prisma.McpServerGetPayload<{ include: typeof SERVER_INCLUDE }>;
 
 @Injectable()
-export class McpService {
+export class McpService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(McpService.name);
+  private readonly patrolIntervalMs = 15 * 60 * 1_000;
+  private patrolTimer?: NodeJS.Timeout;
+  private patrolRunning = false;
+  private readonly notificationTimers = new Map<string, NodeJS.Timeout>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly clientFactory: McpProtocolClientFactory
   ) {}
+
+  onModuleInit(): void {
+    this.clientFactory.registerToolsChangedHandler((serverId) =>
+      this.scheduleNotificationSync(serverId)
+    );
+    // 巡检不阻塞应用启动；定时器 unref 后也不会阻止测试或 CLI 正常退出。
+    this.patrolTimer = setInterval(() => void this.runHealthPatrol(), this.patrolIntervalMs);
+    this.patrolTimer.unref();
+  }
+
+  onModuleDestroy(): void {
+    if (this.patrolTimer) clearInterval(this.patrolTimer);
+    for (const timer of this.notificationTimers.values()) clearTimeout(timer);
+    this.notificationTimers.clear();
+  }
 
   async listServers(): Promise<McpServerListItem[]> {
     const servers = await this.prisma.mcpServer.findMany({
@@ -139,12 +160,15 @@ export class McpService {
       maxOutputChars: tool.server.maxOutputChars,
       maxConcurrency: tool.server.maxConcurrency,
       client: {
+        serverId: tool.serverId,
         endpoint: tool.server.endpoint,
         authType: tool.server.authType.toLowerCase() as McpClientRuntimeConfig["authType"],
         authConfig: this.jsonRecord(tool.server.authConfig),
-        secret: tool.server.secret
-          ? decryptSecret(tool.server.secret.encryptedValue)
-          : undefined,
+        ...this.decodeCredential(
+          tool.server.authType,
+          tool.server.secret ? decryptSecret(tool.server.secret.encryptedValue) : undefined
+        ),
+        authCacheKey: `${tool.server.id}:${tool.server.updatedAt.getTime()}`,
         allowPrivateNetwork: tool.server.allowPrivateNetwork,
         connectTimeoutMs: tool.server.connectTimeoutMs,
         toolTimeoutMs: tool.server.toolTimeoutMs
@@ -155,11 +179,12 @@ export class McpService {
   /** 创建仅持久化配置，不在事务中访问远端；管理员可随后显式测试和同步。 */
   async createServer(payload: McpServerCreateDto, userId: string): Promise<McpServerDetail> {
     const values = this.normalizeCreate(payload);
+    const encryptedCredential = this.credentialValue(payload, values.authType as McpAuthType, true);
     try {
       const server = await this.prisma.$transaction(async (tx) => {
-        const secret = payload.secret
+        const secret = encryptedCredential
           ? await tx.mcpServerSecret.create({
-              data: { encryptedValue: encryptSecret(payload.secret), createdByUserId: userId }
+              data: { encryptedValue: encryptSecret(encryptedCredential), createdByUserId: userId }
             })
           : undefined;
         return tx.mcpServer.create({
@@ -181,23 +206,29 @@ export class McpService {
   ): Promise<McpServerDetail> {
     const current = await this.requireServer(id);
     const values = this.normalizeUpdate(payload, current);
+    const effectiveAuthType = payload.authType ? this.authType(payload.authType) : current.authType;
+    const authChanged = payload.authType !== undefined && effectiveAuthType !== current.authType;
+    const encryptedCredential = this.credentialValue(payload, effectiveAuthType, authChanged);
 
     try {
       const server = await this.prisma.$transaction(async (tx) => {
         let secretId = current.secretId;
-        if (payload.secret) {
+        if (encryptedCredential) {
           if (secretId) {
             await tx.mcpServerSecret.update({
               where: { id: secretId },
-              data: { encryptedValue: encryptSecret(payload.secret), createdByUserId: userId }
+              data: { encryptedValue: encryptSecret(encryptedCredential), createdByUserId: userId }
             });
           } else {
             const secret = await tx.mcpServerSecret.create({
-              data: { encryptedValue: encryptSecret(payload.secret), createdByUserId: userId }
+              data: { encryptedValue: encryptSecret(encryptedCredential), createdByUserId: userId }
             });
             secretId = secret.id;
           }
-        } else if (payload.clearSecret && secretId) {
+        } else if (
+          (payload.clearSecret || (authChanged && effectiveAuthType === McpAuthType.NONE)) &&
+          secretId
+        ) {
           const obsoleteSecretId = secretId;
           secretId = null;
           await tx.mcpServer.update({ where: { id }, data: { secretId: null } });
@@ -276,7 +307,8 @@ export class McpService {
         where: { id },
         data: {
           healthStatus,
-          lastErrorCode: healthStatus === McpHealthStatus.AUTH_REQUIRED ? "AUTH_REQUIRED" : "CONNECT_FAILED",
+          lastErrorCode:
+            healthStatus === McpHealthStatus.AUTH_REQUIRED ? "AUTH_REQUIRED" : "CONNECT_FAILED",
           lastErrorMessage: message
         }
       });
@@ -295,11 +327,15 @@ export class McpService {
    * 完整工具发现成功后才原子替换快照。失败时只更新 SyncRun/健康状态，
    * 绝不清空上一份可工作的定义，避免一次网络抖动让全部 Agent 工具消失。
    */
-  async syncTools(id: string, signal?: AbortSignal): Promise<McpSyncResult> {
+  async syncTools(
+    id: string,
+    signal?: AbortSignal,
+    trigger: McpSyncTrigger = McpSyncTrigger.MANUAL
+  ): Promise<McpSyncResult> {
     const server = await this.requireServer(id);
     const startedAt = Date.now();
     const syncRun = await this.prisma.mcpSyncRun.create({
-      data: { serverId: id, status: McpSyncStatus.RUNNING, trigger: McpSyncTrigger.MANUAL }
+      data: { serverId: id, status: McpSyncStatus.RUNNING, trigger }
     });
     let client: ReturnType<McpProtocolClientFactory["create"]> | undefined;
 
@@ -470,6 +506,48 @@ export class McpService {
     }));
   }
 
+  /** 周期同步兼作健康检查，并刷新远端工具 Schema；单实例内禁止重叠执行。 */
+  private async runHealthPatrol(): Promise<void> {
+    if (this.patrolRunning) return;
+    this.patrolRunning = true;
+    try {
+      const servers = await this.prisma.mcpServer.findMany({
+        where: { enabled: true, deletedAt: null },
+        select: { id: true }
+      });
+      for (const server of servers) {
+        try {
+          await this.syncTools(server.id, undefined, McpSyncTrigger.SCHEDULED);
+        } catch (error) {
+          // 单个 Server 失败不能中断其余巡检，详细错误已由 syncTools 写入 SyncRun。
+          this.logger.warn(
+            `MCP 定时巡检失败: server=${server.id} error=${this.errorMessage(error)}`
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.warn(`MCP 定时巡检读取 Server 失败: ${this.errorMessage(error)}`);
+    } finally {
+      this.patrolRunning = false;
+    }
+  }
+
+  /** 多次 list_changed 通知合并为一次同步，避免频繁变化击穿远端和数据库。 */
+  private scheduleNotificationSync(serverId: string): void {
+    const previous = this.notificationTimers.get(serverId);
+    if (previous) clearTimeout(previous);
+    const timer = setTimeout(() => {
+      this.notificationTimers.delete(serverId);
+      void this.syncTools(serverId, undefined, McpSyncTrigger.NOTIFICATION).catch((error) => {
+        this.logger.warn(
+          `MCP 工具变化同步失败: server=${serverId} error=${this.errorMessage(error)}`
+        );
+      });
+    }, 500);
+    timer.unref();
+    this.notificationTimers.set(serverId, timer);
+  }
+
   private async requireServer(id: string): Promise<ServerWithSummary> {
     const server = await this.prisma.mcpServer.findFirst({
       where: { id, deletedAt: null },
@@ -512,7 +590,9 @@ export class McpService {
   }
 
   private normalizeCreate(payload: McpServerCreateDto): Prisma.McpServerUncheckedCreateInput {
-    const endpoint = this.endpoint(payload.endpoint, payload.allowPrivateNetwork ?? false);
+    const allowPrivateNetwork = payload.allowPrivateNetwork ?? false;
+    const endpoint = this.endpoint(payload.endpoint, allowPrivateNetwork);
+    const authType = this.authType(payload.authType ?? "none");
     this.requiredText(payload.name, "name");
     this.validateSlug(payload.slug);
     return {
@@ -521,15 +601,32 @@ export class McpService {
       slug: payload.slug.trim(),
       description: payload.description?.trim() ?? "",
       endpoint,
-      authType: this.authType(payload.authType ?? "none"),
-      authConfig: this.jsonInput(payload.authConfig ?? {}),
+      authType,
+      authConfig: this.jsonInput(
+        this.normalizeAuthConfig(authType, payload.authConfig ?? {}, allowPrivateNetwork)
+      ),
       enabled: payload.enabled ?? true,
-      allowPrivateNetwork: payload.allowPrivateNetwork ?? false,
+      allowPrivateNetwork,
       approvalMode: this.approvalMode(payload.approvalMode ?? "auto"),
-      connectTimeoutMs: this.bounded(payload.connectTimeoutMs ?? 10_000, 1_000, 60_000, "connectTimeoutMs"),
+      connectTimeoutMs: this.bounded(
+        payload.connectTimeoutMs ?? 10_000,
+        1_000,
+        60_000,
+        "connectTimeoutMs"
+      ),
       toolTimeoutMs: this.bounded(payload.toolTimeoutMs ?? 30_000, 1_000, 300_000, "toolTimeoutMs"),
-      maxResponseBytes: this.bounded(payload.maxResponseBytes ?? 1_000_000, 1_024, 10_000_000, "maxResponseBytes"),
-      maxOutputChars: this.bounded(payload.maxOutputChars ?? 20_000, 1_000, 200_000, "maxOutputChars"),
+      maxResponseBytes: this.bounded(
+        payload.maxResponseBytes ?? 1_000_000,
+        1_024,
+        10_000_000,
+        "maxResponseBytes"
+      ),
+      maxOutputChars: this.bounded(
+        payload.maxOutputChars ?? 20_000,
+        1_000,
+        200_000,
+        "maxOutputChars"
+      ),
       maxConcurrency: this.bounded(payload.maxConcurrency ?? 3, 1, 20, "maxConcurrency"),
       createdByUserId: ""
     };
@@ -542,21 +639,47 @@ export class McpService {
     if (payload.name !== undefined) this.requiredText(payload.name, "name");
     if (payload.slug !== undefined) this.validateSlug(payload.slug);
     const allowPrivateNetwork = payload.allowPrivateNetwork ?? current.allowPrivateNetwork;
+    const authType = payload.authType ? this.authType(payload.authType) : current.authType;
+    const shouldNormalizeAuth =
+      payload.authConfig !== undefined ||
+      payload.authType !== undefined ||
+      payload.allowPrivateNetwork !== undefined;
+    const rawAuthConfig = payload.authConfig ?? this.jsonRecord(current.authConfig);
     return {
       name: payload.name?.trim(),
       slug: payload.slug?.trim(),
       description: payload.description?.trim(),
-      endpoint: payload.endpoint ? this.endpoint(payload.endpoint, allowPrivateNetwork) : undefined,
-      authType: payload.authType ? this.authType(payload.authType) : undefined,
-      authConfig: payload.authConfig ? this.jsonInput(payload.authConfig) : undefined,
+      endpoint:
+        payload.endpoint || payload.allowPrivateNetwork !== undefined
+          ? this.endpoint(payload.endpoint ?? current.endpoint, allowPrivateNetwork)
+          : undefined,
+      authType: payload.authType ? authType : undefined,
+      authConfig: shouldNormalizeAuth
+        ? this.jsonInput(this.normalizeAuthConfig(authType, rawAuthConfig, allowPrivateNetwork))
+        : undefined,
       enabled: payload.enabled,
       allowPrivateNetwork: payload.allowPrivateNetwork,
       approvalMode: payload.approvalMode ? this.approvalMode(payload.approvalMode) : undefined,
-      connectTimeoutMs: payload.connectTimeoutMs === undefined ? undefined : this.bounded(payload.connectTimeoutMs, 1_000, 60_000, "connectTimeoutMs"),
-      toolTimeoutMs: payload.toolTimeoutMs === undefined ? undefined : this.bounded(payload.toolTimeoutMs, 1_000, 300_000, "toolTimeoutMs"),
-      maxResponseBytes: payload.maxResponseBytes === undefined ? undefined : this.bounded(payload.maxResponseBytes, 1_024, 10_000_000, "maxResponseBytes"),
-      maxOutputChars: payload.maxOutputChars === undefined ? undefined : this.bounded(payload.maxOutputChars, 1_000, 200_000, "maxOutputChars"),
-      maxConcurrency: payload.maxConcurrency === undefined ? undefined : this.bounded(payload.maxConcurrency, 1, 20, "maxConcurrency")
+      connectTimeoutMs:
+        payload.connectTimeoutMs === undefined
+          ? undefined
+          : this.bounded(payload.connectTimeoutMs, 1_000, 60_000, "connectTimeoutMs"),
+      toolTimeoutMs:
+        payload.toolTimeoutMs === undefined
+          ? undefined
+          : this.bounded(payload.toolTimeoutMs, 1_000, 300_000, "toolTimeoutMs"),
+      maxResponseBytes:
+        payload.maxResponseBytes === undefined
+          ? undefined
+          : this.bounded(payload.maxResponseBytes, 1_024, 10_000_000, "maxResponseBytes"),
+      maxOutputChars:
+        payload.maxOutputChars === undefined
+          ? undefined
+          : this.bounded(payload.maxOutputChars, 1_000, 200_000, "maxOutputChars"),
+      maxConcurrency:
+        payload.maxConcurrency === undefined
+          ? undefined
+          : this.bounded(payload.maxConcurrency, 1, 20, "maxConcurrency")
     };
   }
 
@@ -568,11 +691,14 @@ export class McpService {
           select: { encryptedValue: true }
         })
       : null;
+    const decrypted = storedSecret ? decryptSecret(storedSecret.encryptedValue) : undefined;
     return {
+      serverId: server.id,
       endpoint: server.endpoint,
       authType: server.authType.toLowerCase() as McpClientRuntimeConfig["authType"],
       authConfig: this.jsonRecord(server.authConfig),
-      secret: storedSecret ? decryptSecret(storedSecret.encryptedValue) : undefined,
+      ...this.decodeCredential(server.authType, decrypted),
+      authCacheKey: `${server.id}:${server.updatedAt.getTime()}`,
       allowPrivateNetwork: server.allowPrivateNetwork,
       connectTimeoutMs: server.connectTimeoutMs,
       toolTimeoutMs: server.toolTimeoutMs
@@ -587,7 +713,11 @@ export class McpService {
       }
       if (names.has(tool.name)) throw new Error(`duplicate MCP tool name: ${tool.name}`);
       names.add(tool.name);
-      if (!tool.inputSchema || typeof tool.inputSchema !== "object" || Array.isArray(tool.inputSchema)) {
+      if (
+        !tool.inputSchema ||
+        typeof tool.inputSchema !== "object" ||
+        Array.isArray(tool.inputSchema)
+      ) {
         throw new Error(`invalid inputSchema for MCP tool: ${tool.name}`);
       }
     }
@@ -608,14 +738,16 @@ export class McpService {
 
   private toolSchemaHash(tool: McpProtocolTool): string {
     return createHash("sha256")
-      .update(this.stableJson({
-        name: tool.name,
-        title: tool.title,
-        description: tool.description,
-        inputSchema: tool.inputSchema,
-        outputSchema: tool.outputSchema,
-        annotations: tool.annotations
-      }))
+      .update(
+        this.stableJson({
+          name: tool.name,
+          title: tool.title,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          outputSchema: tool.outputSchema,
+          annotations: tool.annotations
+        })
+      )
       .digest("hex");
   }
 
@@ -690,19 +822,117 @@ export class McpService {
   }
 
   private endpoint(raw: string, allowPrivateNetwork: boolean): string {
+    return this.validatedUrl(raw, allowPrivateNetwork, "MCP endpoint");
+  }
+
+  private validatedUrl(raw: string, allowPrivateNetwork: boolean, label: string): string {
     let url: URL;
     try {
       url = new URL(raw);
     } catch {
-      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP endpoint 不是合法 URL");
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, `${label} 不是合法 URL`);
     }
     if (url.username || url.password || url.hash) {
-      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP endpoint 不允许凭据或 fragment");
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, `${label} 不允许凭据或 fragment`);
     }
     if (url.protocol !== "https:" && !(allowPrivateNetwork && url.protocol === "http:")) {
-      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "公网 MCP endpoint 必须使用 HTTPS");
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, `公网 ${label} 必须使用 HTTPS`);
     }
     return url.toString();
+  }
+
+  /** 公开 authConfig 只保存协议参数，clientSecret 等凭据必须走加密表。 */
+  private normalizeAuthConfig(
+    authType: McpAuthType,
+    raw: Record<string, unknown>,
+    allowPrivateNetwork: boolean
+  ): Record<string, unknown> {
+    if (authType === McpAuthType.NONE || authType === McpAuthType.BEARER) return {};
+    if (authType === McpAuthType.API_KEY_HEADER) {
+      const headerName = String(raw.headerName ?? "").trim();
+      if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(headerName)) {
+        throw new AppError(ErrorCodes.mcp.invalidConfiguration, "API Key Header 名称不合法");
+      }
+      return { headerName };
+    }
+
+    const defaultTtlSeconds = this.bounded(
+      Number(raw.defaultTtlSeconds ?? 300),
+      30,
+      86_400,
+      "defaultTtlSeconds"
+    );
+    const refreshBeforeSeconds = this.bounded(
+      Number(raw.refreshBeforeSeconds ?? 60),
+      0,
+      defaultTtlSeconds - 1,
+      "refreshBeforeSeconds"
+    );
+    const clientAuthMethod = raw.clientAuthMethod === "basic" ? "basic" : "body";
+    return {
+      tokenUrl: this.validatedUrl(String(raw.tokenUrl ?? ""), allowPrivateNetwork, "Token URL"),
+      clientAuthMethod,
+      scope: typeof raw.scope === "string" ? raw.scope.trim() : "",
+      audience: typeof raw.audience === "string" ? raw.audience.trim() : "",
+      tokenField: String(raw.tokenField ?? "access_token").trim() || "access_token",
+      expiresInField: String(raw.expiresInField ?? "expires_in").trim() || "expires_in",
+      tokenTypeField: String(raw.tokenTypeField ?? "token_type").trim() || "token_type",
+      defaultTtlSeconds,
+      refreshBeforeSeconds
+    };
+  }
+
+  /** 静态 Token 与动态 Client 凭据共用密文表，但用不同运行时字段避免误用。 */
+  private credentialValue(
+    payload: Pick<McpServerCreateDto, "secret" | "credentials">,
+    authType: McpAuthType,
+    required: boolean
+  ): string | undefined {
+    if (authType === McpAuthType.NONE) return undefined;
+    if (authType === McpAuthType.CLIENT_CREDENTIALS) {
+      const clientId = payload.credentials?.clientId?.trim();
+      const clientSecret = payload.credentials?.clientSecret;
+      if (!clientId || !clientSecret) {
+        if (required) {
+          throw new AppError(
+            ErrorCodes.mcp.invalidConfiguration,
+            "Client ID 和 Client Secret 不能为空"
+          );
+        }
+        return undefined;
+      }
+      return JSON.stringify({ clientId, clientSecret });
+    }
+    if (!payload.secret) {
+      if (required) throw new AppError(ErrorCodes.mcp.invalidConfiguration, "鉴权凭据不能为空");
+      return undefined;
+    }
+    return payload.secret;
+  }
+
+  private decodeCredential(
+    authType: McpAuthType,
+    value?: string
+  ): Pick<McpClientRuntimeConfig, "secret" | "credentials"> {
+    if (!value) return {};
+    if (authType !== McpAuthType.CLIENT_CREDENTIALS) return { secret: value };
+    try {
+      const credentials = JSON.parse(value) as Record<string, unknown>;
+      if (
+        typeof credentials.clientId !== "string" ||
+        typeof credentials.clientSecret !== "string"
+      ) {
+        throw new Error("invalid credential fields");
+      }
+      return {
+        credentials: {
+          clientId: credentials.clientId,
+          clientSecret: credentials.clientSecret
+        }
+      };
+    } catch {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP 动态鉴权凭据损坏，请重新配置");
+    }
   }
 
   private authType(value: string): McpAuthType {
@@ -724,12 +954,16 @@ export class McpService {
   }
 
   private requiredText(value: string, field: string): void {
-    if (!value?.trim()) throw new AppError(ErrorCodes.mcp.invalidConfiguration, `${field} 不能为空`);
+    if (!value?.trim())
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, `${field} 不能为空`);
   }
 
   private validateSlug(value: string): void {
     if (!/^[a-z][a-z0-9-]{1,62}$/.test(value.trim())) {
-      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "slug 必须是 2-63 位小写字母、数字或连字符");
+      throw new AppError(
+        ErrorCodes.mcp.invalidConfiguration,
+        "slug 必须是 2-63 位小写字母、数字或连字符"
+      );
     }
   }
 
@@ -750,7 +984,9 @@ export class McpService {
       : {};
   }
 
-  private toPrismaJson(value: unknown): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
+  private toPrismaJson(
+    value: unknown
+  ): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
     return value === undefined ? undefined : this.jsonInput(value);
   }
 

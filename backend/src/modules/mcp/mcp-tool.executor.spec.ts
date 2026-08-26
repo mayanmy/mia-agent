@@ -20,6 +20,7 @@ function makeConfig(overrides: Partial<McpRuntimeToolConfig> = {}): McpRuntimeTo
     maxOutputChars: 20_000,
     maxConcurrency: 1,
     client: {
+      serverId: "server-1",
       endpoint: "http://127.0.0.1:3000/mcp",
       authType: "none",
       authConfig: {},
@@ -82,6 +83,30 @@ export const tests = [
     }
   },
   {
+    name: "McpToolExecutor retries only a transient connection failure",
+    run: async () => {
+      let connectCount = 0;
+      let callCount = 0;
+      const executor = new McpToolExecutor({
+        create: () => ({
+          connect: async () => {
+            connectCount += 1;
+            if (connectCount === 1) throw new Error("ECONNRESET while connecting");
+          },
+          callTool: async () => {
+            callCount += 1;
+            return { content: [{ type: "text", text: "ok" }], isError: false };
+          },
+          close: async () => undefined
+        })
+      } as never);
+
+      assert.equal(await executor.execute(makeConfig(), { text: "retry" }), "ok");
+      assert.equal(connectCount, 2);
+      assert.equal(callCount, 1);
+    }
+  },
+  {
     name: "McpToolExecutor maps protocol tool errors and truncates oversized context output",
     run: async () => {
       let callCount = 0;
@@ -103,10 +128,9 @@ export const tests = [
         (error: unknown) =>
           error instanceof Error && "errorType" in error && error.errorType === "mcp_tool_error"
       );
-      const output = await executor.execute(
-        makeConfig({ maxOutputChars: 100 }),
-        { text: "truncate" }
-      );
+      const output = await executor.execute(makeConfig({ maxOutputChars: 100 }), {
+        text: "truncate"
+      });
       assert.equal(typeof output, "object");
       assert.equal((output as Record<string, unknown>).truncated, true);
     }
@@ -130,10 +154,9 @@ export const tests = [
       } as never);
 
       await assert.rejects(
-        executor.execute(
-          makeConfig({ client: { ...makeConfig().client, toolTimeoutMs: 15 } }),
-          { text: "timeout" }
-        ),
+        executor.execute(makeConfig({ client: { ...makeConfig().client, toolTimeoutMs: 15 } }), {
+          text: "timeout"
+        }),
         (error: unknown) =>
           error instanceof Error && "errorType" in error && error.errorType === "mcp_tool_timeout"
       );

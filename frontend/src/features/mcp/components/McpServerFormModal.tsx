@@ -73,7 +73,8 @@ export function McpServerFormModal({
               options={[
                 { label: "无鉴权", value: "none" },
                 { label: "Bearer Token", value: "bearer" },
-                { label: "API Key Header", value: "api_key_header" }
+                { label: "API Key Header", value: "api_key_header" },
+                { label: "Client Credentials", value: "client_credentials" }
               ]}
             />
           </Form.Item>
@@ -87,7 +88,70 @@ export function McpServerFormModal({
             </Form.Item>
           ) : null}
         </div>
-        {authType !== "none" ? (
+        {authType === "client_credentials" ? (
+          <>
+            <Form.Item
+              label="Token URL"
+              name="tokenUrl"
+              rules={[{ required: true, type: "url", message: "请输入合法 Token URL" }]}
+            >
+              <Input placeholder="https://auth.example.com/oauth/token" />
+            </Form.Item>
+            <div className="mcpFormGrid">
+              <Form.Item
+                label="Client ID"
+                name="clientId"
+                rules={
+                  editing && secretConfigured
+                    ? []
+                    : [{ required: true, message: "请输入 Client ID" }]
+                }
+              >
+                <Input autoComplete="off" />
+              </Form.Item>
+              <Form.Item
+                extra={
+                  editing && secretConfigured
+                    ? "Client ID 与 Secret 同时留空将保留旧凭据。"
+                    : undefined
+                }
+                label="Client Secret"
+                name="clientSecret"
+                rules={
+                  editing && secretConfigured
+                    ? []
+                    : [{ required: true, message: "请输入 Client Secret" }]
+                }
+              >
+                <Input.Password autoComplete="new-password" />
+              </Form.Item>
+            </div>
+            <div className="mcpFormGrid">
+              <Form.Item label="客户端认证方式" name="clientAuthMethod">
+                <Select
+                  options={[
+                    { label: "请求 Body", value: "body" },
+                    { label: "HTTP Basic", value: "basic" }
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item label="Scope" name="scope">
+                <Input placeholder="mcp.read mcp.execute" />
+              </Form.Item>
+              <Form.Item label="Audience" name="audience">
+                <Input placeholder="https://mcp.example.com" />
+              </Form.Item>
+            </div>
+            <div className="mcpFormGrid">
+              <Form.Item label="缺省有效期 (秒)" name="defaultTtlSeconds">
+                <InputNumber min={30} max={86400} />
+              </Form.Item>
+              <Form.Item label="提前刷新 (秒)" name="refreshBeforeSeconds">
+                <InputNumber min={0} max={86399} />
+              </Form.Item>
+            </div>
+          </>
+        ) : authType !== "none" ? (
           <Form.Item
             extra={editing && secretConfigured ? "留空将保留已配置的凭据。" : undefined}
             label={authType === "bearer" ? "Bearer Token" : "API Key"}

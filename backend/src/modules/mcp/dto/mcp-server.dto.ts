@@ -10,6 +10,8 @@ export type McpServerCreateDto = {
   authType?: McpAuthTypeValue;
   authConfig?: Record<string, unknown>;
   secret?: string;
+  /** 动态鉴权凭据独立于公开 authConfig，Service 会整体加密后再持久化。 */
+  credentials?: Record<string, string>;
   enabled?: boolean;
   allowPrivateNetwork?: boolean;
   approvalMode?: McpApprovalModeValue;

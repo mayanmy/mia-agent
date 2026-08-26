@@ -40,6 +40,9 @@ const DEFAULT_VALUES: McpServerFormValues = {
   endpoint: "",
   authType: "none",
   headerName: "X-API-Key",
+  clientAuthMethod: "body",
+  defaultTtlSeconds: 300,
+  refreshBeforeSeconds: 60,
   enabled: true,
   allowPrivateNetwork: false,
   approvalMode: "auto",
@@ -99,6 +102,22 @@ export function McpServersPage() {
           typeof detail.authConfig.headerName === "string"
             ? detail.authConfig.headerName
             : "X-API-Key",
+        tokenUrl:
+          typeof detail.authConfig.tokenUrl === "string" ? detail.authConfig.tokenUrl : undefined,
+        clientAuthMethod: detail.authConfig.clientAuthMethod === "basic" ? "basic" : "body",
+        scope: typeof detail.authConfig.scope === "string" ? detail.authConfig.scope : undefined,
+        audience:
+          typeof detail.authConfig.audience === "string" ? detail.authConfig.audience : undefined,
+        defaultTtlSeconds:
+          typeof detail.authConfig.defaultTtlSeconds === "number"
+            ? detail.authConfig.defaultTtlSeconds
+            : 300,
+        refreshBeforeSeconds:
+          typeof detail.authConfig.refreshBeforeSeconds === "number"
+            ? detail.authConfig.refreshBeforeSeconds
+            : 60,
+        clientId: undefined,
+        clientSecret: undefined,
         secret: undefined
       });
       setFormOpen(true);
@@ -113,11 +132,37 @@ export function McpServersPage() {
   async function submit(values: McpServerFormValues) {
     setSaving(true);
     try {
-      const { headerName, ...rest } = values;
+      const {
+        headerName,
+        tokenUrl,
+        clientAuthMethod,
+        clientId,
+        clientSecret,
+        scope,
+        audience,
+        defaultTtlSeconds,
+        refreshBeforeSeconds,
+        ...rest
+      } = values;
+      const authConfig =
+        values.authType === "api_key_header"
+          ? { headerName }
+          : values.authType === "client_credentials"
+            ? {
+                tokenUrl,
+                clientAuthMethod,
+                scope,
+                audience,
+                defaultTtlSeconds,
+                refreshBeforeSeconds
+              }
+            : {};
       const payload: McpServerPayload = {
         ...rest,
         secret: values.secret || undefined,
-        authConfig: values.authType === "api_key_header" ? { headerName } : {}
+        authConfig,
+        credentials:
+          clientId && clientSecret ? { clientId: clientId.trim(), clientSecret } : undefined
       };
       if (editingId) {
         await updateMcpServer(editingId, payload);
@@ -158,7 +203,9 @@ export function McpServersPage() {
     try {
       const result = await syncMcpTools(server.id);
       if (result.status === "completed") {
-        message.success(`同步完成：${result.toolCount} 个工具，${result.schemaChangedCount} 个变更`);
+        message.success(
+          `同步完成：${result.toolCount} 个工具，${result.schemaChangedCount} 个变更`
+        );
       } else {
         message.error(result.errorMessage || "工具同步失败");
       }
@@ -309,7 +356,11 @@ export function McpServersPage() {
       <WorkspacePageHeader
         actions={
           <>
-            <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void refreshServers()}>
+            <Button
+              icon={<ReloadOutlined />}
+              loading={loading}
+              onClick={() => void refreshServers()}
+            >
               刷新
             </Button>
             <Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
@@ -356,7 +407,12 @@ export function McpServersPage() {
 
 function formatAuth(server: McpServerListItem): string {
   if (server.authType === "none") return "无鉴权";
-  const label = server.authType === "bearer" ? "Bearer" : "API Key";
+  const label =
+    server.authType === "bearer"
+      ? "Bearer"
+      : server.authType === "client_credentials"
+        ? "Client Credentials"
+        : "API Key";
   return `${label} · ${server.secretConfigured ? "已配置" : "缺凭据"}`;
 }
 

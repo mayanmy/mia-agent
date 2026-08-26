@@ -12,6 +12,14 @@ export type McpServerFormValues = {
   authType: McpAuthType;
   secret?: string;
   headerName?: string;
+  tokenUrl?: string;
+  clientAuthMethod?: "body" | "basic";
+  clientId?: string;
+  clientSecret?: string;
+  scope?: string;
+  audience?: string;
+  defaultTtlSeconds?: number;
+  refreshBeforeSeconds?: number;
   enabled: boolean;
   allowPrivateNetwork: boolean;
   approvalMode: McpApprovalMode;
@@ -22,8 +30,20 @@ export type McpServerFormValues = {
   maxConcurrency: number;
 };
 
-export type McpServerPayload = Omit<McpServerFormValues, "headerName"> & {
+export type McpServerPayload = Omit<
+  McpServerFormValues,
+  | "headerName"
+  | "tokenUrl"
+  | "clientAuthMethod"
+  | "clientId"
+  | "clientSecret"
+  | "scope"
+  | "audience"
+  | "defaultTtlSeconds"
+  | "refreshBeforeSeconds"
+> & {
   authConfig: Record<string, unknown>;
+  credentials?: Record<string, string>;
 };
 
 export type McpServerListItem = {
@@ -111,10 +131,7 @@ export function createMcpServer(payload: McpServerPayload): Promise<McpServerDet
   });
 }
 
-export function updateMcpServer(
-  id: string,
-  payload: McpServerPayload
-): Promise<McpServerDetail> {
+export function updateMcpServer(id: string, payload: McpServerPayload): Promise<McpServerDetail> {
   return request<McpServerDetail>(`/api/v1/mcp/servers/${id}`, {
     method: "PUT",
     body: JSON.stringify(payload)

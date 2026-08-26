@@ -49,7 +49,10 @@ export class McpToolExecutor {
   ): Promise<ToolJsonValue> {
     this.validateArguments(config, input);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort("mcp_tool_timeout"), config.client.toolTimeoutMs);
+    const timer = setTimeout(
+      () => controller.abort("mcp_tool_timeout"),
+      config.client.toolTimeoutMs
+    );
     const abortUpstream = () => controller.abort(upstreamSignal?.reason ?? "canceled");
     upstreamSignal?.addEventListener("abort", abortUpstream, { once: true });
     let release: (() => void) | undefined;
@@ -58,7 +61,7 @@ export class McpToolExecutor {
     try {
       release = await this.acquire(config.serverId, config.maxConcurrency, controller.signal);
       client = this.clientFactory.create(config.client);
-      await client.connect(controller.signal);
+      await this.connectWithRetry(client, controller.signal);
       const result = await client.callTool(config.remoteName, input, controller.signal);
       return this.adaptResult(result, config);
     } catch (error) {
@@ -70,16 +73,53 @@ export class McpToolExecutor {
           timeout ? "MCP 工具调用超时" : "MCP 工具调用已取消"
         );
       }
-      throw new McpToolExecutionError(
-        "mcp_protocol_error",
-        error instanceof Error ? error.message : "MCP 协议调用失败"
-      );
+      const message = error instanceof Error ? error.message : "MCP 协议调用失败";
+      throw new McpToolExecutionError(this.classifyProtocolError(message), message);
     } finally {
       clearTimeout(timer);
       upstreamSignal?.removeEventListener("abort", abortUpstream);
       await client?.close().catch(() => undefined);
       release?.();
     }
+  }
+
+  /** 只重试建连阶段一次；callTool 可能有副作用，发送后绝不能自动重放。 */
+  private async connectWithRetry(
+    client: ReturnType<McpProtocolClientFactory["create"]>,
+    signal: AbortSignal
+  ): Promise<void> {
+    try {
+      await client.connect(signal);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!this.isTransientConnectionError(message) || signal.aborted) throw error;
+      await this.delay(250 + Math.floor(Math.random() * 150), signal);
+      await client.connect(signal);
+    }
+  }
+
+  private isTransientConnectionError(message: string): boolean {
+    return /fetch failed|network|ECONN|EAI_AGAIN|ETIMEDOUT|socket|HTTP 5\d\d/i.test(message);
+  }
+
+  private classifyProtocolError(message: string): string {
+    if (/\b(401|403)\b|unauthori[sz]ed|forbidden/i.test(message)) return "mcp_auth_required";
+    if (this.isTransientConnectionError(message)) return "mcp_network_error";
+    return "mcp_protocol_error";
+  }
+
+  private delay(milliseconds: number, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        signal.removeEventListener("abort", abort);
+        resolve();
+      }, milliseconds);
+      const abort = () => {
+        clearTimeout(timer);
+        reject(new DOMException("MCP 重连等待已取消", "AbortError"));
+      };
+      signal.addEventListener("abort", abort, { once: true });
+    });
   }
 
   /** Schema 编译结果按同步哈希缓存；Schema 更新后自然生成新的校验器。 */

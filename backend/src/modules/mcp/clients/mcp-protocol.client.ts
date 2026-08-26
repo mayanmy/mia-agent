@@ -36,6 +36,11 @@ export type McpProtocolClientOptions = {
   requestTimeoutMs?: number;
   maxTotalTimeoutMs?: number;
   maxListPages?: number;
+  authProvider?: {
+    token(): Promise<string | undefined>;
+    onUnauthorized?(): Promise<void>;
+  };
+  onToolsChanged?: () => void;
 };
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
@@ -62,6 +67,17 @@ export class McpProtocolClient {
       {
         capabilities: {},
         inputRequired: { autoFulfill: false },
+        listChanged: this.options.onToolsChanged
+          ? {
+              tools: {
+                autoRefresh: false,
+                debounceMs: 300,
+                onChanged: (error) => {
+                  if (!error) this.options.onToolsChanged?.();
+                }
+              }
+            }
+          : undefined,
         listMaxPages: this.options.maxListPages ?? DEFAULT_MAX_LIST_PAGES,
         // SDK 2.x 默认仍使用 2025 握手；Mia 显式启用 auto，先探测 2026，
         // 收到明确的旧协议信号后再回退，避免把协议选择散落到业务代码。
@@ -77,6 +93,8 @@ export class McpProtocolClient {
     const transport = new StreamableHTTPClientTransport(new URL(this.options.endpoint), {
       fetch: this.options.fetch,
       requestInit: this.options.headers ? { headers: { ...this.options.headers } } : undefined,
+      // 动态鉴权使用 SDK 标准 AuthProvider 扩展点；Transport 会在 401 后调用刷新并只重试一次。
+      authProvider: this.options.authProvider,
       onInsufficientScope: "throw"
     });
 
