@@ -1,4 +1,9 @@
-import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import {
+  AuthProvider,
+  Client,
+  OAuthClientProvider,
+  StreamableHTTPClientTransport
+} from "@modelcontextprotocol/client";
 
 export type McpJsonValue =
   null | boolean | number | string | McpJsonValue[] | { [key: string]: McpJsonValue };
@@ -36,10 +41,7 @@ export type McpProtocolClientOptions = {
   requestTimeoutMs?: number;
   maxTotalTimeoutMs?: number;
   maxListPages?: number;
-  authProvider?: {
-    token(): Promise<string | undefined>;
-    onUnauthorized?(): Promise<void>;
-  };
+  authProvider?: AuthProvider | OAuthClientProvider;
   onToolsChanged?: () => void;
 };
 

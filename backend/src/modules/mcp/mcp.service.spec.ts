@@ -1,11 +1,6 @@
 import * as assert from "node:assert/strict";
 
-import {
-  McpApprovalMode,
-  McpAuthType,
-  McpHealthStatus,
-  McpTransport
-} from "@prisma/client";
+import { McpApprovalMode, McpAuthType, McpHealthStatus, McpTransport } from "@prisma/client";
 
 import { McpService } from "./mcp.service";
 
@@ -42,6 +37,7 @@ function makeServer() {
     createdAt: now,
     updatedAt: now,
     secret: null,
+    oauthAuthorization: null,
     _count: { tools: 1 }
   };
 }
@@ -96,7 +92,11 @@ export const tests = [
         ],
         close: async () => undefined
       };
-      const service = new McpService(prisma as never, { create: () => client } as never);
+      const service = new McpService(
+        prisma as never,
+        { create: () => client } as never,
+        {} as never
+      );
 
       const result = await service.syncTools(server.id);
 
@@ -140,11 +140,15 @@ export const tests = [
         },
         $transaction: async (operations: Promise<unknown>[]) => Promise.all(operations)
       };
-      const service = new McpService(prisma as never, {
-        create: () => {
-          throw new Error("authentication failed");
-        }
-      } as never);
+      const service = new McpService(
+        prisma as never,
+        {
+          create: () => {
+            throw new Error("authentication failed");
+          }
+        } as never,
+        {} as never
+      );
 
       const result = await service.syncTools(server.id);
 

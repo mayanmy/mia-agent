@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import {
   ApiOutlined,
   DeleteOutlined,
+  DisconnectOutlined,
   EditOutlined,
   PlusOutlined,
   ReloadOutlined,
+  SafetyCertificateOutlined,
   SyncOutlined,
   ToolOutlined
 } from "@ant-design/icons";
@@ -18,6 +20,8 @@ import {
   getMcpServer,
   listMcpServers,
   listMcpServerTools,
+  revokeMcpOAuth,
+  startMcpOAuth,
   syncMcpTools,
   testMcpConnection,
   updateMcpServer,
@@ -70,6 +74,11 @@ export function McpServersPage() {
 
   useEffect(() => {
     void refreshServers();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("oauth") === "success") {
+      message.success("MCP OAuth 授权成功，可以开始测试连接并同步工具");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
   }, []);
 
   async function refreshServers() {
@@ -104,7 +113,15 @@ export function McpServersPage() {
             : "X-API-Key",
         tokenUrl:
           typeof detail.authConfig.tokenUrl === "string" ? detail.authConfig.tokenUrl : undefined,
-        clientAuthMethod: detail.authConfig.clientAuthMethod === "basic" ? "basic" : "body",
+        clientAuthMethod:
+          detail.authType === "oauth"
+            ? detail.authConfig.clientAuthMethod === "client_secret_basic" ||
+              detail.authConfig.clientAuthMethod === "client_secret_post"
+              ? detail.authConfig.clientAuthMethod
+              : "none"
+            : detail.authConfig.clientAuthMethod === "basic"
+              ? "basic"
+              : "body",
         scope: typeof detail.authConfig.scope === "string" ? detail.authConfig.scope : undefined,
         audience:
           typeof detail.authConfig.audience === "string" ? detail.authConfig.audience : undefined,
@@ -156,13 +173,16 @@ export function McpServersPage() {
                 defaultTtlSeconds,
                 refreshBeforeSeconds
               }
-            : {};
+            : values.authType === "oauth"
+              ? { clientAuthMethod, scope }
+              : {};
       const payload: McpServerPayload = {
         ...rest,
         secret: values.secret || undefined,
         authConfig,
-        credentials:
-          clientId && clientSecret ? { clientId: clientId.trim(), clientSecret } : undefined
+        credentials: clientId
+          ? { clientId: clientId.trim(), clientSecret: clientSecret ?? "" }
+          : undefined
       };
       if (editingId) {
         await updateMcpServer(editingId, payload);
@@ -216,6 +236,49 @@ export function McpServersPage() {
     } finally {
       setActiveAction(null);
     }
+  }
+
+  async function runOAuth(server: McpServerListItem) {
+    setActiveAction(`oauth:${server.id}`);
+    try {
+      if (server.oauthAuthorized) {
+        Modal.confirm({
+          title: "重新授权 MCP Server",
+          content: "新授权完成前，现有 Token 仍可继续使用。",
+          okText: "继续",
+          cancelText: "取消",
+          onOk: () => void openOAuthWindow(server)
+        });
+      } else {
+        await openOAuthWindow(server);
+      }
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function openOAuthWindow(server: McpServerListItem) {
+    try {
+      const result = await startMcpOAuth(server.id);
+      window.location.assign(result.authorizationUrl);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "启动 OAuth 授权失败");
+    }
+  }
+
+  function confirmRevokeOAuth(server: McpServerListItem) {
+    Modal.confirm({
+      title: "撤销 OAuth 授权",
+      content: "撤销后，该 Server 的工具会立即停止执行，直到重新授权。",
+      okText: "撤销",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: async () => {
+        await revokeMcpOAuth(server.id);
+        message.success("OAuth 授权已撤销");
+        await refreshServers();
+      }
+    });
   }
 
   async function openTools(server: McpServerListItem) {
@@ -284,7 +347,14 @@ export function McpServersPage() {
       title: "鉴权",
       width: 150,
       render: (_, server) => (
-        <Tag color={server.authType === "none" || server.secretConfigured ? "green" : "red"}>
+        <Tag
+          color={
+            server.authType === "none" ||
+            (server.authType === "oauth" ? server.oauthAuthorized : server.secretConfigured)
+              ? "green"
+              : "red"
+          }
+        >
           {formatAuth(server)}
         </Tag>
       )
@@ -313,9 +383,29 @@ export function McpServersPage() {
     {
       title: "操作",
       fixed: "right",
-      width: 260,
+      width: 300,
       render: (_, server) => (
         <Space size={0}>
+          {server.authType === "oauth" ? (
+            <Tooltip title={server.oauthAuthorized ? "重新授权" : "OAuth 授权"}>
+              <Button
+                icon={<SafetyCertificateOutlined />}
+                loading={activeAction === `oauth:${server.id}`}
+                type="text"
+                onClick={() => void runOAuth(server)}
+              />
+            </Tooltip>
+          ) : null}
+          {server.authType === "oauth" && server.oauthAuthorized ? (
+            <Tooltip title="撤销 OAuth 授权">
+              <Button
+                danger
+                icon={<DisconnectOutlined />}
+                type="text"
+                onClick={() => confirmRevokeOAuth(server)}
+              />
+            </Tooltip>
+          ) : null}
           <Tooltip title="测试连接">
             <Button
               icon={<ApiOutlined />}
@@ -407,6 +497,9 @@ export function McpServersPage() {
 
 function formatAuth(server: McpServerListItem): string {
   if (server.authType === "none") return "无鉴权";
+  if (server.authType === "oauth") {
+    return `OAuth · ${server.oauthAuthorized ? "已授权" : "待授权"}`;
+  }
   const label =
     server.authType === "bearer"
       ? "Bearer"

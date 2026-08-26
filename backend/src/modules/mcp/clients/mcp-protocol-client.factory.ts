@@ -6,11 +6,12 @@ import {
   McpClientCredentialsConfig,
   McpClientCredentialsProvider
 } from "./mcp-client-credentials.provider";
+import { McpOAuthManager } from "./mcp-oauth.manager";
 
 export type McpClientRuntimeConfig = {
   serverId: string;
   endpoint: string;
-  authType: "none" | "bearer" | "api_key_header" | "client_credentials";
+  authType: "none" | "bearer" | "api_key_header" | "client_credentials" | "oauth";
   authConfig: Record<string, unknown>;
   secret?: string;
   credentials?: Record<string, string>;
@@ -24,6 +25,8 @@ export type McpClientRuntimeConfig = {
 export class McpProtocolClientFactory {
   private readonly dynamicProviders = new Map<string, McpClientCredentialsProvider>();
   private toolsChangedHandler?: (serverId: string) => void;
+
+  constructor(private readonly oauthManager: McpOAuthManager) {}
 
   /** Service 注册通知入口，Runtime DTO 仍保持纯 JSON，便于未来远程化。 */
   registerToolsChangedHandler(handler: (serverId: string) => void): void {
@@ -49,7 +52,22 @@ export class McpProtocolClientFactory {
     const authProvider =
       config.authType === "client_credentials"
         ? this.getClientCredentialsProvider(config)
-        : undefined;
+        : config.authType === "oauth"
+          ? this.oauthManager.createRuntimeProvider({
+              serverId: config.serverId,
+              endpoint: config.endpoint,
+              scope:
+                typeof config.authConfig.scope === "string" ? config.authConfig.scope : undefined,
+              clientAuthMethod:
+                config.authConfig.clientAuthMethod === "client_secret_basic" ||
+                config.authConfig.clientAuthMethod === "client_secret_post"
+                  ? config.authConfig.clientAuthMethod
+                  : "none",
+              clientId: config.credentials?.clientId,
+              clientSecret: config.credentials?.clientSecret,
+              allowPrivateNetwork: config.allowPrivateNetwork
+            })
+          : undefined;
 
     return new McpProtocolClient({
       endpoint: config.endpoint,

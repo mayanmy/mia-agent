@@ -1,11 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Redirect } from "@nestjs/common";
 import { UserRole } from "@prisma/client";
 
 import { CurrentUser } from "../../core/auth/current-user.decorator";
+import { Public } from "../../core/auth/public.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
+import { getConfig } from "../../core/config";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import {
   McpConnectionTestResult,
+  McpOAuthStartResponse,
   McpServerCreateDto,
   McpServerDetail,
   McpServerListItem,
@@ -35,6 +38,23 @@ export class McpController {
     return this.mcpService.createServer(payload, currentUser.id);
   }
 
+  /** OAuth 回调依靠一次性 state 鉴别请求，不能要求第三方授权服务器携带 Mia JWT。 */
+  @Get("oauth/callback")
+  @Public()
+  @Redirect()
+  async completeOAuth(
+    @Query("state") state: string,
+    @Query("code") code?: string,
+    @Query("iss") iss?: string,
+    @Query("error") error?: string
+  ): Promise<{ url: string; statusCode: number }> {
+    const serverId = await this.mcpService.completeOAuthAuthorization({ state, code, iss, error });
+    const url = new URL("/mcp", getConfig().publicBaseUrl);
+    url.searchParams.set("oauth", "success");
+    url.searchParams.set("serverId", serverId);
+    return { url: url.toString(), statusCode: 302 };
+  }
+
   @Get(":id")
   async getServer(@Param("id") id: string): Promise<McpServerDetail> {
     return this.mcpService.getServer(id);
@@ -59,6 +79,20 @@ export class McpController {
   @Post(":id/test")
   async testConnection(@Param("id") id: string): Promise<McpConnectionTestResult> {
     return this.mcpService.testConnection(id);
+  }
+
+  @Post(":id/oauth/authorize")
+  async startOAuth(
+    @Param("id") id: string,
+    @CurrentUser() currentUser: CurrentUserDto
+  ): Promise<McpOAuthStartResponse> {
+    return this.mcpService.startOAuthAuthorization(id, currentUser.id);
+  }
+
+  @Delete(":id/oauth/authorization")
+  async revokeOAuth(@Param("id") id: string): Promise<null> {
+    await this.mcpService.revokeOAuthAuthorization(id);
+    return null;
   }
 
   @Post(":id/sync-tools")

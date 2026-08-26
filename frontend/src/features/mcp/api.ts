@@ -1,6 +1,6 @@
 import { request } from "../../shared/api/client";
 
-export type McpAuthType = "none" | "bearer" | "api_key_header" | "client_credentials";
+export type McpAuthType = "none" | "bearer" | "api_key_header" | "client_credentials" | "oauth";
 export type McpApprovalMode = "auto" | "confirm" | "disabled";
 export type McpRiskLevel = "low" | "medium" | "high";
 
@@ -13,7 +13,7 @@ export type McpServerFormValues = {
   secret?: string;
   headerName?: string;
   tokenUrl?: string;
-  clientAuthMethod?: "body" | "basic";
+  clientAuthMethod?: "body" | "basic" | "none" | "client_secret_basic" | "client_secret_post";
   clientId?: string;
   clientSecret?: string;
   scope?: string;
@@ -55,6 +55,7 @@ export type McpServerListItem = {
   authType: McpAuthType;
   authConfig: Record<string, unknown>;
   secretConfigured: boolean;
+  oauthAuthorized: boolean;
   enabled: boolean;
   allowPrivateNetwork: boolean;
   approvalMode: McpApprovalMode;
@@ -145,6 +146,21 @@ export function deleteMcpServer(id: string): Promise<null> {
 export function testMcpConnection(id: string): Promise<McpConnectionTestResult> {
   return request<McpConnectionTestResult>(`/api/v1/mcp/servers/${id}/test`, {
     method: "POST"
+  });
+}
+
+export function startMcpOAuth(
+  id: string
+): Promise<{ authorizationUrl: string; expiresAt: string }> {
+  return request<{ authorizationUrl: string; expiresAt: string }>(
+    `/api/v1/mcp/servers/${id}/oauth/authorize`,
+    { method: "POST" }
+  );
+}
+
+export function revokeMcpOAuth(id: string): Promise<null> {
+  return request<null>(`/api/v1/mcp/servers/${id}/oauth/authorization`, {
+    method: "DELETE"
   });
 }
 

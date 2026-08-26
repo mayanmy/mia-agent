@@ -1,4 +1,5 @@
-export type McpAuthTypeValue = "none" | "bearer" | "api_key_header" | "client_credentials";
+export type McpAuthTypeValue =
+  "none" | "bearer" | "api_key_header" | "client_credentials" | "oauth";
 export type McpApprovalModeValue = "auto" | "confirm" | "disabled";
 export type McpRiskLevelValue = "low" | "medium" | "high";
 
@@ -35,6 +36,7 @@ export type McpServerListItem = {
   authType: McpAuthTypeValue;
   authConfig: Record<string, unknown>;
   secretConfigured: boolean;
+  oauthAuthorized: boolean;
   enabled: boolean;
   allowPrivateNetwork: boolean;
   approvalMode: McpApprovalModeValue;
@@ -67,6 +69,11 @@ export type McpConnectionTestResult = {
   toolCount?: number;
   elapsedMs: number;
   errorMessage?: string;
+};
+
+export type McpOAuthStartResponse = {
+  authorizationUrl: string;
+  expiresAt: string;
 };
 
 export type McpServerToolUpdateDto = {

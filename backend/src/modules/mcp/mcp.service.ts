@@ -30,6 +30,7 @@ import {
   McpClientRuntimeConfig
 } from "./clients/mcp-protocol-client.factory";
 import { McpProtocolTool } from "./clients/mcp-protocol.client";
+import { McpOAuthManager } from "./clients/mcp-oauth.manager";
 import {
   McpRuntimeResolutionError,
   McpRuntimeToolConfig,
@@ -38,6 +39,7 @@ import {
 
 const SERVER_INCLUDE = {
   secret: { select: { id: true } },
+  oauthAuthorization: { select: { authorizedAt: true } },
   _count: { select: { tools: true } }
 } satisfies Prisma.McpServerInclude;
 
@@ -53,7 +55,8 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly clientFactory: McpProtocolClientFactory
+    private readonly clientFactory: McpProtocolClientFactory,
+    private readonly oauthManager: McpOAuthManager
   ) {}
 
   onModuleInit(): void {
@@ -209,6 +212,21 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     const effectiveAuthType = payload.authType ? this.authType(payload.authType) : current.authType;
     const authChanged = payload.authType !== undefined && effectiveAuthType !== current.authType;
     const encryptedCredential = this.credentialValue(payload, effectiveAuthType, authChanged);
+    const allowPrivateNetwork = payload.allowPrivateNetwork ?? current.allowPrivateNetwork;
+    const oauthConfigChanged =
+      payload.authConfig !== undefined &&
+      this.stableJson(
+        this.normalizeAuthConfig(effectiveAuthType, payload.authConfig, allowPrivateNetwork)
+      ) !== this.stableJson(this.jsonRecord(current.authConfig));
+    const oauthNeedsReauthorization =
+      current.authType === McpAuthType.OAUTH &&
+      (authChanged ||
+        oauthConfigChanged ||
+        payload.credentials !== undefined ||
+        (payload.endpoint !== undefined &&
+          this.endpoint(payload.endpoint, allowPrivateNetwork) !== current.endpoint) ||
+        (payload.allowPrivateNetwork !== undefined &&
+          allowPrivateNetwork !== current.allowPrivateNetwork));
 
     try {
       const server = await this.prisma.$transaction(async (tx) => {
@@ -233,6 +251,10 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
           secretId = null;
           await tx.mcpServer.update({ where: { id }, data: { secretId: null } });
           await tx.mcpServerSecret.delete({ where: { id: obsoleteSecretId } });
+        }
+        if (oauthNeedsReauthorization) {
+          // OAuth Client、Scope 或资源地址变化后，旧 Token 的受众与授权范围不再可信。
+          await tx.mcpOAuthAuthorization.deleteMany({ where: { serverId: id } });
         }
 
         return tx.mcpServer.update({
@@ -506,6 +528,34 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     }));
   }
 
+  async startOAuthAuthorization(
+    serverId: string,
+    userId: string
+  ): Promise<{ authorizationUrl: string; expiresAt: string }> {
+    const server = await this.requireServer(serverId);
+    if (server.authType !== McpAuthType.OAUTH) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "该 MCP Server 未配置 OAuth");
+    }
+    return this.oauthManager.startAuthorization(serverId, userId);
+  }
+
+  async completeOAuthAuthorization(input: {
+    state: string;
+    code?: string;
+    iss?: string;
+    error?: string;
+  }): Promise<string> {
+    return this.oauthManager.completeAuthorization(input);
+  }
+
+  async revokeOAuthAuthorization(serverId: string): Promise<void> {
+    const server = await this.requireServer(serverId);
+    if (server.authType !== McpAuthType.OAUTH) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "该 MCP Server 未配置 OAuth");
+    }
+    await this.oauthManager.revoke(serverId);
+  }
+
   /** 周期同步兼作健康检查，并刷新远端工具 Schema；单实例内禁止重叠执行。 */
   private async runHealthPatrol(): Promise<void> {
     if (this.patrolRunning) return;
@@ -772,6 +822,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       authType: server.authType.toLowerCase() as McpServerListItem["authType"],
       authConfig: this.jsonRecord(server.authConfig),
       secretConfigured: Boolean(server.secret),
+      oauthAuthorized: Boolean(server.oauthAuthorization?.authorizedAt),
       enabled: server.enabled,
       allowPrivateNetwork: server.allowPrivateNetwork,
       approvalMode: server.approvalMode.toLowerCase() as McpServerListItem["approvalMode"],
@@ -855,6 +906,16 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       }
       return { headerName };
     }
+    if (authType === McpAuthType.OAUTH) {
+      const clientAuthMethod = String(raw.clientAuthMethod ?? "none");
+      if (!["none", "client_secret_basic", "client_secret_post"].includes(clientAuthMethod)) {
+        throw new AppError(ErrorCodes.mcp.invalidConfiguration, "OAuth Client 认证方式不合法");
+      }
+      return {
+        scope: typeof raw.scope === "string" ? raw.scope.trim() : "",
+        clientAuthMethod
+      };
+    }
 
     const defaultTtlSeconds = this.bounded(
       Number(raw.defaultTtlSeconds ?? 300),
@@ -903,6 +964,18 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       }
       return JSON.stringify({ clientId, clientSecret });
     }
+    if (authType === McpAuthType.OAUTH) {
+      const clientId = payload.credentials?.clientId?.trim();
+      const clientSecret = payload.credentials?.clientSecret;
+      if (!clientId && !clientSecret) return undefined;
+      if (!clientId) {
+        throw new AppError(
+          ErrorCodes.mcp.invalidConfiguration,
+          "OAuth Client Secret 不能脱离 Client ID 配置"
+        );
+      }
+      return JSON.stringify({ clientId, clientSecret: clientSecret ?? "" });
+    }
     if (!payload.secret) {
       if (required) throw new AppError(ErrorCodes.mcp.invalidConfiguration, "鉴权凭据不能为空");
       return undefined;
@@ -915,7 +988,9 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     value?: string
   ): Pick<McpClientRuntimeConfig, "secret" | "credentials"> {
     if (!value) return {};
-    if (authType !== McpAuthType.CLIENT_CREDENTIALS) return { secret: value };
+    if (authType !== McpAuthType.CLIENT_CREDENTIALS && authType !== McpAuthType.OAUTH) {
+      return { secret: value };
+    }
     try {
       const credentials = JSON.parse(value) as Record<string, unknown>;
       if (

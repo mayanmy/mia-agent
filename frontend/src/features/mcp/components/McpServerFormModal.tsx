@@ -74,8 +74,13 @@ export function McpServerFormModal({
                 { label: "无鉴权", value: "none" },
                 { label: "Bearer Token", value: "bearer" },
                 { label: "API Key Header", value: "api_key_header" },
-                { label: "Client Credentials", value: "client_credentials" }
+                { label: "Client Credentials", value: "client_credentials" },
+                { label: "OAuth Authorization Code + PKCE", value: "oauth" }
               ]}
+              onChange={(value) => {
+                if (value === "oauth") form.setFieldValue("clientAuthMethod", "none");
+                if (value === "client_credentials") form.setFieldValue("clientAuthMethod", "body");
+              }}
             />
           </Form.Item>
           {authType === "api_key_header" ? (
@@ -148,6 +153,39 @@ export function McpServerFormModal({
               </Form.Item>
               <Form.Item label="提前刷新 (秒)" name="refreshBeforeSeconds">
                 <InputNumber min={0} max={86399} />
+              </Form.Item>
+            </div>
+          </>
+        ) : authType === "oauth" ? (
+          <>
+            <div className="mcpFormGrid">
+              <Form.Item
+                extra="留空时使用服务端支持的动态 Client Registration。"
+                label="预注册 Client ID"
+                name="clientId"
+              >
+                <Input autoComplete="off" />
+              </Form.Item>
+              <Form.Item
+                extra={editing && secretConfigured ? "留空将保留已配置的 Client 凭据。" : undefined}
+                label="Client Secret"
+                name="clientSecret"
+              >
+                <Input.Password autoComplete="new-password" />
+              </Form.Item>
+            </div>
+            <div className="mcpFormGrid">
+              <Form.Item label="Token Endpoint 认证" name="clientAuthMethod">
+                <Select
+                  options={[
+                    { label: "公共客户端 (none)", value: "none" },
+                    { label: "Client Secret Basic", value: "client_secret_basic" },
+                    { label: "Client Secret Post", value: "client_secret_post" }
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item label="Scope" name="scope">
+                <Input placeholder="mcp.read mcp.execute" />
               </Form.Item>
             </div>
           </>

@@ -145,6 +145,7 @@ enum McpAuthType {
   BEARER
   API_KEY_HEADER
   CLIENT_CREDENTIALS
+  OAUTH
 
   @@map("mcp_auth_type")
 }
@@ -195,25 +196,26 @@ enum McpSyncTrigger {
 }
 
 model User {
-  id                  String            @id @default(uuid()) @db.Uuid
-  email               String            @unique(map: "uq_users_email")
-  displayName         String            @map("display_name")
-  passwordHash        String            @map("password_hash")
-  role                UserRole          @default(USER)
-  lastLoginAt         DateTime?         @map("last_login_at") @db.Timestamptz(6)
-  disabledAt          DateTime?         @map("disabled_at") @db.Timestamptz(6)
-  passwordChangedAt   DateTime          @default(now()) @map("password_changed_at") @db.Timestamptz(6)
-  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  authSessions        AuthSession[]
-  sentInvitations     UserInvitation[]  @relation("UserInvitationInviter")
-  chatSessions        ChatSession[]
-  createdAgentApiKeys AgentApiKey[]     @relation("AgentApiKeyCreator")
-  agentRuns           AgentRun[]
-  createdHttpTools    HttpTool[]        @relation("HttpToolCreator")
-  createdToolSecrets  ToolSecret[]      @relation("ToolSecretCreator")
-  createdMcpServers   McpServer[]       @relation("McpServerCreator")
-  createdMcpSecrets   McpServerSecret[] @relation("McpServerSecretCreator")
+  id                            String                  @id @default(uuid()) @db.Uuid
+  email                         String                  @unique(map: "uq_users_email")
+  displayName                   String                  @map("display_name")
+  passwordHash                  String                  @map("password_hash")
+  role                          UserRole                @default(USER)
+  lastLoginAt                   DateTime?               @map("last_login_at") @db.Timestamptz(6)
+  disabledAt                    DateTime?               @map("disabled_at") @db.Timestamptz(6)
+  passwordChangedAt             DateTime                @default(now()) @map("password_changed_at") @db.Timestamptz(6)
+  createdAt                     DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                     DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  authSessions                  AuthSession[]
+  sentInvitations               UserInvitation[]        @relation("UserInvitationInviter")
+  chatSessions                  ChatSession[]
+  createdAgentApiKeys           AgentApiKey[]           @relation("AgentApiKeyCreator")
+  agentRuns                     AgentRun[]
+  createdHttpTools              HttpTool[]              @relation("HttpToolCreator")
+  createdToolSecrets            ToolSecret[]            @relation("ToolSecretCreator")
+  createdMcpServers             McpServer[]             @relation("McpServerCreator")
+  createdMcpSecrets             McpServerSecret[]       @relation("McpServerSecretCreator")
+  createdMcpOAuthAuthorizations McpOAuthAuthorization[] @relation("McpOAuthAuthorizationCreator")
 
   @@index([role, disabledAt], map: "idx_users_role_disabled_at")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
@@ -543,39 +545,40 @@ model ToolSecret {
 
 /// 管理员配置的 MCP Server。发现结果保存为本地快照，运行时不依赖实时 listTools。
 model McpServer {
-  id                        String           @id @default(uuid()) @db.Uuid
+  id                        String                 @id @default(uuid()) @db.Uuid
   name                      String
-  slug                      String           @unique(map: "uq_mcp_servers_slug")
-  description               String           @default("") @db.Text
-  transport                 McpTransport     @default(STREAMABLE_HTTP)
+  slug                      String                 @unique(map: "uq_mcp_servers_slug")
+  description               String                 @default("") @db.Text
+  transport                 McpTransport           @default(STREAMABLE_HTTP)
   endpoint                  String
-  authType                  McpAuthType      @default(NONE) @map("auth_type")
-  authConfig                Json             @default("{}") @map("auth_config") @db.JsonB
-  secretId                  String?          @unique(map: "uq_mcp_servers_secret_id") @map("secret_id") @db.Uuid
-  enabled                   Boolean          @default(true)
-  allowPrivateNetwork       Boolean          @default(false) @map("allow_private_network")
-  approvalMode              McpApprovalMode  @default(AUTO) @map("approval_mode")
-  connectTimeoutMs          Int              @default(10000) @map("connect_timeout_ms")
-  toolTimeoutMs             Int              @default(30000) @map("tool_timeout_ms")
-  maxResponseBytes          Int              @default(1000000) @map("max_response_bytes")
-  maxOutputChars            Int              @default(20000) @map("max_output_chars")
-  maxConcurrency            Int              @default(3) @map("max_concurrency")
-  healthStatus              McpHealthStatus  @default(UNKNOWN) @map("health_status")
-  negotiatedProtocolVersion String?          @map("negotiated_protocol_version")
-  serverInfo                Json?            @map("server_info") @db.JsonB
-  capabilities              Json?            @db.JsonB
-  lastConnectedAt           DateTime?        @map("last_connected_at") @db.Timestamptz(6)
-  lastDiscoveredAt          DateTime?        @map("last_discovered_at") @db.Timestamptz(6)
-  lastErrorCode             String?          @map("last_error_code")
-  lastErrorMessage          String?          @map("last_error_message") @db.Text
-  createdByUserId           String           @map("created_by_user_id") @db.Uuid
-  deletedAt                 DateTime?        @map("deleted_at") @db.Timestamptz(6)
-  createdAt                 DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                 DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  secret                    McpServerSecret? @relation(fields: [secretId], references: [id], onDelete: SetNull)
-  createdBy                 User             @relation("McpServerCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  authType                  McpAuthType            @default(NONE) @map("auth_type")
+  authConfig                Json                   @default("{}") @map("auth_config") @db.JsonB
+  secretId                  String?                @unique(map: "uq_mcp_servers_secret_id") @map("secret_id") @db.Uuid
+  enabled                   Boolean                @default(true)
+  allowPrivateNetwork       Boolean                @default(false) @map("allow_private_network")
+  approvalMode              McpApprovalMode        @default(AUTO) @map("approval_mode")
+  connectTimeoutMs          Int                    @default(10000) @map("connect_timeout_ms")
+  toolTimeoutMs             Int                    @default(30000) @map("tool_timeout_ms")
+  maxResponseBytes          Int                    @default(1000000) @map("max_response_bytes")
+  maxOutputChars            Int                    @default(20000) @map("max_output_chars")
+  maxConcurrency            Int                    @default(3) @map("max_concurrency")
+  healthStatus              McpHealthStatus        @default(UNKNOWN) @map("health_status")
+  negotiatedProtocolVersion String?                @map("negotiated_protocol_version")
+  serverInfo                Json?                  @map("server_info") @db.JsonB
+  capabilities              Json?                  @db.JsonB
+  lastConnectedAt           DateTime?              @map("last_connected_at") @db.Timestamptz(6)
+  lastDiscoveredAt          DateTime?              @map("last_discovered_at") @db.Timestamptz(6)
+  lastErrorCode             String?                @map("last_error_code")
+  lastErrorMessage          String?                @map("last_error_message") @db.Text
+  createdByUserId           String                 @map("created_by_user_id") @db.Uuid
+  deletedAt                 DateTime?              @map("deleted_at") @db.Timestamptz(6)
+  createdAt                 DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  secret                    McpServerSecret?       @relation(fields: [secretId], references: [id], onDelete: SetNull)
+  createdBy                 User                   @relation("McpServerCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   tools                     McpServerTool[]
   syncRuns                  McpSyncRun[]
+  oauthAuthorization        McpOAuthAuthorization?
 
   @@index([enabled, deletedAt], map: "idx_mcp_servers_enabled_deleted_at")
   @@index([healthStatus, updatedAt(sort: Desc)], map: "idx_mcp_servers_health_updated_at")
@@ -594,6 +597,24 @@ model McpServerSecret {
 
   @@index([createdByUserId, createdAt(sort: Desc)], map: "idx_mcp_server_secrets_creator_created_at")
   @@map("mcp_server_secrets")
+}
+
+/// 团队共享的 MCP OAuth 授权。Token、PKCE 和 Discovery 状态整体加密，state 仅保存哈希。
+model McpOAuthAuthorization {
+  id              String    @id @default(uuid()) @db.Uuid
+  serverId        String    @unique(map: "uq_mcp_oauth_authorizations_server_id") @map("server_id") @db.Uuid
+  encryptedState  String    @map("encrypted_state") @db.Text
+  stateHash       String?   @unique(map: "uq_mcp_oauth_authorizations_state_hash") @map("state_hash")
+  stateExpiresAt  DateTime? @map("state_expires_at") @db.Timestamptz(6)
+  authorizedAt    DateTime? @map("authorized_at") @db.Timestamptz(6)
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  server          McpServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  createdBy       User      @relation("McpOAuthAuthorizationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([stateExpiresAt], map: "idx_mcp_oauth_authorizations_state_expires_at")
+  @@map("mcp_oauth_authorizations")
 }
 
 /// 远程 Tool 的本地发现快照。runtimeId 永久稳定，避免重同步破坏 Agent 已有绑定。
