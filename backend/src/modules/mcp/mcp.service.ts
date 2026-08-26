@@ -97,7 +97,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     return this.toDetail(server, enabledToolCount);
   }
 
-  /** 只向统一工具目录暴露已启用、可用且无需人工确认的远程 Tool。 */
+  /** 向统一工具目录暴露 AUTO 与 CONFIRM Tool；DISABLED 策略仍在目录层过滤。 */
   async listRuntimeTools(): Promise<McpRuntimeToolDefinition[]> {
     const tools = await this.prisma.mcpServerTool.findMany({
       where: this.runtimeToolWhere(),
@@ -123,7 +123,10 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
    * 执行前重新读取 Server/Tool 状态，不能信任模型生成定义时的旧快照。
    * 这样管理员停用 Server 或 Tool 后，进行中的会话也会立即阻止下一次调用。
    */
-  async resolveRuntimeTool(runtimeId: string): Promise<McpRuntimeToolConfig | null> {
+  async resolveRuntimeTool(
+    runtimeId: string,
+    approvalGranted = false
+  ): Promise<McpRuntimeToolConfig | null> {
     if (!runtimeId.startsWith("mcp_")) return null;
     const tool = await this.prisma.mcpServerTool.findUnique({
       where: { runtimeId },
@@ -140,8 +143,9 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       throw new McpRuntimeResolutionError("mcp_auth_required", "MCP Server 需要重新鉴权");
     }
     if (
-      tool.approvalMode === McpApprovalMode.CONFIRM ||
-      (!tool.approvalMode && tool.server.approvalMode === McpApprovalMode.CONFIRM)
+      !approvalGranted &&
+      (tool.approvalMode === McpApprovalMode.CONFIRM ||
+        (!tool.approvalMode && tool.server.approvalMode === McpApprovalMode.CONFIRM))
     ) {
       throw new McpRuntimeResolutionError("mcp_approval_required", "MCP Tool 需要人工确认");
     }
@@ -616,10 +620,12 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
         deletedAt: null,
         healthStatus: { in: [McpHealthStatus.HEALTHY, McpHealthStatus.DEGRADED] }
       },
-      OR: [
-        { approvalMode: McpApprovalMode.AUTO },
-        { approvalMode: null, server: { approvalMode: McpApprovalMode.AUTO } }
-      ]
+      NOT: {
+        OR: [
+          { approvalMode: McpApprovalMode.DISABLED },
+          { approvalMode: null, server: { approvalMode: McpApprovalMode.DISABLED } }
+        ]
+      }
     };
   }
 

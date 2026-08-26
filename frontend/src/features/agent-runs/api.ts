@@ -1,7 +1,7 @@
 import { request, type PageResult } from "../../shared/api/client";
 
 export type AgentRunStatus =
-  "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELED" | "TIMED_OUT";
+  "QUEUED" | "RUNNING" | "WAITING_APPROVAL" | "COMPLETED" | "FAILED" | "CANCELED" | "TIMED_OUT";
 export type AgentRunSource = "INTERNAL_CHAT" | "PUBLIC_WIDGET" | "SERVICE_API" | "ASYNC_TASK";
 
 export type AgentRunListItem = {

@@ -33,9 +33,15 @@ type Filters = Omit<AgentRunQuery, "page" | "pageSize" | "createdFrom" | "create
   range?: [Dayjs, Dayjs] | null;
 };
 
-const statusOptions = ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELED", "TIMED_OUT"].map(
-  (value) => ({ label: value, value })
-);
+const statusOptions = [
+  "QUEUED",
+  "RUNNING",
+  "WAITING_APPROVAL",
+  "COMPLETED",
+  "FAILED",
+  "CANCELED",
+  "TIMED_OUT"
+].map((value) => ({ label: value, value }));
 const sourceOptions = ["INTERNAL_CHAT", "PUBLIC_WIDGET", "SERVICE_API", "ASYNC_TASK"].map(
   (value) => ({ label: value, value })
 );
@@ -323,6 +329,7 @@ function statusColor(status: string) {
   if (status === "COMPLETED") return "green";
   if (status === "RUNNING") return "blue";
   if (status === "FAILED" || status === "TIMED_OUT") return "red";
+  if (status === "WAITING_APPROVAL") return "gold";
   if (status === "CANCELED") return "orange";
   return "default";
 }

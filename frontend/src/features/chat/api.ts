@@ -159,6 +159,8 @@ export type ChatStreamEventType =
   | "retrieval_result"
   | "token"
   | "tool_call"
+  | "tool_approval_required"
+  | "tool_approval_resolved"
   | "tool_result"
   | "message_end"
   | "error"
@@ -172,12 +174,22 @@ export type ChatStreamEventData = {
   sources?: ChatRetrievalSource[];
   /** 工具调用或运行事件 ID。 */
   id?: string;
+  /** 审批事件对应的模型工具调用 ID。 */
+  toolCallId?: string;
   /** 工具注册名称。 */
   name?: string;
   /** 工具调用参数。 */
   arguments?: Record<string, unknown>;
   /** 与 tool_result 对应的工具调用 ID。 */
   toolId?: string;
+  /** CONFIRM 工具的一次性审批 ID。 */
+  approvalId?: string;
+  /** 审批有效期。 */
+  expiresAt?: string;
+  /** 审批是否通过。 */
+  approved?: boolean;
+  /** 审批状态。 */
+  status?: string;
   /** 工具是否执行成功。 */
   ok?: boolean;
   /** 工具结构化输出。 */
@@ -327,6 +339,16 @@ export function createChatCompletion(
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+/** 批准当前登录成员自己的待执行 MCP 工具调用。 */
+export function approveMcpToolCall(approvalId: string): Promise<unknown> {
+  return request(`/api/v1/mcp/approvals/${approvalId}/approve`, { method: "POST" });
+}
+
+/** 拒绝工具调用后，原 SSE 会恢复并把拒绝结果送回模型。 */
+export function rejectMcpToolCall(approvalId: string): Promise<unknown> {
+  return request(`/api/v1/mcp/approvals/${approvalId}/reject`, { method: "POST" });
 }
 
 /**

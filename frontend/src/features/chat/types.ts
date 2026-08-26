@@ -14,7 +14,11 @@ export type ChatToolEvent = {
   /** 模型生成并经解析的工具参数。 */
   arguments?: Record<string, unknown>;
   /** 工具调用在 UI 中的当前状态。 */
-  status: "running" | "success" | "error";
+  status: "running" | "approval_required" | "success" | "error";
+  /** CONFIRM 工具等待成员决定时使用的一次性审批 ID。 */
+  approvalId?: string;
+  /** 审批有效期，用于提示该操作不会永久开放工具权限。 */
+  approvalExpiresAt?: string;
   /** 成功执行后的结构化输出。 */
   output?: unknown;
   /** 失败错误分类。 */

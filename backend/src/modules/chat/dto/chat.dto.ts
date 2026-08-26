@@ -91,6 +91,8 @@ export type ChatStreamEventType =
   | "retrieval_result"
   | "token"
   | "tool_call"
+  | "tool_approval_required"
+  | "tool_approval_resolved"
   | "tool_result"
   | "message_end"
   | "error"

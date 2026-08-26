@@ -32,6 +32,10 @@ export type ToolExecutionRequest = {
   stepId?: string;
   userId?: string;
   agentId?: string;
+  /** 仅内部 Chat Runtime 可请求交互审批，外部 API、Workflow 和测试调用不得开启。 */
+  allowInteractiveApproval?: boolean;
+  /** 批准后回传的一次性记录 ID；ToolsService 会先校验并消费，再解析真实工具。 */
+  approvalId?: string;
   signal?: AbortSignal;
 };
 

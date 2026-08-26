@@ -31,5 +31,7 @@ export type AgentRunRequest = {
     files?: AgentRuntimeFileInput[];
   };
   history: AgentRuntimeHistoryMessage[];
+  /** 仅登录成员的内部 Chat 可在同一条 SSE 中挂起并恢复 CONFIRM 工具。 */
+  allowInteractiveToolApproval?: boolean;
   signal?: AbortSignal;
 };

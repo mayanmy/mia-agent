@@ -300,6 +300,10 @@ export class ChatService {
           ? [{ role: item.role, content: item.content }]
           : []
       ),
+      // 公开访问和 Service API 没有可信的交互审批主体，必须稳定走非交互拒绝策略。
+      allowInteractiveToolApproval:
+        (context?.source ?? AgentRunSource.INTERNAL_CHAT) === AgentRunSource.INTERNAL_CHAT &&
+        Boolean(context?.userId),
       signal
     })) {
       if (event.type === "run_completed" && sessionId) {
@@ -327,6 +331,10 @@ export class ChatService {
         return { type: "token", data: event.data };
       case "tool_started":
         return { type: "tool_call", data: event.data };
+      case "tool_approval_required":
+        return { type: "tool_approval_required", data: event.data };
+      case "tool_approval_resolved":
+        return { type: "tool_approval_resolved", data: event.data };
       case "tool_completed":
         return { type: "tool_result", data: event.data };
       case "run_completed":

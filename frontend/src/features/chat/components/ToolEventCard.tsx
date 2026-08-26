@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { Button, Space, message } from "antd";
 
+import { approveMcpToolCall, rejectMcpToolCall } from "../api";
 import type { ChatToolEvent } from "../types";
 
 /** 工具事件卡片参数。 */
@@ -11,9 +13,24 @@ type ToolEventCardProps = {
 /** 展示工具调用状态，并按需展开输入、输出或错误详情。 */
 export function ToolEventCard({ toolEvent }: ToolEventCardProps) {
   const failureSummary = getFailureSummary(toolEvent);
+  const [deciding, setDeciding] = useState<"approve" | "reject" | null>(null);
+  const [messageApi, contextHolder] = message.useMessage();
+
+  async function decide(approved: boolean) {
+    if (!toolEvent.approvalId || deciding) return;
+    setDeciding(approved ? "approve" : "reject");
+    try {
+      if (approved) await approveMcpToolCall(toolEvent.approvalId);
+      else await rejectMcpToolCall(toolEvent.approvalId);
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "审批操作失败");
+      setDeciding(null);
+    }
+  }
 
   return (
     <div className={`chatToolEvent ${toolEvent.status}`}>
+      {contextHolder}
       <div className="chatToolEventHeader">
         <span className="chatToolEventName">
           {toolEvent.status === "error"
@@ -25,7 +42,33 @@ export function ToolEventCard({ toolEvent }: ToolEventCardProps) {
       {toolEvent.arguments && Object.keys(toolEvent.arguments).length > 0 ? (
         <ToolEventDetail label="参数" value={toolEvent.arguments} />
       ) : null}
-      {toolEvent.status !== "running" ? (
+      {toolEvent.status === "approval_required" ? (
+        <div className="chatToolApproval">
+          <div className="chatToolApprovalHint">
+            此工具将访问外部 MCP 服务，仅批准本次调用
+            {toolEvent.approvalExpiresAt
+              ? `，有效期至 ${new Date(toolEvent.approvalExpiresAt).toLocaleTimeString()}`
+              : ""}
+          </div>
+          <Space>
+            <Button
+              loading={deciding === "reject"}
+              disabled={Boolean(deciding)}
+              onClick={() => void decide(false)}
+            >
+              拒绝
+            </Button>
+            <Button
+              type="primary"
+              loading={deciding === "approve"}
+              disabled={Boolean(deciding)}
+              onClick={() => void decide(true)}
+            >
+              批准并执行
+            </Button>
+          </Space>
+        </div>
+      ) : toolEvent.status !== "running" ? (
         toolEvent.status === "success" ? (
           <ToolEventDetail label="结果" value={toolEvent.output} />
         ) : (
@@ -51,6 +94,8 @@ function formatToolStatus(toolEvent: ChatToolEvent): string {
     return "调用中";
   }
 
+  if (toolEvent.status === "approval_required") return "等待确认";
+
   const elapsed = Number.isFinite(toolEvent.elapsedMs) ? ` · ${toolEvent.elapsedMs}ms` : "";
 
   return toolEvent.status === "success" ? `完成${elapsed}` : `失败${elapsed}`;
@@ -65,10 +110,7 @@ type ToolFailureDetailProps = {
 };
 
 /** 展示工具错误分类、失败原因和可选失败返回。 */
-function ToolFailureDetail({
-  toolEvent,
-  summary
-}: ToolFailureDetailProps) {
+function ToolFailureDetail({ toolEvent, summary }: ToolFailureDetailProps) {
   const details = [
     ["工具", formatToolName(toolEvent.name)],
     ["错误类型", summary.typeLabel],

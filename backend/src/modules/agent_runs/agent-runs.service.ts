@@ -212,6 +212,38 @@ export class AgentRunsService {
     });
   }
 
+  /** 将当前 Tool Step 与 Run 一起挂起，审批期间不允许其他 Step 并发推进。 */
+  async waitForApproval(runId: string, stepId: string): Promise<void> {
+    await this.prisma.$transaction(async (transaction) => {
+      const step = await transaction.agentRunStep.updateMany({
+        where: { id: stepId, runId, status: AgentRunStepStatus.RUNNING },
+        data: { status: AgentRunStepStatus.WAITING_APPROVAL }
+      });
+      const run = await transaction.agentRun.updateMany({
+        where: { id: runId, status: AgentRunStatus.RUNNING },
+        data: { status: AgentRunStatus.WAITING_APPROVAL }
+      });
+      this.assertTransitioned(step.count, "只有运行中的 Tool Step 可以等待审批");
+      this.assertTransitioned(run.count, "只有运行中的 Run 可以等待审批");
+    });
+  }
+
+  /** 审批作出决定后恢复同一个 Run/Step；后续完成或失败仍使用原 Trace 标识。 */
+  async resumeAfterApproval(runId: string, stepId: string): Promise<void> {
+    await this.prisma.$transaction(async (transaction) => {
+      const run = await transaction.agentRun.updateMany({
+        where: { id: runId, status: AgentRunStatus.WAITING_APPROVAL },
+        data: { status: AgentRunStatus.RUNNING }
+      });
+      const step = await transaction.agentRunStep.updateMany({
+        where: { id: stepId, runId, status: AgentRunStepStatus.WAITING_APPROVAL },
+        data: { status: AgentRunStepStatus.RUNNING }
+      });
+      this.assertTransitioned(run.count, "等待审批的 Run 无法恢复");
+      this.assertTransitioned(step.count, "等待审批的 Tool Step 无法恢复");
+    });
+  }
+
   /** 完成运行中的 Run，并在同一事务内收敛意外遗留的活动 Step。 */
   async completeRun(runId: string, payload: CompleteAgentRunDto): Promise<void> {
     await this.finishRun(runId, AgentRunStatus.COMPLETED, AgentRunStepStatus.SKIPPED, {
@@ -224,26 +256,39 @@ export class AgentRunsService {
 
   /** 将运行中的 Run 标记失败，并保存可控长度的错误分类和消息。 */
   async failRun(runId: string, error: AgentRunErrorDto): Promise<void> {
-    await this.finishRun(runId, AgentRunStatus.FAILED, AgentRunStepStatus.FAILED, {
-      errorType: this.requireText(error.type, "error.type"),
-      errorMessage: this.truncate(error.message, ERROR_MESSAGE_LIMIT)
-    });
+    await this.finishRun(
+      runId,
+      AgentRunStatus.FAILED,
+      AgentRunStepStatus.FAILED,
+      {
+        errorType: this.requireText(error.type, "error.type"),
+        errorMessage: this.truncate(error.message, ERROR_MESSAGE_LIMIT)
+      },
+      [AgentRunStatus.RUNNING, AgentRunStatus.WAITING_APPROVAL]
+    );
   }
 
   /** 将排队中或运行中的 Run 标记取消，覆盖用户在模型启动前取消的场景。 */
   async cancelRun(runId: string): Promise<void> {
     await this.finishRun(runId, AgentRunStatus.CANCELED, AgentRunStepStatus.CANCELED, {}, [
       AgentRunStatus.QUEUED,
-      AgentRunStatus.RUNNING
+      AgentRunStatus.RUNNING,
+      AgentRunStatus.WAITING_APPROVAL
     ]);
   }
 
   /** 将运行中的 Run 标记总超时，并把活动 Step 收敛为失败。 */
   async timeoutRun(runId: string): Promise<void> {
-    await this.finishRun(runId, AgentRunStatus.TIMED_OUT, AgentRunStepStatus.FAILED, {
-      errorType: "run_timeout",
-      errorMessage: "Agent Run 执行超时"
-    });
+    await this.finishRun(
+      runId,
+      AgentRunStatus.TIMED_OUT,
+      AgentRunStepStatus.FAILED,
+      {
+        errorType: "run_timeout",
+        errorMessage: "Agent Run 执行超时"
+      },
+      [AgentRunStatus.RUNNING, AgentRunStatus.WAITING_APPROVAL]
+    );
   }
 
   /** 为运行中的 Run 创建一个有序 Step，并在写库前递归脱敏输入。 */
@@ -348,7 +393,7 @@ export class AgentRunsService {
       await transaction.agentRunStep.updateMany({
         where: {
           runId: normalizedRunId,
-          status: AgentRunStepStatus.RUNNING
+          status: { in: [AgentRunStepStatus.RUNNING, AgentRunStepStatus.WAITING_APPROVAL] }
         },
         data: {
           status: activeStepStatus,

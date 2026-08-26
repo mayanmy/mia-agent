@@ -4,6 +4,8 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { McpService } from "../mcp/mcp.service";
 import { McpToolExecutor } from "../mcp/mcp-tool.executor";
+import { McpApprovalService } from "../mcp/mcp-approval.service";
+import { McpToolApprovalDetail, McpToolApprovalDecision } from "../mcp/dto/mcp-approval.dto";
 import { ConfiguredHttpToolsService } from "./configured-http-tools.service";
 import {
   ToolCallLogRecord,
@@ -25,7 +27,8 @@ export class ToolsService {
     @Optional() private readonly configuredHttpTools?: ConfiguredHttpToolsService,
     @Optional() private readonly httpToolExecutor?: HttpToolExecutor,
     @Optional() private readonly mcpService?: McpService,
-    @Optional() private readonly mcpToolExecutor?: McpToolExecutor
+    @Optional() private readonly mcpToolExecutor?: McpToolExecutor,
+    @Optional() private readonly mcpApprovalService?: McpApprovalService
   ) {}
 
   /** 合并内置工具与管理员预配置工具，供 Agent 绑定页统一展示。 */
@@ -80,9 +83,20 @@ export class ToolsService {
       const configuredTool = !tool
         ? await this.configuredHttpTools?.resolveRuntimeConfig(toolId)
         : null;
-      const mcpTool = !tool && !configuredTool
-        ? await this.mcpService?.resolveRuntimeTool(toolId)
-        : null;
+      if (request.approvalId) {
+        await this.requireMcpApprovalService().consume({
+          approvalId: request.approvalId,
+          runtimeId: toolId,
+          input: request.input,
+          userId: request.userId ?? "",
+          agentId: request.agentId ?? "",
+          runId: request.runId ?? ""
+        });
+      }
+      const mcpTool =
+        !tool && !configuredTool
+          ? await this.mcpService?.resolveRuntimeTool(toolId, Boolean(request.approvalId))
+          : null;
 
       if ((!tool || !tool.enabled) && !configuredTool && !mcpTool) {
         const result = this.toFailureResult(
@@ -122,9 +136,36 @@ export class ToolsService {
         this.getErrorMessage(error),
         startedAt
       );
-      await this.recordExecutionResult({ request, toolId, result });
+      // 交互式审批会在 Runtime 创建 pending 记录；这里不把“等待确认”误写成执行失败。
+      if (!(request.allowInteractiveApproval && result.errorType === "mcp_approval_required")) {
+        await this.recordExecutionResult({ request, toolId, result });
+      }
       return result;
     }
+  }
+
+  /** 只允许 Runtime 为 MCP CONFIRM 工具创建审批，具体策略仍由 MCP 模块再次校验。 */
+  async createToolApproval(request: ToolExecutionRequest): Promise<McpToolApprovalDetail> {
+    if (!request.runId || !request.userId || !request.agentId) {
+      throw new Error("交互式工具审批缺少 runId、userId 或 agentId");
+    }
+    return this.requireMcpApprovalService().createRequest({
+      runtimeId: this.normalizeToolId(request.toolId),
+      input: request.input,
+      runId: request.runId,
+      stepId: request.stepId,
+      toolCallId: request.toolCallId,
+      requestId: request.requestId,
+      userId: request.userId,
+      agentId: request.agentId
+    });
+  }
+
+  async waitForToolApproval(
+    approvalId: string,
+    signal?: AbortSignal
+  ): Promise<McpToolApprovalDecision> {
+    return this.requireMcpApprovalService().waitForDecision(approvalId, signal);
   }
 
   /** 为 Runtime Event、requested 日志和 Run Step 提供同一份脱敏参数视图。 */
@@ -350,6 +391,13 @@ export class ToolsService {
       throw new Error("MCP Tool Executor 未配置");
     }
     return this.mcpToolExecutor;
+  }
+
+  private requireMcpApprovalService(): McpApprovalService {
+    if (!this.mcpApprovalService) {
+      throw new Error("MCP Approval Service 未配置");
+    }
+    return this.mcpApprovalService;
   }
 
   /** 安全读取未知异常消息，避免把整个对象序列化进日志。 */

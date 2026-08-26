@@ -533,6 +533,21 @@ export function ChatPage() {
               });
             }
 
+            if (event.type === "tool_approval_required" && event.data.approvalId) {
+              updateToolApproval(assistantMessageId, {
+                toolCallId: event.data.toolCallId || "",
+                approvalId: event.data.approvalId,
+                expiresAt: event.data.expiresAt
+              });
+            }
+
+            if (event.type === "tool_approval_resolved") {
+              resolveToolApproval(assistantMessageId, {
+                toolCallId: event.data.toolCallId || "",
+                approved: Boolean(event.data.approved)
+              });
+            }
+
             if (event.type === "error") {
               throw new Error(event.data.message || "对话失败");
             }
@@ -700,6 +715,51 @@ export function ChatPage() {
           )
         };
       })
+    );
+  }
+
+  function updateToolApproval(
+    messageId: string,
+    approval: { toolCallId: string; approvalId: string; expiresAt?: string }
+  ) {
+    setMessages((current) =>
+      current.map((item) =>
+        item.id !== messageId
+          ? item
+          : {
+              ...item,
+              toolEvents: item.toolEvents?.map((toolEvent) =>
+                toolEvent.id === approval.toolCallId
+                  ? {
+                      ...toolEvent,
+                      status: "approval_required",
+                      approvalId: approval.approvalId,
+                      approvalExpiresAt: approval.expiresAt
+                    }
+                  : toolEvent
+              )
+            }
+      )
+    );
+  }
+
+  function resolveToolApproval(
+    messageId: string,
+    decision: { toolCallId: string; approved: boolean }
+  ) {
+    setMessages((current) =>
+      current.map((item) =>
+        item.id !== messageId
+          ? item
+          : {
+              ...item,
+              toolEvents: item.toolEvents?.map((toolEvent) =>
+                toolEvent.id === decision.toolCallId
+                  ? { ...toolEvent, status: "running" }
+                  : toolEvent
+              )
+            }
+      )
     );
   }
 

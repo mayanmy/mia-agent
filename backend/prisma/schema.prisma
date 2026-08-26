@@ -101,6 +101,7 @@ enum AgentRunSource {
 enum AgentRunStatus {
   QUEUED
   RUNNING
+  WAITING_APPROVAL
   COMPLETED
   FAILED
   CANCELED
@@ -125,6 +126,7 @@ enum AgentRunStepType {
 
 enum AgentRunStepStatus {
   RUNNING
+  WAITING_APPROVAL
   COMPLETED
   FAILED
   CANCELED
@@ -156,6 +158,17 @@ enum McpApprovalMode {
   DISABLED
 
   @@map("mcp_approval_mode")
+}
+
+enum McpToolApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CONSUMED
+  EXPIRED
+  CANCELED
+
+  @@map("mcp_tool_approval_status")
 }
 
 enum McpHealthStatus {
@@ -216,6 +229,7 @@ model User {
   createdMcpServers             McpServer[]             @relation("McpServerCreator")
   createdMcpSecrets             McpServerSecret[]       @relation("McpServerSecretCreator")
   createdMcpOAuthAuthorizations McpOAuthAuthorization[] @relation("McpOAuthAuthorizationCreator")
+  mcpToolApprovals              McpToolApproval[]
 
   @@index([role, disabledAt], map: "idx_users_role_disabled_at")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
@@ -579,6 +593,7 @@ model McpServer {
   tools                     McpServerTool[]
   syncRuns                  McpSyncRun[]
   oauthAuthorization        McpOAuthAuthorization?
+  approvals                 McpToolApproval[]
 
   @@index([enabled, deletedAt], map: "idx_mcp_servers_enabled_deleted_at")
   @@index([healthStatus, updatedAt(sort: Desc)], map: "idx_mcp_servers_health_updated_at")
@@ -637,10 +652,41 @@ model McpServerTool {
   createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
   server        McpServer        @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  approvals     McpToolApproval[]
 
   @@unique([serverId, remoteName], map: "uq_mcp_server_tools_server_remote_name")
   @@index([serverId, enabled, unavailableAt], map: "idx_mcp_server_tools_server_enabled_available")
   @@map("mcp_server_tools")
+}
+
+/// Chat Runtime 的一次性工具审批。真实参数加密保存，哈希用于防止批准后替换参数重放。
+model McpToolApproval {
+  id             String                @id @default(uuid()) @db.Uuid
+  serverId       String                @map("server_id") @db.Uuid
+  toolId         String                @map("tool_id") @db.Uuid
+  runtimeId      String                @map("runtime_id")
+  runId          String                @map("run_id") @db.Uuid
+  stepId         String?               @map("step_id") @db.Uuid
+  toolCallId     String?               @map("tool_call_id")
+  requestId      String?               @map("request_id")
+  userId         String                @map("user_id") @db.Uuid
+  agentId        String                @map("agent_id") @db.Uuid
+  encryptedInput String                @map("encrypted_input") @db.Text
+  inputHash      String                @map("input_hash")
+  status         McpToolApprovalStatus @default(PENDING)
+  expiresAt      DateTime              @map("expires_at") @db.Timestamptz(6)
+  decidedAt      DateTime?             @map("decided_at") @db.Timestamptz(6)
+  consumedAt     DateTime?             @map("consumed_at") @db.Timestamptz(6)
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  server         McpServer             @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  tool           McpServerTool         @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, createdAt(sort: Desc)], map: "idx_mcp_tool_approvals_user_status_created_at")
+  @@index([runId, status], map: "idx_mcp_tool_approvals_run_status")
+  @@index([expiresAt, status], map: "idx_mcp_tool_approvals_expiry_status")
+  @@map("mcp_tool_approvals")
 }
 
 /// 每次发现都单独记录结果；失败记录不能覆盖上一份可工作的 Tool 快照。

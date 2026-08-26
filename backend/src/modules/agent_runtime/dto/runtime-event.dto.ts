@@ -38,6 +38,19 @@ export type AgentRuntimeEvent =
   | { type: "retrieval_completed"; data: Record<string, unknown> }
   | { type: "token"; data: { content: string } }
   | { type: "tool_started"; data: Record<string, unknown> }
+  | {
+      type: "tool_approval_required";
+      data: {
+        approvalId: string;
+        toolCallId: string;
+        toolId: string;
+        expiresAt: string;
+      };
+    }
+  | {
+      type: "tool_approval_resolved";
+      data: { approvalId: string; toolCallId: string; approved: boolean; status: string };
+    }
   | { type: "tool_completed"; data: Record<string, unknown> }
   | { type: "run_completed"; data: RuntimeCompletion }
   | { type: "run_failed"; data: { runId?: string; error: RuntimeError } }

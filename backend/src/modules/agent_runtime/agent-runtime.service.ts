@@ -646,6 +646,32 @@ export class AgentRuntimeService {
     }
   }
 
+  /** 审批挂起属于可恢复状态，Trace 写入失败仍不能阻断真实 SSE 等待。 */
+  private async waitTraceForApproval(
+    trace: AgentRuntimeTrace | undefined,
+    step: AgentRuntimeTraceStep | undefined
+  ): Promise<void> {
+    if (!trace || !step || !this.agentRunsService || trace.terminal) return;
+    try {
+      await this.agentRunsService.waitForApproval(trace.runId, step.stepId);
+    } catch (error) {
+      this.logTraceFailure(`挂起 Agent Run 审批失败: ${trace.runId}`, error);
+    }
+  }
+
+  /** 批准和拒绝都先恢复运行态，再由既有完成/失败路径收敛同一个 Tool Step。 */
+  private async resumeTraceAfterApproval(
+    trace: AgentRuntimeTrace | undefined,
+    step: AgentRuntimeTraceStep | undefined
+  ): Promise<void> {
+    if (!trace || !step || !this.agentRunsService || trace.terminal) return;
+    try {
+      await this.agentRunsService.resumeAfterApproval(trace.runId, step.stepId);
+    } catch (error) {
+      this.logTraceFailure(`恢复 Agent Run 审批失败: ${trace.runId}`, error);
+    }
+  }
+
   /** Workflow 主动取消时直接收敛 Run，不能依赖调用方 Signal 一定仍处于 aborted 状态。 */
   async cancelTrace(trace: AgentRuntimeTrace | undefined): Promise<void> {
     if (!trace || trace.terminal) return;
@@ -1212,12 +1238,69 @@ export class AgentRuntimeService {
         stepId: step?.stepId,
         agentId,
         userId: request.userId,
+        allowInteractiveApproval: request.allowInteractiveToolApproval,
         signal: request.signal
       };
       const isWorkflowTool = toolCall.name.startsWith("workflow:");
-      const result = isWorkflowTool
+      let result = isWorkflowTool
         ? await this.requireWorkflowRuntimeService().executeAsTool(executionRequest)
         : await this.requireToolsService().executeTool(executionRequest);
+      let approvalDenied = false;
+      if (
+        !isWorkflowTool &&
+        result.errorType === "mcp_approval_required" &&
+        request.allowInteractiveToolApproval
+      ) {
+        const approval = await this.requireToolsService().createToolApproval(executionRequest);
+        await this.waitTraceForApproval(trace, step);
+        yield {
+          type: "tool_approval_required",
+          data: {
+            approvalId: approval.id,
+            toolCallId: toolCall.id,
+            toolId: toolCall.name,
+            expiresAt: approval.expiresAt
+          }
+        };
+        const decision = await this.requireToolsService().waitForToolApproval(
+          approval.id,
+          request.signal
+        );
+        await this.resumeTraceAfterApproval(trace, step);
+        yield {
+          type: "tool_approval_resolved",
+          data: {
+            approvalId: approval.id,
+            toolCallId: toolCall.id,
+            approved: decision.approved,
+            status: decision.status
+          }
+        };
+        result = decision.approved
+          ? await this.requireToolsService().executeTool({
+              ...executionRequest,
+              approvalId: approval.id,
+              allowInteractiveApproval: false
+            })
+          : {
+              toolId: toolCall.name,
+              ok: false,
+              errorType:
+                decision.status === "EXPIRED"
+                  ? "mcp_approval_expired"
+                  : decision.status === "CANCELED"
+                    ? "canceled"
+                    : "mcp_approval_rejected",
+              errorMessage:
+                decision.status === "EXPIRED"
+                  ? "工具审批已过期"
+                  : decision.status === "CANCELED"
+                    ? "工具审批已取消"
+                    : "用户拒绝了工具调用",
+              elapsedMs: 0
+            };
+        approvalDenied = !decision.approved;
+      }
       // 普通工具由 ToolsService 写完成日志；Workflow 绕过该 Service，必须在编排层补齐同一审计闭环。
       if (isWorkflowTool) {
         await this.recordToolCallLog({
@@ -1232,6 +1315,23 @@ export class AgentRuntimeService {
           source,
           input: sanitizedInput,
           output: result.output,
+          errorType: result.errorType,
+          errorMessage: result.errorMessage,
+          elapsedMs: result.elapsedMs
+        });
+      } else if (approvalDenied) {
+        // 拒绝、过期和取消没有进入 ToolsService 执行器，编排层必须补齐最终失败审计。
+        await this.recordToolCallLog({
+          requestId: request.requestId,
+          runId: trace?.runId,
+          stepId: step?.stepId,
+          agentId,
+          userId: request.userId,
+          toolCallId: toolCall.id,
+          toolId: toolCall.name,
+          status: "failed",
+          source,
+          input: sanitizedInput,
           errorType: result.errorType,
           errorMessage: result.errorMessage,
           elapsedMs: result.elapsedMs

@@ -666,6 +666,34 @@
   background: #fff8f8;
 }
 
+.chatToolEvent.approval_required {
+  border-color: #d89614;
+  background: #fffbe6;
+}
+
+.chatToolApproval {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #ffe58f;
+}
+
+.chatToolApprovalHint {
+  color: #614700;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .chatToolApproval {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .chatToolEventHeader {
   align-items: center;
   display: flex;
