@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { KnowledgeModule } from "../knowledge/knowledge.module";
+import { SkillsModule } from "../skills/skills.module";
 
 import { McpProtocolClientFactory } from "./clients/mcp-protocol-client.factory";
 import { McpOAuthManager } from "./clients/mcp-oauth.manager";
@@ -10,7 +11,7 @@ import { McpApprovalService } from "./mcp-approval.service";
 import { McpApprovalsController } from "./mcp-approvals.controller";
 
 @Module({
-  imports: [KnowledgeModule],
+  imports: [KnowledgeModule, SkillsModule],
   controllers: [McpController, McpApprovalsController],
   providers: [
     McpService,

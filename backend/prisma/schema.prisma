@@ -430,6 +430,32 @@ model WorkflowVersion {
   @@map("workflow_versions")
 }
 
+/// Skill 是管理员维护的可复用指令；MCP Prompt 导入只创建停用草稿，不自动注入 Agent。
+model Skill {
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String
+  description     String    @default("") @db.Text
+  instructions    String    @db.Text
+  usageConditions String    @default("") @map("usage_conditions") @db.Text
+  inputGuidance   String    @default("") @map("input_guidance") @db.Text
+  outputGuidance  String    @default("") @map("output_guidance") @db.Text
+  limitations     String    @default("") @db.Text
+  enabled         Boolean   @default(false)
+  revision        Int       @default(1)
+  sourceType      String    @default("manual") @map("source_type")
+  sourceRef       Json?     @map("source_ref") @db.JsonB
+  sourceHash      String?   @map("source_hash")
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([enabled, updatedAt(sort: Desc)], map: "idx_skills_enabled_updated_at")
+  @@index([createdByUserId], map: "idx_skills_created_by_user_id")
+  @@index([sourceType, sourceHash], map: "idx_skills_source_hash")
+  @@map("skills")
+}
+
 /// 业务后端调用 Agent 的长期凭证。原始 Key 只在创建或轮换时返回，数据库永远不保存明文。
 model AgentApiKey {
   id          String    @id @default(uuid()) @db.Uuid

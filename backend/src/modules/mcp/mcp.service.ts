@@ -17,6 +17,7 @@ import { decryptSecret, encryptSecret } from "../../core/crypto";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import { KnowledgeService } from "../knowledge/knowledge.service";
+import { SkillsService } from "../skills/skills.service";
 import {
   McpConnectionTestResult,
   McpServerCreateDto,
@@ -46,6 +47,13 @@ import {
   McpResourceImportResult,
   McpResourcePreview
 } from "./dto/mcp-resource.dto";
+import {
+  McpPromptCatalog,
+  McpPromptGetDto,
+  McpPromptImportDto,
+  McpPromptImportResult,
+  McpPromptPreview
+} from "./dto/mcp-prompt.dto";
 
 const SERVER_INCLUDE = {
   secret: { select: { id: true } },
@@ -69,7 +77,8 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly clientFactory: McpProtocolClientFactory,
     private readonly oauthManager: McpOAuthManager,
-    @Optional() private readonly knowledgeService?: KnowledgeService
+    @Optional() private readonly knowledgeService?: KnowledgeService,
+    @Optional() private readonly skillsService?: SkillsService
   ) {}
 
   onModuleInit(): void {
@@ -221,6 +230,71 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       buffer
     });
     return { serverId, resourceUri: uri, document };
+  }
+
+  /** Prompt 目录只保留安全元数据；消息内容必须由管理员显式预览后才会读取。 */
+  async listPrompts(serverId: string, signal?: AbortSignal): Promise<McpPromptCatalog> {
+    return this.withProtocolClient(serverId, signal, async (client) => {
+      const catalog = await client.listPrompts(signal);
+      return {
+        prompts: catalog.prompts.map((item) => ({
+          name: this.promptName(item.name),
+          title: this.optionalProtocolString(item.title),
+          description: this.optionalProtocolString(item.description),
+          arguments: Array.isArray(item.arguments)
+            ? item.arguments.slice(0, 50).map((argument) => {
+                const value = this.protocolRecord(argument, "MCP Prompt 参数定义不合法");
+                return {
+                  name: this.promptArgumentName(value.name),
+                  description: this.optionalProtocolString(value.description),
+                  required: value.required === true
+                };
+              })
+            : []
+        }))
+      };
+    });
+  }
+
+  async previewPrompt(
+    serverId: string,
+    payload: McpPromptGetDto,
+    signal?: AbortSignal
+  ): Promise<McpPromptPreview> {
+    const name = this.promptName(payload.name);
+    const args = this.promptArguments(payload.arguments);
+    const prompt = await this.readTextPrompt(serverId, name, args, signal);
+    return { name, description: prompt.description, text: prompt.text, messageCount: prompt.count };
+  }
+
+  /** 每次导入都新建停用 Skill 草稿，远端变化永远不会覆盖本地管理员修订。 */
+  async importPrompt(
+    serverId: string,
+    payload: McpPromptImportDto,
+    userId: string,
+    signal?: AbortSignal
+  ): Promise<McpPromptImportResult> {
+    const name = this.promptName(payload.name);
+    const args = this.promptArguments(payload.arguments);
+    const prompt = await this.readTextPrompt(serverId, name, args, signal);
+    if (prompt.text.length > 8_000) {
+      throw new AppError(
+        ErrorCodes.mcp.invalidConfiguration,
+        "MCP Prompt 超过 8,000 字符 Skill 限制"
+      );
+    }
+    const server = await this.requireServer(serverId);
+    const skill = await this.requireSkillsService().createImportedDraft(
+      {
+        name: this.optionalProtocolString(payload.skillName) ?? name,
+        description: prompt.description ?? `从 MCP Server ${server.name} 导入`,
+        instructions: prompt.text,
+        sourceType: "mcp_prompt",
+        sourceRef: { serverId, serverName: server.name, promptName: name, arguments: args }
+      },
+      userId
+    );
+    return { serverId, promptName: name, skill };
   }
 
   /**
@@ -831,6 +905,89 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       throw new AppError(ErrorCodes.common.internal, "KnowledgeService 未注册", 500);
     }
     return this.knowledgeService;
+  }
+
+  private promptName(value: unknown): string {
+    const name = String(value ?? "").trim();
+    if (!name || name.length > 128 || !/^[A-Za-z0-9_.:-]+$/.test(name)) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP Prompt 名称不合法");
+    }
+    return name;
+  }
+
+  private promptArgumentName(value: unknown): string {
+    const name = String(value ?? "").trim();
+    if (!name || name.length > 128 || !/^[A-Za-z0-9_.:-]+$/.test(name)) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP Prompt 参数名不合法");
+    }
+    return name;
+  }
+
+  private promptArguments(value: unknown): Record<string, string> {
+    if (value === undefined) return {};
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP Prompt arguments 必须是对象");
+    }
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length > 50) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP Prompt 参数不能超过 50 个");
+    }
+    return Object.fromEntries(
+      entries.map(([key, item]) => {
+        const name = this.promptArgumentName(key);
+        if (typeof item !== "string" || item.length > 2_000) {
+          throw new AppError(
+            ErrorCodes.mcp.invalidConfiguration,
+            `MCP Prompt 参数 ${name} 必须是字符串`
+          );
+        }
+        return [name, item];
+      })
+    );
+  }
+
+  private protocolRecord(value: unknown, message: string): Record<string, unknown> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, message);
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private async readTextPrompt(
+    serverId: string,
+    name: string,
+    args: Record<string, string>,
+    signal?: AbortSignal
+  ): Promise<{ description?: string; text: string; count: number }> {
+    return this.withProtocolClient(serverId, signal, async (client) => {
+      const result = await client.getPrompt(name, args, signal);
+      const messages: string[] = [];
+      for (const message of result.messages) {
+        const role = message.role === "assistant" ? "Assistant" : "User";
+        const content = this.protocolRecord(message.content, "MCP Prompt Message content 不合法");
+        if (typeof content.text === "string" && content.text.trim()) {
+          messages.push(`## ${role}\n\n${content.text.trim()}`);
+        }
+      }
+      if (messages.length === 0) {
+        throw new AppError(
+          ErrorCodes.mcp.invalidConfiguration,
+          "MCP Prompt 不包含可导入的文本消息"
+        );
+      }
+      return {
+        description: this.optionalProtocolString(result.description),
+        text: messages.join("\n\n"),
+        count: result.messages.length
+      };
+    });
+  }
+
+  private requireSkillsService(): SkillsService {
+    if (!this.skillsService) {
+      throw new AppError(ErrorCodes.common.internal, "SkillsService 未注册", 500);
+    }
+    return this.skillsService;
   }
 
   private isControl(character: string): boolean {

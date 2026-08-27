@@ -11,6 +11,7 @@ import {
   MessageOutlined,
   PlaySquareOutlined,
   RobotOutlined,
+  ReadOutlined,
   TeamOutlined,
   ToolOutlined,
   UserOutlined
@@ -83,6 +84,9 @@ const McpServersPage = lazy(() =>
     default: module.McpServersPage
   }))
 );
+const SkillsPage = lazy(() =>
+  import("../features/skills/SkillsPage").then((module) => ({ default: module.SkillsPage }))
+);
 const ActivateInvitationPage = lazy(() =>
   import("../features/auth/ActivateInvitationPage").then((module) => ({
     default: module.ActivateInvitationPage
@@ -112,6 +116,7 @@ const navConfig: NavConfig[] = [
   },
   { label: "工具", path: "/tools", roles: ["ADMIN"], icon: <ToolOutlined /> },
   { label: "MCP", path: "/mcp", roles: ["ADMIN"], icon: <CloudServerOutlined /> },
+  { label: "Skill", path: "/skills", roles: ["ADMIN"], icon: <ReadOutlined /> },
   { label: "Workflow", path: "/workflows", roles: ["ADMIN"], icon: <ApartmentOutlined /> },
   {
     label: "Workflow 应用",
@@ -162,6 +167,7 @@ export function App() {
             <Route element={<RequireRole roles={["ADMIN"]} />}>
               <Route path="/tools" element={<ToolsPage />} />
               <Route path="/mcp" element={<McpServersPage />} />
+              <Route path="/skills" element={<SkillsPage />} />
               <Route path="/workflows" element={<WorkflowsPage />} />
               <Route path="/workflows/:workflowId" element={<WorkflowsPage />} />
               <Route path="/agent-runs" element={<AgentRunsPage />} />

@@ -8,6 +8,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
+  SnippetsOutlined,
   SyncOutlined,
   ToolOutlined
 } from "@ant-design/icons";
@@ -23,8 +24,11 @@ import {
   getMcpServer,
   listMcpServers,
   listMcpResources,
+  listMcpPrompts,
   listMcpServerTools,
   importMcpResource,
+  importMcpPrompt,
+  previewMcpPrompt,
   previewMcpResource,
   revokeMcpOAuth,
   startMcpOAuth,
@@ -38,12 +42,15 @@ import type {
   McpResourceCatalog,
   McpResourceItem,
   McpResourcePreview,
+  McpPromptItem,
+  McpPromptPreview,
   McpServerListItem,
   McpServerPayload,
   McpServerTool
 } from "./api";
 import { McpServerFormModal } from "./components/McpServerFormModal";
 import { McpResourcesDrawer } from "./components/McpResourcesDrawer";
+import { McpPromptsDrawer } from "./components/McpPromptsDrawer";
 import { McpToolsDrawer } from "./components/McpToolsDrawer";
 import "./mcp.less";
 
@@ -89,6 +96,10 @@ export function McpServersPage() {
   const [resourcesLoading, setResourcesLoading] = useState(false);
   const [resourcePreviewLoading, setResourcePreviewLoading] = useState(false);
   const [resourceImportLoading, setResourceImportLoading] = useState(false);
+  const [promptServer, setPromptServer] = useState<McpServerListItem | null>(null);
+  const [prompts, setPrompts] = useState<McpPromptItem[]>([]);
+  const [promptsLoading, setPromptsLoading] = useState(false);
+  const [promptActionLoading, setPromptActionLoading] = useState(false);
 
   useEffect(() => {
     void refreshServers();
@@ -366,6 +377,58 @@ export function McpServersPage() {
     }
   }
 
+  async function openPrompts(server: McpServerListItem) {
+    setPromptServer(server);
+    setPrompts([]);
+    setPromptsLoading(true);
+    try {
+      setPrompts((await listMcpPrompts(server.id)).prompts);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载 MCP Prompt 失败");
+    } finally {
+      setPromptsLoading(false);
+    }
+  }
+
+  async function previewPrompt(
+    prompt: McpPromptItem,
+    args: Record<string, string>
+  ): Promise<McpPromptPreview | undefined> {
+    if (!promptServer) return undefined;
+    setPromptActionLoading(true);
+    try {
+      return await previewMcpPrompt(promptServer.id, prompt.name, args);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "生成 MCP Prompt 预览失败");
+      return undefined;
+    } finally {
+      setPromptActionLoading(false);
+    }
+  }
+
+  async function importPrompt(
+    prompt: McpPromptItem,
+    args: Record<string, string>,
+    skillName?: string
+  ): Promise<boolean> {
+    if (!promptServer) return false;
+    setPromptActionLoading(true);
+    try {
+      const result = await importMcpPrompt(promptServer.id, {
+        name: prompt.name,
+        arguments: args,
+        skillName
+      });
+      message.success(`已创建停用 Skill 草稿：${result.skill.name}`);
+      return true;
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "导入 MCP Prompt 失败");
+      return false;
+    } finally {
+      setPromptActionLoading(false);
+    }
+  }
+
   async function updateTool(tool: McpServerTool, changes: Partial<McpServerTool>) {
     if (!toolServer) return;
     setUpdatingToolId(tool.id);
@@ -505,6 +568,13 @@ export function McpServersPage() {
               onClick={() => void openResources(server)}
             />
           </Tooltip>
+          <Tooltip title="Prompt 目录">
+            <Button
+              icon={<SnippetsOutlined />}
+              type="text"
+              onClick={() => void openPrompts(server)}
+            />
+          </Tooltip>
           <Tooltip title="编辑">
             <Button icon={<EditOutlined />} type="text" onClick={() => void openEdit(server)} />
           </Tooltip>
@@ -581,6 +651,15 @@ export function McpServersPage() {
         onClose={() => setResourceServer(null)}
         onImport={importResource}
         onPreview={previewResource}
+      />
+      <McpPromptsDrawer
+        actionLoading={promptActionLoading}
+        loading={promptsLoading}
+        prompts={prompts}
+        server={promptServer}
+        onClose={() => setPromptServer(null)}
+        onImport={importPrompt}
+        onPreview={previewPrompt}
       />
     </section>
   );

@@ -1,5 +1,7 @@
 # Skill v1 技术方案
 
+> 实施状态：M6-C 已完成 `skills` 数据模型、管理 CRUD、Skill 工作室和 MCP Prompt 停用草稿导入。Agent 绑定、Runtime 注入和 Run Trace 仍待后续阶段实现。
+
 ## 1. 背景与目标
 
 Mia 已经具备四类基础能力：

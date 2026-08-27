@@ -42,6 +42,15 @@ export type McpProtocolResourceResult = {
   contents: Array<Record<string, McpJsonValue>>;
 };
 
+export type McpProtocolPromptCatalog = {
+  prompts: Array<Record<string, McpJsonValue>>;
+};
+
+export type McpProtocolPromptResult = {
+  description?: string;
+  messages: Array<Record<string, McpJsonValue>>;
+};
+
 export type McpProtocolClientOptions = {
   endpoint: string;
   headers?: Record<string, string>;
@@ -229,6 +238,46 @@ export class McpProtocolClient {
     return {
       contents: result.contents.map((item) =>
         this.toJsonRecord(item, "MCP Resource 内容不是 JSON 对象")
+      )
+    };
+  }
+
+  /** Prompt 发现只读取名称、说明和参数定义，不在目录阶段展开消息。 */
+  async listPrompts(signal?: AbortSignal): Promise<McpProtocolPromptCatalog> {
+    const result = await this.normalizeAbort(
+      this.requireClient().listPrompts(undefined, {
+        cacheMode: "refresh",
+        signal,
+        timeout: this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+        maxTotalTimeout: this.options.maxTotalTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+      }),
+      signal
+    );
+    return {
+      prompts: result.prompts.map((item) => this.toJsonRecord(item, "MCP Prompt 不是 JSON 对象"))
+    };
+  }
+
+  async getPrompt(
+    name: string,
+    args: Record<string, string>,
+    signal?: AbortSignal
+  ): Promise<McpProtocolPromptResult> {
+    const result = await this.normalizeAbort(
+      this.requireClient().getPrompt(
+        { name, arguments: args },
+        {
+          signal,
+          timeout: this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+          maxTotalTimeout: this.options.maxTotalTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+        }
+      ),
+      signal
+    );
+    return {
+      description: result.description,
+      messages: result.messages.map((item) =>
+        this.toJsonRecord(item, "MCP Prompt Message 不是 JSON 对象")
       )
     };
   }

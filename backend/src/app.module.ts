@@ -13,6 +13,7 @@ import { ModelProvidersModule } from "./modules/model-providers/model-providers.
 import { McpModule } from "./modules/mcp/mcp.module";
 import { PrismaModule } from "./modules/prisma/prisma.module";
 import { RetrievalModule } from "./modules/retrieval/retrieval.module";
+import { SkillsModule } from "./modules/skills/skills.module";
 import { ToolsModule } from "./modules/tools/tools.module";
 import { UsersModule } from "./modules/users/users.module";
 import { WorkflowsModule } from "./modules/workflows/workflows.module";
@@ -37,7 +38,8 @@ import { RolesGuard } from "./core/auth/roles.guard";
     ToolsModule,
     LogsModule,
     KnowledgeModule,
-    RetrievalModule
+    RetrievalModule,
+    SkillsModule
   ],
   providers: [
     // 默认拒绝所有内部接口，新增 Controller 时必须显式标记 @Public() 才能匿名访问。

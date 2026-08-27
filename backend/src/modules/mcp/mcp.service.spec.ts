@@ -140,6 +140,46 @@ export const tests = [
     }
   },
   {
+    name: "McpService imports an MCP Prompt as a disabled Skill draft snapshot",
+    run: async () => {
+      const server = makeServer();
+      let imported: Record<string, unknown> | undefined;
+      const client = {
+        connect: async () => ({}),
+        getPrompt: async () => ({
+          description: "合同审查方法",
+          messages: [{ role: "user", content: { type: "text", text: "检查付款和违约条款。" } }]
+        }),
+        close: async () => undefined
+      };
+      const skillsService = {
+        createImportedDraft: async (payload: Record<string, unknown>, userId: string) => {
+          imported = { ...payload, userId };
+          return { id: "skill-1", name: payload.name, enabled: false };
+        }
+      };
+      const service = new McpService(
+        { mcpServer: { findFirst: async () => server } } as never,
+        { create: () => client } as never,
+        {} as never,
+        undefined,
+        skillsService as never
+      );
+
+      const result = await service.importPrompt(
+        server.id,
+        { name: "review_contract", arguments: { position: "采购方" } },
+        "admin-1"
+      );
+
+      assert.equal(result.skill.enabled, false);
+      assert.equal(imported?.instructions, "## User\n\n检查付款和违约条款。");
+      assert.deepEqual((imported?.sourceRef as Record<string, unknown>).arguments, {
+        position: "采购方"
+      });
+    }
+  },
+  {
     name: "McpService sync keeps stable runtime IDs and creates new tools disabled",
     run: async () => {
       const server = makeServer();

@@ -77,6 +77,11 @@ export const ErrorCodes = {
     connectionFailed: 9003,
     invalidConfiguration: 9004,
     toolNotFound: 9005
+  },
+  skill: {
+    notFound: 9101,
+    revisionConflict: 9102,
+    invalidContent: 9103
   }
 } as const;
 

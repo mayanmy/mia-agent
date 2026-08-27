@@ -25,6 +25,13 @@ import {
   McpResourcePreview,
   McpResourceReadDto
 } from "./dto/mcp-resource.dto";
+import {
+  McpPromptCatalog,
+  McpPromptGetDto,
+  McpPromptImportDto,
+  McpPromptImportResult,
+  McpPromptPreview
+} from "./dto/mcp-prompt.dto";
 import { McpService } from "./mcp.service";
 
 @Controller("mcp/servers")
@@ -128,6 +135,29 @@ export class McpController {
     @Body() payload: McpResourceImportDto
   ): Promise<McpResourceImportResult> {
     return this.mcpService.importResource(id, payload);
+  }
+
+  @Get(":id/prompts")
+  async listPrompts(@Param("id") id: string): Promise<McpPromptCatalog> {
+    return this.mcpService.listPrompts(id);
+  }
+
+  @Post(":id/prompts/preview")
+  async previewPrompt(
+    @Param("id") id: string,
+    @Body() payload: McpPromptGetDto
+  ): Promise<McpPromptPreview> {
+    return this.mcpService.previewPrompt(id, payload);
+  }
+
+  /** 导入需要记录当前管理员，并始终创建停用 Skill 草稿。 */
+  @Post(":id/prompts/import")
+  async importPrompt(
+    @Param("id") id: string,
+    @Body() payload: McpPromptImportDto,
+    @CurrentUser() currentUser: CurrentUserDto
+  ): Promise<McpPromptImportResult> {
+    return this.mcpService.importPrompt(id, payload, currentUser.id);
   }
 
   @Get(":id/tools")

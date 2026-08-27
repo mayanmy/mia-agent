@@ -19,7 +19,7 @@ async function startTestMcpServer(): Promise<TestMcpServer> {
   const handler = createMcpHandler(() => {
     const server = new Server(
       { name: "mia-mcp-m0-test", version: "1.0.0" },
-      { capabilities: { tools: {}, resources: {} } }
+      { capabilities: { tools: {}, resources: {}, prompts: {} } }
     );
 
     // 人工拆成两页，用于验证 Client.listTools() 会聚合完整结果并防止分页游标泄漏到业务层。
@@ -124,6 +124,30 @@ async function startTestMcpServer(): Promise<TestMcpServer> {
       ]
     }));
 
+    server.setRequestHandler("prompts/list", async () => ({
+      prompts: [
+        {
+          name: "review_contract",
+          title: "合同审查",
+          description: "按审查立场生成合同审查步骤",
+          arguments: [{ name: "position", description: "审查立场", required: true }]
+        }
+      ]
+    }));
+
+    server.setRequestHandler("prompts/get", async (request) => ({
+      description: "合同审查方法",
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `请站在${request.params.arguments?.position ?? "采购方"}立场审查合同。`
+          }
+        }
+      ]
+    }));
+
     return server;
   });
   const nodeHandler = toNodeHandler(handler);
@@ -218,6 +242,30 @@ export const tests = [
         const resource = await client.readResource("mia://guides/weather");
         assert.equal(resource.contents[0]?.mimeType, "text/markdown");
         assert.match(String(resource.contents[0]?.text), /下雨时请携带雨具/);
+      } finally {
+        await client.close();
+        await testServer.close();
+      }
+    }
+  },
+  {
+    name: "McpProtocolClient discovers Prompts and renders messages with arguments",
+    run: async () => {
+      const testServer = await startTestMcpServer();
+      const client = new McpProtocolClient({
+        endpoint: testServer.endpoint,
+        connectTimeoutMs: 2_000,
+        requestTimeoutMs: 2_000
+      });
+
+      try {
+        await client.connect();
+        const catalog = await client.listPrompts();
+        assert.equal(catalog.prompts[0]?.name, "review_contract");
+
+        const prompt = await client.getPrompt("review_contract", { position: "采购方" });
+        assert.equal(prompt.description, "合同审查方法");
+        assert.match(JSON.stringify(prompt.messages[0]?.content), /采购方/);
       } finally {
         await client.close();
         await testServer.close();

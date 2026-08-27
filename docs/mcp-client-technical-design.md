@@ -647,7 +647,7 @@ M6 按可独立上线的子阶段实施，避免资源导入、成员授权和�
 
 1. **M6-A Tool Catalog / Tool Search（已实现）**：绑定普通工具超过 20 个时，Runtime 先按用户问题和 System Prompt 检索轻量目录，最多选择 12 个候选，再延迟加载完整 Schema。检索写入 `TOOL_SEARCH` Step 和 Runtime Event；小规模 Agent 保持完整 Schema 行为。
 2. **M6-B Resources（已实现）**：通过短连接实时发现 Resource 与 Resource Template，管理端提供只读目录与最多 5 万字符预览；只有管理员显式选择目标知识库后才复制不超过 5 MB 的文本内容，并复用知识库文件校验、存储、切分和 Embedding 链路。Resource URI 只作为 MCP 协议参数传递，不由 Mia 直接抓取；模型、Tool Result 和 MCP Server 均无自动导入权限。
-3. **M6-C Prompts**：发现 Prompt、参数和消息预览，管理员显式导入为 Mia Skill 草稿；远端后续变化不得自动覆盖已导入 Skill。
+3. **M6-C Prompts（已实现）**：实时发现 Prompt、参数定义和文本消息预览；管理员填写参数后可显式导入为停用的 Mia Skill 草稿。每次导入都保存独立来源快照和内容哈希，远端后续变化或再次导入不得覆盖已导入 Skill。非文本消息和超过 8,000 字符的 Prompt 不允许导入。
 4. **M6-D 按用户 OAuth**：共享授权与成员授权使用独立数据模型和 Token 缓存键，运行时按调用用户选择授权；公开访问、Service API 和 Workflow 继续使用明确的非交互策略。
 5. **M6-E stdio 评估**：仅允许管理员选择平台预置命令，协议进程在独立 Worker/容器中运行。完成威胁模型、资源限制和审计验证前，不在 NestJS API 进程开放 stdio。
 
@@ -660,6 +660,16 @@ POST /api/v1/mcp/servers/:id/resources/import
 ```
 
 三类接口均继承 MCP Server 管理员权限，并复用 Server 的 SSRF、动态鉴权与超时配置。URI Template 当前只展示定义，不在客户端猜测参数或自动展开。
+
+M6-C 管理接口：
+
+```text
+GET  /api/v1/mcp/servers/:id/prompts
+POST /api/v1/mcp/servers/:id/prompts/preview
+POST /api/v1/mcp/servers/:id/prompts/import
+```
+
+Prompt 导入依赖 `SkillsModule`。本阶段同步提供 Skill 管理 CRUD 和工作室，但不自动建立 Agent 绑定，也不改变 Agent Runtime Prompt；Skill 启用后的 Agent 绑定与注入仍按 Skill v1 方案独立实施。
 
 ### M7：Mia 作为 MCP Server
 

@@ -147,6 +147,21 @@ export type McpResourcePreview = {
   originalChars: number;
 };
 
+export type McpPromptArgument = { name: string; description?: string; required: boolean };
+export type McpPromptItem = {
+  name: string;
+  title?: string;
+  description?: string;
+  arguments: McpPromptArgument[];
+};
+export type McpPromptCatalog = { prompts: McpPromptItem[] };
+export type McpPromptPreview = {
+  name: string;
+  description?: string;
+  text: string;
+  messageCount: number;
+};
+
 export function listMcpServers(): Promise<McpServerListItem[]> {
   return request<McpServerListItem[]>("/api/v1/mcp/servers");
 }
@@ -220,6 +235,31 @@ export function importMcpResource(
   payload: { uri: string; knowledgeBaseId: string; filename?: string }
 ): Promise<{ resourceUri: string; document: { id: string; originalFilename: string } }> {
   return request(`/api/v1/mcp/servers/${id}/resources/import`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function listMcpPrompts(id: string): Promise<McpPromptCatalog> {
+  return request<McpPromptCatalog>(`/api/v1/mcp/servers/${id}/prompts`);
+}
+
+export function previewMcpPrompt(
+  id: string,
+  name: string,
+  args: Record<string, string>
+): Promise<McpPromptPreview> {
+  return request<McpPromptPreview>(`/api/v1/mcp/servers/${id}/prompts/preview`, {
+    method: "POST",
+    body: JSON.stringify({ name, arguments: args })
+  });
+}
+
+export function importMcpPrompt(
+  id: string,
+  payload: { name: string; arguments: Record<string, string>; skillName?: string }
+): Promise<{ promptName: string; skill: { id: string; name: string; enabled: boolean } }> {
+  return request(`/api/v1/mcp/servers/${id}/prompts/import`, {
     method: "POST",
     body: JSON.stringify(payload)
   });

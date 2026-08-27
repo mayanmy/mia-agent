@@ -15,6 +15,7 @@ import { tests as mcpApprovalTests } from "../modules/mcp/mcp-approval.service.s
 import { tests as mcpServiceTests } from "../modules/mcp/mcp.service.spec";
 import { tests as mcpToolExecutorTests } from "../modules/mcp/mcp-tool.executor.spec";
 import { tests as retrievalTests } from "../modules/retrieval/retrieval.service.spec";
+import { tests as skillTests } from "../modules/skills/skills.service.spec";
 import { tests as toolTests } from "../modules/tools/tools.service.spec";
 import { tests as workflowTests } from "../modules/workflows/workflows.service.spec";
 import { tests as workflowCompilerTests } from "../modules/workflows/workflow-compiler.spec";
@@ -35,6 +36,7 @@ const tests: TestCase[] = [
   ...mcpOAuthTests,
   ...mcpApprovalTests,
   ...mcpServiceTests,
+  ...skillTests,
   ...mcpToolExecutorTests,
   ...agentRunTests,
   ...agentPromptBuilderTests,
