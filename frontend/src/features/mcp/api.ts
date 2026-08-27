@@ -117,6 +117,36 @@ export type McpSyncResult = {
   errorMessage?: string;
 };
 
+export type McpResourceItem = {
+  uri: string;
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+  size?: number;
+};
+
+export type McpResourceTemplateItem = {
+  uriTemplate: string;
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+};
+
+export type McpResourceCatalog = {
+  resources: McpResourceItem[];
+  templates: McpResourceTemplateItem[];
+};
+
+export type McpResourcePreview = {
+  uri: string;
+  mimeType: string;
+  text: string;
+  truncated: boolean;
+  originalChars: number;
+};
+
 export function listMcpServers(): Promise<McpServerListItem[]> {
   return request<McpServerListItem[]>("/api/v1/mcp/servers");
 }
@@ -172,6 +202,27 @@ export function syncMcpTools(id: string): Promise<McpSyncResult> {
 
 export function listMcpServerTools(id: string): Promise<McpServerTool[]> {
   return request<McpServerTool[]>(`/api/v1/mcp/servers/${id}/tools`);
+}
+
+export function listMcpResources(id: string): Promise<McpResourceCatalog> {
+  return request<McpResourceCatalog>(`/api/v1/mcp/servers/${id}/resources`);
+}
+
+export function previewMcpResource(id: string, uri: string): Promise<McpResourcePreview> {
+  return request<McpResourcePreview>(`/api/v1/mcp/servers/${id}/resources/preview`, {
+    method: "POST",
+    body: JSON.stringify({ uri })
+  });
+}
+
+export function importMcpResource(
+  id: string,
+  payload: { uri: string; knowledgeBaseId: string; filename?: string }
+): Promise<{ resourceUri: string; document: { id: string; originalFilename: string } }> {
+  return request(`/api/v1/mcp/servers/${id}/resources/import`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 export function updateMcpServerTool(

@@ -165,36 +165,36 @@ frontend/src/features/mcp/
 
 ### 7.1 `mcp_servers`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | UUID | 主键 |
-| `name` | String | 展示名称 |
-| `slug` | String unique | 稳定标识 |
-| `description` | Text | 管理员说明 |
-| `transport` | Enum | 首期固定 `STREAMABLE_HTTP` |
-| `endpoint` | String | MCP Endpoint，不包含 Secret |
-| `auth_type` | Enum | `NONE/BEARER/API_KEY_HEADER/CLIENT_CREDENTIALS` |
-| `auth_config` | JsonB | 非敏感配置，如 Header 名、Token URL、Scope |
-| `secret_id` | UUID nullable | 加密 Secret 引用 |
-| `enabled` | Boolean | 总开关 |
-| `allow_private_network` | Boolean | 是否允许固定 Host 解析到私网 |
-| `approval_mode` | Enum | `AUTO/CONFIRM/DISABLED`，首期只执行 `AUTO` |
-| `connect_timeout_ms` | Int | 建连/首响应超时 |
-| `tool_timeout_ms` | Int | 单次 Tool 墙钟超时 |
-| `max_response_bytes` | Int | 原始响应硬限制 |
-| `max_output_chars` | Int | 送入模型和日志前的文本限制 |
-| `max_concurrency` | Int | Server 级并发槽位 |
-| `health_status` | Enum | `UNKNOWN/CONNECTING/HEALTHY/DEGRADED/UNAVAILABLE/AUTH_REQUIRED` |
-| `negotiated_protocol_version` | String nullable | 最近协商版本 |
-| `server_info` | JsonB nullable | 脱敏后的 Server 信息 |
-| `capabilities` | JsonB nullable | 最近协商 Capability 快照 |
-| `last_connected_at` | Timestamptz nullable | 最近连接成功时间 |
-| `last_discovered_at` | Timestamptz nullable | 最近工具同步成功时间 |
-| `last_error_code` | String nullable | 稳定错误码 |
-| `last_error_message` | Text nullable | 脱敏错误摘要 |
-| `created_by_user_id` | UUID | 创建管理员 |
-| `deleted_at` | Timestamptz nullable | 软删除 |
-| `created_at/updated_at` | Timestamptz | 审计时间 |
+| 字段                          | 类型                 | 说明                                                            |
+| ----------------------------- | -------------------- | --------------------------------------------------------------- |
+| `id`                          | UUID                 | 主键                                                            |
+| `name`                        | String               | 展示名称                                                        |
+| `slug`                        | String unique        | 稳定标识                                                        |
+| `description`                 | Text                 | 管理员说明                                                      |
+| `transport`                   | Enum                 | 首期固定 `STREAMABLE_HTTP`                                      |
+| `endpoint`                    | String               | MCP Endpoint，不包含 Secret                                     |
+| `auth_type`                   | Enum                 | `NONE/BEARER/API_KEY_HEADER/CLIENT_CREDENTIALS`                 |
+| `auth_config`                 | JsonB                | 非敏感配置，如 Header 名、Token URL、Scope                      |
+| `secret_id`                   | UUID nullable        | 加密 Secret 引用                                                |
+| `enabled`                     | Boolean              | 总开关                                                          |
+| `allow_private_network`       | Boolean              | 是否允许固定 Host 解析到私网                                    |
+| `approval_mode`               | Enum                 | `AUTO/CONFIRM/DISABLED`，首期只执行 `AUTO`                      |
+| `connect_timeout_ms`          | Int                  | 建连/首响应超时                                                 |
+| `tool_timeout_ms`             | Int                  | 单次 Tool 墙钟超时                                              |
+| `max_response_bytes`          | Int                  | 原始响应硬限制                                                  |
+| `max_output_chars`            | Int                  | 送入模型和日志前的文本限制                                      |
+| `max_concurrency`             | Int                  | Server 级并发槽位                                               |
+| `health_status`               | Enum                 | `UNKNOWN/CONNECTING/HEALTHY/DEGRADED/UNAVAILABLE/AUTH_REQUIRED` |
+| `negotiated_protocol_version` | String nullable      | 最近协商版本                                                    |
+| `server_info`                 | JsonB nullable       | 脱敏后的 Server 信息                                            |
+| `capabilities`                | JsonB nullable       | 最近协商 Capability 快照                                        |
+| `last_connected_at`           | Timestamptz nullable | 最近连接成功时间                                                |
+| `last_discovered_at`          | Timestamptz nullable | 最近工具同步成功时间                                            |
+| `last_error_code`             | String nullable      | 稳定错误码                                                      |
+| `last_error_message`          | Text nullable        | 脱敏错误摘要                                                    |
+| `created_by_user_id`          | UUID                 | 创建管理员                                                      |
+| `deleted_at`                  | Timestamptz nullable | 软删除                                                          |
+| `created_at/updated_at`       | Timestamptz          | 审计时间                                                        |
 
 约束：
 
@@ -204,12 +204,12 @@ frontend/src/features/mcp/
 
 ### 7.2 `mcp_server_secrets`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | UUID | 主键 |
-| `encrypted_value` | Text | AES-GCM 加密后的 JSON 凭据包 |
-| `created_by_user_id` | UUID | 创建管理员 |
-| `created_at/updated_at` | Timestamptz | 审计时间 |
+| 字段                    | 类型        | 说明                         |
+| ----------------------- | ----------- | ---------------------------- |
+| `id`                    | UUID        | 主键                         |
+| `encrypted_value`       | Text        | AES-GCM 加密后的 JSON 凭据包 |
+| `created_by_user_id`    | UUID        | 创建管理员                   |
+| `created_at/updated_at` | Timestamptz | 审计时间                     |
 
 Secret 明文结构按鉴权类型解释：
 
@@ -226,24 +226,24 @@ API 只返回 `secretConfigured`。更新时空值表示保留原 Secret，显�
 
 ### 7.3 `mcp_server_tools`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | UUID | Mia 工具主键 |
-| `server_id` | UUID | 所属 Server |
-| `remote_name` | String | Server 内原始工具名，区分大小写 |
-| `runtime_id` | String unique | `mcp_{id}`，供 Agent 和 Workflow 绑定 |
-| `title` | String nullable | 展示标题 |
-| `description` | Text | 工具描述 |
-| `input_schema` | JsonB | 原始 JSON Schema 快照 |
-| `output_schema` | JsonB nullable | 可选输出 Schema |
-| `annotations` | JsonB nullable | 不可信提示，只用于辅助展示 |
-| `schema_hash` | String | 规范化 Schema 的 SHA-256 |
-| `enabled` | Boolean | Mia 本地开关 |
-| `approval_mode` | Enum nullable | 覆盖 Server 默认策略 |
-| `risk_level` | Enum | `LOW/MEDIUM/HIGH`，由管理员确认 |
-| `last_seen_at` | Timestamptz | 最近发现时间 |
-| `unavailable_at` | Timestamptz nullable | 远端已不再返回该 Tool |
-| `created_at/updated_at` | Timestamptz | 审计时间 |
+| 字段                    | 类型                 | 说明                                  |
+| ----------------------- | -------------------- | ------------------------------------- |
+| `id`                    | UUID                 | Mia 工具主键                          |
+| `server_id`             | UUID                 | 所属 Server                           |
+| `remote_name`           | String               | Server 内原始工具名，区分大小写       |
+| `runtime_id`            | String unique        | `mcp_{id}`，供 Agent 和 Workflow 绑定 |
+| `title`                 | String nullable      | 展示标题                              |
+| `description`           | Text                 | 工具描述                              |
+| `input_schema`          | JsonB                | 原始 JSON Schema 快照                 |
+| `output_schema`         | JsonB nullable       | 可选输出 Schema                       |
+| `annotations`           | JsonB nullable       | 不可信提示，只用于辅助展示            |
+| `schema_hash`           | String               | 规范化 Schema 的 SHA-256              |
+| `enabled`               | Boolean              | Mia 本地开关                          |
+| `approval_mode`         | Enum nullable        | 覆盖 Server 默认策略                  |
+| `risk_level`            | Enum                 | `LOW/MEDIUM/HIGH`，由管理员确认       |
+| `last_seen_at`          | Timestamptz          | 最近发现时间                          |
+| `unavailable_at`        | Timestamptz nullable | 远端已不再返回该 Tool                 |
+| `created_at/updated_at` | Timestamptz          | 审计时间                              |
 
 唯一约束：`server_id + remote_name`。
 
@@ -403,19 +403,19 @@ Agent Runtime / Workflow Tool Executor
 
 ### 11.1 错误类型
 
-| 错误码 | 是否自动重试 | 说明 |
-| --- | --- | --- |
-| `mcp_server_disabled` | 否 | Server 已停用或删除 |
-| `mcp_tool_unavailable` | 否 | Tool 停用、未发现或 Schema 无效 |
-| `mcp_auth_required` | 否 | 需要重新鉴权 |
-| `mcp_invalid_arguments` | 否 | 入参不符合 Schema |
-| `mcp_connect_timeout` | 可重试一次 | 建连/首响应超时 |
-| `mcp_tool_timeout` | 否 | Tool 墙钟超时，避免重复副作用 |
-| `mcp_network_error` | 只读 Tool 可重试一次 | 网络错误 |
-| `mcp_protocol_error` | 否 | 协议或响应结构不合法 |
-| `mcp_tool_error` | 否 | Server 返回 `isError=true` |
-| `mcp_output_too_large` | 否 | 原始响应超过硬限制 |
-| `canceled` | 否 | 用户或 Runtime 取消 |
+| 错误码                  | 是否自动重试         | 说明                            |
+| ----------------------- | -------------------- | ------------------------------- |
+| `mcp_server_disabled`   | 否                   | Server 已停用或删除             |
+| `mcp_tool_unavailable`  | 否                   | Tool 停用、未发现或 Schema 无效 |
+| `mcp_auth_required`     | 否                   | 需要重新鉴权                    |
+| `mcp_invalid_arguments` | 否                   | 入参不符合 Schema               |
+| `mcp_connect_timeout`   | 可重试一次           | 建连/首响应超时                 |
+| `mcp_tool_timeout`      | 否                   | Tool 墙钟超时，避免重复副作用   |
+| `mcp_network_error`     | 只读 Tool 可重试一次 | 网络错误                        |
+| `mcp_protocol_error`    | 否                   | 协议或响应结构不合法            |
+| `mcp_tool_error`        | 否                   | Server 返回 `isError=true`      |
+| `mcp_output_too_large`  | 否                   | 原始响应超过硬限制              |
+| `canceled`              | 否                   | 用户或 Runtime 取消             |
 
 默认不重试 `tools/call`，因为远端 Tool 是否幂等不能从名称推断。只有管理员明确标记为只读且调用尚未收到业务结果时，才允许一次瞬时错误重试。
 
@@ -530,7 +530,7 @@ ToolCallLog 补充的 `source` 使用 `mcp`，`toolId` 保存稳定 Runtime ID�
 - Server instructions、Tool description、annotations 和 Tool result 都是不可信外部输入。
 - Tool description 有长度上限，去除不可见控制字符，不允许覆盖平台 System Prompt。
 - Tool result 使用独立 Tool Message 进入模型，不拼接进 System Prompt。
-- Resource Link 不自动抓取，防止二次越权读取。
+- Tool Result 中的 Resource Link 不自动抓取，防止模型触发二次越权读取。M6-B 只允许管理员从资源目录显式预览或导入。
 - Schema 变化后不能自动扩大权限；新 Tool 默认停用。
 
 ### 16.3 Secret 与隐私
@@ -545,16 +545,16 @@ ToolCallLog 补充的 `source` 使用 `mcp`，`toolId` 保存稳定 Runtime ID�
 
 建议默认值：
 
-| 项目 | 默认 | 最大 |
-| --- | --- | --- |
-| 建连/首响应超时 | 10 秒 | 30 秒 |
-| 单次 Tool 超时 | 30 秒 | 120 秒 |
-| 每 Server 并发 | 3 | 10 |
-| 单次 Run MCP 调用数 | 8 | 20 |
-| 原始响应 | 1 MB | 5 MB |
-| 送入模型文本 | 20,000 字符 | 100,000 字符 |
-| 单 Server Tool 数 | 100 | 500 |
-| 单 Agent 绑定 Tool 数 | 20 | 50 |
+| 项目                  | 默认        | 最大         |
+| --------------------- | ----------- | ------------ |
+| 建连/首响应超时       | 10 秒       | 30 秒        |
+| 单次 Tool 超时        | 30 秒       | 120 秒       |
+| 每 Server 并发        | 3           | 10           |
+| 单次 Run MCP 调用数   | 8           | 20           |
+| 原始响应              | 1 MB        | 5 MB         |
+| 送入模型文本          | 20,000 字符 | 100,000 字符 |
+| 单 Server Tool 数     | 100         | 500          |
+| 单 Agent 绑定 Tool 数 | 20          | 50           |
 
 ## 17. 可观测性
 
@@ -646,10 +646,20 @@ Mia 当前会把 Agent 绑定工具的完整 Schema 发送给模型。首期采�
 M6 按可独立上线的子阶段实施，避免资源导入、成员授权和本地进程执行同时扩大风险面：
 
 1. **M6-A Tool Catalog / Tool Search（已实现）**：绑定普通工具超过 20 个时，Runtime 先按用户问题和 System Prompt 检索轻量目录，最多选择 12 个候选，再延迟加载完整 Schema。检索写入 `TOOL_SEARCH` Step 和 Runtime Event；小规模 Agent 保持完整 Schema 行为。
-2. **M6-B Resources**：发现 Resource 与 Resource Template，管理端只读预览；只有管理员显式选择目标知识库后才复制内容并进入现有文档索引任务，不允许模型自动导入。
+2. **M6-B Resources（已实现）**：通过短连接实时发现 Resource 与 Resource Template，管理端提供只读目录与最多 5 万字符预览；只有管理员显式选择目标知识库后才复制不超过 5 MB 的文本内容，并复用知识库文件校验、存储、切分和 Embedding 链路。Resource URI 只作为 MCP 协议参数传递，不由 Mia 直接抓取；模型、Tool Result 和 MCP Server 均无自动导入权限。
 3. **M6-C Prompts**：发现 Prompt、参数和消息预览，管理员显式导入为 Mia Skill 草稿；远端后续变化不得自动覆盖已导入 Skill。
 4. **M6-D 按用户 OAuth**：共享授权与成员授权使用独立数据模型和 Token 缓存键，运行时按调用用户选择授权；公开访问、Service API 和 Workflow 继续使用明确的非交互策略。
 5. **M6-E stdio 评估**：仅允许管理员选择平台预置命令，协议进程在独立 Worker/容器中运行。完成威胁模型、资源限制和审计验证前，不在 NestJS API 进程开放 stdio。
+
+M6-B 管理接口：
+
+```text
+GET  /api/v1/mcp/servers/:id/resources
+POST /api/v1/mcp/servers/:id/resources/preview
+POST /api/v1/mcp/servers/:id/resources/import
+```
+
+三类接口均继承 MCP Server 管理员权限，并复用 Server 的 SSRF、动态鉴权与超时配置。URI Template 当前只展示定义，不在客户端猜测参数或自动展开。
 
 ### M7：Mia 作为 MCP Server
 
@@ -711,16 +721,16 @@ M6 按可独立上线的子阶段实施，避免资源导入、成员授权和�
 
 ## 23. 主要风险与应对
 
-| 风险 | 应对 |
-| --- | --- |
-| MCP 规范与 SDK 变化快 | SDK 隔离层、精确锁版本、兼容测试、按阶段升级 |
+| 风险                              | 应对                                                                |
+| --------------------------------- | ------------------------------------------------------------------- |
+| MCP 规范与 SDK 变化快             | SDK 隔离层、精确锁版本、兼容测试、按阶段升级                        |
 | 恶意 Server 描述或结果注入 Prompt | 外部内容不可信、独立 Tool Message、长度限制、禁止覆盖 System Prompt |
-| MCP Tool 权限过大 | 管理员连接、工具级白名单、风险等级、审批和最小凭据 |
-| stdio 造成任意代码执行 | 首期不支持；后续仅预置命令加独立 Worker 沙箱 |
-| Tool Schema 过多挤占上下文 | 绑定上限、描述裁剪、后续 Tool Search |
-| 重试造成重复副作用 | `tools/call` 默认不重试，仅显式只读 Tool 可重试 |
-| Token 串用或泄漏 | 加密存储、身份隔离缓存键、Audience/Resource 约束、日志脱敏 |
-| Server 故障导致模型编造 | 将不可用状态显式写入 Runtime，禁止静默跳过后继续假装成功 |
+| MCP Tool 权限过大                 | 管理员连接、工具级白名单、风险等级、审批和最小凭据                  |
+| stdio 造成任意代码执行            | 首期不支持；后续仅预置命令加独立 Worker 沙箱                        |
+| Tool Schema 过多挤占上下文        | 绑定上限、描述裁剪、后续 Tool Search                                |
+| 重试造成重复副作用                | `tools/call` 默认不重试，仅显式只读 Tool 可重试                     |
+| Token 串用或泄漏                  | 加密存储、身份隔离缓存键、Audience/Resource 约束、日志脱敏          |
+| Server 故障导致模型编造           | 将不可用状态显式写入 Runtime，禁止静默跳过后继续假装成功            |
 
 ## 24. 实施顺序结论
 

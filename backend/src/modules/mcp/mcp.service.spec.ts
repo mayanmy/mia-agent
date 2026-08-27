@@ -44,6 +44,102 @@ function makeServer() {
 
 export const tests = [
   {
+    name: "McpService lists Resource metadata without reading remote content",
+    run: async () => {
+      const server = makeServer();
+      let readCalled = false;
+      let closed = false;
+      const client = {
+        connect: async () => ({}),
+        listResources: async () => ({
+          resources: [
+            {
+              uri: "mia://guide/weather",
+              name: "weather",
+              description: "天气\u0000指南",
+              mimeType: "text/markdown"
+            }
+          ],
+          templates: [{ uriTemplate: "mia://guide/{topic}", name: "guide" }]
+        }),
+        readResource: async () => {
+          readCalled = true;
+          return { contents: [] };
+        },
+        close: async () => {
+          closed = true;
+        }
+      };
+      const service = new McpService(
+        { mcpServer: { findFirst: async () => server } } as never,
+        { create: () => client } as never,
+        {} as never
+      );
+
+      const catalog = await service.listResources(server.id);
+
+      assert.equal(catalog.resources[0]?.description, "天气 指南");
+      assert.equal(catalog.templates[0]?.uriTemplate, "mia://guide/{topic}");
+      assert.equal(readCalled, false);
+      assert.equal(closed, true);
+    }
+  },
+  {
+    name: "McpService imports text Resources through the KnowledgeService upload boundary",
+    run: async () => {
+      const server = makeServer();
+      let uploaded:
+        { knowledgeBaseId: string; filename: string; body: string; mimeType: string } | undefined;
+      const client = {
+        connect: async () => ({}),
+        readResource: async () => ({
+          contents: [
+            {
+              uri: "mia://guide/weather",
+              mimeType: "text/markdown",
+              text: "# 天气指南"
+            }
+          ]
+        }),
+        close: async () => undefined
+      };
+      const knowledgeService = {
+        uploadKnowledgeDocument: async (
+          knowledgeBaseId: string,
+          file: { originalname: string; mimetype: string; buffer: Buffer }
+        ) => {
+          uploaded = {
+            knowledgeBaseId,
+            filename: file.originalname,
+            body: file.buffer.toString("utf8"),
+            mimeType: file.mimetype
+          };
+          return { id: "document-1", originalFilename: file.originalname };
+        }
+      };
+      const service = new McpService(
+        { mcpServer: { findFirst: async () => server } } as never,
+        { create: () => client } as never,
+        {} as never,
+        knowledgeService as never
+      );
+
+      const result = await service.importResource(server.id, {
+        uri: "mia://guide/weather",
+        knowledgeBaseId: "knowledge-1",
+        filename: "weather-guide.md"
+      });
+
+      assert.deepEqual(uploaded, {
+        knowledgeBaseId: "knowledge-1",
+        filename: "weather-guide.md",
+        body: "# 天气指南",
+        mimeType: "text/markdown"
+      });
+      assert.equal(result.document.id, "document-1");
+    }
+  },
+  {
     name: "McpService sync keeps stable runtime IDs and creates new tools disabled",
     run: async () => {
       const server = makeServer();

@@ -3,7 +3,8 @@
 }
 
 .mcpServerIdentity,
-.mcpToolIdentity {
+.mcpToolIdentity,
+.mcpResourceIdentity {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -12,6 +13,7 @@
 
 .mcpServerIdentity span,
 .mcpToolIdentity code,
+.mcpResourceIdentity code,
 .mcpEndpoint {
   color: #64748b;
   font-size: 12px;
@@ -63,6 +65,38 @@
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.mcpResourceIdentity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mcpResourceIdentity code {
+  overflow-wrap: anywhere;
+}
+
+.mcpResourceTemplateNotice,
+.mcpResourcePreviewMeta {
+  margin-bottom: 12px;
+}
+
+.mcpResourcePreview {
+  overflow: auto;
+  max-height: 56vh;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid #d9e0ea;
+  border-radius: 6px;
+  background: #f7f9fc;
+  color: #172033;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 720px) {

@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
+import { Buffer } from "node:buffer";
+import { basename, extname } from "node:path";
 
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import {
   McpApprovalMode,
   McpAuthType,
@@ -14,6 +16,7 @@ import {
 import { decryptSecret, encryptSecret } from "../../core/crypto";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
+import { KnowledgeService } from "../knowledge/knowledge.service";
 import {
   McpConnectionTestResult,
   McpServerCreateDto,
@@ -37,12 +40,20 @@ import {
   McpRuntimeToolConfig,
   McpRuntimeToolDefinition
 } from "./dto/mcp-runtime.dto";
+import {
+  McpResourceCatalog,
+  McpResourceImportDto,
+  McpResourceImportResult,
+  McpResourcePreview
+} from "./dto/mcp-resource.dto";
 
 const SERVER_INCLUDE = {
   secret: { select: { id: true } },
   oauthAuthorization: { select: { authorizedAt: true } },
   _count: { select: { tools: true } }
 } satisfies Prisma.McpServerInclude;
+const MAX_RESOURCE_PREVIEW_CHARS = 50_000;
+const MAX_RESOURCE_IMPORT_BYTES = 5 * 1024 * 1024;
 
 type ServerWithSummary = Prisma.McpServerGetPayload<{ include: typeof SERVER_INCLUDE }>;
 
@@ -57,7 +68,8 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly clientFactory: McpProtocolClientFactory,
-    private readonly oauthManager: McpOAuthManager
+    private readonly oauthManager: McpOAuthManager,
+    @Optional() private readonly knowledgeService?: KnowledgeService
   ) {}
 
   onModuleInit(): void {
@@ -142,6 +154,73 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       source: "mcp",
       tags: [tool.server.name, tool.server.slug, tool.riskLevel.toLowerCase()]
     }));
+  }
+
+  /** Resource 目录是实时只读视图，不保存正文，也不展开 URI Template。 */
+  async listResources(serverId: string, signal?: AbortSignal): Promise<McpResourceCatalog> {
+    return this.withProtocolClient(serverId, signal, async (client) => {
+      const catalog = await client.listResources(signal);
+      return {
+        resources: catalog.resources.map((item) => ({
+          uri: this.requiredProtocolString(item.uri, "Resource uri"),
+          name: this.requiredProtocolString(item.name, "Resource name"),
+          title: this.optionalProtocolString(item.title),
+          description: this.optionalProtocolString(item.description),
+          mimeType: this.optionalProtocolString(item.mimeType),
+          size: typeof item.size === "number" && item.size >= 0 ? item.size : undefined
+        })),
+        templates: catalog.templates.map((item) => ({
+          uriTemplate: this.requiredProtocolString(item.uriTemplate, "Resource uriTemplate"),
+          name: this.requiredProtocolString(item.name, "Resource Template name"),
+          title: this.optionalProtocolString(item.title),
+          description: this.optionalProtocolString(item.description),
+          mimeType: this.optionalProtocolString(item.mimeType)
+        }))
+      };
+    });
+  }
+
+  async previewResource(
+    serverId: string,
+    payload: { uri?: string },
+    signal?: AbortSignal
+  ): Promise<McpResourcePreview> {
+    const uri = this.resourceUri(payload.uri);
+    const resource = await this.readTextResource(serverId, uri, signal);
+    const originalChars = resource.text.length;
+    return {
+      uri,
+      mimeType: resource.mimeType,
+      text: resource.text.slice(0, MAX_RESOURCE_PREVIEW_CHARS),
+      truncated: originalChars > MAX_RESOURCE_PREVIEW_CHARS,
+      originalChars
+    };
+  }
+
+  /** 导入是管理员显式动作；远端文本仍通过 KnowledgeService 的标准文件入口建立索引。 */
+  async importResource(
+    serverId: string,
+    payload: McpResourceImportDto,
+    signal?: AbortSignal
+  ): Promise<McpResourceImportResult> {
+    const uri = this.resourceUri(payload.uri);
+    const knowledgeBaseId = String(payload.knowledgeBaseId ?? "").trim();
+    if (!knowledgeBaseId) {
+      throw new AppError(ErrorCodes.common.badRequest, "knowledgeBaseId 不能为空");
+    }
+    const resource = await this.readTextResource(serverId, uri, signal);
+    const buffer = Buffer.from(resource.text, "utf8");
+    if (buffer.byteLength > MAX_RESOURCE_IMPORT_BYTES) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP Resource 超过 5 MB 导入限制");
+    }
+    const filename = this.resourceFilename(payload.filename, uri, resource.mimeType);
+    const document = await this.requireKnowledgeService().uploadKnowledgeDocument(knowledgeBaseId, {
+      originalname: filename,
+      mimetype: resource.mimeType,
+      size: buffer.byteLength,
+      buffer
+    });
+    return { serverId, resourceUri: uri, document };
   }
 
   /**
@@ -634,6 +713,129 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     });
     if (!server) throw new AppError(ErrorCodes.mcp.notFound, "MCP Server 不存在", 404);
     return server;
+  }
+
+  /**
+   * Resource 管理操作使用短连接，避免预览连接进入 Runtime 连接池。
+   * 连接配置复用 Tool Runtime 的网络、鉴权与超时策略，确保管理端没有绕过 SSRF 防护。
+   */
+  private async withProtocolClient<T>(
+    serverId: string,
+    signal: AbortSignal | undefined,
+    operation: (client: ReturnType<McpProtocolClientFactory["create"]>) => Promise<T>
+  ): Promise<T> {
+    const server = await this.requireServer(serverId);
+    if (!server.enabled) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP Server 已停用");
+    }
+    if (server.healthStatus === McpHealthStatus.AUTH_REQUIRED) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP Server 需要重新鉴权");
+    }
+
+    const client = this.clientFactory.create(await this.toRuntimeConfig(server));
+    try {
+      await client.connect(signal);
+      return await operation(client);
+    } finally {
+      await client.close().catch(() => undefined);
+    }
+  }
+
+  /** Resource URI 可以是自定义 scheme，但不能包含控制字符或无限增长。 */
+  private resourceUri(value: unknown): string {
+    const uri = String(value ?? "").trim();
+    if (!uri || uri.length > 8_192 || [...uri].some((character) => this.isControl(character))) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP Resource URI 不合法");
+    }
+    return uri;
+  }
+
+  private requiredProtocolString(value: unknown, label: string): string {
+    const text = this.optionalProtocolString(value);
+    if (!text) {
+      throw new AppError(ErrorCodes.mcp.invalidConfiguration, `${label} 不能为空`);
+    }
+    return text;
+  }
+
+  /** 协议元数据属于不可信外部输入，返回管理端前去掉控制字符并限制展示长度。 */
+  private optionalProtocolString(value: unknown): string | undefined {
+    if (typeof value !== "string") return undefined;
+    const text = [...value]
+      .map((character) => (this.isControl(character) ? " " : character))
+      .join("")
+      .trim();
+    return text ? text.slice(0, 2_000) : undefined;
+  }
+
+  private async readTextResource(
+    serverId: string,
+    uri: string,
+    signal?: AbortSignal
+  ): Promise<{ text: string; mimeType: string }> {
+    return this.withProtocolClient(serverId, signal, async (client) => {
+      const result = await client.readResource(uri, signal);
+      const textParts: string[] = [];
+      let mimeType = "text/plain";
+
+      for (const content of result.contents) {
+        if (typeof content.mimeType === "string" && content.mimeType.trim()) {
+          mimeType = content.mimeType.trim().slice(0, 255);
+        }
+        if (typeof content.text === "string") textParts.push(content.text);
+      }
+
+      if (textParts.length === 0) {
+        throw new AppError(
+          ErrorCodes.mcp.invalidConfiguration,
+          "MCP Resource 不是可预览或导入的文本资源"
+        );
+      }
+      const text = textParts.join("\n\n");
+      if (Buffer.byteLength(text, "utf8") > MAX_RESOURCE_IMPORT_BYTES) {
+        throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP Resource 超过 5 MB 读取限制");
+      }
+      return { text, mimeType };
+    });
+  }
+
+  /** 仅生成知识库当前支持的文本扩展名，防止远端 URI 伪装成可执行文件。 */
+  private resourceFilename(value: unknown, uri: string, mimeType: string): string {
+    let filename = typeof value === "string" ? basename(value.trim()) : "";
+    if (!filename) {
+      try {
+        filename = basename(new URL(uri).pathname);
+      } catch {
+        filename = basename(uri.split(/[?#]/, 1)[0]);
+      }
+    }
+    filename = filename.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[-.]+/, "");
+    if (!filename) filename = "mcp-resource";
+
+    const mimeExtension = mimeType.includes("json")
+      ? ".json"
+      : mimeType.includes("markdown")
+        ? ".md"
+        : mimeType.includes("csv")
+          ? ".csv"
+          : ".txt";
+    const extension = extname(filename).toLowerCase();
+    if (![".txt", ".md", ".markdown", ".csv", ".json"].includes(extension)) {
+      filename = `${filename}${mimeExtension}`;
+    }
+    return filename.slice(-240);
+  }
+
+  private requireKnowledgeService(): KnowledgeService {
+    if (!this.knowledgeService) {
+      throw new AppError(ErrorCodes.common.internal, "KnowledgeService 未注册", 500);
+    }
+    return this.knowledgeService;
+  }
+
+  private isControl(character: string): boolean {
+    const code = character.charCodeAt(0);
+    return code <= 31 || code === 127;
   }
 
   private runtimeToolWhere(): Prisma.McpServerToolWhereInput {

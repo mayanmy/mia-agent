@@ -18,6 +18,13 @@ import {
   McpSyncResult,
   McpSyncRunListItem
 } from "./dto/mcp-server.dto";
+import {
+  McpResourceCatalog,
+  McpResourceImportDto,
+  McpResourceImportResult,
+  McpResourcePreview,
+  McpResourceReadDto
+} from "./dto/mcp-resource.dto";
 import { McpService } from "./mcp.service";
 
 @Controller("mcp/servers")
@@ -98,6 +105,29 @@ export class McpController {
   @Post(":id/sync-tools")
   async syncTools(@Param("id") id: string): Promise<McpSyncResult> {
     return this.mcpService.syncTools(id);
+  }
+
+  /** Resource 目录始终实时读取远端，只把协议元数据返回给管理员。 */
+  @Get(":id/resources")
+  async listResources(@Param("id") id: string): Promise<McpResourceCatalog> {
+    return this.mcpService.listResources(id);
+  }
+
+  @Post(":id/resources/preview")
+  async previewResource(
+    @Param("id") id: string,
+    @Body() payload: McpResourceReadDto
+  ): Promise<McpResourcePreview> {
+    return this.mcpService.previewResource(id, payload);
+  }
+
+  /** 只有管理员显式选择知识库后才允许导入，不提供 MCP Server 主动写入入口。 */
+  @Post(":id/resources/import")
+  async importResource(
+    @Param("id") id: string,
+    @Body() payload: McpResourceImportDto
+  ): Promise<McpResourceImportResult> {
+    return this.mcpService.importResource(id, payload);
   }
 
   @Get(":id/tools")

@@ -19,7 +19,7 @@ async function startTestMcpServer(): Promise<TestMcpServer> {
   const handler = createMcpHandler(() => {
     const server = new Server(
       { name: "mia-mcp-m0-test", version: "1.0.0" },
-      { capabilities: { tools: {} } }
+      { capabilities: { tools: {}, resources: {} } }
     );
 
     // 人工拆成两页，用于验证 Client.listTools() 会聚合完整结果并防止分页游标泄漏到业务层。
@@ -91,6 +91,39 @@ async function startTestMcpServer(): Promise<TestMcpServer> {
       };
     });
 
+    server.setRequestHandler("resources/list", async () => ({
+      resources: [
+        {
+          uri: "mia://guides/weather",
+          name: "weather-guide",
+          title: "天气穿搭指南",
+          description: "适合导入知识库的文本资源",
+          mimeType: "text/markdown"
+        }
+      ]
+    }));
+
+    server.setRequestHandler("resources/templates/list", async () => ({
+      resourceTemplates: [
+        {
+          uriTemplate: "mia://guides/{topic}",
+          name: "guide-template",
+          description: "按主题读取指南",
+          mimeType: "text/markdown"
+        }
+      ]
+    }));
+
+    server.setRequestHandler("resources/read", async (request) => ({
+      contents: [
+        {
+          uri: request.params.uri,
+          mimeType: "text/markdown",
+          text: "# 天气穿搭\n\n下雨时请携带雨具。"
+        }
+      ]
+    }));
+
     return server;
   });
   const nodeHandler = toNodeHandler(handler);
@@ -161,6 +194,31 @@ export const tests = [
         assert.deepEqual(result.content, [{ type: "text", text: "hello MCP" }]);
       } finally {
         await client.close();
+        await client.close();
+        await testServer.close();
+      }
+    }
+  },
+  {
+    name: "McpProtocolClient discovers resource catalogs and reads text content",
+    run: async () => {
+      const testServer = await startTestMcpServer();
+      const client = new McpProtocolClient({
+        endpoint: testServer.endpoint,
+        connectTimeoutMs: 2_000,
+        requestTimeoutMs: 2_000
+      });
+
+      try {
+        await client.connect();
+        const catalog = await client.listResources();
+        assert.equal(catalog.resources[0]?.uri, "mia://guides/weather");
+        assert.equal(catalog.templates[0]?.uriTemplate, "mia://guides/{topic}");
+
+        const resource = await client.readResource("mia://guides/weather");
+        assert.equal(resource.contents[0]?.mimeType, "text/markdown");
+        assert.match(String(resource.contents[0]?.text), /下雨时请携带雨具/);
+      } finally {
         await client.close();
         await testServer.close();
       }

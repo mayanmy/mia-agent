@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ApiOutlined,
+  DatabaseOutlined,
   DeleteOutlined,
   DisconnectOutlined,
   EditOutlined,
@@ -14,12 +15,17 @@ import { App as AntdApp, Button, Form, Modal, Space, Table, Tag, Tooltip } from 
 import type { TableProps } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { listKnowledgeBases } from "../knowledge/api";
+import type { KnowledgeBaseListItem } from "../knowledge/api";
 import {
   createMcpServer,
   deleteMcpServer,
   getMcpServer,
   listMcpServers,
+  listMcpResources,
   listMcpServerTools,
+  importMcpResource,
+  previewMcpResource,
   revokeMcpOAuth,
   startMcpOAuth,
   syncMcpTools,
@@ -29,11 +35,15 @@ import {
 } from "./api";
 import type {
   McpServerFormValues,
+  McpResourceCatalog,
+  McpResourceItem,
+  McpResourcePreview,
   McpServerListItem,
   McpServerPayload,
   McpServerTool
 } from "./api";
 import { McpServerFormModal } from "./components/McpServerFormModal";
+import { McpResourcesDrawer } from "./components/McpResourcesDrawer";
 import { McpToolsDrawer } from "./components/McpToolsDrawer";
 import "./mcp.less";
 
@@ -56,6 +66,7 @@ const DEFAULT_VALUES: McpServerFormValues = {
   maxOutputChars: 20_000,
   maxConcurrency: 3
 };
+const EMPTY_RESOURCE_CATALOG: McpResourceCatalog = { resources: [], templates: [] };
 
 export function McpServersPage() {
   const { message } = AntdApp.useApp();
@@ -71,6 +82,13 @@ export function McpServersPage() {
   const [tools, setTools] = useState<McpServerTool[]>([]);
   const [toolsLoading, setToolsLoading] = useState(false);
   const [updatingToolId, setUpdatingToolId] = useState<string | null>(null);
+  const [resourceServer, setResourceServer] = useState<McpServerListItem | null>(null);
+  const [resourceCatalog, setResourceCatalog] =
+    useState<McpResourceCatalog>(EMPTY_RESOURCE_CATALOG);
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseListItem[]>([]);
+  const [resourcesLoading, setResourcesLoading] = useState(false);
+  const [resourcePreviewLoading, setResourcePreviewLoading] = useState(false);
+  const [resourceImportLoading, setResourceImportLoading] = useState(false);
 
   useEffect(() => {
     void refreshServers();
@@ -293,6 +311,61 @@ export function McpServersPage() {
     }
   }
 
+  async function openResources(server: McpServerListItem) {
+    setResourceServer(server);
+    setResourceCatalog(EMPTY_RESOURCE_CATALOG);
+    setResourcesLoading(true);
+    try {
+      const [catalog, knowledgeResult] = await Promise.all([
+        listMcpResources(server.id),
+        listKnowledgeBases(1, 100)
+      ]);
+      setResourceCatalog(catalog);
+      setKnowledgeBases(knowledgeResult.list);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载 MCP Resource 失败");
+    } finally {
+      setResourcesLoading(false);
+    }
+  }
+
+  async function previewResource(
+    resource: McpResourceItem
+  ): Promise<McpResourcePreview | undefined> {
+    if (!resourceServer) return undefined;
+    setResourcePreviewLoading(true);
+    try {
+      return await previewMcpResource(resourceServer.id, resource.uri);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "预览 MCP Resource 失败");
+      return undefined;
+    } finally {
+      setResourcePreviewLoading(false);
+    }
+  }
+
+  async function importResource(
+    resource: McpResourceItem,
+    values: { knowledgeBaseId: string; filename?: string }
+  ): Promise<boolean> {
+    if (!resourceServer) return false;
+    setResourceImportLoading(true);
+    try {
+      const result = await importMcpResource(resourceServer.id, {
+        uri: resource.uri,
+        knowledgeBaseId: values.knowledgeBaseId,
+        filename: values.filename
+      });
+      message.success(`已导入 ${result.document.originalFilename}`);
+      return true;
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "导入 MCP Resource 失败");
+      return false;
+    } finally {
+      setResourceImportLoading(false);
+    }
+  }
+
   async function updateTool(tool: McpServerTool, changes: Partial<McpServerTool>) {
     if (!toolServer) return;
     setUpdatingToolId(tool.id);
@@ -425,6 +498,13 @@ export function McpServersPage() {
           <Tooltip title="工具目录">
             <Button icon={<ToolOutlined />} type="text" onClick={() => void openTools(server)} />
           </Tooltip>
+          <Tooltip title="资源目录">
+            <Button
+              icon={<DatabaseOutlined />}
+              type="text"
+              onClick={() => void openResources(server)}
+            />
+          </Tooltip>
           <Tooltip title="编辑">
             <Button icon={<EditOutlined />} type="text" onClick={() => void openEdit(server)} />
           </Tooltip>
@@ -490,6 +570,17 @@ export function McpServersPage() {
         updatingToolId={updatingToolId}
         onClose={() => setToolServer(null)}
         onUpdate={(tool, changes) => void updateTool(tool, changes)}
+      />
+      <McpResourcesDrawer
+        catalog={resourceCatalog}
+        importLoading={resourceImportLoading}
+        knowledgeBases={knowledgeBases}
+        loading={resourcesLoading}
+        previewLoading={resourcePreviewLoading}
+        server={resourceServer}
+        onClose={() => setResourceServer(null)}
+        onImport={importResource}
+        onPreview={previewResource}
       />
     </section>
   );

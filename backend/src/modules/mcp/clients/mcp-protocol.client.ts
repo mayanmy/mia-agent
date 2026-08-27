@@ -33,6 +33,15 @@ export type McpProtocolToolResult = {
   meta?: Record<string, McpJsonValue>;
 };
 
+export type McpProtocolResourceCatalog = {
+  resources: Array<Record<string, McpJsonValue>>;
+  templates: Array<Record<string, McpJsonValue>>;
+};
+
+export type McpProtocolResourceResult = {
+  contents: Array<Record<string, McpJsonValue>>;
+};
+
 export type McpProtocolClientOptions = {
   endpoint: string;
   headers?: Record<string, string>;
@@ -178,6 +187,49 @@ export class McpProtocolClient {
       meta: result._meta
         ? this.toJsonRecord(result._meta, "MCP Tool result _meta 不是 JSON 对象")
         : undefined
+    };
+  }
+
+  /** Resources 与 Templates 仅返回协议元数据，不会在发现阶段读取任何远端正文。 */
+  async listResources(signal?: AbortSignal): Promise<McpProtocolResourceCatalog> {
+    const options = {
+      cacheMode: "refresh" as const,
+      signal,
+      timeout: this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+      maxTotalTimeout: this.options.maxTotalTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+    };
+    const [resources, templates] = await Promise.all([
+      this.normalizeAbort(this.requireClient().listResources(undefined, options), signal),
+      this.normalizeAbort(this.requireClient().listResourceTemplates(undefined, options), signal)
+    ]);
+    return {
+      resources: resources.resources.map((item) =>
+        this.toJsonRecord(item, "MCP Resource 不是 JSON 对象")
+      ),
+      templates: templates.resourceTemplates.map((item) =>
+        this.toJsonRecord(item, "MCP Resource Template 不是 JSON 对象")
+      )
+    };
+  }
+
+  /** 只读取管理员显式提交的 URI；SDK 缓存关闭，预览和导入都拿到当前远端内容。 */
+  async readResource(uri: string, signal?: AbortSignal): Promise<McpProtocolResourceResult> {
+    const result = await this.normalizeAbort(
+      this.requireClient().readResource(
+        { uri },
+        {
+          cacheMode: "refresh",
+          signal,
+          timeout: this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+          maxTotalTimeout: this.options.maxTotalTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+        }
+      ),
+      signal
+    );
+    return {
+      contents: result.contents.map((item) =>
+        this.toJsonRecord(item, "MCP Resource 内容不是 JSON 对象")
+      )
     };
   }
 
