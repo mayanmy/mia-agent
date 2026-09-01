@@ -3,6 +3,7 @@ import { App as AntdApp, Button, Form, Input, Modal, Space, Table, Tag } from "a
 import type { TableProps } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { ToolsGuide } from "../../shared/components/menu-guides";
 
 import {
   createHttpTool,
@@ -258,6 +259,7 @@ export function ToolsPage() {
       <WorkspacePageHeader
         actions={
           <>
+            <ToolsGuide />
             <Button disabled={loading} onClick={() => void refresh()}>
               刷新
             </Button>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { App as AntdApp, Button, Form, Modal } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { KnowledgeGuide } from "../../shared/components/menu-guides";
 
 import { listModelConfigs } from "../model-providers/api";
 import type { ModelConfigListItem } from "../model-providers/api";
@@ -325,6 +326,7 @@ export function KnowledgePage() {
       <WorkspacePageHeader
         actions={
           <>
+            <KnowledgeGuide />
             <Button disabled={loading} onClick={() => void refresh()}>
               刷新
             </Button>

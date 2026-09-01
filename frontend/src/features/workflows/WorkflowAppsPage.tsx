@@ -3,6 +3,7 @@ import { ApartmentOutlined, PlayCircleOutlined } from "@ant-design/icons";
 import { App as AntdApp, Button, Empty, Spin, Tag } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { WorkflowAppsGuide } from "../../shared/components/menu-guides";
 import {
   listPublishedWorkflowApps,
   runPublishedWorkflow,
@@ -46,7 +47,11 @@ export function WorkflowAppsPage() {
 
   return (
     <section className="workspace workflowAppsWorkspace">
-      <WorkspacePageHeader description="直接运行团队已经发布的确定性流程。" title="Workflow 应用" />
+      <WorkspacePageHeader
+        actions={<WorkflowAppsGuide />}
+        description="直接运行团队已经发布的确定性流程。"
+        title="Workflow 应用"
+      />
       <Spin spinning={loading}>
         {apps.length ? (
           <div className="workflowGalleryGrid">

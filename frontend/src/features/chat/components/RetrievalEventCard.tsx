@@ -10,6 +10,7 @@ type RetrievalEventCardProps = {
 
 /** 展示知识检索状态、耗时和命中来源。 */
 export function RetrievalEventCard({ retrievalEvent }: RetrievalEventCardProps) {
+  const [expanded, setExpanded] = useState(false);
   const [expandedSourceKeys, setExpandedSourceKeys] = useState<Set<string>>(() => new Set());
 
   function toggleSource(key: string) {
@@ -29,14 +30,26 @@ export function RetrievalEventCard({ retrievalEvent }: RetrievalEventCardProps) 
   return (
     <div className={`chatRetrievalEvent ${retrievalEvent.status}`}>
       <div className="chatRetrievalEventHeader">
-        <span className="chatRetrievalEventName">知识库检索</span>
+        <button
+          aria-expanded={expanded}
+          className="chatRetrievalEventSummary"
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          <span className="chatRetrievalEventName">
+            {retrievalEvent.status === "running"
+              ? "正在检索资料"
+              : `已检索 ${retrievalEvent.sources.length} 条资料`}
+          </span>
+          <span className="chatRetrievalEventToggle">{expanded ? "收起" : "查看过程"}</span>
+        </button>
         <span className="chatRetrievalEventStatus">{formatRetrievalStatus(retrievalEvent)}</span>
       </div>
-      {retrievalEvent.status === "running" ? (
+      {expanded && retrievalEvent.status === "running" ? (
         <div className="chatRetrievalEventHint">
           正在检索 {retrievalEvent.knowledgeBaseIds.length} 个知识库
         </div>
-      ) : retrievalEvent.sources.length > 0 ? (
+      ) : expanded && retrievalEvent.sources.length > 0 ? (
         <div className="chatRetrievalSources">
           {retrievalEvent.sources.map((source) => {
             const sourceKey = `${source.documentId}-${source.chunkId}`;
@@ -47,7 +60,7 @@ export function RetrievalEventCard({ retrievalEvent }: RetrievalEventCardProps) 
                 <div className="chatRetrievalSourceMain">
                   <span className="chatRetrievalSourceName">{source.documentName}</span>
                   <span className="chatRetrievalSourceMeta">
-                    #{source.chunkIndex} · score {source.score.toFixed(4)}
+                    #{source.chunkIndex} · 相关度 {formatRelevance(source.score)}
                   </span>
                   <button
                     className="chatRetrievalSourceToggle"
@@ -66,11 +79,15 @@ export function RetrievalEventCard({ retrievalEvent }: RetrievalEventCardProps) 
             );
           })}
         </div>
-      ) : (
+      ) : expanded ? (
         <div className="chatRetrievalEventHint">未检索到相关片段</div>
-      )}
+      ) : null}
     </div>
   );
+}
+
+function formatRelevance(score: number): string {
+  return `${Math.max(0, Math.min(100, Math.round(score * 100)))}%`;
 }
 
 function formatRetrievalStatus(retrievalEvent: ChatRetrievalEvent): string {

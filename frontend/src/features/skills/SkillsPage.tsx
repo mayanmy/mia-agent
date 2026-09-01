@@ -15,6 +15,7 @@ import {
 import type { TableProps } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { SkillsGuide } from "../../shared/components/menu-guides";
 import {
   archiveSkill,
   createSkill,
@@ -180,6 +181,7 @@ export function SkillsPage() {
       <WorkspacePageHeader
         actions={
           <>
+            <SkillsGuide />
             <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void refresh()}>
               刷新
             </Button>

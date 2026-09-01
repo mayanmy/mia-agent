@@ -57,4 +57,8 @@ export type ChatUiMessage = ChatMessage & {
   images?: ChatImageAttachment[];
   /** 用户消息携带的文本附件。 */
   files?: ChatFileAttachment[];
+  /** 当前回答的生成终态；错误和停止独立展示，不污染 Markdown 正文。 */
+  generationStatus?: "streaming" | "completed" | "stopped" | "error";
+  /** 面向用户的失败说明。 */
+  errorMessage?: string;
 };

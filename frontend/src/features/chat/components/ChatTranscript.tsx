@@ -27,6 +27,8 @@ type ChatTranscriptProps = {
   onScrollBottom: () => void;
   /** 复制消息正文回调。 */
   onCopyMessage: (content: string) => void;
+  /** 重新生成某条 assistant 回答。 */
+  onRetryMessage: (messageId: string) => void;
 };
 
 /** 展示消息时间线并协调历史分页和滚动跟随。 */
@@ -40,7 +42,8 @@ export function ChatTranscript({
   onScroll,
   onLoadMoreHistory,
   onScrollBottom,
-  onCopyMessage
+  onCopyMessage,
+  onRetryMessage
 }: ChatTranscriptProps) {
   return (
     <>
@@ -67,15 +70,11 @@ export function ChatTranscript({
         ) : (
           messages.map((item, index) => (
             <ChatMessageItem
-              generating={
-                sending &&
-                item.role === "assistant" &&
-                index === messages.length - 1 &&
-                item.content.trim().length === 0
-              }
+              generating={sending && item.role === "assistant" && index === messages.length - 1}
               item={item}
               key={item.id}
               onCopy={onCopyMessage}
+              onRetry={item.role === "assistant" ? () => onRetryMessage(item.id) : undefined}
             />
           ))
         )}

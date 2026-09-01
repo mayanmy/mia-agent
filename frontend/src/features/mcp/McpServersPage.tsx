@@ -16,6 +16,7 @@ import { App as AntdApp, Button, Form, Modal, Space, Table, Tag, Tooltip } from 
 import type { TableProps } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { McpGuide } from "../../shared/components/menu-guides";
 import { listKnowledgeBases } from "../knowledge/api";
 import type { KnowledgeBaseListItem } from "../knowledge/api";
 import {
@@ -596,6 +597,7 @@ export function McpServersPage() {
       <WorkspacePageHeader
         actions={
           <>
+            <McpGuide />
             <Button
               icon={<ReloadOutlined />}
               loading={loading}

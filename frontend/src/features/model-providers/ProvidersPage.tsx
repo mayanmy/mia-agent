@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { App as AntdApp, Button, Card, Empty, Input } from "antd";
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { ProvidersGuide } from "../../shared/components/menu-guides";
 import {
   checkModelCapability,
   createModelConfig,
@@ -396,6 +397,7 @@ export function ProvidersPage() {
       <WorkspacePageHeader
         actions={
           <>
+            <ProvidersGuide />
             <Button onClick={() => void openDefaultModelDialog()}>默认模型设置</Button>
             <Button onClick={() => void refresh()}>
               自动更新 <span className="latestBadge">最新</span>

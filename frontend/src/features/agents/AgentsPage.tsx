@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, Form, Modal, message } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { AgentsGuide } from "../../shared/components/menu-guides";
 
 import { listKnowledgeBases, type KnowledgeBaseListItem } from "../knowledge/api";
 import { getDefaultModelSettings, listModelConfigs, listProviders } from "../model-providers/api";
@@ -397,6 +398,7 @@ export function AgentsPage() {
       <WorkspacePageHeader
         actions={
           <>
+            <AgentsGuide />
             <Button disabled={loading} onClick={() => void refresh()}>
               刷新
             </Button>

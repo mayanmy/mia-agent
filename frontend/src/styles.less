@@ -335,6 +335,37 @@ a {
   justify-content: flex-end;
 }
 
+.menuGuide {
+  display: grid;
+  gap: 20px;
+}
+
+.menuGuide section h3 {
+  margin: 0 0 14px;
+}
+
+.menuGuideRows > div {
+  align-items: flex-start;
+  border-bottom: 1px solid #eef1f6;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(100px, 132px) 1fr;
+  padding: 10px 0;
+}
+
+.menuGuideRows > div:last-child {
+  border-bottom: 0;
+}
+
+.menuGuideRows strong {
+  color: #1f2937;
+}
+
+.menuGuideRows span {
+  color: #667085;
+  line-height: 1.6;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   color: #64748b;

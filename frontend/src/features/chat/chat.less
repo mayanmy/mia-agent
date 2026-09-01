@@ -314,6 +314,7 @@
 
 .chatMessage.assistant {
   justify-self: start;
+  max-width: min(860px, 78%);
 }
 
 .chatMessageRole {
@@ -526,6 +527,25 @@
   justify-content: space-between;
 }
 
+.chatRetrievalEventSummary {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 10px;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.chatRetrievalEventToggle {
+  color: #2563eb;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .chatRetrievalEventName {
   color: #111827;
   font-size: 13px;
@@ -643,6 +663,38 @@
 
 .chatCitationMeta {
   color: #94a3b8;
+}
+
+.chatGenerationNotice {
+  align-items: center;
+  border-radius: 8px;
+  display: flex;
+  font-size: 13px;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding: 10px 12px;
+}
+
+.chatGenerationNotice > div {
+  display: grid;
+  gap: 2px;
+}
+
+.chatGenerationNotice span {
+  color: #64748b;
+}
+
+.chatGenerationNotice.error {
+  background: #fff7f7;
+  border: 1px solid #fecaca;
+  color: #b42318;
+}
+
+.chatGenerationNotice.stopped {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
 }
 
 .chatToolEvent {

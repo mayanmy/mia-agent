@@ -17,13 +17,16 @@ type ChatMessageItemProps = {
   generating: boolean;
   /** 复制消息正文回调。 */
   onCopy: (content: string) => void;
+  /** 重新提交该回答对应的上一条用户消息。 */
+  onRetry?: () => void;
 };
 
 /** 渲染用户或 Agent 消息及其检索、工具和引用信息。 */
 export function ChatMessageItem({
   item,
   generating,
-  onCopy
+  onCopy,
+  onRetry
 }: ChatMessageItemProps) {
   const citationSources = getCitationSources(item);
 
@@ -68,6 +71,18 @@ export function ChatMessageItem({
         ) : null}
         <MarkdownMessageContent content={item.content} />
         {generating ? <GeneratingIndicator /> : null}
+        {item.generationStatus === "error" ? (
+          <div className="chatGenerationNotice error" role="alert">
+            <div>
+              <strong>回答生成失败</strong>
+              <span>{item.errorMessage || "服务暂时不可用，请稍后重试。"}</span>
+            </div>
+            {onRetry ? <Button size="small" onClick={onRetry}>重试</Button> : null}
+          </div>
+        ) : null}
+        {item.generationStatus === "stopped" ? (
+          <div className="chatGenerationNotice stopped">已停止生成，已保留当前回答。</div>
+        ) : null}
         {citationSources.length > 0 ? <CitationSourceList sources={citationSources} /> : null}
       </div>
       <div className="chatMessageMeta">
@@ -81,6 +96,11 @@ export function ChatMessageItem({
           type="text"
           onClick={() => onCopy(item.content)}
         />
+        {item.role === "assistant" && item.generationStatus === "stopped" && onRetry ? (
+          <Button className="chatMessageMetaButton" size="small" type="text" onClick={onRetry}>
+            重试
+          </Button>
+        ) : null}
       </div>
     </div>
   );
@@ -161,7 +181,7 @@ function CitationSourceList({ sources }: CitationSourceListProps) {
             <span className="chatCitationIndex">[{index + 1}]</span>
             <span className="chatCitationName">{source.documentName}</span>
             <span className="chatCitationMeta">
-              #{source.chunkIndex} · score {source.score.toFixed(4)}
+              #{source.chunkIndex} · 相关度 {Math.max(0, Math.min(100, Math.round(source.score * 100)))}%
             </span>
           </div>
         ))}

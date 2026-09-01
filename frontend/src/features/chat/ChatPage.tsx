@@ -390,12 +390,12 @@ export function ChatPage() {
    * 提交用户消息并把 SSE 过程事件合并到当前 assistant 气泡。
    * AbortController 同时承担用户停止生成和页面切换时的上游取消。
    */
-  async function handleSend() {
+  async function handleSend(retry?: { assistantMessageId: string; content: string }) {
     if (disposedRef.current) {
       return;
     }
 
-    const content = input.trim();
+    const content = retry?.content.trim() ?? input.trim();
 
     if (!selectedAgentId) {
       messageApi.warning("请选择 Agent");
@@ -424,12 +424,12 @@ export function ChatPage() {
       return;
     }
 
-    const currentImages = images.map(({ name, mimeType, dataUrl }) => ({
+    const currentImages = (retry ? [] : images).map(({ name, mimeType, dataUrl }) => ({
       name,
       mimeType,
       dataUrl
     }));
-    const currentFiles = files.map(({ name, mimeType, size, content: fileContent }) => ({
+    const currentFiles = (retry ? [] : files).map(({ name, mimeType, size, content: fileContent }) => ({
       name,
       mimeType,
       size,
@@ -444,24 +444,37 @@ export function ChatPage() {
       createdAt: Date.now()
     };
     const assistantMessageId = createMessageId();
+    const retryMessageIndex = retry
+      ? messages.findIndex((item) => item.id === retry.assistantMessageId)
+      : -1;
+    const historyMessages =
+      retryMessageIndex > 0 ? messages.slice(0, retryMessageIndex - 1) : messages;
     const history =
       selectedAgent?.chatSessionMode === "EPHEMERAL"
-        ? buildTransportHistory(messages, { maxTurns: selectedAgent.historyTurns })
+        ? buildTransportHistory(historyMessages, { maxTurns: selectedAgent.historyTurns })
         : undefined;
 
     resetAutoScroll();
-    setMessages((current) => [
-      ...current,
-      nextUserMessage,
-      {
-        id: assistantMessageId,
-        role: "assistant",
-        content: "",
-        createdAt: Date.now()
-      }
-    ]);
-    setInput("");
-    clearAttachments();
+    setMessages((current) => {
+      const withoutFailedAttempt = retry
+        ? current.filter((item) => item.id !== retry.assistantMessageId)
+        : current;
+      return [
+        ...withoutFailedAttempt,
+        nextUserMessage,
+        {
+          id: assistantMessageId,
+          role: "assistant" as const,
+          content: "",
+          createdAt: Date.now(),
+          generationStatus: "streaming" as const
+        }
+      ];
+    });
+    if (!retry) {
+      setInput("");
+      clearAttachments();
+    }
     setSending(true);
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -495,6 +508,7 @@ export function ChatPage() {
             if (event.type === "message_end" && typeof event.data.content === "string") {
               // Workflow End answer 是最终权威内容，可能没有 token，也可能转换过中间模型输出。
               replaceAssistantContent(assistantMessageId, event.data.content);
+              updateAssistantGeneration(assistantMessageId, "completed");
             }
 
             if (event.type === "retrieval_start") {
@@ -557,11 +571,14 @@ export function ChatPage() {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         if (!disposedRef.current) {
-          appendAssistantToken(assistantMessageId, "\n\n已停止生成。");
+          updateAssistantGeneration(assistantMessageId, "stopped");
         }
       } else if (!disposedRef.current) {
-        messageApi.error(error instanceof Error ? error.message : "对话失败");
-        removeAssistantMessageIfEmpty(assistantMessageId);
+        updateAssistantGeneration(
+          assistantMessageId,
+          "error",
+          error instanceof Error ? error.message : "对话失败"
+        );
       }
     } finally {
       if (abortControllerRef.current === controller) {
@@ -617,6 +634,18 @@ export function ChatPage() {
   function replaceAssistantContent(messageId: string, content: string) {
     setMessages((current) =>
       current.map((item) => (item.id === messageId ? { ...item, content } : item))
+    );
+  }
+
+  function updateAssistantGeneration(
+    messageId: string,
+    generationStatus: NonNullable<ChatUiMessage["generationStatus"]>,
+    errorMessage?: string
+  ) {
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === messageId ? { ...item, generationStatus, errorMessage } : item
+      )
     );
   }
 
@@ -763,20 +792,30 @@ export function ChatPage() {
     );
   }
 
-  function removeAssistantMessageIfEmpty(messageId: string) {
-    setMessages((current) =>
-      current.filter(
-        (item) =>
-          item.id !== messageId ||
-          item.content.trim().length > 0 ||
-          Boolean(item.retrievalEvents?.length) ||
-          Boolean(item.toolEvents?.length)
-      )
-    );
-  }
-
   function handleStop() {
     abortControllerRef.current?.abort();
+  }
+
+  function handleRetryMessage(assistantMessageId: string) {
+    if (sending) {
+      return;
+    }
+
+    const assistantIndex = messages.findIndex((item) => item.id === assistantMessageId);
+    const assistantMessage = messages[assistantIndex];
+    const userMessage = assistantIndex > 0 ? messages[assistantIndex - 1] : undefined;
+
+    if (!assistantMessage || userMessage?.role !== "user") {
+      messageApi.warning("找不到这次回答对应的问题");
+      return;
+    }
+
+    if (assistantMessage.toolEvents?.length) {
+      messageApi.warning("该回答执行过工具，为避免重复操作，请重新发送问题");
+      return;
+    }
+
+    void handleSend({ assistantMessageId, content: userMessage.content });
   }
 
   async function copyMessageContent(content: string) {
@@ -846,6 +885,7 @@ export function ChatPage() {
               loadingHistory={loadingHistory}
               showScrollBottom={showScrollBottom}
               onCopyMessage={(content) => void copyMessageContent(content)}
+              onRetryMessage={handleRetryMessage}
               onLoadMoreHistory={() => void loadOlderMessages()}
               onScroll={releaseAutoScrollIfNeeded}
               onScrollBottom={scrollMessagesToBottom}
