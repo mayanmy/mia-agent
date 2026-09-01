@@ -34,6 +34,10 @@ export function getEmbedCode({
     return "";
   }
 
+  if (scenario === "iframe") {
+    return getIframeEmbedCode(origin, shareToken, agentName);
+  }
+
   if (scenario === "multi") {
     return getMultiAgentEmbedCode(origin, shareToken, agentName);
   }
@@ -47,6 +51,10 @@ export function getEmbedCode({
   }
 
   return getScriptTag(origin, shareToken, agentName);
+}
+
+function getIframeEmbedCode(origin: string, shareToken: string, agentName?: string): string {
+  return `<iframe src="${getShareUrl(origin, shareToken)}" title="${escapeHtmlAttribute(agentName || "Mia Agent")}" style="width:100%;height:700px;border:0;border-radius:12px;" allow="clipboard-write" loading="lazy"></iframe>`;
 }
 
 function getScriptTag(origin: string, shareToken: string, agentName?: string): string {

@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 
+import { getConfig } from "../../core/config";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { AgentsService } from "../agents/agents.service";
 import {
@@ -116,7 +117,9 @@ export class PublicAccessService {
       return;
     }
 
-    if (!origin || !allowedOrigins.includes(origin)) {
+    // iframe 分享页运行在 Mia 自身 Origin 内，应始终可访问；外部 JS Widget 仍需命中 Agent 白名单。
+    const publicOrigin = new URL(getConfig().publicBaseUrl).origin;
+    if (!origin || (origin !== publicOrigin && !allowedOrigins.includes(origin))) {
       throw new AppError(ErrorCodes.common.forbidden, "公开访问来源未获授权", HttpStatus.FORBIDDEN);
     }
   }

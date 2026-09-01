@@ -53,6 +53,16 @@ export function AgentEmbedModal({
         activeKey={scenario}
         items={[
           {
+            key: "iframe",
+            label: "iframe 嵌入",
+            children: (
+              <EmbedCodePanel
+                code={codeFor("iframe")}
+                description="推荐用于快速接入：聊天页面运行在 Mia 域名内，宿主网站无需配置 CORS。可直接调整 iframe 的宽度和高度。"
+              />
+            )
+          },
+          {
             key: "single",
             label: "单页面单 Agent",
             children: (

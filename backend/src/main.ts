@@ -1,5 +1,6 @@
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
+import { Request, Response } from "express";
 
 import { AppModule } from "./app.module";
 import { AppExceptionFilter } from "./core/app-exception.filter";
@@ -11,10 +12,50 @@ import {
 } from "./core/request-id.middleware";
 import { ResultInterceptor } from "./core/result.interceptor";
 
+/**
+ * 公共 Widget 的预检请求不携带 agentToken，无法在 OPTIONS 阶段查询 Agent 白名单。
+ * 因此这里只让浏览器通过公共路由预检；真正请求仍由 PublicAccessService 按
+ * publicAllowedOrigins 校验，管理端等其他 API 继续使用全局 CORS 白名单。
+ */
+function publicWidgetCorsMiddleware(
+  req: Request,
+  res: Response,
+  next: () => void
+): void {
+  const apiPrefix = getConfig().apiPrefix.replace(/\/+$/u, "");
+  const pathname = req.url?.split("?", 1)[0] ?? "";
+  const origin = req.headers.origin;
+  const requestOrigin = Array.isArray(origin) ? origin[0] : origin;
+
+  if (!pathname.startsWith(`${apiPrefix}/public/`) || !requestOrigin) {
+    next();
+    return;
+  }
+
+  res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    Array.isArray(req.headers["access-control-request-headers"])
+      ? req.headers["access-control-request-headers"].join(",")
+      : (req.headers["access-control-request-headers"] ?? "Content-Type")
+  );
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
+  next();
+}
+
 async function bootstrap() {
   const config = getConfig();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  app.use(publicWidgetCorsMiddleware);
   app.enableCors({
     origin: config.corsOrigins,
     credentials: true

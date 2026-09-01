@@ -48,7 +48,7 @@ export function AgentsPage() {
   const [embedAgent, setEmbedAgent] = useState<AgentTableItem | null>(null);
   const [apiKeyAgent, setApiKeyAgent] = useState<AgentTableItem | null>(null);
   const [publicAccessAgent, setPublicAccessAgent] = useState<AgentTableItem | null>(null);
-  const [embedScenario, setEmbedScenario] = useState<EmbedScenario>("single");
+  const [embedScenario, setEmbedScenario] = useState<EmbedScenario>("iframe");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loadedToolIds, setLoadedToolIds] = useState<string[]>([]);
   const [loadedKnowledgeBaseIds, setLoadedKnowledgeBaseIds] = useState<string[]>([]);
@@ -324,7 +324,7 @@ export function AgentsPage() {
       return;
     }
 
-    setEmbedScenario("single");
+    setEmbedScenario("iframe");
     setEmbedAgent(agent);
   }
 

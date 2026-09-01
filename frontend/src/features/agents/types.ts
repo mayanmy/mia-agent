@@ -33,4 +33,4 @@ export type AgentTableItem = AgentListItem & {
 };
 
 /** 嵌入代码面板支持的部署场景。 */
-export type EmbedScenario = "single" | "multi" | "spa" | "inline";
+export type EmbedScenario = "iframe" | "single" | "multi" | "spa" | "inline";
