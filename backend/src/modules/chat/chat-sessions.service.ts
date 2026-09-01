@@ -5,6 +5,7 @@ import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   ChatMessageQueryDto,
+  ChatMessageMetadata,
   ChatSessionListItem,
   ChatSessionListQueryDto,
   ChatSessionListResponse,
@@ -166,6 +167,7 @@ export class ChatSessionsService {
         id: item.id,
         role: item.role === ChatSessionMessageRole.USER ? "user" : "assistant",
         content: item.content,
+        metadata: this.toMessageMetadata(item.metadata),
         createdAt: item.createdAt
       })),
       hasMore,
@@ -295,7 +297,8 @@ export class ChatSessionsService {
   async appendMessage(
     sessionId: string,
     role: ChatSessionMessageRole,
-    content: string
+    content: string,
+    metadata?: ChatMessageMetadata
   ): Promise<void> {
     if (!content.trim()) {
       return;
@@ -307,7 +310,8 @@ export class ChatSessionsService {
         data: {
           sessionId,
           role,
-          content
+          content,
+          metadata: metadata ? (metadata as Prisma.InputJsonValue) : undefined
         }
       });
       await transaction.chatSession.update({
@@ -325,6 +329,15 @@ export class ChatSessionsService {
         });
       }
     });
+  }
+
+  /** Prisma JsonValue 经过边界检查后转换为稳定 DTO，旧数据或非对象值统一忽略。 */
+  private toMessageMetadata(value: Prisma.JsonValue | null): ChatMessageMetadata | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return null;
+    }
+
+    return value as ChatMessageMetadata;
   }
 
   /** 按复合归属读取会话，避免只凭可猜测 ID 越权访问。 */

@@ -21,6 +21,8 @@ type ChatSessionListProps = {
   disabled: boolean;
   /** 会话列表是否正在加载。 */
   loading: boolean;
+  /** 当前筛选仍有更多会话。 */
+  hasMore: boolean;
   /** 创建新会话回调。 */
   onCreate: () => void;
   /** 选择会话回调。 */
@@ -37,6 +39,8 @@ type ChatSessionListProps = {
   showingArchived: boolean;
   /** 切换活跃/归档视图回调。 */
   onToggleArchived: () => void;
+  /** 加载下一页会话。 */
+  onLoadMore: () => void;
 };
 
 /** 展示并管理当前 Agent 的持久会话。 */
@@ -45,6 +49,7 @@ export function ChatSessionList({
   activeSessionId,
   disabled,
   loading,
+  hasMore,
   onCreate,
   onSelect,
   onRename,
@@ -52,7 +57,8 @@ export function ChatSessionList({
   onRestore,
   onDelete,
   showingArchived,
-  onToggleArchived
+  onToggleArchived,
+  onLoadMore
 }: ChatSessionListProps) {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -209,6 +215,11 @@ export function ChatSessionList({
               </div>
             );
           })}
+          {hasMore ? (
+            <Button block loading={loading} size="small" type="text" onClick={onLoadMore}>
+              加载更多会话
+            </Button>
+          ) : null}
         </div>
       )}
     </section>

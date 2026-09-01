@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Button } from "antd";
-import { CopyOutlined } from "@ant-design/icons";
+import { CopyOutlined, InfoCircleOutlined } from "@ant-design/icons";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -28,6 +29,7 @@ export function ChatMessageItem({
   onCopy,
   onRetry
 }: ChatMessageItemProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const citationSources = getCitationSources(item);
 
   return (
@@ -84,6 +86,9 @@ export function ChatMessageItem({
           <div className="chatGenerationNotice stopped">已停止生成，已保留当前回答。</div>
         ) : null}
         {citationSources.length > 0 ? <CitationSourceList sources={citationSources} /> : null}
+        {detailsOpen && item.runtimeMetadata ? (
+          <RuntimeDetails metadata={item.runtimeMetadata} />
+        ) : null}
       </div>
       <div className="chatMessageMeta">
         <span>{formatMessageTime(item.createdAt)}</span>
@@ -101,7 +106,42 @@ export function ChatMessageItem({
             重试
           </Button>
         ) : null}
+        {item.role === "assistant" && item.runtimeMetadata ? (
+          <Button
+            className="chatMessageMetaButton"
+            icon={<InfoCircleOutlined />}
+            size="small"
+            type="text"
+            onClick={() => setDetailsOpen((current) => !current)}
+          >
+            运行详情
+          </Button>
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+function RuntimeDetails({ metadata }: { metadata: NonNullable<ChatUiMessage["runtimeMetadata"]> }) {
+  const rows = [
+    ["模型", [metadata.providerName, metadata.modelName].filter(Boolean).join(" / ")],
+    ["总耗时", metadata.elapsedMs === undefined ? "" : `${metadata.elapsedMs}ms`],
+    ["输入 Token", metadata.usage?.inputTokens?.toLocaleString() ?? ""],
+    ["输出 Token", metadata.usage?.outputTokens?.toLocaleString() ?? ""],
+    ["候选工具", metadata.toolSearch?.catalogMatchCount?.toString() ?? ""],
+    ["选中工具", metadata.toolSearch?.selectedToolIds?.join("、") ?? ""],
+    ["Request ID", metadata.requestId ?? ""],
+    ["Run ID", metadata.runId ?? ""]
+  ].filter((row) => row[1]);
+
+  return (
+    <div className="chatRuntimeDetails">
+      {rows.map(([name, value]) => (
+        <div key={name}>
+          <strong>{name}</strong>
+          <span>{value}</span>
+        </div>
+      ))}
     </div>
   );
 }

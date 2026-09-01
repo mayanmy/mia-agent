@@ -31,6 +31,7 @@ import "./chat.less";
 export function ChatPage() {
   const { message: messageApi } = AntdApp.useApp();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const streamStartedAtRef = useRef<Map<string, number>>(new Map());
   const disposedRef = useRef(false);
   const sessionLoadVersionRef = useRef(0);
   const historyLoadVersionRef = useRef(0);
@@ -41,6 +42,7 @@ export function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionStatus, setSessionStatus] = useState<ChatSessionStatus>("ACTIVE");
   const [sessions, setSessions] = useState<ChatSessionListItem[]>([]);
+  const [sessionCursor, setSessionCursor] = useState<string | null>(null);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
   const [input, setInput] = useState("");
@@ -82,6 +84,7 @@ export function ChatPage() {
     setSending(false);
     setSessionId(null);
     setSessions([]);
+    setSessionCursor(null);
     setHistoryCursor(null);
     setMessages([]);
     historyLoadVersionRef.current += 1;
@@ -101,6 +104,7 @@ export function ChatPage() {
         }
 
         const nextSessions = response.list;
+        setSessionCursor(response.nextCursor);
 
         if (sessionStatus === "ARCHIVED") {
           setSessions(nextSessions);
@@ -265,6 +269,29 @@ export function ChatPage() {
       resetAutoScroll();
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "新建会话失败");
+    } finally {
+      setLoadingSessions(false);
+    }
+  }
+
+  async function loadMoreSessions() {
+    if (!selectedAgentId || !sessionCursor || loadingSessions || sending) {
+      return;
+    }
+
+    setLoadingSessions(true);
+    try {
+      const response = await listChatSessions(selectedAgentId, {
+        cursor: sessionCursor,
+        status: sessionStatus
+      });
+      setSessions((current) => [
+        ...current,
+        ...response.list.filter((item) => !current.some((existing) => existing.id === item.id))
+      ]);
+      setSessionCursor(response.nextCursor);
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "加载更多会话失败");
     } finally {
       setLoadingSessions(false);
     }
@@ -444,6 +471,7 @@ export function ChatPage() {
       createdAt: Date.now()
     };
     const assistantMessageId = createMessageId();
+    streamStartedAtRef.current.set(assistantMessageId, Date.now());
     const retryMessageIndex = retry
       ? messages.findIndex((item) => item.id === retry.assistantMessageId)
       : -1;
@@ -505,10 +533,37 @@ export function ChatPage() {
               setSessionId(event.data.sessionId);
             }
 
+            if (event.type === "message_start") {
+              updateAssistantRuntimeMetadata(assistantMessageId, {
+                runId: event.data.runId,
+                modelConfigId: event.data.modelConfigId,
+                modelName: event.data.modelName,
+                providerName: event.data.providerName
+              });
+            }
+
+            if (event.type === "tool_search_result") {
+              updateAssistantRuntimeMetadata(assistantMessageId, {
+                toolSearch: {
+                  boundToolCount: event.data.boundToolCount,
+                  catalogMatchCount: event.data.catalogMatchCount,
+                  selectedToolIds: event.data.selectedToolIds
+                }
+              });
+            }
+
             if (event.type === "message_end" && typeof event.data.content === "string") {
               // Workflow End answer 是最终权威内容，可能没有 token，也可能转换过中间模型输出。
               replaceAssistantContent(assistantMessageId, event.data.content);
               updateAssistantGeneration(assistantMessageId, "completed");
+              updateAssistantRuntimeMetadata(assistantMessageId, {
+                runId: event.data.runId,
+                modelConfigId: event.data.modelConfigId,
+                modelName: event.data.modelName,
+                providerName: event.data.providerName,
+                usage: event.data.usage,
+                elapsedMs: Date.now() - (streamStartedAtRef.current.get(assistantMessageId) ?? Date.now())
+              });
             }
 
             if (event.type === "retrieval_start") {
@@ -584,6 +639,7 @@ export function ChatPage() {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
       }
+      streamStartedAtRef.current.delete(assistantMessageId);
 
       if (!disposedRef.current) {
         setSending(false);
@@ -645,6 +701,19 @@ export function ChatPage() {
     setMessages((current) =>
       current.map((item) =>
         item.id === messageId ? { ...item, generationStatus, errorMessage } : item
+      )
+    );
+  }
+
+  function updateAssistantRuntimeMetadata(
+    messageId: string,
+    metadata: NonNullable<ChatUiMessage["runtimeMetadata"]>
+  ) {
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === messageId
+          ? { ...item, runtimeMetadata: { ...item.runtimeMetadata, ...metadata } }
+          : item
       )
     );
   }
@@ -859,6 +928,7 @@ export function ChatPage() {
                 <ChatSessionList
                   activeSessionId={sessionId}
                   disabled={sending}
+                  hasMore={Boolean(sessionCursor)}
                   loading={loadingSessions}
                   sessions={sessions}
                   showingArchived={sessionStatus === "ARCHIVED"}
@@ -871,6 +941,7 @@ export function ChatPage() {
                   onRestore={(targetSessionId) => void handleRestoreSession(targetSessionId)}
                   onSelect={(targetSessionId) => void handleSessionChange(targetSessionId)}
                   onToggleArchived={handleToggleArchivedSessions}
+                  onLoadMore={() => void loadMoreSessions()}
                 />
               </div>
             </aside>
@@ -922,6 +993,8 @@ type PersistedChatMessage = {
   role: "user" | "assistant";
   /** 消息正文。 */
   content: string;
+  /** assistant 运行快照；兼容旧消息为空。 */
+  metadata: import("./api").ChatMessageMetadata | null;
   /** ISO 格式创建时间。 */
   createdAt: string;
 };
@@ -932,7 +1005,28 @@ function toChatUiMessage(message: PersistedChatMessage): ChatUiMessage {
     id: message.id,
     role: message.role,
     content: message.content,
-    createdAt: new Date(message.createdAt).getTime()
+    createdAt: new Date(message.createdAt).getTime(),
+    generationStatus: message.role === "assistant" ? "completed" : undefined,
+    retrievalEvents: message.metadata?.retrievalEvents?.map((event) => ({
+      id: createMessageId(),
+      knowledgeBaseIds: event.knowledgeBaseIds,
+      status: event.status,
+      sources: event.sources,
+      elapsedMs: event.elapsedMs
+    })),
+    toolEvents: message.metadata?.toolEvents,
+    runtimeMetadata: message.metadata
+      ? {
+          requestId: message.metadata.requestId,
+          runId: message.metadata.runId,
+          modelConfigId: message.metadata.modelConfigId,
+          modelName: message.metadata.modelName,
+          providerName: message.metadata.providerName,
+          elapsedMs: message.metadata.elapsedMs,
+          usage: message.metadata.usage,
+          toolSearch: message.metadata.toolSearch
+        }
+      : undefined
   };
 }
 

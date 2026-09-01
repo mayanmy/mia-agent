@@ -24,9 +24,15 @@ export const tests = [
           findMany: async (query: Record<string, unknown>) => {
             queryCalls.push(query);
             return [
-              { id: "message-3", role: "ASSISTANT", content: "最新", createdAt: newest },
-              { id: "message-2", role: "USER", content: "中间", createdAt: middle },
-              { id: "message-1", role: "ASSISTANT", content: "最早", createdAt: oldest }
+              {
+                id: "message-3",
+                role: "ASSISTANT",
+                content: "最新",
+                metadata: { requestId: "request-3", elapsedMs: 320 },
+                createdAt: newest
+              },
+              { id: "message-2", role: "USER", content: "中间", metadata: null, createdAt: middle },
+              { id: "message-1", role: "ASSISTANT", content: "最早", metadata: null, createdAt: oldest }
             ];
           }
         }
@@ -46,6 +52,41 @@ export const tests = [
       assert.equal(page.hasMore, true);
       assert.ok(page.nextBefore);
       assert.equal(queryCalls[0].take, 3);
+      assert.deepEqual(page.list[1]?.metadata, { requestId: "request-3", elapsedMs: 320 });
+    }
+  },
+  {
+    name: "ChatSessionsService persists assistant runtime metadata",
+    run: async () => {
+      let createdData: Record<string, unknown> | undefined;
+      const transaction = {
+        chatSessionMessage: {
+          create: async ({ data }: { data: Record<string, unknown> }) => {
+            createdData = data;
+          }
+        },
+        chatSession: {
+          update: async () => undefined,
+          updateMany: async () => undefined
+        }
+      };
+      const prisma = {
+        $transaction: async (callback: (client: typeof transaction) => Promise<void>) =>
+          callback(transaction)
+      };
+      const service = new ChatSessionsService(prisma as never);
+
+      await service.appendMessage("session-id", "ASSISTANT" as never, "回答", {
+        requestId: "request-id",
+        modelName: "model-a",
+        retrievalEvents: []
+      });
+
+      assert.deepEqual(createdData?.metadata, {
+        requestId: "request-id",
+        modelName: "model-a",
+        retrievalEvents: []
+      });
     }
   },
   {

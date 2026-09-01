@@ -1,5 +1,37 @@
 import { ChatSessionStatus } from "@prisma/client";
 
+/** 持久消息保存的运行快照。字段均可 JSON 序列化，旧消息可以没有该结构。 */
+export type ChatMessageMetadata = {
+  requestId?: string;
+  runId?: string;
+  modelConfigId?: string;
+  modelName?: string;
+  providerName?: string;
+  elapsedMs?: number;
+  usage?: { inputTokens?: number; outputTokens?: number; estimatedCost?: number };
+  retrievalEvents?: Array<{
+    knowledgeBaseIds: string[];
+    status: "success";
+    sources: Array<Record<string, unknown>>;
+    elapsedMs?: number;
+  }>;
+  toolEvents?: Array<{
+    id: string;
+    name: string;
+    arguments?: Record<string, unknown>;
+    status: "success" | "error";
+    output?: unknown;
+    errorType?: string;
+    errorMessage?: string;
+    elapsedMs?: number;
+  }>;
+  toolSearch?: {
+    boundToolCount?: number;
+    catalogMatchCount?: number;
+    selectedToolIds?: string[];
+  };
+};
+
 /** 会话列表查询参数；cursor 与 pageSize 由 service 统一校验和归一化。 */
 export type ChatSessionListQueryDto = {
   /** 限定查询的 Agent ID。 */
@@ -76,6 +108,8 @@ export type ChatSessionMessageListItem = {
   role: "user" | "assistant";
   /** 消息正文。 */
   content: string;
+  /** 回答运行快照；旧消息和用户消息通常为 null。 */
+  metadata: ChatMessageMetadata | null;
   /** 消息创建时间。 */
   createdAt: Date;
 };

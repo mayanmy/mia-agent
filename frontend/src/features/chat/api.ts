@@ -65,8 +65,41 @@ export type ChatSessionMessage = {
   role: ChatRole;
   /** 消息正文。 */
   content: string;
+  /** assistant 回答的运行快照；旧消息和用户消息为 null。 */
+  metadata: ChatMessageMetadata | null;
   /** ISO 格式创建时间。 */
   createdAt: string;
+};
+
+export type ChatMessageMetadata = {
+  requestId?: string;
+  runId?: string;
+  modelConfigId?: string;
+  modelName?: string;
+  providerName?: string;
+  elapsedMs?: number;
+  usage?: { inputTokens?: number; outputTokens?: number; estimatedCost?: number };
+  retrievalEvents?: Array<{
+    knowledgeBaseIds: string[];
+    status: "success";
+    sources: ChatRetrievalSource[];
+    elapsedMs?: number;
+  }>;
+  toolEvents?: Array<{
+    id: string;
+    name: string;
+    arguments?: Record<string, unknown>;
+    status: "success" | "error";
+    output?: unknown;
+    errorType?: string;
+    errorMessage?: string;
+    elapsedMs?: number;
+  }>;
+  toolSearch?: {
+    boundToolCount?: number;
+    catalogMatchCount?: number;
+    selectedToolIds?: string[];
+  };
 };
 
 /** 兼容旧单会话接口的响应结构。 */
@@ -222,6 +255,10 @@ export type ChatStreamEventData = {
   providerName?: string;
   /** 服务端创建或确认的持久会话 ID。 */
   sessionId?: string;
+  /** Runtime 运行记录 ID。 */
+  runId?: string;
+  /** 模型 token 用量。 */
+  usage?: { inputTokens?: number; outputTokens?: number; estimatedCost?: number };
 };
 
 /** 浏览器消费的单个 Chat SSE 事件。 */

@@ -61,4 +61,6 @@ export type ChatUiMessage = ChatMessage & {
   generationStatus?: "streaming" | "completed" | "stopped" | "error";
   /** 面向用户的失败说明。 */
   errorMessage?: string;
+  /** 服务端持久化的模型、耗时、usage 和 request_id。 */
+  runtimeMetadata?: Omit<import("./api").ChatMessageMetadata, "retrievalEvents" | "toolEvents">;
 };

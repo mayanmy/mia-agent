@@ -22,6 +22,7 @@ import {
   ChatStreamEvent
 } from "./dto/chat.dto";
 import {
+  ChatMessageMetadata,
   ChatMessageQueryDto,
   ChatSessionListQueryDto,
   CreateChatSessionDto,
@@ -277,6 +278,14 @@ export class ChatService {
         : payload.history;
     // 无论历史来自客户端、外部会话还是数据库，都统一经过 Chat 权威策略后才进入 Runtime。
     const history = this.normalizeHistory(rawHistory, agent.historyTurns);
+    const requestId = this.resolveRequestId(context);
+    const startedAt = Date.now();
+    const metadata: ChatMessageMetadata = {
+      requestId,
+      retrievalEvents: [],
+      toolEvents: []
+    };
+    let activeRetrievalKnowledgeBaseIds: string[] = [];
 
     if (sessionId) {
       // 用户消息先于 Runtime 落库，模型失败或取消后仍可在会话中看到原始提问。
@@ -288,7 +297,7 @@ export class ChatService {
     }
 
     for await (const event of this.requireAgentRuntimeService().runAgent({
-      requestId: this.resolveRequestId(context),
+      requestId,
       source: context?.source ?? AgentRunSource.INTERNAL_CHAT,
       agentId,
       userId: context?.userId,
@@ -306,16 +315,103 @@ export class ChatService {
         Boolean(context?.userId),
       signal
     })) {
+      if (event.type === "run_started") {
+        metadata.runId = event.data.runId;
+        metadata.modelConfigId = event.data.modelConfigId;
+        metadata.modelName = event.data.modelName;
+        metadata.providerName = event.data.providerName;
+      }
+
+      if (event.type === "tool_search_completed") {
+        metadata.toolSearch = event.data;
+      }
+
+      if (event.type === "retrieval_started") {
+        activeRetrievalKnowledgeBaseIds = this.readStringArray(
+          event.data.knowledgeBaseIds
+        );
+      }
+
+      if (event.type === "retrieval_completed") {
+        metadata.retrievalEvents?.push({
+          knowledgeBaseIds: activeRetrievalKnowledgeBaseIds,
+          status: "success",
+          sources: this.readRecordArray(event.data.sources),
+          elapsedMs: this.readOptionalNumber(event.data.elapsedMs)
+        });
+      }
+
+      if (event.type === "tool_started") {
+        metadata.toolEvents?.push({
+          id: this.readString(event.data.id) || this.readString(event.data.toolCallId) || "unknown",
+          name: this.readString(event.data.name) || "unknown_tool",
+          arguments: this.readOptionalRecord(event.data.arguments),
+          status: "success"
+        });
+      }
+
+      if (event.type === "tool_completed") {
+        const toolId = this.readString(event.data.toolId) || this.readString(event.data.id);
+        const toolEvents = metadata.toolEvents ?? [];
+        let toolIndex = -1;
+        for (let index = toolEvents.length - 1; index >= 0; index -= 1) {
+          if (toolEvents[index]?.name === toolId) {
+            toolIndex = index;
+            break;
+          }
+        }
+        const toolEvent = toolIndex >= 0 ? toolEvents[toolIndex] : undefined;
+
+        if (toolEvent) {
+          const ok = event.data.ok === true;
+          toolEvent.status = ok ? "success" : "error";
+          toolEvent.output = event.data.output;
+          toolEvent.errorType = this.readString(event.data.errorType) || undefined;
+          toolEvent.errorMessage = this.readString(event.data.errorMessage) || undefined;
+          toolEvent.elapsedMs = this.readOptionalNumber(event.data.elapsedMs);
+        }
+      }
+
       if (event.type === "run_completed" && sessionId) {
-        // 只有完整终态回答写入历史，取消和失败不会留下伪完整的助手消息。
+        metadata.runId = event.data.runId ?? metadata.runId;
+        metadata.usage = event.data.usage;
+        metadata.elapsedMs = Date.now() - startedAt;
         await this.requireChatSessionsService().appendMessage(
           sessionId,
           ChatSessionMessageRole.ASSISTANT,
-          event.data.content
+          event.data.content,
+          metadata
         );
       }
       yield event;
     }
+  }
+
+  private readString(value: unknown): string {
+    return typeof value === "string" ? value : "";
+  }
+
+  private readStringArray(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  }
+
+  private readRecordArray(value: unknown): Array<Record<string, unknown>> {
+    return Array.isArray(value)
+      ? value.filter(
+          (item): item is Record<string, unknown> =>
+            Boolean(item) && typeof item === "object" && !Array.isArray(item)
+        )
+      : [];
+  }
+
+  private readOptionalRecord(value: unknown): Record<string, unknown> | undefined {
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  }
+
+  private readOptionalNumber(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
   }
 
   /** 将 Runtime 事件映射回既有 SSE 协议，避免阶段 C 要求前端同步升级。 */
@@ -347,7 +443,10 @@ export class ChatService {
           data: {
             runId: event.data.runId,
             content: event.data.content,
-            usage: event.data.usage
+            usage: event.data.usage,
+            modelConfigId: event.data.modelConfigId,
+            modelName: event.data.modelName,
+            providerName: event.data.providerName
           }
         };
       case "run_failed":
