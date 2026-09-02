@@ -19,6 +19,8 @@ function makeConfig(overrides: Partial<McpRuntimeToolConfig> = {}): McpRuntimeTo
     maxResponseBytes: 100_000,
     maxOutputChars: 20_000,
     maxConcurrency: 1,
+    sensitiveInputPaths: [],
+    sensitiveOutputPaths: [],
     client: {
       serverId: "server-1",
       endpoint: "http://127.0.0.1:3000/mcp",
@@ -133,6 +135,50 @@ export const tests = [
       });
       assert.equal(typeof output, "object");
       assert.equal((output as Record<string, unknown>).truncated, true);
+    }
+  },
+  {
+    name: "McpToolExecutor redacts configured output paths and remote error credentials",
+    run: async () => {
+      let callCount = 0;
+      const executor = new McpToolExecutor({
+        create: () => ({
+          connect: async () => ({}),
+          callTool: async () => {
+            callCount += 1;
+            return callCount === 1
+              ? {
+                  content: [{ type: "text", text: "authorization=Bearer secret-token" }],
+                  isError: true
+                }
+              : {
+                  content: [],
+                  structuredContent: {
+                    result: { mobile: "13800138000", name: "张三" },
+                    accessToken: "response-token"
+                  },
+                  isError: false
+                };
+          },
+          close: async () => undefined
+        })
+      } as never);
+      const config = makeConfig({
+        sensitiveOutputPaths: ["result.mobile"],
+        client: { ...makeConfig().client, secret: "secret-token" }
+      });
+
+      await assert.rejects(
+        executor.execute(config, { text: "error" }),
+        (error: unknown) =>
+          error instanceof Error &&
+          !error.message.includes("secret-token") &&
+          error.message.includes("[REDACTED]")
+      );
+      assert.deepEqual(await executor.execute(config, { text: "success" }), {
+        result: { mobile: "[REDACTED]", name: "张三" },
+        accessToken: "[REDACTED]"
+      });
     }
   },
   {

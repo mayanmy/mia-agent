@@ -129,6 +129,7 @@ export const tests = [
             inputSchema: { type: "object" }
           }
         ],
+        sanitizeRuntimeInput: async (_runtimeId: string, input: Record<string, unknown>) => input,
         resolveRuntimeTool: async () => ({ runtimeId: "mcp_weather" })
       };
       const mcpExecutor = {
@@ -153,6 +154,48 @@ export const tests = [
       });
       assert.equal(result.ok, true);
       assert.deepEqual(result.output, { temperature: 27 });
+    }
+  },
+
+  {
+    name: "ToolsService uses MCP redaction for runtime events and persisted logs",
+    run: async () => {
+      const writes: Array<Record<string, unknown>> = [];
+      const mcpService = {
+        sanitizeRuntimeInput: async () => ({
+          customer: { mobile: "[REDACTED]" },
+          password: "[REDACTED]"
+        }),
+        resolveRuntimeTool: async () => ({ runtimeId: "mcp_customer" })
+      };
+      const service = new ToolsService(
+        {
+          toolCallLog: {
+            create: async ({ data }: { data: Record<string, unknown> }) => {
+              writes.push(data);
+              return { id: "log-1" };
+            }
+          }
+        } as never,
+        undefined,
+        undefined,
+        mcpService as never,
+        { execute: async () => ({ result: { token: "[REDACTED]" } }) } as never
+      );
+      const input = { customer: { mobile: "13800138000" }, password: "plain-password" };
+
+      assert.deepEqual(await service.sanitizeToolInput("mcp_customer", input), {
+        customer: { mobile: "[REDACTED]" },
+        password: "[REDACTED]"
+      });
+      const result = await service.executeTool({ toolId: "mcp_customer", input });
+
+      assert.equal(result.ok, true);
+      assert.deepEqual(writes[0]?.input, {
+        customer: { mobile: "[REDACTED]" },
+        password: "[REDACTED]"
+      });
+      assert.deepEqual(writes[0]?.output, { result: { token: "[REDACTED]" } });
     }
   },
 

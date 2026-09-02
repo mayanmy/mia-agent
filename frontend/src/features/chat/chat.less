@@ -270,7 +270,9 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 20px;
+  /* 为最后一条消息的时间和操作栏保留安全区，避免贴近输入框时被边界视觉裁切。 */
+  padding: 20px 20px 32px;
+  scroll-padding-bottom: 32px;
   scroll-behavior: smooth;
 }
 
@@ -896,10 +898,14 @@
 .chatMessageMeta {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   color: #94a3b8;
   font-size: 13px;
   justify-self: end;
+  line-height: 24px;
+  max-width: 100%;
+  min-height: 24px;
 }
 
 .chatMessage.assistant .chatMessageMeta {
@@ -913,6 +919,12 @@
   padding: 0;
   color: #64748b;
   background: transparent;
+}
+
+/* 带文字的运行详情按钮不能沿用纯图标按钮的固定宽度，否则文字会覆盖相邻操作。 */
+.chatMessageDetailsButton {
+  width: auto;
+  padding: 0 4px;
 }
 
 .chatMessageMetaButton:hover,

@@ -7,6 +7,7 @@ import { ToolJsonValue } from "../tools/dto/tool.dto";
 import { McpProtocolClientFactory } from "./clients/mcp-protocol-client.factory";
 import { McpProtocolToolResult } from "./clients/mcp-protocol.client";
 import { McpRuntimeToolConfig } from "./dto/mcp-runtime.dto";
+import { McpRedactor } from "./mcp-redaction";
 
 type PendingPermit = {
   resolve: (release: () => void) => void;
@@ -36,7 +37,10 @@ export class McpToolExecutor {
   private readonly validators = new Map<string, ValidateFunction>();
   private readonly semaphores = new Map<string, ServerSemaphore>();
 
-  constructor(private readonly clientFactory: McpProtocolClientFactory) {}
+  constructor(
+    private readonly clientFactory: McpProtocolClientFactory,
+    private readonly redactor: McpRedactor = new McpRedactor()
+  ) {}
 
   /**
    * MCP Tool 默认不重试，因为远端操作是否幂等不可知。超时和上游取消共用同一个
@@ -73,7 +77,10 @@ export class McpToolExecutor {
           timeout ? "MCP 工具调用超时" : "MCP 工具调用已取消"
         );
       }
-      const message = error instanceof Error ? error.message : "MCP 协议调用失败";
+      const message = this.redactor.redactText(
+        error instanceof Error ? error.message : "MCP 协议调用失败",
+        this.credentialValues(config)
+      );
       throw new McpToolExecutionError(this.classifyProtocolError(message), message);
     } finally {
       clearTimeout(timer);
@@ -151,14 +158,26 @@ export class McpToolExecutor {
       throw new McpToolExecutionError("mcp_output_too_large", "MCP Tool 返回内容超过硬限制");
     }
     if (result.isError) {
-      throw new McpToolExecutionError("mcp_tool_error", this.errorContent(result));
+      throw new McpToolExecutionError(
+        "mcp_tool_error",
+        this.redactor.redactText(this.errorContent(result), this.credentialValues(config))
+      );
     }
 
     const output =
       result.structuredContent !== undefined
         ? (result.structuredContent as ToolJsonValue)
         : this.contentOutput(result);
-    return this.truncateOutput(output, config.maxOutputChars);
+    return this.truncateOutput(
+      this.redactor.redactJson(output, config.sensitiveOutputPaths),
+      config.maxOutputChars
+    );
+  }
+
+  private credentialValues(config: McpRuntimeToolConfig): string[] {
+    return [config.client.secret, ...Object.values(config.client.credentials ?? {})].filter(
+      (value): value is string => typeof value === "string"
+    );
   }
 
   private contentOutput(result: McpProtocolToolResult): ToolJsonValue {

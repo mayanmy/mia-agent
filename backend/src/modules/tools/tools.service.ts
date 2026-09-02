@@ -262,6 +262,9 @@ export class ToolsService {
     toolId: string,
     input: Record<string, ToolJsonValue>
   ): Promise<Record<string, ToolJsonValue>> {
+    if (toolId.startsWith("mcp_") && this.mcpService) {
+      return this.mcpService.sanitizeRuntimeInput(toolId, input);
+    }
     return this.configuredHttpTools ? this.configuredHttpTools.sanitizeInput(toolId, input) : input;
   }
 

@@ -113,7 +113,7 @@ export function ChatMessageItem({
         ) : null}
         {item.role === "assistant" && item.runtimeMetadata ? (
           <Button
-            className="chatMessageMetaButton"
+            className="chatMessageMetaButton chatMessageDetailsButton"
             icon={<InfoCircleOutlined />}
             size="small"
             type="text"

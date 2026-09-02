@@ -9,6 +9,7 @@ import { McpService } from "./mcp.service";
 import { McpToolExecutor } from "./mcp-tool.executor";
 import { McpApprovalService } from "./mcp-approval.service";
 import { McpApprovalsController } from "./mcp-approvals.controller";
+import { McpRedactor } from "./mcp-redaction";
 
 @Module({
   imports: [KnowledgeModule, SkillsModule],
@@ -17,6 +18,7 @@ import { McpApprovalsController } from "./mcp-approvals.controller";
     McpService,
     McpApprovalService,
     McpOAuthManager,
+    McpRedactor,
     McpProtocolClientFactory,
     McpToolExecutor
   ],

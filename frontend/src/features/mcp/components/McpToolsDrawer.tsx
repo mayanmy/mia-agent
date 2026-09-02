@@ -59,6 +59,40 @@ export function McpToolsDrawer({
       )
     },
     {
+      title: "输入脱敏路径",
+      dataIndex: "sensitiveInputPaths",
+      width: 220,
+      render: (paths: string[], tool) => (
+        <Select
+          aria-label={`${tool.remoteName} 输入脱敏路径`}
+          disabled={updatingToolId === tool.id}
+          mode="tags"
+          open={false}
+          placeholder="如 customer.mobile"
+          tokenSeparators={[",", "，"]}
+          value={paths}
+          onChange={(value) => onUpdate(tool, { sensitiveInputPaths: value })}
+        />
+      )
+    },
+    {
+      title: "输出脱敏路径",
+      dataIndex: "sensitiveOutputPaths",
+      width: 220,
+      render: (paths: string[], tool) => (
+        <Select
+          aria-label={`${tool.remoteName} 输出脱敏路径`}
+          disabled={updatingToolId === tool.id}
+          mode="tags"
+          open={false}
+          placeholder="如 result.token"
+          tokenSeparators={[",", "，"]}
+          value={paths}
+          onChange={(value) => onUpdate(tool, { sensitiveOutputPaths: value })}
+        />
+      )
+    },
+    {
       title: "启用",
       dataIndex: "enabled",
       width: 78,
@@ -80,7 +114,7 @@ export function McpToolsDrawer({
       destroyOnHidden
       open={Boolean(server)}
       title={server ? `${server.name} · 工具目录` : "工具目录"}
-      width={760}
+      width={1160}
       onClose={onClose}
     >
       <Space className="mcpToolDrawerSummary" size={8} wrap>
@@ -90,7 +124,7 @@ export function McpToolsDrawer({
       </Space>
       <Alert
         className="mcpToolNotice"
-        message="新发现的工具默认停用。确认用途和风险后再启用，启用后才会出现在 Agent 工具绑定中。"
+        message="新工具默认停用。系统会自动脱敏 password、token、secret 等字段；业务敏感字段请用点路径或 JSON Pointer 补充，例如 customer.mobile 或 /customer/mobile。"
         showIcon
         type="info"
       />
@@ -101,7 +135,7 @@ export function McpToolsDrawer({
         locale={{ emptyText: <Empty description="尚未同步工具" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
         pagination={false}
         rowKey="id"
-        scroll={{ x: 680 }}
+        scroll={{ x: 1080 }}
       />
     </Drawer>
   );

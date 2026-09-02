@@ -34,6 +34,8 @@ export type McpRuntimeToolConfig = {
   maxResponseBytes: number;
   maxOutputChars: number;
   maxConcurrency: number;
+  sensitiveInputPaths: string[];
+  sensitiveOutputPaths: string[];
   client: McpClientRuntimeConfig;
 };
 

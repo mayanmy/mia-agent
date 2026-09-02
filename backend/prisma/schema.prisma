@@ -682,6 +682,8 @@ model McpServerTool {
   enabled       Boolean          @default(false)
   approvalMode  McpApprovalMode? @map("approval_mode")
   riskLevel     McpRiskLevel     @default(LOW) @map("risk_level")
+  sensitiveInputPaths  Json      @default("[]") @map("sensitive_input_paths") @db.JsonB
+  sensitiveOutputPaths Json      @default("[]") @map("sensitive_output_paths") @db.JsonB
   lastSeenAt    DateTime         @map("last_seen_at") @db.Timestamptz(6)
   unavailableAt DateTime?        @map("unavailable_at") @db.Timestamptz(6)
   createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)

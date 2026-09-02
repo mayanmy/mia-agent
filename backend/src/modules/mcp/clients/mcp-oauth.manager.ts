@@ -17,6 +17,7 @@ import { getConfig } from "../../../core/config";
 import { AppError, ErrorCodes } from "../../../core/errors";
 import { PrismaService } from "../../prisma/prisma.service";
 import { createMcpSafeFetch } from "../mcp-network-policy";
+import { McpRedactor } from "../mcp-redaction";
 
 export type McpOAuthRuntimeConfig = {
   serverId: string;
@@ -43,7 +44,10 @@ export class McpOAuthManager {
   private readonly config = getConfig();
   private readonly mutations = new Map<string, Promise<void>>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redactor: McpRedactor = new McpRedactor()
+  ) {}
 
   createRuntimeProvider(config: McpOAuthRuntimeConfig): OAuthClientProvider {
     return new DatabaseOAuthProvider(this, config);
@@ -80,7 +84,12 @@ export class McpOAuthManager {
       await this.clearPendingState(serverId);
       throw new AppError(
         ErrorCodes.mcp.invalidConfiguration,
-        error instanceof Error ? error.message : "MCP OAuth 初始化失败"
+        this.redactor.redactText(
+          error instanceof Error ? error.message : "MCP OAuth 初始化失败",
+          [config.clientId, config.clientSecret].filter(
+            (value): value is string => typeof value === "string"
+          )
+        )
       );
     }
   }
@@ -111,7 +120,9 @@ export class McpOAuthManager {
     if (input.error || !input.code) {
       await this.markAuthorizationRequired(
         authorization.serverId,
-        input.error ? `OAuth 授权失败：${input.error}` : "OAuth 回调缺少 code"
+        input.error
+          ? this.redactor.redactText(`OAuth 授权失败：${input.error}`)
+          : "OAuth 回调缺少 code"
       );
       throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP OAuth 授权未完成", 400);
     }
@@ -145,7 +156,12 @@ export class McpOAuthManager {
     } catch (error) {
       await this.markAuthorizationRequired(
         authorization.serverId,
-        error instanceof Error ? error.message : "OAuth Token 兑换失败"
+        this.redactor.redactText(
+          error instanceof Error ? error.message : "OAuth Token 兑换失败",
+          [config.clientId, config.clientSecret].filter(
+            (value): value is string => typeof value === "string"
+          )
+        )
       );
       throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP OAuth Token 兑换失败", 400);
     }
@@ -255,7 +271,7 @@ export class McpOAuthManager {
       data: {
         healthStatus: McpHealthStatus.AUTH_REQUIRED,
         lastErrorCode: "AUTH_REQUIRED",
-        lastErrorMessage: message.slice(0, 2_000)
+        lastErrorMessage: this.redactor.redactText(message).slice(0, 2_000)
       }
     });
   }

@@ -12,6 +12,7 @@ import { tests as mcpProtocolClientTests } from "../modules/mcp/clients/mcp-prot
 import { tests as mcpClientCredentialsTests } from "../modules/mcp/clients/mcp-client-credentials.provider.spec";
 import { tests as mcpOAuthTests } from "../modules/mcp/clients/mcp-oauth.manager.spec";
 import { tests as mcpApprovalTests } from "../modules/mcp/mcp-approval.service.spec";
+import { tests as mcpRedactionTests } from "../modules/mcp/mcp-redaction.spec";
 import { tests as mcpServiceTests } from "../modules/mcp/mcp.service.spec";
 import { tests as mcpToolExecutorTests } from "../modules/mcp/mcp-tool.executor.spec";
 import { tests as retrievalTests } from "../modules/retrieval/retrieval.service.spec";
@@ -35,6 +36,7 @@ const tests: TestCase[] = [
   ...mcpClientCredentialsTests,
   ...mcpOAuthTests,
   ...mcpApprovalTests,
+  ...mcpRedactionTests,
   ...mcpServiceTests,
   ...skillTests,
   ...mcpToolExecutorTests,

@@ -437,7 +437,9 @@ export function McpServersPage() {
       const updated = await updateMcpServerTool(toolServer.id, tool.id, {
         enabled: changes.enabled ?? tool.enabled,
         riskLevel: changes.riskLevel ?? tool.riskLevel,
-        approvalMode: tool.approvalMode ?? null
+        approvalMode: changes.approvalMode ?? tool.approvalMode ?? null,
+        sensitiveInputPaths: changes.sensitiveInputPaths ?? tool.sensitiveInputPaths,
+        sensitiveOutputPaths: changes.sensitiveOutputPaths ?? tool.sensitiveOutputPaths
       });
       setTools((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       await refreshServers();

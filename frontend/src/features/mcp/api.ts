@@ -103,6 +103,8 @@ export type McpServerTool = {
   enabled: boolean;
   approvalMode?: McpApprovalMode;
   riskLevel: McpRiskLevel;
+  sensitiveInputPaths: string[];
+  sensitiveOutputPaths: string[];
   available: boolean;
   schemaHash: string;
   lastSeenAt: string;
@@ -268,7 +270,10 @@ export function importMcpPrompt(
 export function updateMcpServerTool(
   serverId: string,
   toolId: string,
-  payload: Pick<McpServerTool, "enabled" | "riskLevel"> & {
+  payload: Pick<
+    McpServerTool,
+    "enabled" | "riskLevel" | "sensitiveInputPaths" | "sensitiveOutputPaths"
+  > & {
     approvalMode?: McpApprovalMode | null;
   }
 ): Promise<McpServerTool> {

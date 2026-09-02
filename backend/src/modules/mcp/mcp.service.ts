@@ -35,6 +35,7 @@ import {
 } from "./clients/mcp-protocol-client.factory";
 import { McpProtocolTool } from "./clients/mcp-protocol.client";
 import { McpOAuthManager } from "./clients/mcp-oauth.manager";
+import { McpRedactor } from "./mcp-redaction";
 import {
   McpRuntimeResolutionError,
   McpRuntimeToolCatalogItem,
@@ -78,7 +79,8 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     private readonly clientFactory: McpProtocolClientFactory,
     private readonly oauthManager: McpOAuthManager,
     @Optional() private readonly knowledgeService?: KnowledgeService,
-    @Optional() private readonly skillsService?: SkillsService
+    @Optional() private readonly skillsService?: SkillsService,
+    private readonly redactor: McpRedactor = new McpRedactor()
   ) {}
 
   onModuleInit(): void {
@@ -344,6 +346,8 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       maxResponseBytes: tool.server.maxResponseBytes,
       maxOutputChars: tool.server.maxOutputChars,
       maxConcurrency: tool.server.maxConcurrency,
+      sensitiveInputPaths: this.stringList(tool.sensitiveInputPaths),
+      sensitiveOutputPaths: this.stringList(tool.sensitiveOutputPaths),
       client: {
         serverId: tool.serverId,
         endpoint: tool.server.endpoint,
@@ -359,6 +363,18 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
         toolTimeoutMs: tool.server.toolTimeoutMs
       }
     };
+  }
+
+  /** Runtime Event、审批卡片和日志共享同一份 MCP 输入脱敏视图。 */
+  async sanitizeRuntimeInput(
+    runtimeId: string,
+    input: Record<string, import("../tools/dto/tool.dto").ToolJsonValue>
+  ): Promise<Record<string, import("../tools/dto/tool.dto").ToolJsonValue>> {
+    const tool = await this.prisma.mcpServerTool.findUnique({
+      where: { runtimeId },
+      select: { sensitiveInputPaths: true }
+    });
+    return this.redactor.redactJson(input, this.stringList(tool?.sensitiveInputPaths));
   }
 
   /** 创建仅持久化配置，不在事务中访问远端；管理员可随后显式测试和同步。 */
@@ -479,9 +495,11 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       data: { healthStatus: McpHealthStatus.CONNECTING }
     });
     let client: ReturnType<McpProtocolClientFactory["create"]> | undefined;
+    let runtimeConfig: McpClientRuntimeConfig | undefined;
 
     try {
-      client = this.clientFactory.create(await this.toRuntimeConfig(server));
+      runtimeConfig = await this.toRuntimeConfig(server);
+      client = this.clientFactory.create(runtimeConfig);
       const info = await client.connect(signal);
       const tools = await client.listTools(signal);
       const elapsedMs = Date.now() - startedAt;
@@ -505,7 +523,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
         elapsedMs
       };
     } catch (error) {
-      const message = this.errorMessage(error);
+      const message = this.errorMessage(error, runtimeConfig);
       const healthStatus = this.classifyHealth(message);
       await this.prisma.mcpServer.update({
         where: { id },
@@ -542,9 +560,11 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       data: { serverId: id, status: McpSyncStatus.RUNNING, trigger }
     });
     let client: ReturnType<McpProtocolClientFactory["create"]> | undefined;
+    let runtimeConfig: McpClientRuntimeConfig | undefined;
 
     try {
-      client = this.clientFactory.create(await this.toRuntimeConfig(server));
+      runtimeConfig = await this.toRuntimeConfig(server);
+      client = this.clientFactory.create(runtimeConfig);
       const info = await client.connect(signal);
       const tools = await client.listTools(signal);
       this.validateDiscoveredTools(tools);
@@ -618,7 +638,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
         elapsedMs: Date.now() - startedAt
       };
     } catch (error) {
-      const message = this.errorMessage(error);
+      const message = this.errorMessage(error, runtimeConfig);
       const elapsedMs = Date.now() - startedAt;
       await this.prisma.$transaction([
         this.prisma.mcpServer.update({
@@ -683,7 +703,15 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
             : payload.approvalMode === null
               ? null
               : this.approvalMode(payload.approvalMode),
-        riskLevel: payload.riskLevel ? this.riskLevel(payload.riskLevel) : undefined
+        riskLevel: payload.riskLevel ? this.riskLevel(payload.riskLevel) : undefined,
+        sensitiveInputPaths:
+          payload.sensitiveInputPaths === undefined
+            ? undefined
+            : this.jsonInput(this.sensitivePaths(payload.sensitiveInputPaths)),
+        sensitiveOutputPaths:
+          payload.sensitiveOutputPaths === undefined
+            ? undefined
+            : this.jsonInput(this.sensitivePaths(payload.sensitiveOutputPaths))
       }
     });
     return this.toToolDetail(tool);
@@ -806,10 +834,16 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       throw new AppError(ErrorCodes.mcp.invalidConfiguration, "MCP Server 需要重新鉴权");
     }
 
-    const client = this.clientFactory.create(await this.toRuntimeConfig(server));
+    const runtimeConfig = await this.toRuntimeConfig(server);
+    const client = this.clientFactory.create(runtimeConfig);
     try {
       await client.connect(signal);
       return await operation(client);
+    } catch (error) {
+      throw new AppError(
+        ErrorCodes.mcp.invalidConfiguration,
+        this.errorMessage(error, runtimeConfig)
+      );
     } finally {
       await client.close().catch(() => undefined);
     }
@@ -1256,6 +1290,8 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       enabled: tool.enabled,
       approvalMode: tool.approvalMode?.toLowerCase() as McpServerToolDetail["approvalMode"],
       riskLevel: tool.riskLevel.toLowerCase() as McpServerToolDetail["riskLevel"],
+      sensitiveInputPaths: this.stringList(tool.sensitiveInputPaths),
+      sensitiveOutputPaths: this.stringList(tool.sensitiveOutputPaths),
       available: tool.unavailableAt === null,
       schemaHash: tool.schemaHash,
       lastSeenAt: tool.lastSeenAt.toISOString()
@@ -1449,6 +1485,23 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       : {};
   }
 
+  private stringList(value: Prisma.JsonValue | undefined): string[] {
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : [];
+  }
+
+  private sensitivePaths(value: unknown): string[] {
+    try {
+      return this.redactor.normalizePaths(value);
+    } catch (error) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        error instanceof Error ? error.message : "敏感字段路径不合法"
+      );
+    }
+  }
+
   private toPrismaJson(
     value: unknown
   ): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
@@ -1461,8 +1514,14 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       : McpHealthStatus.UNAVAILABLE;
   }
 
-  private errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message.slice(0, 2_000) : "unknown MCP error";
+  private errorMessage(error: unknown, config?: McpClientRuntimeConfig): string {
+    const message = error instanceof Error ? error.message : "unknown MCP error";
+    const secrets = config
+      ? [config.secret, ...Object.values(config.credentials ?? {})].filter(
+          (value): value is string => typeof value === "string"
+        )
+      : [];
+    return this.redactor.redactText(message, secrets).slice(0, 2_000);
   }
 
   private rethrowConstraint(error: unknown): never {

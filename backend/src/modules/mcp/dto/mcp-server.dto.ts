@@ -80,6 +80,8 @@ export type McpServerToolUpdateDto = {
   enabled?: boolean;
   approvalMode?: McpApprovalModeValue | null;
   riskLevel?: McpRiskLevelValue;
+  sensitiveInputPaths?: string[];
+  sensitiveOutputPaths?: string[];
 };
 
 export type McpServerToolDetail = {
@@ -95,6 +97,8 @@ export type McpServerToolDetail = {
   enabled: boolean;
   approvalMode?: McpApprovalModeValue;
   riskLevel: McpRiskLevelValue;
+  sensitiveInputPaths: string[];
+  sensitiveOutputPaths: string[];
   available: boolean;
   schemaHash: string;
   lastSeenAt: string;
