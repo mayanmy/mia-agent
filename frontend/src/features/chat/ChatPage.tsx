@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { App as AntdApp } from "antd";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { App as AntdApp, Input } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
 import {
@@ -10,6 +10,7 @@ import {
   getChatSessionMessages,
   listChatSessions,
   restoreChatSession,
+  submitChatMessageFeedback,
   streamChatCompletion,
   updateChatSessionTitle,
   type ChatSessionListItem,
@@ -22,16 +23,19 @@ import { ChatSessionList } from "./components/ChatSessionList";
 import { ChatTranscript } from "./components/ChatTranscript";
 import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useChatAttachments } from "./hooks/useChatAttachments";
+import { useChatMessageEvents } from "./hooks/useChatMessageEvents";
 import { buildTransportHistory } from "./history";
-import type { ChatRetrievalEvent, ChatToolEvent, ChatUiMessage } from "./types";
-import { createMessageId, findLastToolEventIndex, isLikelyVisionModel } from "./utils";
+import type { ChatUiMessage } from "./types";
+import { createMessageId, isLikelyVisionModel } from "./utils";
 import "./chat.less";
 
 /** Chat 路由页，负责编排 Agent、会话、附件与 SSE 状态。 */
 export function ChatPage() {
-  const { message: messageApi } = AntdApp.useApp();
+  const { message: messageApi, modal } = AntdApp.useApp();
+  const navigate = useNavigate();
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamStartedAtRef = useRef<Map<string, number>>(new Map());
+  const firstTokenRecordedRef = useRef<Set<string>>(new Set());
   const disposedRef = useRef(false);
   const sessionLoadVersionRef = useRef(0);
   const historyLoadVersionRef = useRef(0);
@@ -50,6 +54,19 @@ export function ChatPage() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [sending, setSending] = useState(false);
+  const {
+    appendAssistantToken,
+    replaceAssistantContent,
+    updateAssistantGeneration,
+    updateAssistantRuntimeMetadata,
+    updateAssistantPersistedId,
+    appendRetrievalEvent,
+    updateRetrievalResult,
+    appendToolCall,
+    updateToolResult,
+    updateToolApproval,
+    resolveToolApproval
+  } = useChatMessageEvents(setMessages);
   const {
     images,
     files,
@@ -472,6 +489,7 @@ export function ChatPage() {
     };
     const assistantMessageId = createMessageId();
     streamStartedAtRef.current.set(assistantMessageId, Date.now());
+    firstTokenRecordedRef.current.delete(assistantMessageId);
     const retryMessageIndex = retry
       ? messages.findIndex((item) => item.id === retry.assistantMessageId)
       : -1;
@@ -526,6 +544,13 @@ export function ChatPage() {
             }
 
             if (event.type === "token" && event.data.content) {
+              if (!firstTokenRecordedRef.current.has(assistantMessageId)) {
+                firstTokenRecordedRef.current.add(assistantMessageId);
+                updateAssistantRuntimeMetadata(assistantMessageId, {
+                  firstTokenMs:
+                    Date.now() - (streamStartedAtRef.current.get(assistantMessageId) ?? Date.now())
+                });
+              }
               appendAssistantToken(assistantMessageId, event.data.content);
             }
 
@@ -564,6 +589,9 @@ export function ChatPage() {
                 usage: event.data.usage,
                 elapsedMs: Date.now() - (streamStartedAtRef.current.get(assistantMessageId) ?? Date.now())
               });
+              if (event.data.messageId) {
+                updateAssistantPersistedId(assistantMessageId, event.data.messageId);
+              }
             }
 
             if (event.type === "retrieval_start") {
@@ -611,10 +639,7 @@ export function ChatPage() {
             }
 
             if (event.type === "tool_approval_resolved") {
-              resolveToolApproval(assistantMessageId, {
-                toolCallId: event.data.toolCallId || "",
-                approved: Boolean(event.data.approved)
-              });
+              resolveToolApproval(assistantMessageId, event.data.toolCallId || "");
             }
 
             if (event.type === "error") {
@@ -640,6 +665,7 @@ export function ChatPage() {
         abortControllerRef.current = null;
       }
       streamStartedAtRef.current.delete(assistantMessageId);
+      firstTokenRecordedRef.current.delete(assistantMessageId);
 
       if (!disposedRef.current) {
         setSending(false);
@@ -671,194 +697,6 @@ export function ChatPage() {
       // 新消息的会话回到顶部，侧栏排序和下一次服务端刷新保持一致。
       return [updatedSession, ...current.filter((item) => item.id !== targetSessionId)];
     });
-  }
-
-  function appendAssistantToken(messageId: string, token: string) {
-    setMessages((current) =>
-      current.map((item) =>
-        item.id === messageId
-          ? {
-              ...item,
-              content: `${item.content}${token}`
-            }
-          : item
-      )
-    );
-  }
-
-  /** 终态回答覆盖流式草稿，保证 Workflow 的 End 输出与页面、历史记录完全一致。 */
-  function replaceAssistantContent(messageId: string, content: string) {
-    setMessages((current) =>
-      current.map((item) => (item.id === messageId ? { ...item, content } : item))
-    );
-  }
-
-  function updateAssistantGeneration(
-    messageId: string,
-    generationStatus: NonNullable<ChatUiMessage["generationStatus"]>,
-    errorMessage?: string
-  ) {
-    setMessages((current) =>
-      current.map((item) =>
-        item.id === messageId ? { ...item, generationStatus, errorMessage } : item
-      )
-    );
-  }
-
-  function updateAssistantRuntimeMetadata(
-    messageId: string,
-    metadata: NonNullable<ChatUiMessage["runtimeMetadata"]>
-  ) {
-    setMessages((current) =>
-      current.map((item) =>
-        item.id === messageId
-          ? { ...item, runtimeMetadata: { ...item.runtimeMetadata, ...metadata } }
-          : item
-      )
-    );
-  }
-
-  function appendRetrievalEvent(messageId: string, retrievalEvent: ChatRetrievalEvent) {
-    setMessages((current) =>
-      current.map((item) =>
-        item.id === messageId
-          ? {
-              ...item,
-              retrievalEvents: [...(item.retrievalEvents ?? []), retrievalEvent]
-            }
-          : item
-      )
-    );
-  }
-
-  function updateRetrievalResult(
-    messageId: string,
-    result: Pick<ChatRetrievalEvent, "elapsedMs" | "sources">
-  ) {
-    setMessages((current) =>
-      current.map((item) => {
-        if (item.id !== messageId || !item.retrievalEvents?.length) {
-          return item;
-        }
-
-        // 每轮对话只有一个检索事件，仍按最后一个更新，便于后续支持多次检索。
-        const lastIndex = item.retrievalEvents.length - 1;
-
-        return {
-          ...item,
-          retrievalEvents: item.retrievalEvents.map((retrievalEvent, index) =>
-            index === lastIndex
-              ? {
-                  ...retrievalEvent,
-                  status: "success",
-                  sources: result.sources,
-                  elapsedMs: result.elapsedMs
-                }
-              : retrievalEvent
-          )
-        };
-      })
-    );
-  }
-
-  function appendToolCall(messageId: string, toolEvent: ChatToolEvent) {
-    setMessages((current) =>
-      current.map((item) =>
-        item.id === messageId
-          ? {
-              ...item,
-              toolEvents: [...(item.toolEvents ?? []), toolEvent]
-            }
-          : item
-      )
-    );
-  }
-
-  function updateToolResult(
-    messageId: string,
-    result: {
-      toolId: string;
-      ok: boolean;
-      output?: unknown;
-      errorType?: string;
-      errorMessage?: string;
-      elapsedMs?: number;
-    }
-  ) {
-    setMessages((current) =>
-      current.map((item) => {
-        if (item.id !== messageId || !item.toolEvents?.length) {
-          return item;
-        }
-
-        const index = findLastToolEventIndex(item.toolEvents, result.toolId);
-
-        if (index < 0) {
-          return item;
-        }
-
-        return {
-          ...item,
-          toolEvents: item.toolEvents.map((toolEvent, currentIndex) =>
-            currentIndex === index
-              ? {
-                  ...toolEvent,
-                  status: result.ok ? "success" : "error",
-                  output: result.output,
-                  errorType: result.errorType,
-                  errorMessage: result.errorMessage,
-                  elapsedMs: result.elapsedMs
-                }
-              : toolEvent
-          )
-        };
-      })
-    );
-  }
-
-  function updateToolApproval(
-    messageId: string,
-    approval: { toolCallId: string; approvalId: string; expiresAt?: string }
-  ) {
-    setMessages((current) =>
-      current.map((item) =>
-        item.id !== messageId
-          ? item
-          : {
-              ...item,
-              toolEvents: item.toolEvents?.map((toolEvent) =>
-                toolEvent.id === approval.toolCallId
-                  ? {
-                      ...toolEvent,
-                      status: "approval_required",
-                      approvalId: approval.approvalId,
-                      approvalExpiresAt: approval.expiresAt
-                    }
-                  : toolEvent
-              )
-            }
-      )
-    );
-  }
-
-  function resolveToolApproval(
-    messageId: string,
-    decision: { toolCallId: string; approved: boolean }
-  ) {
-    setMessages((current) =>
-      current.map((item) =>
-        item.id !== messageId
-          ? item
-          : {
-              ...item,
-              toolEvents: item.toolEvents?.map((toolEvent) =>
-                toolEvent.id === decision.toolCallId
-                  ? { ...toolEvent, status: "running" }
-                  : toolEvent
-              )
-            }
-      )
-    );
   }
 
   function handleStop() {
@@ -896,6 +734,87 @@ export function ChatPage() {
     messageApi.success("已复制");
   }
 
+  async function handleMessageFeedback(messageId: string, rating: "UP" | "DOWN") {
+    const item = messages.find((message) => message.id === messageId);
+    if (!item?.persistedMessageId) {
+      messageApi.warning("只有已保存的会话消息可以提交反馈");
+      return;
+    }
+    if (rating === "DOWN") {
+      let reason = item.feedback?.rating === "DOWN" ? item.feedback.reason || "" : "";
+      modal.confirm({
+        title: "这条回答哪里需要改进？",
+        content: (
+          <Input.TextArea
+            defaultValue={reason}
+            maxLength={500}
+            placeholder="可选：例如引用不准确、没有回答问题、工具调用错误"
+            rows={4}
+            showCount
+            onChange={(event) => {
+              reason = event.target.value;
+            }}
+          />
+        ),
+        okText: "提交反馈",
+        cancelText: "取消",
+        onOk: () => submitMessageFeedback(item.id, item.persistedMessageId!, rating, reason)
+      });
+      return;
+    }
+
+    await submitMessageFeedback(item.id, item.persistedMessageId, rating);
+  }
+
+  async function submitMessageFeedback(
+    messageId: string,
+    persistedMessageId: string,
+    rating: "UP" | "DOWN",
+    reason?: string
+  ) {
+    try {
+      const feedback = await submitChatMessageFeedback(persistedMessageId, rating, reason);
+      setMessages((current) =>
+        current.map((message) => (message.id === messageId ? { ...message, feedback } : message))
+      );
+      messageApi.success("感谢反馈");
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "提交反馈失败");
+    }
+  }
+
+  function exportCurrentConversation() {
+    if (!selectedAgent || messages.length === 0) {
+      return;
+    }
+
+    const title = sessions.find((session) => session.id === sessionId)?.title || selectedAgent.name;
+    const markdown = [
+      `# ${title}`,
+      "",
+      `Agent：${selectedAgent.name}`,
+      `导出时间：${new Date().toLocaleString()}`,
+      "",
+      ...messages.flatMap((item) => [
+        `## ${item.role === "user" ? "用户" : "Agent"}`,
+        "",
+        item.content || (item.generationStatus === "error" ? `> ${item.errorMessage || "回答失败"}` : ""),
+        "",
+        ...(item.role === "assistant" && item.runtimeMetadata?.requestId
+          ? [`Request ID：${item.runtimeMetadata.requestId}`, ""]
+          : [])
+      ])
+    ].join("\n");
+    const blobUrl = URL.createObjectURL(
+      new Blob([markdown], { type: "text/markdown;charset=utf-8" })
+    );
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = `${sanitizeExportFilename(title)}.md`;
+    link.click();
+    URL.revokeObjectURL(blobUrl);
+  }
+
   return (
     <section className="workspace chatWorkspace">
       <ChatHeader
@@ -903,6 +822,7 @@ export function ChatPage() {
         detail={Boolean(selectedAgentId)}
         loadingAgents={loadingAgents}
         onBack={handleBackToAgents}
+        onExport={messages.length > 0 ? exportCurrentConversation : undefined}
         onRefreshAgents={() => void refreshAgents()}
       />
 
@@ -957,6 +877,8 @@ export function ChatPage() {
               showScrollBottom={showScrollBottom}
               onCopyMessage={(content) => void copyMessageContent(content)}
               onRetryMessage={handleRetryMessage}
+              onOpenLogs={(requestId) => navigate(`/logs?requestId=${encodeURIComponent(requestId)}`)}
+              onFeedback={(messageId, rating) => void handleMessageFeedback(messageId, rating)}
               onLoadMoreHistory={() => void loadOlderMessages()}
               onScroll={releaseAutoScrollIfNeeded}
               onScrollBottom={scrollMessagesToBottom}
@@ -995,6 +917,8 @@ type PersistedChatMessage = {
   content: string;
   /** assistant 运行快照；兼容旧消息为空。 */
   metadata: import("./api").ChatMessageMetadata | null;
+  /** 当前用户已提交的评价。 */
+  feedback: import("./api").ChatMessageFeedback | null;
   /** ISO 格式创建时间。 */
   createdAt: string;
 };
@@ -1023,10 +947,13 @@ function toChatUiMessage(message: PersistedChatMessage): ChatUiMessage {
           modelName: message.metadata.modelName,
           providerName: message.metadata.providerName,
           elapsedMs: message.metadata.elapsedMs,
+          firstTokenMs: message.metadata.firstTokenMs,
           usage: message.metadata.usage,
           toolSearch: message.metadata.toolSearch
         }
-      : undefined
+      : undefined,
+    feedback: message.feedback,
+    persistedMessageId: message.role === "assistant" ? message.id : undefined
   };
 }
 
@@ -1039,4 +966,9 @@ function createSessionTitle(content: string): string {
   }
 
   return normalized.length > 24 ? `${normalized.slice(0, 24)}...` : normalized;
+}
+
+function sanitizeExportFilename(value: string): string {
+  const filename = value.replace(/[\\/:*?"<>|]/gu, "-").trim();
+  return filename || "mia-chat";
 }

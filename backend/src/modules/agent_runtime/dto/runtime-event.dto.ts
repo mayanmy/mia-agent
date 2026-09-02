@@ -30,6 +30,8 @@ export type RuntimeCompletion = {
   workflowId?: string;
   workflowVersionId?: string;
   usage?: RuntimeUsage;
+  /** Chat 持久会话成功落库后的 Assistant 消息 ID。 */
+  messageId?: string;
 };
 
 export type AgentRuntimeEvent =

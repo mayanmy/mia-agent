@@ -78,6 +78,13 @@ enum ChatSessionStatus {
   @@map("chat_session_status")
 }
 
+enum ChatMessageFeedbackRating {
+  UP
+  DOWN
+
+  @@map("chat_message_feedback_rating")
+}
+
 /// 外部访问入口决定 End User 与会话的隔离范围，不能只用一个字符串标识混合公开访客和业务用户。
 enum ExternalUserSource {
   WIDGET
@@ -231,6 +238,7 @@ model User {
   createdMcpSecrets             McpServerSecret[]       @relation("McpServerSecretCreator")
   createdMcpOAuthAuthorizations McpOAuthAuthorization[] @relation("McpOAuthAuthorizationCreator")
   mcpToolApprovals              McpToolApproval[]
+  chatMessageFeedbacks          ChatMessageFeedback[]
 
   @@index([role, disabledAt], map: "idx_users_role_disabled_at")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
@@ -770,9 +778,27 @@ model ChatSessionMessage {
   metadata  Json?                  @db.JsonB
   createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
   session   ChatSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  feedbacks ChatMessageFeedback[]
 
   @@index([sessionId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_chat_session_messages_cursor")
   @@map("chat_session_messages")
+}
+
+/// 成员对一条已持久化 Assistant 消息的质量反馈；归属通过消息所属会话再次校验。
+model ChatMessageFeedback {
+  id        String                    @id @default(uuid()) @db.Uuid
+  messageId String                    @map("message_id") @db.Uuid
+  userId    String                    @map("user_id") @db.Uuid
+  rating    ChatMessageFeedbackRating
+  reason    String?                   @db.Text
+  createdAt DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  message   ChatSessionMessage        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId], map: "uq_chat_message_feedback_message_user")
+  @@index([rating, createdAt(sort: Desc)], map: "idx_chat_message_feedback_rating_created_at")
+  @@map("chat_message_feedbacks")
 }
 
 model ToolCallLog {

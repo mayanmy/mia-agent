@@ -67,8 +67,15 @@ export type ChatSessionMessage = {
   content: string;
   /** assistant 回答的运行快照；旧消息和用户消息为 null。 */
   metadata: ChatMessageMetadata | null;
+  feedback: ChatMessageFeedback | null;
   /** ISO 格式创建时间。 */
   createdAt: string;
+};
+
+export type ChatMessageFeedback = {
+  messageId: string;
+  rating: "UP" | "DOWN";
+  reason: string | null;
 };
 
 export type ChatMessageMetadata = {
@@ -78,6 +85,7 @@ export type ChatMessageMetadata = {
   modelName?: string;
   providerName?: string;
   elapsedMs?: number;
+  firstTokenMs?: number;
   usage?: { inputTokens?: number; outputTokens?: number; estimatedCost?: number };
   retrievalEvents?: Array<{
     knowledgeBaseIds: string[];
@@ -257,6 +265,8 @@ export type ChatStreamEventData = {
   sessionId?: string;
   /** Runtime 运行记录 ID。 */
   runId?: string;
+  /** 成功写入保留会话后的 Assistant 消息 ID。 */
+  messageId?: string;
   /** 模型 token 用量。 */
   usage?: { inputTokens?: number; outputTokens?: number; estimatedCost?: number };
 };
@@ -373,6 +383,17 @@ export function restoreChatSession(sessionId: string): Promise<ChatSessionListIt
 export function deleteChatSession(sessionId: string): Promise<null> {
   return request<null>(`/api/v1/chat/sessions/${sessionId}`, {
     method: "DELETE"
+  });
+}
+
+export function submitChatMessageFeedback(
+  messageId: string,
+  rating: "UP" | "DOWN",
+  reason?: string
+): Promise<ChatMessageFeedback> {
+  return request<ChatMessageFeedback>(`/api/v1/chat/messages/${messageId}/feedback`, {
+    method: "PUT",
+    body: JSON.stringify({ rating, reason })
   });
 }
 

@@ -1,11 +1,18 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { ChatSessionMessageRole, ChatSessionStatus, Prisma } from "@prisma/client";
+import {
+  ChatMessageFeedbackRating,
+  ChatSessionMessageRole,
+  ChatSessionStatus,
+  Prisma
+} from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   ChatMessageQueryDto,
   ChatMessageMetadata,
+  ChatMessageFeedbackDto,
+  ChatMessageFeedbackResponse,
   ChatSessionListItem,
   ChatSessionListQueryDto,
   ChatSessionListResponse,
@@ -156,7 +163,13 @@ export class ChatSessionsService {
           : {})
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: pageSize + 1
+      take: pageSize + 1,
+      include: {
+        feedbacks: {
+          where: { userId: owner.userId },
+          take: 1
+        }
+      }
     });
     const hasMore = rows.length > pageSize;
     const pageRows = rows.slice(0, pageSize);
@@ -168,6 +181,13 @@ export class ChatSessionsService {
         role: item.role === ChatSessionMessageRole.USER ? "user" : "assistant",
         content: item.content,
         metadata: this.toMessageMetadata(item.metadata),
+        feedback: item.feedbacks[0]
+          ? {
+              messageId: item.id,
+              rating: item.feedbacks[0].rating,
+              reason: item.feedbacks[0].reason
+            }
+          : null,
         createdAt: item.createdAt
       })),
       hasMore,
@@ -299,14 +319,14 @@ export class ChatSessionsService {
     role: ChatSessionMessageRole,
     content: string,
     metadata?: ChatMessageMetadata
-  ): Promise<void> {
+  ): Promise<string | null> {
     if (!content.trim()) {
-      return;
+      return null;
     }
 
     const now = new Date();
-    await this.prisma.$transaction(async (transaction) => {
-      await transaction.chatSessionMessage.create({
+    return this.prisma.$transaction(async (transaction) => {
+      const message = await transaction.chatSessionMessage.create({
         data: {
           sessionId,
           role,
@@ -328,7 +348,40 @@ export class ChatSessionsService {
           data: { title: this.createTitleFromMessage(content) }
         });
       }
+      return message.id;
     });
+  }
+
+  async upsertMessageFeedback(
+    messageId: string,
+    userId: string,
+    payload: ChatMessageFeedbackDto
+  ): Promise<ChatMessageFeedbackResponse> {
+    const rating = payload.rating;
+    const reason = payload.reason?.trim() || null;
+    if (rating !== "UP" && rating !== "DOWN") {
+      throw new AppError(ErrorCodes.common.badRequest, "feedback rating must be UP or DOWN");
+    }
+    if (reason && reason.length > 500) {
+      throw new AppError(ErrorCodes.common.badRequest, "feedback reason cannot exceed 500 characters");
+    }
+    const message = await this.prisma.chatSessionMessage.findFirst({
+      where: {
+        id: messageId,
+        role: ChatSessionMessageRole.ASSISTANT,
+        session: { userId }
+      },
+      select: { id: true }
+    });
+    if (!message) {
+      throw new AppError(ErrorCodes.common.notFound, "chat message not found", HttpStatus.NOT_FOUND);
+    }
+    const feedback = await this.prisma.chatMessageFeedback.upsert({
+      where: { messageId_userId: { messageId, userId } },
+      create: { messageId, userId, rating: rating as ChatMessageFeedbackRating, reason },
+      update: { rating: rating as ChatMessageFeedbackRating, reason }
+    });
+    return { messageId, rating: feedback.rating, reason: feedback.reason };
   }
 
   /** Prisma JsonValue 经过边界检查后转换为稳定 DTO，旧数据或非对象值统一忽略。 */

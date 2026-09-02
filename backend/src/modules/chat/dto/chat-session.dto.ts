@@ -8,6 +8,7 @@ export type ChatMessageMetadata = {
   modelName?: string;
   providerName?: string;
   elapsedMs?: number;
+  firstTokenMs?: number;
   usage?: { inputTokens?: number; outputTokens?: number; estimatedCost?: number };
   retrievalEvents?: Array<{
     knowledgeBaseIds: string[];
@@ -54,6 +55,17 @@ export type CreateChatSessionDto = {
 export type UpdateChatSessionDto = {
   /** 新会话标题。 */
   title?: string;
+};
+
+export type ChatMessageFeedbackDto = {
+  rating?: "UP" | "DOWN";
+  reason?: string;
+};
+
+export type ChatMessageFeedbackResponse = {
+  messageId: string;
+  rating: "UP" | "DOWN";
+  reason: string | null;
 };
 
 /** 会话消息向前翻页的查询参数。 */
@@ -110,6 +122,8 @@ export type ChatSessionMessageListItem = {
   content: string;
   /** 回答运行快照；旧消息和用户消息通常为 null。 */
   metadata: ChatMessageMetadata | null;
+  /** 当前成员已经提交的反馈。 */
+  feedback: ChatMessageFeedbackResponse | null;
   /** 消息创建时间。 */
   createdAt: Date;
 };

@@ -63,4 +63,8 @@ export type ChatUiMessage = ChatMessage & {
   errorMessage?: string;
   /** 服务端持久化的模型、耗时、usage 和 request_id。 */
   runtimeMetadata?: Omit<import("./api").ChatMessageMetadata, "retrievalEvents" | "toolEvents">;
+  /** 当前用户对已持久化 Assistant 消息的反馈。 */
+  feedback?: import("./api").ChatMessageFeedback | null;
+  /** 只有服务端成功持久化后才存在，用于安全提交反馈。 */
+  persistedMessageId?: string;
 };

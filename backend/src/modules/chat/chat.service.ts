@@ -23,6 +23,7 @@ import {
 } from "./dto/chat.dto";
 import {
   ChatMessageMetadata,
+  ChatMessageFeedbackDto,
   ChatMessageQueryDto,
   ChatSessionListQueryDto,
   CreateChatSessionDto,
@@ -148,6 +149,18 @@ export class ChatService {
     await this.requirePersistentAgent(session.agentId);
 
     return sessions.getMessagePage(sessionId, { agentId: session.agentId, userId }, query);
+  }
+
+  async upsertMessageFeedback(
+    messageId: string,
+    payload: ChatMessageFeedbackDto,
+    context: ChatRequestContext
+  ) {
+    return this.requireChatSessionsService().upsertMessageFeedback(
+      messageId,
+      this.requireSessionUserId(context),
+      payload
+    );
   }
 
   /** 更新会话标题；归属和标题合法性由会话 Service 统一保证。 */
@@ -286,6 +299,7 @@ export class ChatService {
       toolEvents: []
     };
     let activeRetrievalKnowledgeBaseIds: string[] = [];
+    let firstTokenRecorded = false;
 
     if (sessionId) {
       // 用户消息先于 Runtime 落库，模型失败或取消后仍可在会话中看到原始提问。
@@ -372,16 +386,24 @@ export class ChatService {
         }
       }
 
+      if (event.type === "token" && !firstTokenRecorded) {
+        firstTokenRecorded = true;
+        metadata.firstTokenMs = Date.now() - startedAt;
+      }
+
       if (event.type === "run_completed" && sessionId) {
         metadata.runId = event.data.runId ?? metadata.runId;
         metadata.usage = event.data.usage;
         metadata.elapsedMs = Date.now() - startedAt;
-        await this.requireChatSessionsService().appendMessage(
+        const persistedMessageId = await this.requireChatSessionsService().appendMessage(
           sessionId,
           ChatSessionMessageRole.ASSISTANT,
           event.data.content,
           metadata
         );
+        if (persistedMessageId) {
+          event.data.messageId = persistedMessageId;
+        }
       }
       yield event;
     }
@@ -442,6 +464,7 @@ export class ChatService {
           type: "message_end",
           data: {
             runId: event.data.runId,
+            messageId: event.data.messageId,
             content: event.data.content,
             usage: event.data.usage,
             modelConfigId: event.data.modelConfigId,

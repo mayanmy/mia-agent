@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Button,
   DatePicker,
@@ -35,15 +36,20 @@ type LogFilters = Omit<ToolCallLogQuery, "page" | "pageSize" | "createdFrom" | "
 };
 
 export function LogsPage() {
+  const [searchParams] = useSearchParams();
+  const initialRequestId = searchParams.get("requestId")?.trim() || undefined;
   const [toolCallLogs, setToolCallLogs] = useState<ToolCallLogListItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState<LogFilters>({});
+  const [filters, setFilters] = useState<LogFilters>(
+    initialRequestId ? { requestId: initialRequestId } : {}
+  );
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
   const [detailLog, setDetailLog] = useState<ToolCallLogListItem | null>(null);
 
   useEffect(() => {
     let disposed = false;
-    void refresh(1, pagination.pageSize, filters, () => !disposed);
+    const initialFilters = initialRequestId ? { requestId: initialRequestId } : {};
+    void refresh(1, pagination.pageSize, initialFilters, () => !disposed);
 
     return () => {
       disposed = true;

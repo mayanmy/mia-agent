@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "antd";
-import { CopyOutlined, InfoCircleOutlined } from "@ant-design/icons";
+import { CopyOutlined, DislikeOutlined, InfoCircleOutlined, LikeOutlined } from "@ant-design/icons";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -20,6 +20,9 @@ type ChatMessageItemProps = {
   onCopy: (content: string) => void;
   /** 重新提交该回答对应的上一条用户消息。 */
   onRetry?: () => void;
+  /** 使用 request_id 打开对应日志。 */
+  onOpenLogs?: (requestId: string) => void;
+  onFeedback?: (rating: "UP" | "DOWN") => void;
 };
 
 /** 渲染用户或 Agent 消息及其检索、工具和引用信息。 */
@@ -27,7 +30,9 @@ export function ChatMessageItem({
   item,
   generating,
   onCopy,
-  onRetry
+  onRetry,
+  onOpenLogs,
+  onFeedback
 }: ChatMessageItemProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const citationSources = getCitationSources(item);
@@ -87,7 +92,7 @@ export function ChatMessageItem({
         ) : null}
         {citationSources.length > 0 ? <CitationSourceList sources={citationSources} /> : null}
         {detailsOpen && item.runtimeMetadata ? (
-          <RuntimeDetails metadata={item.runtimeMetadata} />
+          <RuntimeDetails metadata={item.runtimeMetadata} onCopy={onCopy} onOpenLogs={onOpenLogs} />
         ) : null}
       </div>
       <div className="chatMessageMeta">
@@ -117,20 +122,48 @@ export function ChatMessageItem({
             运行详情
           </Button>
         ) : null}
+        {item.role === "assistant" && item.persistedMessageId && onFeedback ? (
+          <>
+            <Button
+              aria-label="回答有帮助"
+              className="chatMessageMetaButton"
+              icon={<LikeOutlined />}
+              size="small"
+              type={item.feedback?.rating === "UP" ? "primary" : "text"}
+              onClick={() => onFeedback("UP")}
+            />
+            <Button
+              aria-label="回答需改进"
+              className="chatMessageMetaButton"
+              icon={<DislikeOutlined />}
+              size="small"
+              type={item.feedback?.rating === "DOWN" ? "primary" : "text"}
+              onClick={() => onFeedback("DOWN")}
+            />
+          </>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function RuntimeDetails({ metadata }: { metadata: NonNullable<ChatUiMessage["runtimeMetadata"]> }) {
+function RuntimeDetails({
+  metadata,
+  onCopy,
+  onOpenLogs
+}: {
+  metadata: NonNullable<ChatUiMessage["runtimeMetadata"]>;
+  onCopy: (content: string) => void;
+  onOpenLogs?: (requestId: string) => void;
+}) {
   const rows = [
     ["模型", [metadata.providerName, metadata.modelName].filter(Boolean).join(" / ")],
     ["总耗时", metadata.elapsedMs === undefined ? "" : `${metadata.elapsedMs}ms`],
+    ["首 Token", metadata.firstTokenMs === undefined ? "" : `${metadata.firstTokenMs}ms`],
     ["输入 Token", metadata.usage?.inputTokens?.toLocaleString() ?? ""],
     ["输出 Token", metadata.usage?.outputTokens?.toLocaleString() ?? ""],
     ["候选工具", metadata.toolSearch?.catalogMatchCount?.toString() ?? ""],
     ["选中工具", metadata.toolSearch?.selectedToolIds?.join("、") ?? ""],
-    ["Request ID", metadata.requestId ?? ""],
     ["Run ID", metadata.runId ?? ""]
   ].filter((row) => row[1]);
 
@@ -142,6 +175,22 @@ function RuntimeDetails({ metadata }: { metadata: NonNullable<ChatUiMessage["run
           <span>{value}</span>
         </div>
       ))}
+      {metadata.requestId ? (
+        <div>
+          <strong>Request ID</strong>
+          <span className="chatRuntimeRequestId">
+            {metadata.requestId}
+            <Button size="small" type="link" onClick={() => onCopy(metadata.requestId!)}>
+              复制
+            </Button>
+            {onOpenLogs ? (
+              <Button size="small" type="link" onClick={() => onOpenLogs(metadata.requestId!)}>
+                查看日志
+              </Button>
+            ) : null}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

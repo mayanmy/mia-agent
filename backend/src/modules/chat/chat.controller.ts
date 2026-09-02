@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req, Res } from "@nestjs/common";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { UserRole } from "@prisma/client";
 
@@ -10,6 +10,7 @@ import { ChatService } from "./chat.service";
 import { ChatCompletionDto, ChatCompletionResult } from "./dto/chat.dto";
 import {
   ChatMessageQueryDto,
+  ChatMessageFeedbackDto,
   ChatSessionListQueryDto,
   CreateChatSessionDto,
   UpdateChatSessionDto
@@ -68,6 +69,15 @@ export class ChatController {
     @CurrentUser() currentUser: CurrentUserDto
   ) {
     return this.chatService.getSessionMessages(sessionId, query, { userId: currentUser.id });
+  }
+
+  @Put("messages/:messageId/feedback")
+  async upsertMessageFeedback(
+    @Param("messageId") messageId: string,
+    @Body() payload: ChatMessageFeedbackDto,
+    @CurrentUser() currentUser: CurrentUserDto
+  ) {
+    return this.chatService.upsertMessageFeedback(messageId, payload, { userId: currentUser.id });
   }
 
   /** 更新会话标题。 */

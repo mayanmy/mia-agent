@@ -29,10 +29,11 @@ export const tests = [
                 role: "ASSISTANT",
                 content: "最新",
                 metadata: { requestId: "request-3", elapsedMs: 320 },
+                feedbacks: [],
                 createdAt: newest
               },
-              { id: "message-2", role: "USER", content: "中间", metadata: null, createdAt: middle },
-              { id: "message-1", role: "ASSISTANT", content: "最早", metadata: null, createdAt: oldest }
+              { id: "message-2", role: "USER", content: "中间", metadata: null, feedbacks: [], createdAt: middle },
+              { id: "message-1", role: "ASSISTANT", content: "最早", metadata: null, feedbacks: [], createdAt: oldest }
             ];
           }
         }
@@ -63,6 +64,7 @@ export const tests = [
         chatSessionMessage: {
           create: async ({ data }: { data: Record<string, unknown> }) => {
             createdData = data;
+            return { id: "message-id" };
           }
         },
         chatSession: {
@@ -107,6 +109,53 @@ export const tests = [
             {}
           ),
         /chat session not found/u
+      );
+    }
+  },
+  {
+    name: "ChatSessionsService upserts feedback only for an owned assistant message",
+    run: async () => {
+      let upsertQuery: Record<string, unknown> | undefined;
+      const prisma = {
+        chatSessionMessage: {
+          findFirst: async () => ({ id: "assistant-message" })
+        },
+        chatMessageFeedback: {
+          upsert: async (query: Record<string, unknown>) => {
+            upsertQuery = query;
+            return { rating: "DOWN", reason: "引用不准确" };
+          }
+        }
+      };
+      const service = new ChatSessionsService(prisma as never);
+
+      const feedback = await service.upsertMessageFeedback(
+        "assistant-message",
+        "user-id",
+        { rating: "DOWN", reason: " 引用不准确 " }
+      );
+
+      assert.deepEqual(feedback, {
+        messageId: "assistant-message",
+        rating: "DOWN",
+        reason: "引用不准确"
+      });
+      assert.deepEqual(upsertQuery?.where, {
+        messageId_userId: { messageId: "assistant-message", userId: "user-id" }
+      });
+    }
+  },
+  {
+    name: "ChatSessionsService rejects feedback for a message outside the current user session",
+    run: async () => {
+      const prisma = {
+        chatSessionMessage: { findFirst: async () => null }
+      };
+      const service = new ChatSessionsService(prisma as never);
+
+      await assert.rejects(
+        () => service.upsertMessageFeedback("other-message", "user-id", { rating: "UP" }),
+        /chat message not found/u
       );
     }
   },

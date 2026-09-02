@@ -62,6 +62,11 @@ export function ChatSessionList({
 }: ChatSessionListProps) {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  const [search, setSearch] = useState("");
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const filteredSessions = normalizedSearch
+    ? sessions.filter((session) => session.title.toLocaleLowerCase().includes(normalizedSearch))
+    : sessions;
 
   function startRename(session: ChatSessionListItem) {
     setEditingSessionId(session.id);
@@ -107,20 +112,40 @@ export function ChatSessionList({
           ) : null}
         </div>
       </div>
-      {sessions.length === 0 ? (
+      <Input.Search
+        allowClear
+        className="chatSessionSearch"
+        placeholder="搜索已加载会话"
+        size="small"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+      />
+      {filteredSessions.length === 0 ? (
         <Empty
           className="chatSessionEmpty"
-          description={showingArchived ? "暂无已归档会话" : "暂无历史会话"}
+          description={
+            normalizedSearch
+              ? "没有匹配的会话"
+              : showingArchived
+                ? "暂无已归档会话"
+                : "暂无历史会话"
+          }
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       ) : (
         <div className="chatSessionList">
-          {sessions.map((session) => {
+          {filteredSessions.map((session, index) => {
             const isEditing = editingSessionId === session.id;
             const isActive = activeSessionId === session.id;
+            const group = getSessionTimeGroup(session);
+            const previousGroup = index > 0 ? getSessionTimeGroup(filteredSessions[index - 1]!) : null;
 
             return (
-              <div className={`chatSessionItem${isActive ? " active" : ""}`} key={session.id}>
+              <div className="chatSessionGroup" key={session.id}>
+                {group !== previousGroup ? (
+                  <div className="chatSessionGroupLabel">{group}</div>
+                ) : null}
+                <div className={`chatSessionItem${isActive ? " active" : ""}`}>
                 {isEditing ? (
                   <Input
                     autoFocus
@@ -212,6 +237,7 @@ export function ChatSessionList({
                     </Tooltip>
                   </div>
                 ) : null}
+                </div>
               </div>
             );
           })}
@@ -224,4 +250,18 @@ export function ChatSessionList({
       )}
     </section>
   );
+}
+
+function getSessionTimeGroup(session: ChatSessionListItem): string {
+  const value = session.lastMessageAt || session.createdAt;
+  const date = new Date(value);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const day = 24 * 60 * 60 * 1000;
+  const timestamp = date.getTime();
+
+  if (timestamp >= startOfToday) return "今天";
+  if (timestamp >= startOfToday - day) return "昨天";
+  if (timestamp >= startOfToday - 7 * day) return "近 7 天";
+  return "更早";
 }

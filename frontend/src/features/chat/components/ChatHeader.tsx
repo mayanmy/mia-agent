@@ -1,3 +1,4 @@
+import { DownloadOutlined } from "@ant-design/icons";
 import { Button, Tag } from "antd";
 
 import type { AgentListItem } from "../../agents/api";
@@ -15,6 +16,8 @@ type ChatHeaderProps = {
   onBack: () => void;
   /** 详情页当前选中的 Agent。 */
   agent: AgentListItem | null;
+  /** 导出当前会话。 */
+  onExport?: () => void;
 };
 
 /** 使用统一页面骨架展示 Chat 工作室或 Agent 对话详情。 */
@@ -23,15 +26,22 @@ export function ChatHeader({
   onRefreshAgents,
   detail,
   onBack,
-  agent
+  agent,
+  onExport
 }: ChatHeaderProps) {
   return (
     <WorkspacePageHeader
-      actions={!detail ? (
-        <Button disabled={loadingAgents} onClick={onRefreshAgents}>
-          刷新 Agent
-        </Button>
-      ) : undefined}
+      actions={
+        !detail ? (
+          <Button disabled={loadingAgents} onClick={onRefreshAgents}>
+            刷新 Agent
+          </Button>
+        ) : onExport ? (
+          <Button icon={<DownloadOutlined />} onClick={onExport}>
+            导出会话
+          </Button>
+        ) : undefined
+      }
       backLabel="返回 Agent 列表"
       description={
         detail && agent ? `${agent.providerName} / ${agent.modelName}` : "选择一个 Agent 开始对话。"
