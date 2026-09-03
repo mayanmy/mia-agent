@@ -144,11 +144,11 @@
     '<footer class="mia-agent-composer">' +
     '<div class="mia-agent-attachments"></div>' +
     '<div class="mia-agent-toolbar">' +
-    '<button class="mia-agent-tool-button mia-agent-image-button" type="button">图片</button>' +
-    '<button class="mia-agent-tool-button mia-agent-file-button" type="button">文件</button>' +
+    '<button class="mia-agent-tool-button mia-agent-image-button" type="button">上传图片</button>' +
+    '<button class="mia-agent-tool-button mia-agent-file-button" type="button">上传文件</button>' +
     "</div>" +
     '<div class="mia-agent-composer-row">' +
-    '<textarea class="mia-agent-input" rows="2" placeholder="输入消息，或直接粘贴图片..."></textarea>' +
+    '<textarea class="mia-agent-input" rows="2" placeholder="输入消息，或直接粘贴图片"></textarea>' +
     '<button class="mia-agent-send" type="button">发送</button>' +
     "</div>" +
     '<input class="mia-agent-image-input" type="file" accept="image/*" multiple hidden />' +
@@ -186,9 +186,16 @@
     ".mia-agent-message-assistant{align-items:flex-start}" +
     ".mia-agent-access-gate{display:grid;gap:8px;margin:16px;padding:16px;border:1px solid #dbe3ef;border-radius:12px;background:#f8fafc;color:#334155;font-size:13px;line-height:1.45}" +
     ".mia-agent-access-gate strong{color:#111827;font-size:15px}.mia-agent-access-gate span{color:#64748b}.mia-agent-access-gate>div{display:flex;gap:8px}.mia-agent-access-password{min-width:0;flex:1;height:36px;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;font:inherit;outline:none}.mia-agent-access-password:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.mia-agent-access-submit{height:36px;border:0;border-radius:8px;background:#2563eb;color:#fff;padding:0 12px;font:inherit;cursor:pointer;white-space:nowrap}" +
-    ".mia-agent-bubble{max-width:84%;white-space:pre-wrap;word-break:break-word;border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.55}" +
-    ".mia-agent-message-user .mia-agent-bubble{background:#2563eb;color:#fff;border-bottom-right-radius:4px}" +
-    ".mia-agent-message-assistant .mia-agent-bubble{background:#f1f5f9;color:#111827;border-bottom-left-radius:4px}" +
+    ".mia-agent-bubble{max-width:84%;overflow-wrap:anywhere;border:1px solid #dde3eb;border-radius:8px;background:#fff;color:#111827;padding:12px 14px;font-size:14px;line-height:1.7}" +
+    ".mia-agent-message-user .mia-agent-bubble{white-space:pre-wrap;border-color:#2563eb;background:#2563eb;color:#fff}" +
+    ".mia-agent-markdown>:first-child{margin-top:0}.mia-agent-markdown>:last-child{margin-bottom:0}" +
+    ".mia-agent-markdown h1,.mia-agent-markdown h2,.mia-agent-markdown h3,.mia-agent-markdown h4,.mia-agent-markdown h5,.mia-agent-markdown h6{margin:18px 0 8px;color:#111827;line-height:1.35}" +
+    ".mia-agent-markdown h1{font-size:20px}.mia-agent-markdown h2{font-size:18px}.mia-agent-markdown h3{font-size:16px}.mia-agent-markdown h4,.mia-agent-markdown h5,.mia-agent-markdown h6{font-size:14px}" +
+    ".mia-agent-markdown p{margin:0 0 10px}.mia-agent-markdown ul,.mia-agent-markdown ol{margin:0 0 10px;padding-left:22px}.mia-agent-markdown li+li{margin-top:4px}" +
+    ".mia-agent-markdown code{border-radius:4px;background:#f1f5f9;color:#be123c;padding:2px 4px;font:0.88em ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}" +
+    ".mia-agent-markdown pre{margin:10px 0;overflow-x:auto;border-radius:6px;background:#0f172a;color:#e2e8f0;padding:12px;white-space:pre-wrap}.mia-agent-markdown pre code{background:transparent;color:inherit;padding:0}" +
+    ".mia-agent-markdown blockquote{margin:10px 0;border-left:3px solid #93c5fd;color:#475569;padding-left:12px}.mia-agent-markdown a{color:#2563eb;text-decoration:underline}" +
+    ".mia-agent-markdown table{display:block;max-width:100%;margin:10px 0;overflow-x:auto;border-collapse:collapse}.mia-agent-markdown th,.mia-agent-markdown td{border:1px solid #dbe3ef;padding:6px 8px;text-align:left;white-space:nowrap}.mia-agent-markdown th{background:#f8fafc;font-weight:700}" +
     ".mia-agent-tool-events{display:grid;gap:6px;max-width:84%;margin:0 0 8px 0}" +
     ".mia-agent-tool-event{display:grid;gap:4px;border:1px solid #dfe6ef;border-radius:8px;background:#f8fafc;color:#334155;padding:8px 10px;font-size:12px;line-height:1.45}" +
     ".mia-agent-tool-event-success{border-color:#cce8d7;background:#f7fdf9}" +
@@ -210,7 +217,7 @@
     ".mia-agent-input{flex:1;min-height:44px;max-height:120px;resize:none;border:1px solid #cbd5e1;border-radius:12px;padding:10px 12px;font:inherit;font-size:14px;outline:none}" +
     ".mia-agent-input:disabled{background:#f8fafc;color:#94a3b8;cursor:not-allowed}" +
     ".mia-agent-input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}" +
-    ".mia-agent-tool-button{height:28px;border:1px solid #d8e0ec;border-radius:9px;background:#fff;color:#64748b;font-size:12px;font-weight:600;cursor:pointer;padding:0 9px;white-space:nowrap}" +
+    ".mia-agent-tool-button{height:32px;border:1px solid #d8e0ec;border-radius:8px;background:#fff;color:#64748b;font-size:13px;font-weight:500;cursor:pointer;padding:0 10px;white-space:nowrap}" +
     ".mia-agent-tool-button:disabled{background:#f8fafc;color:#94a3b8;cursor:not-allowed}" +
     ".mia-agent-send{min-width:64px;height:44px;border:0;border-radius:12px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer}" +
     ".mia-agent-send.mia-agent-stop{background:#ef4444}" +
@@ -749,7 +756,7 @@
         return readStream(response.body, function (event) {
           if (event.type === "token" && event.data.content) {
             assistantMessage.content += event.data.content;
-            assistantMessage.bubble.textContent = assistantMessage.content;
+            renderMessageContent(assistantMessage);
             scrollToBottomIfNeeded();
           }
 
@@ -760,7 +767,7 @@
           if (event.type === "message_end" && typeof event.data.content === "string") {
             // End answer 是 Workflow 的最终结果，覆盖可能为空或仅代表中间节点的 token。
             assistantMessage.content = event.data.content;
-            assistantMessage.bubble.textContent = assistantMessage.content;
+            renderMessageContent(assistantMessage);
             scrollToBottomIfNeeded();
           }
 
@@ -783,10 +790,10 @@
         if (isAbortError(error)) {
           if (!assistantMessage.content) {
             assistantMessage.content = "已停止生成。";
-            assistantMessage.bubble.textContent = assistantMessage.content;
+            renderMessageContent(assistantMessage);
           } else {
             assistantMessage.content += "\n\n已停止生成。";
-            assistantMessage.bubble.textContent = assistantMessage.content;
+            renderMessageContent(assistantMessage);
           }
           scrollToBottomIfNeeded();
           return;
@@ -794,7 +801,7 @@
 
         if (!assistantMessage.content) {
           assistantMessage.content = error.message || "对话失败";
-          assistantMessage.bubble.textContent = assistantMessage.content;
+          renderMessageContent(assistantMessage);
         }
       })
       .finally(function () {
@@ -1052,7 +1059,7 @@
     bubble.className = "mia-agent-bubble";
     toolEventsEl.className = "mia-agent-tool-events";
     toolEventsEl.hidden = true;
-    bubble.textContent = content || " ";
+    renderMessageContent(message);
     wrapper.appendChild(bubble);
     wrapper.appendChild(toolEventsEl);
     wrapper.appendChild(createMessageMeta(message));
@@ -1082,12 +1089,12 @@
       bubble.className = "mia-agent-bubble";
       toolEventsEl.className = "mia-agent-tool-events";
       toolEventsEl.hidden = true;
-      bubble.textContent = message.content || " ";
+      message.bubble = bubble;
+      renderMessageContent(message);
       wrapper.appendChild(bubble);
       wrapper.appendChild(toolEventsEl);
       wrapper.appendChild(createMessageMeta(message));
       messagesEl.appendChild(wrapper);
-      message.bubble = bubble;
       message.toolEventsEl = toolEventsEl;
       renderToolEvents(message);
     });
@@ -1113,6 +1120,187 @@
     meta.appendChild(copyButton);
 
     return meta;
+  }
+
+  /**
+   * Widget 不依赖宿主页面的框架，因此用 DOM API 渲染常用 Markdown。
+   * 全程使用 textContent/节点属性，避免模型输出被当作 HTML 注入宿主页面。
+   */
+  function renderMessageContent(message) {
+    var bubble = message.bubble;
+    var content = message.content || " ";
+
+    if (!bubble) {
+      return;
+    }
+
+    bubble.innerHTML = "";
+    if (message.role === "user") {
+      bubble.textContent = content;
+      return;
+    }
+
+    bubble.classList.add("mia-agent-markdown");
+    renderMarkdownBlocks(bubble, content);
+  }
+
+  function renderMarkdownBlocks(container, markdown) {
+    var lines = String(markdown).replace(/\r\n?/g, "\n").split("\n");
+    var index = 0;
+
+    while (index < lines.length) {
+      var line = lines[index];
+      var fence = line.match(/^\s*```(?:\w+)?\s*$/);
+      var heading = line.match(/^(#{1,6})\s+(.+)$/);
+      var list = line.match(/^\s*(?:([-+*])|(\d+)\.)\s+(.+)$/);
+      var isTable =
+        line.indexOf("|") >= 0 &&
+        index + 1 < lines.length &&
+        /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[index + 1]);
+
+      if (!line.trim()) {
+        index += 1;
+        continue;
+      }
+
+      if (fence) {
+        var codeLines = [];
+        index += 1;
+        while (index < lines.length && !/^\s*```\s*$/.test(lines[index])) {
+          codeLines.push(lines[index]);
+          index += 1;
+        }
+        if (index < lines.length) index += 1;
+        var pre = document.createElement("pre");
+        var code = document.createElement("code");
+        code.textContent = codeLines.join("\n");
+        pre.appendChild(code);
+        container.appendChild(pre);
+        continue;
+      }
+
+      if (heading) {
+        var headingEl = document.createElement("h" + heading[1].length);
+        appendInlineMarkdown(headingEl, heading[2]);
+        container.appendChild(headingEl);
+        index += 1;
+        continue;
+      }
+
+      if (isTable) {
+        var table = document.createElement("table");
+        var tableHead = document.createElement("thead");
+        var tableBody = document.createElement("tbody");
+        appendMarkdownTableRow(tableHead, line, "th");
+        index += 2;
+        while (index < lines.length && lines[index].indexOf("|") >= 0 && lines[index].trim()) {
+          appendMarkdownTableRow(tableBody, lines[index], "td");
+          index += 1;
+        }
+        table.appendChild(tableHead);
+        table.appendChild(tableBody);
+        container.appendChild(table);
+        continue;
+      }
+
+      if (list) {
+        var listEl = document.createElement(list[2] ? "ol" : "ul");
+        while (index < lines.length) {
+          var itemMatch = lines[index].match(/^\s*(?:([-+*])|(\d+)\.)\s+(.+)$/);
+          if (!itemMatch || Boolean(itemMatch[2]) !== Boolean(list[2])) break;
+          var item = document.createElement("li");
+          appendInlineMarkdown(item, itemMatch[3]);
+          listEl.appendChild(item);
+          index += 1;
+        }
+        container.appendChild(listEl);
+        continue;
+      }
+
+      if (/^\s*>\s?/.test(line)) {
+        var quoteLines = [];
+        while (index < lines.length && /^\s*>\s?/.test(lines[index])) {
+          quoteLines.push(lines[index].replace(/^\s*>\s?/, ""));
+          index += 1;
+        }
+        var quote = document.createElement("blockquote");
+        renderMarkdownBlocks(quote, quoteLines.join("\n"));
+        container.appendChild(quote);
+        continue;
+      }
+
+      if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+        container.appendChild(document.createElement("hr"));
+        index += 1;
+        continue;
+      }
+
+      var paragraphLines = [line];
+      index += 1;
+      while (
+        index < lines.length &&
+        lines[index].trim() &&
+        !/^\s*```/.test(lines[index]) &&
+        !/^(#{1,6})\s+/.test(lines[index]) &&
+        !/^\s*(?:[-+*]|\d+\.)\s+/.test(lines[index]) &&
+        !/^\s*>\s?/.test(lines[index])
+      ) {
+        paragraphLines.push(lines[index]);
+        index += 1;
+      }
+      var paragraph = document.createElement("p");
+      paragraphLines.forEach(function (paragraphLine, lineIndex) {
+        if (lineIndex > 0) paragraph.appendChild(document.createElement("br"));
+        appendInlineMarkdown(paragraph, paragraphLine);
+      });
+      container.appendChild(paragraph);
+    }
+  }
+
+  function appendMarkdownTableRow(section, value, cellTag) {
+    var row = document.createElement("tr");
+    var cells = value.trim().replace(/^\||\|$/g, "").split("|");
+    cells.forEach(function (cellValue) {
+      var cell = document.createElement(cellTag);
+      appendInlineMarkdown(cell, cellValue.trim());
+      row.appendChild(cell);
+    });
+    section.appendChild(row);
+  }
+
+  function appendInlineMarkdown(container, value) {
+    var pattern = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g;
+    var cursor = 0;
+    var match;
+
+    while ((match = pattern.exec(value))) {
+      if (match.index > cursor) {
+        container.appendChild(document.createTextNode(value.slice(cursor, match.index)));
+      }
+      var token = match[0];
+      if (token.charAt(0) === "`") {
+        var code = document.createElement("code");
+        code.textContent = token.slice(1, -1);
+        container.appendChild(code);
+      } else if (token.slice(0, 2) === "**" || token.slice(0, 2) === "__") {
+        var strong = document.createElement("strong");
+        strong.textContent = token.slice(2, -2);
+        container.appendChild(strong);
+      } else {
+        var linkMatch = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+        var link = document.createElement("a");
+        link.textContent = linkMatch[1];
+        link.href = linkMatch[2];
+        link.target = "_blank";
+        link.rel = "noreferrer noopener";
+        container.appendChild(link);
+      }
+      cursor = pattern.lastIndex;
+    }
+
+    if (cursor < value.length) {
+      container.appendChild(document.createTextNode(value.slice(cursor)));
+    }
   }
 
   function appendToolCall(message, data) {
