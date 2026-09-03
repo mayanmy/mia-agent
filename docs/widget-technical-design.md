@@ -119,6 +119,7 @@ frontend/src/features/agents/AgentsPage.tsx
 | ------------------------ | ----------- | ----------------------- | --------------------------------------------------------------- |
 | `src`                    | 是          | 无                      | Widget 脚本地址，通常是 Mia 前端服务下的 `/mia-agent-widget.js` |
 | `data-agent-token`       | 是          | 无                      | Agent 发布后生成的 share token                                  |
+| `data-user-id`           | 登录系统必填 | 无                      | 宿主当前用户的稳定非敏感 ID；用于按用户隔离会话和本地缓存          |
 | `data-api-base`          | 否          | script 所在 origin      | API 请求基地址                                                  |
 | `data-agent-name`        | 否          | 后端 Agent 名称或 `Mia` | Agent 初始显示名称                                              |
 | `data-mode`              | 否          | `floating`              | `floating` 或 `inline`                                          |

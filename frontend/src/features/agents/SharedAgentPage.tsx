@@ -58,6 +58,10 @@ export function SharedAgentPage() {
     script.async = true;
     script.src = `${window.location.origin}/mia-agent-widget.min.js`;
     script.setAttribute("data-agent-token", token);
+    const externalUserId = new URLSearchParams(window.location.search).get("user_id");
+    if (externalUserId) {
+      script.setAttribute("data-user-id", externalUserId);
+    }
     script.setAttribute("data-api-base", window.location.origin);
     script.setAttribute("data-agent-name", agent.name);
     script.setAttribute("data-mode", "inline");

@@ -2,6 +2,9 @@
   var currentScript = document.currentScript;
   var token = currentScript && currentScript.getAttribute("data-agent-token");
   var agentName = currentScript && currentScript.getAttribute("data-agent-name");
+  // 宿主站点应传入当前登录用户的稳定、非敏感 ID，避免同一浏览器切换账号后复用聊天记录。
+  var externalUserId =
+    currentScript && normalizeExternalUserId(currentScript.getAttribute("data-user-id"));
   var mode = (currentScript && currentScript.getAttribute("data-mode")) || "floating";
   var containerSelector = currentScript && currentScript.getAttribute("data-container");
   var launcherIcon = (currentScript && currentScript.getAttribute("data-launcher-icon")) || "M";
@@ -68,14 +71,16 @@
     registerAgentTo(inlineAgents, {
       token: token,
       apiBase: apiBase,
-      name: agentName || ""
+      name: agentName || "",
+      externalUserId: externalUserId
     });
   } else {
     window[registryName] = window[registryName] || [];
     registerAgentTo(window[registryName], {
       token: token,
       apiBase: apiBase,
-      name: agentName || ""
+      name: agentName || "",
+      externalUserId: externalUserId
     });
   }
 
@@ -1419,6 +1424,7 @@
     if (existing) {
       existing.name = nextAgent.name || existing.name;
       existing.apiBase = nextAgent.apiBase;
+      existing.externalUserId = nextAgent.externalUserId || existing.externalUserId;
       return;
     }
 
@@ -1427,6 +1433,7 @@
       token: nextAgent.token,
       apiBase: nextAgent.apiBase,
       name: nextAgent.name || "Mia Agent",
+      externalUserId: nextAgent.externalUserId || "",
       agent: null,
       loadingAgent: false,
       historyLoaded: false,
@@ -1442,16 +1449,20 @@
   }
 
   function getAgentKey(agent) {
-    return agent.apiBase + "::" + agent.token;
+    return agent.apiBase + "::" + agent.token + "::" + (agent.externalUserId || "anonymous");
   }
 
   /**
-   * 浏览器匿名身份只使用 Agent Token 命名空间下的随机 UUID。
+   * 宿主传入 data-user-id 时直接作为外部用户隔离键；未传时才退回浏览器匿名 UUID。
    *
    * 不读取宿主站点账号、Cookie 或手机号等资料，清理浏览器存储后会自然成为新的外部访客。
    */
   function getWidgetSessionId(entry) {
-    var storageKey = "mia_widget_session:" + entry.token;
+    if (entry.externalUserId) {
+      return entry.externalUserId;
+    }
+
+    var storageKey = "mia_widget_session:" + getWidgetStorageNamespace(entry);
     var existing = readLocalStorage(storageKey);
 
     if (existing) {
@@ -1464,8 +1475,8 @@
   }
 
   function getWidgetConversationId(entry) {
-    // conversationId 由服务端签发并绑定匿名 session，刷新页面后继续向同一外部会话写入。
-    return readLocalStorage("mia_widget_conversation:" + entry.token);
+    // 会话缓存必须包含宿主用户命名空间，避免同一浏览器切换账号后读到前一账号的会话。
+    return readLocalStorage("mia_widget_conversation:" + getWidgetStorageNamespace(entry));
   }
 
   function setWidgetConversationId(entry, conversationId) {
@@ -1473,13 +1484,15 @@
       return;
     }
 
-    writeLocalStorage("mia_widget_conversation:" + entry.token, conversationId);
+    writeLocalStorage("mia_widget_conversation:" + getWidgetStorageNamespace(entry), conversationId);
   }
 
   /** 当服务端已删除会话时清理失效引用，下次发送会自动创建新的匿名会话。 */
   function clearWidgetConversationId(entry) {
     try {
-      window.localStorage.removeItem("mia_widget_conversation:" + entry.token);
+      window.localStorage.removeItem(
+        "mia_widget_conversation:" + getWidgetStorageNamespace(entry)
+      );
     } catch (_) {
       // 存储不可用时无需额外处理，当前页面的后续请求也会让服务端创建新会话。
     }
@@ -1495,6 +1508,27 @@
       var value = character === "x" ? random : (random & 3) | 8;
       return value.toString(16);
     });
+  }
+
+  function getWidgetStorageNamespace(entry) {
+    return entry.token + ":" + (entry.externalUserId || "anonymous");
+  }
+
+  function normalizeExternalUserId(value) {
+    var normalized = typeof value === "string" ? value.trim() : "";
+
+    if (!normalized) {
+      return "";
+    }
+
+    // 与服务端 ExternalAccessService 的外部用户格式保持一致，避免静默退回匿名身份造成串号。
+    if (!/^[A-Za-z0-9_.:@-]{1,256}$/.test(normalized)) {
+      throw new Error(
+        "Mia Agent Widget: data-user-id 仅支持 1-256 位字母、数字及 _ . : @ -"
+      );
+    }
+
+    return normalized;
   }
 
   function readLocalStorage(key) {
