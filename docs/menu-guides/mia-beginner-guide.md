@@ -884,6 +884,71 @@ curl -sS -X POST "$MIA_BASE_URL/api/v1/chat-messages" \
 
 💡 生产环境优先使用 `mia-agent-widget.min.js`。Mia 开发者如果修改了 `frontend/public/mia-agent-widget.js`，必须在 `frontend/` 运行 `npm run build:widget` 同步生成压缩版。
 
+#### 登录系统必须隔离 Widget 聊天记录
+
+Widget 默认只能生成“当前浏览器的匿名身份”。它适合没有账号体系的公开网页，但不能识别宿主系统当前登录的是谁。同一浏览器退出 A 账号再登录 B 账号时，如果没有传 `data-user-id`，两人会继续使用同一份聊天记录。
+
+接入员工门户、研发平台等登录系统时，必须把当前登录用户的稳定 ID 传给 `data-user-id`：
+
+```html
+<script
+  src="https://mia.example.com/mia-agent-widget.min.js?v=20260817-user-isolation"
+  data-agent-token="替换为发布后的公开Token"
+  data-api-base="https://mia.example.com"
+  data-user-id="my-system:当前用户数据库ID"
+  async
+></script>
+```
+
+推荐格式为 `系统名:用户数据库ID`，例如 `employee-portal:550e8400-e29b-41d4-a716-446655440000`。不要使用姓名、手机号、身份证号等敏感或可能变化的字段，也不要只传角色名 `admin`、`developer`。允许的字符为字母、数字、`_ . : @ -`，总长度不超过 256 位。
+
+React/Vue 等 SPA 不应把 Widget 静态写在 `index.html`，因为页面加载时通常还没有当前用户。应在登录用户加载完成后动态创建脚本：
+
+```javascript
+function loadMiaWidget(currentUser) {
+  window.MiaAgentWidget?.destroy?.();
+  document.querySelector("#mia-agent-widget-loader")?.remove();
+
+  const script = document.createElement("script");
+  script.id = "mia-agent-widget-loader";
+  script.src = "https://mia.example.com/mia-agent-widget.min.js?v=20260817-user-isolation";
+  script.async = true;
+  script.setAttribute("data-agent-token", "替换为发布后的公开Token");
+  script.setAttribute("data-api-base", "https://mia.example.com");
+  script.setAttribute("data-user-id", `employee-portal:${currentUser.id}`);
+  document.body.appendChild(script);
+}
+```
+
+账号切换、退出登录或组件卸载时必须销毁旧 Widget：
+
+```javascript
+window.MiaAgentWidget?.destroy?.();
+document.querySelector("#mia-agent-widget-loader")?.remove();
+```
+
+#### 如何确认隔离已经生效
+
+1. 用 A 用户登录，在浏览器开发者工具的 **Elements** 中找到 Widget `<script>`，确认 `data-user-id` 是 A 的 ID。
+2. 在 **Network** 中打开 `/api/v1/public/chat-messages` 请求，确认请求体 `sessionId` 与 A 的 `data-user-id` 相同。
+3. 退出后用 B 用户登录，确认 `data-user-id` 和请求体 `sessionId` 都变成 B 的 ID。
+4. A、B 分别发送带用户名的测试消息，重新登录后只能恢复自己的记录。
+
+如果属性已经不同但仍串号，先检查浏览器是否缓存了旧 Widget。生产脚本建议使用版本查询参数，例如 `?v=20260817-user-isolation`；或者给该文件设置不缓存响应头：
+
+```nginx
+location = /mia-agent-widget.min.js {
+    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    add_header Pragma "no-cache" always;
+    add_header Expires "0" always;
+    try_files $uri =404;
+}
+```
+
+注意，`always` 必须写在每条 `add_header` 末尾，不能单独作为一行指令。配置后使用 `curl -I https://mia.example.com/mia-agent-widget.min.js` 检查响应头，并强制刷新浏览器。
+
+⚠️ `data-user-id` 用于防止正常使用中的聊天记录串号，但它来自浏览器，可以被开发者工具修改，因此不是强身份认证。如果业务要求防止恶意用户伪造他人身份，应由宿主系统后端验证登录 JWT，再使用 Mia Service API 调用；Agent API Key 只保存在宿主后端，并由后端根据已认证用户生成 `user`，不能接受浏览器自行指定的 `user`。
+
 ---
 
 ## 八、高频问题排查清单
@@ -1039,7 +1104,21 @@ embedding response count does not match chunk count
 
 可先使用 `response_mode: "blocking"` 验证业务链路，再排查流式代理配置。
 
-### 8.11 去哪里看运行证据
+### 8.11 Widget 聊天记录串号
+
+按以下顺序检查：
+
+1. 是否仍在 `index.html` 静态加载 Widget；登录系统应改为用户加载完成后动态创建。
+2. Widget `<script>` 是否存在 `data-user-id`，且不同账号的值确实不同。
+3. `/api/v1/public/chat-messages` 请求体中的 `sessionId` 是否随账号改变。
+4. 退出登录时是否调用 `window.MiaAgentWidget.destroy()` 并移除旧脚本。
+5. 页面是否重复加载了两份 Widget，一份带 `data-user-id`、另一份没有。
+6. 浏览器是否仍缓存不支持 `data-user-id` 的旧版 `mia-agent-widget.min.js`。
+7. 脚本 URL 是否增加版本参数，或 Nginx 是否对该文件返回 `no-cache`。
+
+不要通过清空所有用户历史或共用固定 `data-user-id` 临时规避，这会继续制造权限边界错误。修复后旧匿名会话不会自动迁移到新用户空间；这是为了避免把无法确认归属的历史错误分配给某个账号。
+
+### 8.12 去哪里看运行证据
 
 - **对话**：看知识检索卡片、工具调用卡片和最终回答。
 - **日志**：看模型/工具错误与调用详情。
@@ -1065,6 +1144,7 @@ embedding response count does not match chunk count
 - [ ] Agent 已发布，分享页可以访问。
 - [ ] Service API curl 调用返回正确答案。
 - [ ] 如需网页集成，Widget 已在允许的 Origin 正常显示。
+- [ ] 登录系统中的 Widget 已传入稳定的 `data-user-id`，并用两个账号验证聊天记录互不可见。
 
 建议最后保存以下四条回归问题。每次更换模型、Prompt、Embedding 或文档后重新测试：
 
