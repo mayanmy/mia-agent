@@ -675,6 +675,12 @@
   padding-bottom: 38px;
 }
 
+// 变量数量较多时保持弹层尺寸稳定，只滚动菜单内容，避免遮挡整个工作流画布。
+.workflowVariableDropdown .ant-dropdown-menu {
+  height: 360px;
+  overflow-y: auto;
+}
+
 .workflowNodeIssue {
   background: #fff1d6;
   color: #9a5700;

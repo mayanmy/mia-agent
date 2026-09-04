@@ -10,3 +10,4 @@ backend/.env
 backend/coverage
 backend/storage
 *.tsbuildinfo
+docs/demo

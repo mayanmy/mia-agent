@@ -36,6 +36,7 @@ export function VariableTextArea({ value, variables, autoSize, onChange }: Varia
           onClick: ({ key }) =>
             onChange(`${value}${value && !value.endsWith(" ") ? " " : ""}${key}`)
         }}
+        overlayClassName="workflowVariableDropdown"
         placement="bottomRight"
         trigger={["click"]}
       >
