@@ -204,10 +204,10 @@ export function WorkflowsPage() {
     return node;
   }
 
-  /** 确保 Start/End 的单例约束，并创建带资源默认值的节点。 */
+  /** Start 保持单例；End 可按条件分支分别配置不同的最终输出。 */
   function addNode(type: WorkflowNodeType) {
-    if ((type === "start" || type === "end") && graph.nodes.some((node) => node.type === type)) {
-      message.warning(type === "start" ? "只能有一个开始节点" : "当前已有结束节点");
+    if (type === "start" && graph.nodes.some((node) => node.type === "start")) {
+      message.warning("只能有一个开始节点");
       return;
     }
     const node = createConfiguredNode(type);
@@ -221,10 +221,6 @@ export function WorkflowsPage() {
     sourceHandle: string | undefined,
     type: WorkflowNodeType
   ) {
-    if (type === "end" && graph.nodes.some((node) => node.type === "end")) {
-      message.warning("当前已有结束节点");
-      return;
-    }
     const connectedEdge = graph.edges.find(
       (edge) =>
         edge.source === sourceNodeId &&
@@ -248,10 +244,6 @@ export function WorkflowsPage() {
 
   /** 将新节点事务性插入连线，原 Condition sourceHandle 由 Graph Command 保留。 */
   function insertNode(edgeId: string, type: WorkflowNodeType) {
-    if (type === "end" && graph.nodes.some((node) => node.type === "end")) {
-      message.warning("当前已有结束节点");
-      return;
-    }
     const node = createConfiguredNode(type);
     changeGraph(insertNodeOnEdge(graph, edgeId, node));
     setSelectedNodeId(node.id);
