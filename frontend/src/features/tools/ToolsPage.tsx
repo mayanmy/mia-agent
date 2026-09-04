@@ -13,7 +13,7 @@ import {
   testHttpTool,
   updateHttpTool
 } from "./api";
-import type { HttpToolFormValues, HttpToolListItem } from "./api";
+import type { HttpToolFormValues, HttpToolListItem, HttpToolParameter } from "./api";
 import { HttpToolFormModal } from "./components/HttpToolFormModal";
 import "./tools.less";
 
@@ -64,6 +64,7 @@ export function ToolsPage() {
   const [testInput, setTestInput] = useState("{}");
   const [testResult, setTestResult] = useState("");
   const [testing, setTesting] = useState(false);
+  const [openingTestId, setOpeningTestId] = useState<string | null>(null);
 
   useEffect(() => {
     void refresh();
@@ -162,6 +163,21 @@ export function ToolsPage() {
     });
   }
 
+  async function openTest(tool: HttpToolListItem) {
+    setOpeningTestId(tool.id);
+    try {
+      // 列表响应不包含参数定义，打开测试弹窗时读取详情，避免测试 JSON 与最新配置不一致。
+      const detail = await getHttpTool(tool.id);
+      setTestTool(tool);
+      setTestInput(JSON.stringify(buildTestInput(detail.parameters), null, 2));
+      setTestResult("");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载工具参数失败");
+    } finally {
+      setOpeningTestId(null);
+    }
+  }
+
   async function runTest() {
     if (!testTool) return;
     setTesting(true);
@@ -233,13 +249,10 @@ export function ToolsPage() {
       render: (_, tool) => (
         <Space size={2}>
           <Button
+            loading={openingTestId === tool.id}
             size="small"
             type="link"
-            onClick={() => {
-              setTestTool(tool);
-              setTestInput("{}");
-              setTestResult("");
-            }}
+            onClick={() => void openTest(tool)}
           >
             测试
           </Button>
@@ -323,4 +336,18 @@ function formatAuthType(authType: HttpToolListItem["authType"]): string {
   if (authType === "oauth2_client_credentials") return "Client Credentials";
   if (authType === "custom_token") return "自定义 Token";
   return "无";
+}
+
+function buildTestInput(parameters: HttpToolParameter[]): Record<string, unknown> {
+  return Object.fromEntries(
+    parameters.map((parameter) => [parameter.name, getDefaultParameterValue(parameter.type)])
+  );
+}
+
+function getDefaultParameterValue(type: HttpToolParameter["type"]): unknown {
+  if (type === "number") return 0;
+  if (type === "boolean") return false;
+  if (type === "object") return {};
+  if (type === "array") return [];
+  return "";
 }
