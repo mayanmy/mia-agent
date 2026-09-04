@@ -1,0 +1,15 @@
+{
+  "name": "mia-ops-demo-api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Deterministic operations API fixtures for Mia Workflow demos",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.mjs",
+    "start": "node src/server.mjs",
+    "test": "node --test"
+  }
+}

@@ -229,5 +229,75 @@ export const tests = [
       assert.equal(result.valid, false);
       assert.ok(result.issues.some((issue) => issue.code === "BRANCH_REFERENCE_CONFLICT"));
     }
+  },
+  {
+    name: "WorkflowCompiler allows branch-specific outputs with separate End nodes",
+    run: async () => {
+      const branchGraph: WorkflowGraph = {
+        schemaVersion: 1,
+        nodes: [
+          {
+            id: "start",
+            type: "start",
+            name: "开始",
+            config: { inputs: [{ name: "risk", type: "string", required: true }] }
+          },
+          {
+            id: "condition",
+            type: "condition",
+            name: "风险判断",
+            config: {
+              branches: [{ handle: "low", left: "{{input.risk}}", operator: "eq", right: "low" }],
+              defaultHandle: "high"
+            }
+          },
+          {
+            id: "low-report",
+            type: "template",
+            name: "低风险报告",
+            config: { template: "低风险" }
+          },
+          {
+            id: "high-report",
+            type: "template",
+            name: "高风险报告",
+            config: { template: "待审批" }
+          },
+          {
+            id: "low-end",
+            type: "end",
+            name: "低风险结束",
+            config: {
+              output: { status: "diagnosed", report: "{{nodes.low-report.output.text}}" },
+              answer: "{{nodes.low-report.output.text}}"
+            }
+          },
+          {
+            id: "high-end",
+            type: "end",
+            name: "高风险结束",
+            config: {
+              output: { status: "waiting_approval", report: "{{nodes.high-report.output.text}}" },
+              answer: "{{nodes.high-report.output.text}}"
+            }
+          }
+        ],
+        edges: [
+          { id: "e1", source: "start", target: "condition" },
+          { id: "e2", source: "condition", sourceHandle: "low", target: "low-report" },
+          { id: "e3", source: "condition", sourceHandle: "high", target: "high-report" },
+          { id: "e4", source: "low-report", target: "low-end" },
+          { id: "e5", source: "high-report", target: "high-end" }
+        ]
+      };
+
+      const result = await createCompiler().compile(branchGraph);
+
+      assert.equal(result.valid, true);
+      assert.deepEqual(
+        result.compiledPlan?.topologicalOrder.filter((nodeId) => nodeId.endsWith("-end")),
+        ["low-end", "high-end"]
+      );
+    }
   }
 ];

@@ -6,6 +6,7 @@
   "scripts": {
     "dev:web": "npm --prefix frontend run dev",
     "dev:api": "npm --prefix backend run dev",
+    "dev:ops-demo": "npm --prefix examples/ops-demo-api run dev",
     "build:web": "npm --prefix frontend run build",
     "build:api": "npm --prefix backend run build",
     "typecheck:web": "npm --prefix frontend run typecheck",
@@ -22,6 +23,7 @@
     "build": "npm run build:api && npm run build:web",
     "check": "npm run lint && npm run typecheck",
     "typecheck": "npm run typecheck:api && npm run typecheck:web",
+    "test:ops-demo": "npm --prefix examples/ops-demo-api test",
     "lint": "eslint \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\" \"frontend/scripts/**/*.{js,mjs}\" frontend/vite.config.ts",
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,less,html,yml,yaml}\"",

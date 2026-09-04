@@ -8,6 +8,7 @@ Mia is a locally deployed internal AI Agent platform for small teams.
 mia/
   backend/          NestJS + Prisma API
   frontend/         React + Vite web app
+  examples/         可独立运行的集成演示服务
   docker-compose.yml
   AGENTS.md
   docs/
@@ -65,6 +66,28 @@ URLs:
 Backend:  http://127.0.0.1:8000/api/v1/health
 Frontend: http://127.0.0.1:5173/
 ```
+
+## Workflow 故障诊断示例 API
+
+`examples/ops-demo-api` 提供可重复演示的服务健康检查、日志查询和故障工单接口，
+用于配置 Mia 的 HTTP 工具，不属于 Mia 生产监控能力。
+
+本地启动：
+
+```bash
+npm run dev:ops-demo
+```
+
+或随开发 Compose 启动：
+
+```bash
+docker compose up -d ops-demo-api
+```
+
+当 Mia 后端在同一 Compose 网络中运行时，HTTP 工具使用
+`http://ops-demo-api:3100`；当 Mia 后端直接运行在宿主机时使用
+`http://127.0.0.1:3100`。工具配置需要开启“允许访问私网”。详细参数见
+[`examples/ops-demo-api/README.md`](examples/ops-demo-api/README.md)。
 
 ## Docker deployment
 
