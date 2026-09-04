@@ -16,5 +16,23 @@ services:
       timeout: 5s
       retries: 5
 
+  ops-demo-api:
+    build:
+      context: ./examples/ops-demo-api
+    container_name: mia-ops-demo-api
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3100/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   mia_postgres_data:
