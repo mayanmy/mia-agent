@@ -9,10 +9,10 @@
 .logsFilterPanel {
   align-items: center;
   display: grid;
-  gap: 12px;
+  gap: 10px 12px;
   grid-template-columns: repeat(3, minmax(220px, 1fr));
   min-width: 0;
-  padding: 16px;
+  padding: 12px;
 }
 
 .logsFilterPanel .ant-input,
@@ -54,7 +54,6 @@
 }
 
 .logsFilterActions {
-  grid-column: 1 / -1;
   justify-self: end;
 }
 
@@ -154,6 +153,10 @@
 @media (max-width: 1180px) {
   .logsFilterPanel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .logsFilterActions {
+    grid-column: 1 / -1;
   }
 }
 
