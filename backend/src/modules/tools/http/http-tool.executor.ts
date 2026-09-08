@@ -70,8 +70,8 @@ export class HttpToolExecutor {
       const body = await this.readLimitedResponse(response, config.maxResponseBytes);
 
       return {
-        // 返回配置模板而非展开后的 URL，避免敏感 Path/Query 参数进入 SSE、日志和 Run Trace。
-        url: new URL(config.path, `${config.baseUrl}/`).toString(),
+        // 返回实际展开后的请求地址，便于测试排查；显式标记为敏感的参数仍只展示脱敏值。
+        url: request.displayUrl.toString(),
         status: response.status,
         ok: response.ok,
         contentType: response.headers.get("content-type") ?? "",
@@ -125,9 +125,11 @@ export class HttpToolExecutor {
   private buildRequest(
     config: HttpToolRuntimeConfig,
     input: Record<string, ToolJsonValue>
-  ): { url: URL; init: RequestInit } {
+  ): { url: URL; displayUrl: URL; init: RequestInit } {
     let path = config.path;
+    let displayPath = config.path;
     const query = new URLSearchParams();
+    const displayQuery = new URLSearchParams();
     const body: Record<string, ToolJsonValue> = {};
     const headers = new Headers({ accept: "application/json, text/plain;q=0.9, */*;q=0.8" });
 
@@ -142,9 +144,19 @@ export class HttpToolExecutor {
       if (value === undefined) continue;
 
       if (parameter.location === "path") {
-        path = path.replaceAll(`{${targetName}}`, encodeURIComponent(String(value)));
+        const placeholder = `{${targetName}}`;
+        path = path.replaceAll(placeholder, encodeURIComponent(String(value)));
+        displayPath = displayPath.replaceAll(
+          placeholder,
+          encodeURIComponent(parameter.sensitive ? "[REDACTED]" : String(value))
+        );
       } else if (parameter.location === "query") {
         this.appendQueryValue(query, targetName, value);
+        this.appendQueryValue(
+          displayQuery,
+          targetName,
+          parameter.sensitive ? "[REDACTED]" : value
+        );
       } else if (parameter.location === "header") {
         if (FORBIDDEN_MODEL_HEADERS.has(targetName.toLowerCase())) {
           throw new Error(`${targetName} header is not allowed`);
@@ -160,13 +172,16 @@ export class HttpToolExecutor {
     }
 
     const url = new URL(path, `${config.baseUrl}/`);
+    const displayUrl = new URL(displayPath, `${config.baseUrl}/`);
     query.forEach((value, key) => url.searchParams.append(key, value));
+    displayQuery.forEach((value, key) => displayUrl.searchParams.append(key, value));
     if (config.method === "POST") {
       headers.set("content-type", "application/json");
     }
 
     return {
       url,
+      displayUrl,
       init: {
         method: config.method,
         headers,

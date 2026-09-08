@@ -521,14 +521,52 @@ export const tests = [
           verbose: true
         });
         assert.equal(requestedUrl, "http://127.0.0.1:9000/orders/ORD%201?include_items=true");
+        assert.ok(output && typeof output === "object" && !Array.isArray(output));
+        assert.equal(output.url, requestedUrl);
         assert.equal(requestedHeaders.get("x-tenant-id"), "team-a");
         assert.equal(requestedHeaders.get("authorization"), "Bearer secret-token");
-        assert.ok(output && typeof output === "object" && !Array.isArray(output));
         assert.deepEqual(output.body, {
           id: "ORD 1",
           token: "[REDACTED]",
           note: "[REDACTED] suffix"
         });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
+  },
+
+  {
+    name: "HttpToolExecutor redacts sensitive parameters in the displayed request URL",
+    run: async () => {
+      const executor = new HttpToolExecutor();
+      const originalFetch = globalThis.fetch;
+      let requestedUrl = "";
+      globalThis.fetch = (async (url: string | URL | Request) => {
+        requestedUrl = String(url);
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }) as typeof fetch;
+
+      try {
+        const output = await executor.execute(
+          {
+            ...configuredHttpTool,
+            parameters: configuredHttpTool.parameters.map((parameter) => ({
+              ...parameter,
+              sensitive: true
+            }))
+          },
+          { orderId: "ORD 1", verbose: true }
+        );
+        assert.equal(requestedUrl, "http://127.0.0.1:9000/orders/ORD%201?include_items=true");
+        assert.ok(output && typeof output === "object" && !Array.isArray(output));
+        assert.equal(
+          output.url,
+          "http://127.0.0.1:9000/orders/%5BREDACTED%5D?include_items=%5BREDACTED%5D"
+        );
       } finally {
         globalThis.fetch = originalFetch;
       }
