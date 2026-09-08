@@ -186,13 +186,14 @@ export function AgentRunsPage() {
           onChange={(source) => setFilters({ ...filters, source })}
         />
         <RangePicker
+          className="runFilterRange"
           showTime
           value={filters.range ?? null}
           onChange={(value) =>
             setFilters({ ...filters, range: value?.[0] && value[1] ? [value[0], value[1]] : null })
           }
         />
-        <Space>
+        <Space className="runFilterActions">
           <Button type="primary" onClick={() => void refresh(1, paging.pageSize)}>
             查询
           </Button>
