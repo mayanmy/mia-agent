@@ -133,6 +133,41 @@
   white-space: pre-wrap;
 }
 
+.workflowRunOutput {
+  display: grid;
+  gap: 10px;
+}
+
+.workflowRunMarkdown {
+  background: #f7f9fc;
+  border: 1px solid #e1e6ed;
+  border-radius: 8px;
+  line-height: 1.7;
+  max-height: 360px;
+  overflow: auto;
+  padding: 14px 16px;
+  overflow-wrap: anywhere;
+}
+
+.workflowRunMarkdown > :first-child {
+  margin-top: 0;
+}
+
+.workflowRunMarkdown > :last-child {
+  margin-bottom: 0;
+}
+
+.workflowRunMarkdown ul,
+.workflowRunMarkdown ol {
+  padding-left: 22px;
+}
+
+.workflowRunMarkdown code {
+  background: #edf1f6;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
 .workflowRunResult small {
   color: #7b8798;
   overflow-wrap: anywhere;

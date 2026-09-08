@@ -1,4 +1,6 @@
 import { Alert, Form, Input, InputNumber, Modal, Switch } from "antd";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import type { PublishedWorkflowApp, WorkflowAppRunResult } from "../api";
 
@@ -88,13 +90,50 @@ export function WorkflowRunModal({ app, running, result, onCancel, onRun }: Work
             description={result.error?.message}
             type={result.ok ? "success" : "error"}
           />
-          {result.output ? <pre>{JSON.stringify(result.output, null, 2)}</pre> : null}
+          {result.output ? <WorkflowRunOutput output={result.output} /> : null}
           <small>
             执行事件 {result.events.length} 条 · Request ID {result.requestId}
           </small>
         </div>
       ) : null}
     </Modal>
+  );
+}
+
+const workflowTextOutputKeys = ["summary", "text", "content", "message"] as const;
+
+/** 优先把结束节点的文本正文按 Markdown 展示，其余字段仍保留结构化 JSON。 */
+function WorkflowRunOutput({ output }: { output: Record<string, unknown> }) {
+  const textKey = workflowTextOutputKeys.find((key) => typeof output[key] === "string");
+  if (!textKey) {
+    return <pre>{JSON.stringify(output, null, 2)}</pre>;
+  }
+
+  const text = output[textKey] as string;
+  const remainingOutput = Object.fromEntries(
+    Object.entries(output).filter(([key]) => key !== textKey)
+  );
+
+  return (
+    <div className="workflowRunOutput">
+      <div className="workflowRunMarkdown">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ children, href }) => (
+              <a href={href} rel="noreferrer noopener" target="_blank">
+                {children}
+              </a>
+            )
+          }}
+        >
+          {text}
+        </ReactMarkdown>
+      </div>
+      {Object.keys(remainingOutput).length > 0 ? (
+        <pre>{JSON.stringify(remainingOutput, null, 2)}</pre>
+      ) : null}
+    </div>
   );
 }
 
