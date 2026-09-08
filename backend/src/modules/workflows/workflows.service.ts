@@ -273,6 +273,7 @@ export class WorkflowsService {
     const compiledPlan = compilation.compiledPlan;
     const checksum = compilation.checksum;
 
+    // 发布状态推进与不可变版本快照必须原子提交；Serializable 配合双重乐观锁阻止重复版本号。
     return this.prisma.$transaction(
       async (transaction) => {
         const updated = await transaction.workflow.updateMany({

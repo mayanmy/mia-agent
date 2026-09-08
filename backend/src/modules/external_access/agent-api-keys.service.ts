@@ -95,6 +95,7 @@ export class AgentApiKeysService {
     }
 
     const { rawKey, keyPrefix, keyHash } = this.createRawKey();
+    // 轮换必须先撤销旧 Key 再创建新 Key，并在同一事务中保证任一时刻只有一把有效密钥。
     const record = await this.prisma.$transaction(async (transaction) => {
       await transaction.agentApiKey.update({
         where: { id: existing.id },

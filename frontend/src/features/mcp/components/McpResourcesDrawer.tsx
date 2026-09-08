@@ -56,6 +56,7 @@ export function McpResourcesDrawer({
   const [importTarget, setImportTarget] = useState<McpResourceItem | null>(null);
   const [form] = Form.useForm<ImportValues>();
 
+  // 切换/关闭 Server 时清空上一个 Server 的资源预览和导入目标，避免跨 Server 误导入。
   useEffect(() => {
     if (!server) {
       setPreview(null);
@@ -75,6 +76,7 @@ export function McpResourcesDrawer({
   async function submitImport() {
     if (!importTarget) return;
     const values = await form.validateFields();
+    // 仅在上层确认导入成功后关闭表单；失败时保留目标和输入便于重试。
     if (await onImport(importTarget, values)) {
       setImportTarget(null);
       form.resetFields();

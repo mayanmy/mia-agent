@@ -65,6 +65,7 @@ export class ConfiguredHttpToolsService {
     const data = this.validateCreate(payload);
     await this.ensureSlugAvailable(data.slug);
 
+    // 凭据与工具配置必须原子创建，避免留下无法归属的 Secret 或缺少凭据的工具。
     const tool = await this.prisma.$transaction(async (transaction) => {
       const secret = data.credentialPayload
         ? await transaction.toolSecret.create({
@@ -118,6 +119,7 @@ export class ConfiguredHttpToolsService {
     const data = this.validateUpdate(payload, existing);
     await this.ensureSlugAvailable(data.slug, id);
 
+    // 凭据新增/替换/删除与工具配置更新必须同步提交，防止运行时读取到半更新状态。
     const tool = await this.prisma.$transaction(async (transaction) => {
       let secretId = existing.secretId;
 

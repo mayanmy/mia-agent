@@ -142,6 +142,7 @@ export class UsersService {
           ]
         }
       : {};
+    // 成员列表与总数共用同一事务快照，保证管理员分页展示口径一致。
     const [list, total] = await this.prisma.$transaction([
       this.prisma.user.findMany({
         where,

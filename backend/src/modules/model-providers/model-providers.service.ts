@@ -56,6 +56,7 @@ export class ModelProvidersService {
       deletedAt: null
     };
 
+    // 列表与总数共用同一事务快照，避免高频配置变更时分页元数据短暂不一致。
     const [list, total] = await this.prisma.$transaction([
       this.prisma.modelProvider.findMany({
         where,
@@ -199,6 +200,7 @@ export class ModelProvidersService {
       ...(query.modelType ? { modelType: query.modelType } : {})
     };
 
+    // 列表与总数共用同一事务快照，保证模型配置分页口径一致。
     const [list, total] = await this.prisma.$transaction([
       this.prisma.modelConfig.findMany({
         where,
@@ -278,6 +280,7 @@ export class ModelProvidersService {
     await this.findModelConfigDetail(id);
     await this.ensureModelConfigNotInUse(id);
 
+    // 清理默认模型引用与软删除配置必须原子提交，避免默认设置指向已删除模型。
     await this.prisma.$transaction([
       this.prisma.defaultModelSetting.updateMany({
         where: { chatModelConfigId: id },

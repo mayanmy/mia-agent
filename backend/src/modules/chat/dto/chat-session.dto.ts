@@ -57,11 +57,13 @@ export type UpdateChatSessionDto = {
   title?: string;
 };
 
+/** 成员对 Assistant 消息提交的赞踩和可选原因。 */
 export type ChatMessageFeedbackDto = {
   rating?: "UP" | "DOWN";
   reason?: string;
 };
 
+/** 已保存的消息反馈。 */
 export type ChatMessageFeedbackResponse = {
   messageId: string;
   rating: "UP" | "DOWN";

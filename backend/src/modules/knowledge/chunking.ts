@@ -1,9 +1,14 @@
+/** 保存到知识库的单个文本切片。 */
 export type KnowledgeChunkInput = {
+  /** 文档内从 0 开始的稳定顺序。 */
   chunkIndex: number;
+  /** 已去除首尾空白的切片正文。 */
   content: string;
+  /** 轻量估算值，仅用于容量统计，不作为模型精确计费。 */
   tokenCount: number;
 };
 
+/** 文本切分参数，单位为字符而非模型 token。 */
 export type ChunkTextOptions = {
   chunkSize?: number;
   overlap?: number;
@@ -20,6 +25,7 @@ export function chunkText(text: string, options: ChunkTextOptions = {}): Knowled
   }
 
   const chunkSize = normalizePositiveInteger(options.chunkSize, DEFAULT_CHUNK_SIZE);
+  // overlap 必须小于 chunkSize，否则游标无法前进并会形成死循环。
   const overlap = Math.min(
     normalizePositiveInteger(options.overlap, DEFAULT_OVERLAP),
     chunkSize - 1
@@ -44,6 +50,7 @@ export function chunkText(text: string, options: ChunkTextOptions = {}): Knowled
       break;
     }
 
+    // start + 1 是兜底前进量，防止异常断点使下一轮重复相同区间。
     start = Math.max(end - overlap, start + 1);
   }
 
@@ -58,6 +65,7 @@ function findChunkEnd(text: string, start: number, hardEnd: number): number {
   const slice = text.slice(start, hardEnd);
   const paragraphBreak = slice.lastIndexOf("\n\n");
 
+  // 只在窗口后半段采用自然边界，避免为了完整段落产生过小切片。
   if (paragraphBreak >= Math.floor(slice.length * 0.5)) {
     return start + paragraphBreak + 2;
   }
@@ -91,5 +99,6 @@ function normalizePositiveInteger(value: number | undefined, fallback: number): 
 }
 
 function estimateTokenCount(value: string): number {
+  // V1 不绑定特定 tokenizer，以 4 字符/token 提供稳定且低成本的容量近似。
   return Math.max(1, Math.ceil(value.length / 4));
 }

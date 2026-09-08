@@ -61,6 +61,7 @@ export function getCurrentUser(): Promise<CurrentUser> {
   });
 }
 
+/** 公开激活页可展示的非敏感邀请信息。 */
 export type InvitationValidation = {
   displayName: string;
   email: string;

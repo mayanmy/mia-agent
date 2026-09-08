@@ -382,6 +382,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     const values = this.normalizeCreate(payload);
     const encryptedCredential = this.credentialValue(payload, values.authType as McpAuthType, true);
     try {
+      // Secret 与 Server 引用必须原子创建，避免产生孤立密钥或缺少凭据的运行配置。
       const server = await this.prisma.$transaction(async (tx) => {
         const secret = encryptedCredential
           ? await tx.mcpServerSecret.create({
@@ -427,6 +428,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
           allowPrivateNetwork !== current.allowPrivateNetwork));
 
     try {
+      // 配置、Secret 生命周期和 OAuth 失效处理必须原子提交，运行时不能观察到半更新状态。
       const server = await this.prisma.$transaction(async (tx) => {
         let secretId = current.secretId;
         if (encryptedCredential) {
@@ -573,6 +575,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       const existingByName = new Map(existing.map((tool) => [tool.remoteName, tool]));
       let schemaChangedCount = 0;
 
+      // 工具快照、Server 健康状态与同步任务结果必须一起落库，保证目录版本可追溯。
       await this.prisma.$transaction(async (tx) => {
         for (const tool of tools) {
           const previous = existingByName.get(tool.name);
@@ -640,6 +643,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       const message = this.errorMessage(error, runtimeConfig);
       const elapsedMs = Date.now() - startedAt;
+      // 同步失败时 Server 健康状态与 SyncRun 必须使用同一失败快照。
       await this.prisma.$transaction([
         this.prisma.mcpServer.update({
           where: { id },

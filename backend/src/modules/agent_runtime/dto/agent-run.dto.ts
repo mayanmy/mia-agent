@@ -1,11 +1,13 @@
 import { AgentRunSource } from "@prisma/client";
 
+/** Runtime 接收的内联图片输入。 */
 export type AgentRuntimeImageInput = {
   name: string;
   mimeType: string;
   dataUrl: string;
 };
 
+/** Runtime 接收的已提取文本文件输入。 */
 export type AgentRuntimeFileInput = {
   name: string;
   mimeType: string;
@@ -13,11 +15,13 @@ export type AgentRuntimeFileInput = {
   content: string;
 };
 
+/** 进入模型上下文的标准历史消息。 */
 export type AgentRuntimeHistoryMessage = {
   role: "user" | "assistant";
   content: string;
 };
 
+/** Chat、公开访问和 Workflow 入口调用 Agent Runtime 的统一请求。 */
 export type AgentRunRequest = {
   requestId: string;
   source: AgentRunSource;

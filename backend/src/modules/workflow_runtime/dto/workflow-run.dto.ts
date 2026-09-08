@@ -1,5 +1,6 @@
 import { WorkflowRunMode } from "@prisma/client";
 
+/** 调用 Workflow Runtime 的统一请求。 */
 export type WorkflowRunRequest = {
   requestId: string;
   runId?: string;
@@ -15,6 +16,7 @@ export type WorkflowRunRequest = {
   timeoutMs?: number;
 };
 
+/** Workflow Runtime 对外稳定的节点级错误。 */
 export type WorkflowRuntimeErrorData = {
   type: string;
   message: string;
@@ -22,6 +24,7 @@ export type WorkflowRuntimeErrorData = {
   retryable: boolean;
 };
 
+/** Workflow Runtime 流式状态与 token 事件联合。 */
 export type WorkflowRuntimeEvent =
   | { type: "workflow_started"; data: Record<string, unknown> }
   | { type: "node_started"; data: Record<string, unknown> }

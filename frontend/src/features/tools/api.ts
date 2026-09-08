@@ -1,5 +1,6 @@
 import { request } from "../../shared/api/client";
 
+/** 工具列表统一展示的轻量摘要。 */
 export type ToolListItem = {
   /** Runtime 使用的稳定工具 ID。 */
   id: string;
@@ -15,9 +16,12 @@ export type ToolListItem = {
   workflowVersion?: number;
 };
 
+/** HTTP 工具 V1 允许的请求方法。 */
 export type HttpToolMethod = "GET" | "POST";
+/** HTTP 工具支持的静态和动态鉴权方式。 */
 export type HttpToolAuthType =
   "none" | "bearer" | "api_key_header" | "oauth2_client_credentials" | "custom_token";
+/** 模型参数到 HTTP 请求位置的映射。 */
 export type HttpToolParameter = {
   name: string;
   targetName?: string;
@@ -27,13 +31,16 @@ export type HttpToolParameter = {
   required: boolean;
   sensitive?: boolean;
 };
+/** 管理员配置且模型不能覆盖的固定 Header。 */
 export type HttpToolFixedHeader = { name: string; value: string };
+/** 自定义 Token 请求中的固定值或凭据引用。 */
 export type HttpToolTokenParameter = {
   name: string;
   location: "header" | "query" | "body";
   value?: string;
   credentialKey?: string;
 };
+/** 前端展开编辑的动态 Token 鉴权配置。 */
 export type HttpToolAuthConfig = {
   tokenUrl?: string;
   clientAuthMethod?: "body" | "basic";
@@ -51,8 +58,10 @@ export type HttpToolAuthConfig = {
   defaultTtlSeconds?: number;
   refreshBeforeSeconds?: number;
 };
+/** 只写凭据表单行；详情接口只回传 key。 */
 export type HttpToolCredentialEntry = { key: string; value?: string };
 
+/** HTTP 工具创建/编辑表单的展开字段。 */
 export type HttpToolFormValues = {
   name: string;
   slug: string;
@@ -75,6 +84,7 @@ export type HttpToolFormValues = {
   allowPrivateNetwork: boolean;
 };
 
+/** HTTP 工具管理列表的安全摘要。 */
 export type HttpToolListItem = {
   id: string;
   runtimeId: string;
@@ -91,6 +101,7 @@ export type HttpToolListItem = {
   updatedAt: string;
 };
 
+/** HTTP 工具详情和已配置凭据键，不包含凭据值。 */
 export type HttpToolDetail = HttpToolListItem &
   Omit<HttpToolFormValues, "secret" | "clientId" | "clientSecret" | "credentialEntries"> & {
     authHeaderName: string | null;
@@ -98,6 +109,7 @@ export type HttpToolDetail = HttpToolListItem &
     createdAt: string;
   };
 
+/** 将表单凭据行归一化后的 HTTP 工具请求结构。 */
 export type HttpToolPayload = Omit<
   HttpToolFormValues,
   "clientId" | "clientSecret" | "credentialEntries"
@@ -105,6 +117,7 @@ export type HttpToolPayload = Omit<
   credentials?: Record<string, string>;
 };
 
+/** HTTP 工具测试的统一结果。 */
 export type HttpToolTestResult = {
   ok: boolean;
   output?: unknown;

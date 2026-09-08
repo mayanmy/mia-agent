@@ -599,6 +599,7 @@ export class AgentsService {
     const executionMode = this.normalizeExecutionMode(payload.executionMode);
 
     if (executionMode === AgentExecutionMode.AGENT_LOOP) {
+      // 执行模式与 Workflow 绑定必须原子切换，避免 Agent Loop 仍残留可执行工作流。
       await this.prisma.$transaction([
         this.prisma.agentWorkflow.deleteMany({ where: { agentId: id } }),
         this.prisma.agent.update({
@@ -615,6 +616,7 @@ export class AgentsService {
       "workflowVersionId"
     );
     await this.workflowsService.getPublishedRuntimeConfig(workflowId, workflowVersionId);
+    // 绑定不可变版本与切换执行模式必须同时成功，防止 WORKFLOW 模式缺少运行配置。
     await this.prisma.$transaction([
       this.prisma.agentWorkflow.upsert({
         where: { agentId: id },
@@ -642,6 +644,7 @@ export class AgentsService {
     const toolIds = this.normalizeToolIds(payload.toolIds);
     await this.ensureToolIdsExist(toolIds);
 
+    // 工具绑定采用全量替换，删除旧集合和写入新集合必须在同一事务内完成。
     await this.prisma.$transaction([
       this.prisma.agentTool.deleteMany({
         where: {
@@ -694,6 +697,7 @@ export class AgentsService {
     const knowledgeBaseIds = this.normalizeKnowledgeBaseIds(payload.knowledgeBaseIds);
     await this.knowledgeService.ensureKnowledgeBaseIdsExist(knowledgeBaseIds);
 
+    // 知识库绑定采用全量替换，避免并发读取观察到暂时为空的中间状态。
     await this.prisma.$transaction([
       this.prisma.agentKnowledgeBase.deleteMany({
         where: {

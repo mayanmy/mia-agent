@@ -72,12 +72,14 @@ export type ChatSessionMessage = {
   createdAt: string;
 };
 
+/** 当前成员对 Assistant 消息保存的反馈。 */
 export type ChatMessageFeedback = {
   messageId: string;
   rating: "UP" | "DOWN";
   reason: string | null;
 };
 
+/** 持久消息附带的运行、检索与工具事件快照。 */
 export type ChatMessageMetadata = {
   requestId?: string;
   runId?: string;

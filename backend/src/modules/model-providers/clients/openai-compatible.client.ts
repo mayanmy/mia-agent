@@ -13,6 +13,7 @@ import {
 } from "../dto/llm.dto";
 import { ProviderClient } from "./base.client";
 
+/** OpenAI-compatible 非流式/流式响应中的工具调用原始结构。 */
 type OpenAIToolCall = {
   id?: string;
   type?: "function";
@@ -22,6 +23,7 @@ type OpenAIToolCall = {
   };
 };
 
+/** 流式工具调用会把名称和参数拆成多个 delta，需要按 index 重组。 */
 type OpenAIStreamToolCallDelta = {
   index?: number;
   id?: string;
@@ -32,6 +34,7 @@ type OpenAIStreamToolCallDelta = {
   };
 };
 
+/** 只声明 Mia 实际消费的 Choice 字段，避免上层依赖供应商完整响应。 */
 type OpenAIChatChoice = {
   message?: {
     content?: string;
@@ -68,6 +71,7 @@ type OpenAIEmbeddingResponse = {
 
 @Injectable()
 export class OpenAICompatibleClient implements ProviderClient {
+  /** 将 OpenAI-compatible 非流式协议归一化为 Mia DTO。 */
   async createChatCompletion(
     config: ProviderRuntimeConfig,
     request: ProviderChatRequest
@@ -123,6 +127,7 @@ export class OpenAICompatibleClient implements ProviderClient {
     }
 
     const data = (await response.json()) as OpenAIEmbeddingResponse;
+    // 部分兼容供应商不会按请求顺序返回 data，必须按 index 还原批量输入顺序。
     const embeddings = [...(data.data ?? [])]
       .sort((left, right) => (left.index ?? 0) - (right.index ?? 0))
       .map((item) => item.embedding)
@@ -150,6 +155,7 @@ export class OpenAICompatibleClient implements ProviderClient {
     };
   }
 
+  /** 逐行解析 SSE，并在本层完成跨 chunk 的工具调用参数拼接。 */
   async *streamChatCompletion(
     config: ProviderRuntimeConfig,
     request: ProviderChatRequest
@@ -175,6 +181,7 @@ export class OpenAICompatibleClient implements ProviderClient {
 
     const decoder = new TextDecoder();
     let buffer = "";
+    // 同一轮可能并行生成多个工具调用，index 是流式 delta 唯一稳定的归并键。
     const toolCallAccumulator = new Map<number, OpenAIToolCall>();
     let toolCallsEmitted = false;
 
@@ -191,6 +198,7 @@ export class OpenAICompatibleClient implements ProviderClient {
         }
 
         if (event === "[DONE]") {
+          // 某些兼容实现不返回 finish_reason=tool_calls，只能在 DONE 时补发已累积调用。
           if (!toolCallsEmitted) {
             for (const toolCall of this.parseToolCalls([...toolCallAccumulator.values()])) {
               yield { type: "tool_call", toolCall };
@@ -214,6 +222,7 @@ export class OpenAICompatibleClient implements ProviderClient {
         this.mergeToolCallDeltas(toolCallAccumulator, streamEvent.toolCallDeltas);
 
         if (streamEvent.finishReason === "tool_calls") {
+          // 标记后避免随后的 [DONE] 再次触发同一批工具。
           toolCallsEmitted = true;
 
           for (const toolCall of this.parseToolCalls([...toolCallAccumulator.values()])) {
@@ -223,6 +232,7 @@ export class OpenAICompatibleClient implements ProviderClient {
       }
     }
 
+    // 上游若直接关闭连接但已经形成完整工具调用，仍尽量交付，避免静默丢失。
     if (!toolCallsEmitted) {
       for (const toolCall of this.parseToolCalls([...toolCallAccumulator.values()])) {
         yield { type: "tool_call", toolCall };
@@ -257,6 +267,7 @@ export class OpenAICompatibleClient implements ProviderClient {
       messages: request.messages.map((message) => this.buildMessage(message)),
       stream,
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+      // 仅正整数才下发；null/undefined 表示沿用供应商默认值。
       ...(request.maxTokens ? { max_tokens: request.maxTokens } : {}),
       ...(request.tools && request.tools.length > 0
         ? {
@@ -275,6 +286,7 @@ export class OpenAICompatibleClient implements ProviderClient {
   }
 
   private buildMessage(message: ChatMessage): Record<string, unknown> {
+    // tool 结果必须携带原 tool_call_id，供应商才能把结果关联回 assistant 调用。
     if (message.role === "tool") {
       return {
         role: "tool",
@@ -326,6 +338,7 @@ export class OpenAICompatibleClient implements ProviderClient {
         finishReason: choice?.finish_reason ?? null
       };
     } catch {
+      // 兼容供应商偶尔会混入心跳或非 JSON data 行，忽略单行而不中断整个流。
       return null;
     }
   }
@@ -345,6 +358,7 @@ export class OpenAICompatibleClient implements ProviderClient {
         }
       };
 
+      // arguments 是字符串增量，必须按到达顺序拼接，不能逐段尝试 JSON.parse。
       accumulator.set(index, {
         id: delta.id ?? current.id,
         type: delta.type ?? current.type,
@@ -395,11 +409,13 @@ export class OpenAICompatibleClient implements ProviderClient {
 
       return parsed as Record<string, unknown>;
     } catch {
+      // 保留 rawArguments 供上层记录排障，结构化参数降级为空对象交由工具校验拒绝。
       return {};
     }
   }
 
   private async toProviderError(response: Response): Promise<AppError> {
+    // 错误正文会进入管理员日志，因此在解析阶段统一限制长度，避免超大响应污染日志。
     const text = await response.text();
     const message = this.extractProviderErrorMessage(text);
     const detail = message ? `: ${message}` : "";

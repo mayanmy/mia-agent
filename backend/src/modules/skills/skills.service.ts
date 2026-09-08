@@ -37,6 +37,7 @@ export class SkillsService {
         : {}),
       ...(query.enabled === undefined ? {} : { enabled: this.boolean(query.enabled) })
     };
+    // Skill 列表与总数共用同一事务快照，避免编辑状态变化造成分页口径不一致。
     const [items, total] = await this.prisma.$transaction([
       this.prisma.skill.findMany({
         where,

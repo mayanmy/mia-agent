@@ -138,6 +138,7 @@ export class McpOAuthManager {
         fetchFn: createMcpSafeFetch(config.allowPrivateNetwork)
       });
       if (result !== "AUTHORIZED") throw new Error("MCP OAuth Token 兑换未完成");
+      // Token 已由 Provider 持久化后，再原子更新授权时间与 Server 健康状态。
       await this.prisma.$transaction([
         this.prisma.mcpOAuthAuthorization.update({
           where: { serverId: authorization.serverId },
@@ -169,6 +170,7 @@ export class McpOAuthManager {
 
   /** 本地撤销立即删除 Token；远端撤销端点兼容性作为后续增强，不阻塞本地失效。 */
   async revoke(serverId: string): Promise<void> {
+    // OAuth 临时状态、持久 Token 和 Server 状态必须同时清除，避免 UI 与运行时授权判断分叉。
     await this.prisma.$transaction([
       this.prisma.mcpOAuthAuthorization.updateMany({
         where: { serverId },

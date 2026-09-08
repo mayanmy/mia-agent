@@ -11,6 +11,7 @@ import { ToolCallLogListItem, ToolCallLogQueryDto } from "./dto/log.dto";
 export class LogsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** 并行读取当前页和总数，二者复用同一筛选条件避免口径漂移。 */
   async listToolCallLogs(query: ToolCallLogQueryDto): Promise<PageResult<ToolCallLogListItem>> {
     const page = normalizePageQuery(query);
     const where = this.buildToolCallLogWhere(query);
@@ -52,6 +53,7 @@ export class LogsService {
     const createdFrom = this.parseDate(query.createdFrom, "createdFrom");
     const createdTo = this.parseDate(query.createdTo, "createdTo");
 
+    // 只有至少一个有效边界时才生成 createdAt 条件，避免空对象影响 Prisma 查询语义。
     if (createdFrom || createdTo) {
       where.createdAt = {
         ...(createdFrom ? { gte: createdFrom } : {}),

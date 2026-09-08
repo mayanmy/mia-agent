@@ -1,23 +1,28 @@
 import { request, type PageResult } from "../../shared/api/client";
 import type { CurrentUser, UserRole } from "../auth/types";
 
+/** 成员管理列表中的状态与时间摘要。 */
 export type ManagedUser = CurrentUser & {
   lastLoginAt: string | null;
   disabledAt: string | null;
   createdAt: string;
 };
+/** 管理员直接创建成员的输入。 */
 export type CreateManagedUserPayload = {
   email: string;
   displayName: string;
   password: string;
   role: UserRole;
 };
+/** 管理员更新成员资料、角色和启用状态的输入。 */
 export type UpdateManagedUserPayload = { displayName?: string; role?: UserRole; enabled?: boolean };
+/** 创建一次性成员邀请的输入。 */
 export type CreateUserInvitationPayload = {
   email: string;
   displayName: string;
   role: UserRole;
 };
+/** 创建或重新生成后唯一一次返回的激活链接。 */
 export type UserInvitation = {
   id: string;
   email: string;

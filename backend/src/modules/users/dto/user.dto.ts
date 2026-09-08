@@ -26,18 +26,21 @@ export type CreateUserInput = {
   role: UserRole;
 };
 
+/** 成员管理列表的分页和关键词筛选。 */
 export type UserQueryDto = {
   page?: string;
   pageSize?: string;
   keyword?: string;
 };
 
+/** 成员管理列表中的状态和时间摘要。 */
 export type UserListItem = CurrentUserDto & {
   lastLoginAt: Date | null;
   disabledAt: Date | null;
   createdAt: Date;
 };
 
+/** 管理员直接创建成员时的输入。 */
 export type CreateManagedUserDto = {
   email?: string;
   displayName?: string;
@@ -45,10 +48,12 @@ export type CreateManagedUserDto = {
   role?: UserRole;
 };
 
+/** 管理员更新成员资料、角色和启用状态的输入。 */
 export type UpdateManagedUserDto = {
   displayName?: string;
   role?: UserRole;
   enabled?: boolean;
 };
 
+/** 管理员重置成员密码的输入。 */
 export type ResetUserPasswordDto = { password?: string };

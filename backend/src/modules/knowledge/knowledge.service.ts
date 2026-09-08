@@ -93,6 +93,7 @@ export class KnowledgeService {
       ...(query.enabled !== undefined ? { enabled: this.parseEnabled(query.enabled) } : {})
     };
 
+    // 列表与总数共用同一事务快照，避免文档索引状态更新造成分页口径漂移。
     const [list, total] = await this.prisma.$transaction([
       this.prisma.knowledgeBase.findMany({
         where,
@@ -202,6 +203,7 @@ export class KnowledgeService {
       ...(query.status ? { status: this.normalizeDocumentStatus(query.status) } : {})
     };
 
+    // 文档列表和总数共用同一事务快照，确保后台索引更新期间分页结果自洽。
     const [documents, total] = await this.prisma.$transaction([
       this.prisma.knowledgeDocument.findMany({
         where,
@@ -293,8 +295,12 @@ export class KnowledgeService {
     const deletedAt = new Date();
 
     // 删除文档时同时清理所有维度分表里的向量，避免软删除 chunk 仍被旧索引命中。
-    await this.deleteEmbeddingsForDocument(documentId, this.toVectorNamespace(existing.knowledgeBase));
+    await this.deleteEmbeddingsForDocument(
+      documentId,
+      this.toVectorNamespace(existing.knowledgeBase)
+    );
 
+    // 文档与切片采用软删除，二者必须同时提交，避免已删除文档的 chunk 继续参与业务查询。
     await this.prisma.$transaction([
       this.prisma.knowledgeDocument.update({
         where: {
@@ -353,7 +359,10 @@ export class KnowledgeService {
     });
 
     // 重新索引前先删除旧 embedding，避免旧向量继续参与后续检索。
-    await this.deleteEmbeddingsForDocument(document.id, await this.getVectorNamespace(knowledgeBaseId));
+    await this.deleteEmbeddingsForDocument(
+      document.id,
+      await this.getVectorNamespace(knowledgeBaseId)
+    );
 
     const reindexedDocument = await this.indexTextDocument(processingDocument, buffer);
 
@@ -460,8 +469,7 @@ export class KnowledgeService {
       return;
     }
 
-    const embeddingConfig =
-      await this.getKnowledgeBaseEmbeddingConfig(knowledgeBaseId);
+    const embeddingConfig = await this.getKnowledgeBaseEmbeddingConfig(knowledgeBaseId);
     const response = await this.modelProvidersService.createEmbedding({
       modelConfigId: embeddingConfig.embeddingModelConfigId,
       input: chunks.map((chunk) => chunk.content)
@@ -834,13 +842,13 @@ export class KnowledgeService {
     }
 
     if (file.size > MAX_DOCUMENT_FILE_SIZE) {
-      throw new AppError(
-        ErrorCodes.knowledge.invalidDocument,
-        "file size cannot exceed 20MB"
-      );
+      throw new AppError(ErrorCodes.knowledge.invalidDocument, "file size cannot exceed 20MB");
     }
 
-    const originalname = this.resolveUploadedOriginalFilename(file.originalname, encodedOriginalFilename);
+    const originalname = this.resolveUploadedOriginalFilename(
+      file.originalname,
+      encodedOriginalFilename
+    );
     const extension = extname(originalname).toLowerCase();
 
     if (!ALLOWED_DOCUMENT_EXTENSIONS.has(extension)) {
@@ -890,7 +898,9 @@ export class KnowledgeService {
 
     // multipart 文件名有时会被 multer 按 latin1 暴露，中文会显示成 å、ç、æ 这类乱码。
     // 只有在“转回 UTF-8 后明显更像正常文件名”时才替换，避免误伤正常英文文件名。
-    if (this.getFilenameDecodeScore(decodedFilename) > this.getFilenameDecodeScore(trimmedFilename)) {
+    if (
+      this.getFilenameDecodeScore(decodedFilename) > this.getFilenameDecodeScore(trimmedFilename)
+    ) {
       return decodedFilename;
     }
 

@@ -46,6 +46,7 @@ export function LogsPage() {
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
   const [detailLog, setDetailLog] = useState<ToolCallLogListItem | null>(null);
 
+  // 允许从 Run Trace 携带 requestId 深链到日志页，并阻止卸载后的异步请求回写状态。
   useEffect(() => {
     let disposed = false;
     const initialFilters = initialRequestId ? { requestId: initialRequestId } : {};
@@ -342,6 +343,7 @@ function ToolCallLogDetail({ log }: { log: ToolCallLogListItem }) {
 }
 
 function normalizeFilters(filters: LogFilters): ToolCallLogQuery {
+  // 日期范围转换为 ISO 时间交给后端统一按绝对时间筛选，避免时区口径不一致。
   return {
     requestId: filters.requestId?.trim(),
     agentId: filters.agentId?.trim(),

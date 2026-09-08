@@ -1,11 +1,13 @@
 import { RuntimeError } from "./runtime-error.dto";
 
+/** Runtime 汇总的模型 token 与估算成本。 */
 export type RuntimeUsage = {
   inputTokens?: number;
   outputTokens?: number;
   estimatedCost?: number;
 };
 
+/** run_started 事件携带的模型、会话和执行模式快照。 */
 export type RuntimeRunStartedData = {
   runId?: string;
   agentId: string;
@@ -18,6 +20,7 @@ export type RuntimeRunStartedData = {
   workflowVersionId?: string;
 };
 
+/** Runtime 成功结束时返回的完整内容与运行快照。 */
 export type RuntimeCompletion = {
   runId?: string;
   agentId: string;
@@ -34,6 +37,7 @@ export type RuntimeCompletion = {
   messageId?: string;
 };
 
+/** Agent Runtime 对 Chat/SSE 暴露的固定事件联合。 */
 export type AgentRuntimeEvent =
   | { type: "run_started"; data: RuntimeRunStartedData }
   | { type: "tool_search_started"; data: { boundToolCount: number } }

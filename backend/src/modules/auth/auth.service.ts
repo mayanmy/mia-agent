@@ -81,6 +81,7 @@ export class AuthService {
     const nextRefreshToken = this.tokenService.createRefreshToken();
     const nextExpiresAt = this.tokenService.getRefreshExpiresAt(now);
 
+    // Refresh Token 采用单次轮换：旧 Session 撤销与新 Session 创建必须同时成功，防止并发重放。
     await this.prisma.$transaction(async (transaction) => {
       const revoked = await transaction.authSession.updateMany({
         where: {
@@ -276,6 +277,7 @@ export class AuthService {
     const refreshExpiresAt = this.tokenService.getRefreshExpiresAt(now);
 
     try {
+      // 一次性邀请消费、用户创建和初始 Session 必须原子提交，失败时邀请仍可重试。
       const user = await this.prisma.$transaction(async (transaction) => {
         const consumed = await transaction.userInvitation.updateMany({
           where: {

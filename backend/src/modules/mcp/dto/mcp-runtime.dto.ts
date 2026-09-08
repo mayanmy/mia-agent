@@ -1,5 +1,6 @@
 import { McpClientRuntimeConfig } from "../clients/mcp-protocol-client.factory";
 
+/** 提供给 Agent Runtime 的 MCP 工具定义与审批元数据。 */
 export type McpRuntimeToolDefinition = {
   id: string;
   name: string;

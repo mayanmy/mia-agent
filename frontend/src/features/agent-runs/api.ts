@@ -1,9 +1,12 @@
 import { request, type PageResult } from "../../shared/api/client";
 
+/** Run Trace 页面识别的运行生命周期状态。 */
 export type AgentRunStatus =
   "QUEUED" | "RUNNING" | "WAITING_APPROVAL" | "COMPLETED" | "FAILED" | "CANCELED" | "TIMED_OUT";
+/** Run 的入口来源。 */
 export type AgentRunSource = "INTERNAL_CHAT" | "PUBLIC_WIDGET" | "SERVICE_API" | "ASYNC_TASK";
 
+/** Run Trace 列表中的运行摘要。 */
 export type AgentRunListItem = {
   id: string;
   requestId: string;
@@ -29,6 +32,7 @@ export type AgentRunListItem = {
   stepCount: number;
 };
 
+/** Run 详情中的单个执行步骤。 */
 export type AgentRunStep = {
   id: string;
   sequence: number;
@@ -46,6 +50,7 @@ export type AgentRunStep = {
   finishedAt: string | null;
 };
 
+/** Run 摘要及其外部关联和完整步骤。 */
 export type AgentRunDetail = AgentRunListItem & {
   externalConversationId: string | null;
   estimatedCost: string | null;
@@ -53,6 +58,7 @@ export type AgentRunDetail = AgentRunListItem & {
   steps: AgentRunStep[];
 };
 
+/** Run Trace 页的归属、状态与时间筛选。 */
 export type AgentRunQuery = Partial<{
   page: number;
   pageSize: number;

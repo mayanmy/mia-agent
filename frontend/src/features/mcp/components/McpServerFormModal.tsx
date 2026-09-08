@@ -22,6 +22,7 @@ export function McpServerFormModal({
   onCancel,
   onSubmit
 }: McpServerFormModalProps) {
+  // 认证类型决定动态字段与校验规则；私网开关同步改变 Endpoint 的安全提示。
   const authType = Form.useWatch("authType", form);
   const allowPrivateNetwork = Form.useWatch("allowPrivateNetwork", form);
 
@@ -78,6 +79,7 @@ export function McpServerFormModal({
                 { label: "OAuth Authorization Code + PKCE", value: "oauth" }
               ]}
               onChange={(value) => {
+                // 两种 OAuth 流程的服务端默认认证方式不同，切换时重置为兼容默认值。
                 if (value === "oauth") form.setFieldValue("clientAuthMethod", "none");
                 if (value === "client_credentials") form.setFieldValue("clientAuthMethod", "body");
               }}

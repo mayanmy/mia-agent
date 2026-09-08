@@ -77,6 +77,7 @@ export function SkillsPage() {
     setSaving(true);
     try {
       if (editing) {
+        // revision 作为乐观锁提交，避免覆盖另一管理员刚保存的内容。
         await updateSkill(editing.id, { ...values, expectedRevision: editing.revision });
         message.success("Skill 已更新");
       } else {
@@ -94,6 +95,7 @@ export function SkillsPage() {
 
   async function changeStatus(skill: SkillDetail, enabled: boolean) {
     try {
+      // 状态切换同样携带 revision，服务端拒绝基于旧列表快照的更新。
       const updated = await updateSkillStatus(skill.id, enabled, skill.revision);
       setSkills((items) => items.map((item) => (item.id === updated.id ? updated : item)));
     } catch (error) {

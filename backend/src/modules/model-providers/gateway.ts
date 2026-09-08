@@ -17,6 +17,7 @@ import {
   ProviderRuntimeConfig
 } from "./dto/llm.dto";
 
+/** Prisma 查询结果在模型模块内部转换成运行配置，不向业务模块暴露 ORM Model。 */
 type ModelConfigWithProvider = {
   id: string;
   modelName: string;
@@ -33,9 +34,11 @@ export class ModelProvidersGateway {
     private readonly ollamaClient: OllamaClient
   ) {}
 
+  /** 非流式 Chat 的统一入口，负责配置加载、取消传播、超时和错误归一化。 */
   async createChatCompletion(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
     const { config, messages, timeoutMs } = await this.prepareChatCall(request);
     const controller = new AbortController();
+    // 合并调用方取消与模型级总超时，确保任一条件发生都能关闭上游 HTTP 请求。
     const abort = () => controller.abort();
     request.signal?.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -52,11 +55,13 @@ export class ModelProvidersGateway {
     } catch (error) {
       throw this.normalizeProviderError(error);
     } finally {
+      // 无论成功、失败还是取消都清理定时器与监听器，避免长时间运行后积累闭包。
       clearTimeout(timeout);
       request.signal?.removeEventListener("abort", abort);
     }
   }
 
+  /** Embedding 的统一入口，与 Chat 共用相同取消和错误边界。 */
   async createEmbedding(request: EmbeddingRequest): Promise<EmbeddingResponse> {
     const { config, input, timeoutMs } = await this.prepareEmbeddingCall(request);
     const controller = new AbortController();
@@ -77,6 +82,7 @@ export class ModelProvidersGateway {
     }
   }
 
+  /** 流式 Chat 在生成器 finally 中释放超时和取消监听，覆盖消费者提前停止迭代的场景。 */
   async *streamChatCompletion(request: ChatCompletionRequest): AsyncIterable<ChatStreamChunk> {
     const { config, messages, timeoutMs } = await this.prepareChatCall(request);
     const controller = new AbortController();
@@ -114,6 +120,7 @@ export class ModelProvidersGateway {
         providerId: modelConfig.provider.id,
         providerType: modelConfig.provider.providerType,
         baseUrl: modelConfig.provider.baseUrl,
+        // 密钥只在即将调用供应商时解密，并限制在模型模块运行配置内。
         apiKey: modelConfig.provider.apiKeyEncrypted
           ? decryptSecret(modelConfig.provider.apiKeyEncrypted)
           : "",
@@ -152,6 +159,7 @@ export class ModelProvidersGateway {
   }
 
   private async findModelConfig(id: string): Promise<ModelConfigWithProvider> {
+    // 同时校验模型和供应商启用/软删除状态，避免绕过管理端禁用继续发起外部调用。
     const modelConfig = await this.prisma.modelConfig.findFirst({
       where: {
         id,
@@ -263,6 +271,7 @@ export class ModelProvidersGateway {
   }
 
   private isValidMessageContent(content: unknown, message?: ChatMessage): boolean {
+    // assistant 发起工具调用时允许正文为空，工具调用本身就是有效输出。
     if (message?.role === "assistant" && message.toolCalls && message.toolCalls.length > 0) {
       return typeof content === "string";
     }
@@ -292,6 +301,7 @@ export class ModelProvidersGateway {
           typeof imageUrl === "object" &&
           "url" in imageUrl &&
           typeof imageUrl.url === "string" &&
+          // 当前只接受客户端已内联的图片，禁止模型网关代取任意 URL 形成 SSRF 通道。
           imageUrl.url.startsWith("data:image/")
         );
       }
@@ -322,6 +332,7 @@ export class ModelProvidersGateway {
     }
 
     if (error instanceof Error && error.name === "AbortError") {
+      // 目前调用方取消与超时共用 AbortSignal；上层 Runtime 会再结合自身 signal 映射 canceled。
       return new AppError(
         ErrorCodes.provider.connectionFailed,
         "provider request timeout",

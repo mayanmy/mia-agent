@@ -269,7 +269,11 @@ export class ChatSessionsService {
     });
 
     if (!session) {
-      throw new AppError(ErrorCodes.common.notFound, "chat session not found", HttpStatus.NOT_FOUND);
+      throw new AppError(
+        ErrorCodes.common.notFound,
+        "chat session not found",
+        HttpStatus.NOT_FOUND
+      );
     }
 
     return session;
@@ -325,6 +329,7 @@ export class ChatSessionsService {
     }
 
     const now = new Date();
+    // 消息、会话最后活跃时间和首次自动标题必须原子更新，避免侧栏排序与消息记录不一致。
     return this.prisma.$transaction(async (transaction) => {
       const message = await transaction.chatSessionMessage.create({
         data: {
@@ -363,7 +368,10 @@ export class ChatSessionsService {
       throw new AppError(ErrorCodes.common.badRequest, "feedback rating must be UP or DOWN");
     }
     if (reason && reason.length > 500) {
-      throw new AppError(ErrorCodes.common.badRequest, "feedback reason cannot exceed 500 characters");
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "feedback reason cannot exceed 500 characters"
+      );
     }
     const message = await this.prisma.chatSessionMessage.findFirst({
       where: {
@@ -374,7 +382,11 @@ export class ChatSessionsService {
       select: { id: true }
     });
     if (!message) {
-      throw new AppError(ErrorCodes.common.notFound, "chat message not found", HttpStatus.NOT_FOUND);
+      throw new AppError(
+        ErrorCodes.common.notFound,
+        "chat message not found",
+        HttpStatus.NOT_FOUND
+      );
     }
     const feedback = await this.prisma.chatMessageFeedback.upsert({
       where: { messageId_userId: { messageId, userId } },
@@ -405,7 +417,11 @@ export class ChatSessionsService {
 
     if (!session) {
       // 统一返回 not found，不向调用方泄露某个 sessionId 是否属于其他成员。
-      throw new AppError(ErrorCodes.common.notFound, "chat session not found", HttpStatus.NOT_FOUND);
+      throw new AppError(
+        ErrorCodes.common.notFound,
+        "chat session not found",
+        HttpStatus.NOT_FOUND
+      );
     }
 
     return session;

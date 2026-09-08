@@ -61,6 +61,7 @@ export function KnowledgePage() {
     [modelConfigs]
   );
 
+  // 首次同时加载知识库和模型选项；disposed 防止路由切换后继续回写组件状态。
   useEffect(() => {
     let disposed = false;
     void refresh(1, pagination.pageSize, () => !disposed);
@@ -82,6 +83,7 @@ export function KnowledgePage() {
     setLoading(true);
 
     try {
+      // 两个列表彼此独立，并行请求可避免管理页首屏串行等待。
       const [knowledgeBasePage, modelConfigPage] = await Promise.all([
         listKnowledgeBases(nextPage, nextPageSize),
         listModelConfigs(1, 100)
@@ -237,6 +239,7 @@ export function KnowledgePage() {
     try {
       await uploadKnowledgeDocument(activeKnowledgeBase.id, file);
       message.success("文档已上传");
+      // 文档状态与知识库聚合计数来自不同接口，操作成功后并行刷新两处视图。
       await Promise.all([
         refreshDocuments(activeKnowledgeBase.id, 1, documentPagination.pageSize),
         refresh(pagination.page, pagination.pageSize)
@@ -284,6 +287,7 @@ export function KnowledgePage() {
     try {
       const document = await reindexKnowledgeDocument(activeKnowledgeBase.id, documentId);
 
+      // 重建接口返回最新状态；未到 indexed 必须按失败处理，不能只凭 HTTP 200 提示成功。
       if (document.status !== "indexed") {
         throw new Error(document.errorMessage ?? "重新索引失败");
       }

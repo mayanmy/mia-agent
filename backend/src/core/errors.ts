@@ -1,5 +1,6 @@
 import { HttpStatus } from "@nestjs/common";
 
+/** 对外稳定的业务错误码；HTTP 状态只描述传输语义，客户端分支应依赖这里的 code。 */
 export const ErrorCodes = {
   common: {
     badRequest: 1001,
@@ -85,8 +86,11 @@ export const ErrorCodes = {
   }
 } as const;
 
+/** Service 层统一抛出的业务异常，由全局 Filter 转成固定失败响应。 */
 export class AppError extends Error {
+  /** 稳定业务错误码。 */
   readonly code: number;
+  /** 对应的 HTTP 状态码。 */
   readonly httpStatus: number;
 
   constructor(code: number, message: string, httpStatus = HttpStatus.BAD_REQUEST) {
