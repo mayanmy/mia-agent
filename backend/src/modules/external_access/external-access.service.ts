@@ -215,6 +215,7 @@ export class ExternalAccessService {
 
     return this.prisma.externalConversation.create({
       data: {
+        workspaceId: endUser.workspaceId,
         agentId: owner.agentId,
         externalEndUserId: endUser.id,
         source: owner.source
@@ -251,6 +252,10 @@ export class ExternalAccessService {
   /** 按 Agent、来源和外部隔离键建立唯一 End User，不把业务 user 写入工作台 users 表。 */
   private async upsertEndUser(agentId: string, source: ExternalUserSource, externalId: string) {
     const now = new Date();
+    const agent = await this.prisma.agent.findUniqueOrThrow({
+      where: { id: agentId },
+      select: { workspaceId: true }
+    });
 
     return this.prisma.externalEndUser.upsert({
       where: {
@@ -261,6 +266,7 @@ export class ExternalAccessService {
         }
       },
       create: {
+        workspaceId: agent.workspaceId,
         agentId,
         source,
         externalId,

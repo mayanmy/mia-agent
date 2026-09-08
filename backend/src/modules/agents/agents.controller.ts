@@ -1,11 +1,14 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
+import { UserRole, WorkspaceRole } from "@prisma/client";
 
 import { CurrentUser } from "../../core/auth/current-user.decorator";
+import { CurrentWorkspace } from "../../core/auth/current-workspace.decorator";
 import { Public } from "../../core/auth/public.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRequired, WorkspaceRoles } from "../../core/auth/workspace.decorator";
 import { PageResult } from "../../core/result";
 import { CurrentUserDto } from "../users/dto/user.dto";
+import { CurrentWorkspaceDto } from "../workspaces/dto/workspace.dto";
 import {
   AgentCreateDto,
   AgentDetail,
@@ -24,22 +27,26 @@ import {
 import { AgentsService } from "./agents.service";
 
 @Controller("agents")
+@WorkspaceRequired()
 export class AgentsController {
   constructor(private readonly agentsService: AgentsService) {}
 
   /** 按权限返回 Agent 管理或成员可用列表。 */
   @Get()
   @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRequired()
   async listAgents(
     @Query() query: AgentQueryDto,
-    @CurrentUser() currentUser: CurrentUserDto
+    @CurrentUser() currentUser: CurrentUserDto,
+    @CurrentWorkspace() currentWorkspace: CurrentWorkspaceDto
   ): Promise<PageResult<AgentListItem>> {
-    return this.agentsService.listAgents(query, currentUser);
+    return this.agentsService.listAgents(query, currentUser, currentWorkspace);
   }
 
   /** 创建 Agent 基础配置。 */
   @Post()
   @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async createAgent(@Body() payload: AgentCreateDto): Promise<AgentDetail> {
     return this.agentsService.createAgent(payload);
   }
@@ -54,6 +61,7 @@ export class AgentsController {
   /** 获取 Agent 编辑详情。 */
   @Get(":id")
   @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async getAgent(@Param("id") id: string): Promise<AgentDetail> {
     return this.agentsService.getAgent(id);
   }
@@ -61,6 +69,7 @@ export class AgentsController {
   /** 更新 Agent 基础配置。 */
   @Put(":id")
   @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async updateAgent(
     @Param("id") id: string,
     @Body() payload: AgentUpdateDto
@@ -71,6 +80,7 @@ export class AgentsController {
   /** 软删除 Agent。 */
   @Delete(":id")
   @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async deleteAgent(@Param("id") id: string): Promise<null> {
     await this.agentsService.deleteAgent(id);
     return null;
@@ -79,6 +89,7 @@ export class AgentsController {
   /** 发布 Agent 并返回分享令牌。 */
   @Post(":id/publish")
   @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async publishAgent(@Param("id") id: string): Promise<AgentPublishResult> {
     return this.agentsService.publishAgent(id);
   }
@@ -86,6 +97,7 @@ export class AgentsController {
   /** 取消发布并作废分享入口。 */
   @Delete(":id/publish")
   @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async unpublishAgent(@Param("id") id: string): Promise<AgentPublishResult> {
     return this.agentsService.unpublishAgent(id);
   }
@@ -93,6 +105,7 @@ export class AgentsController {
   /** 获取 Agent 工具绑定。 */
   @Get(":id/tools")
   @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async getAgentTools(@Param("id") id: string): Promise<AgentToolBindingResult> {
     return this.agentsService.getAgentTools(id);
   }
@@ -100,6 +113,7 @@ export class AgentsController {
   /** 批量替换 Agent 工具绑定。 */
   @Put(":id/tools")
   @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async updateAgentTools(
     @Param("id") id: string,
     @Body() payload: AgentToolBindingDto
@@ -110,6 +124,7 @@ export class AgentsController {
   /** 获取 Agent 知识库绑定。 */
   @Get(":id/knowledge-bases")
   @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async getAgentKnowledgeBases(@Param("id") id: string): Promise<AgentKnowledgeBaseBindingResult> {
     return this.agentsService.getAgentKnowledgeBases(id);
   }
@@ -117,6 +132,7 @@ export class AgentsController {
   /** 批量替换 Agent 知识库绑定。 */
   @Put(":id/knowledge-bases")
   @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async updateAgentKnowledgeBases(
     @Param("id") id: string,
     @Body() payload: AgentKnowledgeBaseBindingDto
@@ -126,14 +142,16 @@ export class AgentsController {
 
   /** 获取 Agent 工作流执行策略。 */
   @Get(":id/workflow")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async getAgentWorkflow(@Param("id") id: string): Promise<AgentWorkflowBindingResult> {
     return this.agentsService.getAgentWorkflow(id);
   }
 
   /** 更新 Agent 工作流执行策略。 */
   @Put(":id/workflow")
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async updateAgentWorkflow(
     @Param("id") id: string,
     @Body() payload: AgentWorkflowBindingDto

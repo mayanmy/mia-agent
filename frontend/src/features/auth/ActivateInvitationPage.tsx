@@ -20,7 +20,7 @@ const passwordRules = [
   }
 ];
 
-/** 成员通过管理员发送的一次性链接设置首个密码并激活工作台账号。 */
+/** 用户通过一次性链接创建账号或验证已有账号，并加入指定项目空间。 */
 export function ActivateInvitationPage() {
   const { message } = AntdApp.useApp();
   const { completeLogin } = useAuth();
@@ -80,8 +80,8 @@ export function ActivateInvitationPage() {
     try {
       const response = await acceptInvitation(token, values.password);
       completeLogin(response);
-      message.success("账号已激活");
-      navigate(response.user.role === "ADMIN" ? "/agents" : "/chat", { replace: true });
+      message.success("已加入项目空间");
+      navigate("/agents", { replace: true });
     } catch (error) {
       message.error(error instanceof Error ? error.message : "账号激活失败");
     } finally {
@@ -99,7 +99,7 @@ export function ActivateInvitationPage() {
             <div className="brandMeta">AI Agent 平台</div>
           </div>
         </div>
-        <h1>激活团队账号</h1>
+        <h1>加入项目空间</h1>
         {loading ? (
           <div className="activationLoading">
             <Spin />
@@ -109,12 +109,13 @@ export function ActivateInvitationPage() {
         ) : (
           <>
             <p>
-              {invitation.displayName}，请为 {invitation.email} 设置登录密码。
+              {invitation.displayName}，你将加入“{invitation.workspaceName}”。新账号将使用下方
+              密码完成创建，已有账号请输入当前密码验证身份。
             </p>
             <Form layout="vertical" requiredMark={false} onFinish={handleFinish}>
               <Form.Item label="密码" name="password" rules={passwordRules}>
                 <Input.Password
-                  autoComplete="new-password"
+                  autoComplete="current-password"
                   placeholder="至少 8 位，包含字母和数字"
                   size="large"
                 />

@@ -7,6 +7,7 @@ import {
 } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
+import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   ChatMessageQueryDto,
@@ -89,6 +90,7 @@ export class ChatSessionsService {
   async createSession(owner: SessionOwner): Promise<ChatSessionListItem> {
     const session = await this.prisma.chatSession.create({
       data: {
+        workspaceId: requireWorkspaceId(),
         agentId: owner.agentId,
         userId: owner.userId,
         title: DEFAULT_SESSION_TITLE
@@ -107,6 +109,7 @@ export class ChatSessionsService {
     const cursor = this.decodeUpdatedAtCursor(query.cursor);
     const status = query.status ?? ChatSessionStatus.ACTIVE;
     const where: Prisma.ChatSessionWhereInput = {
+      workspaceId: requireWorkspaceId(),
       agentId: owner.agentId,
       userId: owner.userId,
       status,
@@ -265,7 +268,7 @@ export class ChatSessionsService {
   /** 仅按当前成员查找会话，用于消息详情接口先取得其所属 Agent 再完成模式校验。 */
   async getOwnedSession(sessionId: string, userId: string) {
     const session = await this.prisma.chatSession.findFirst({
-      where: { id: sessionId, userId }
+      where: { id: sessionId, workspaceId: requireWorkspaceId(), userId }
     });
 
     if (!session) {
@@ -410,6 +413,7 @@ export class ChatSessionsService {
     const session = await this.prisma.chatSession.findFirst({
       where: {
         id: sessionId,
+        workspaceId: requireWorkspaceId(),
         agentId: owner.agentId,
         userId: owner.userId
       }

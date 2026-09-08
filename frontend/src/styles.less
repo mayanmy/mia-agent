@@ -101,6 +101,11 @@ a {
   flex: none;
 }
 
+.workspaceSelect {
+  margin: 10px 4px 14px;
+  width: calc(100% - 8px);
+}
+
 .navList {
   display: grid;
   gap: 4px;
@@ -141,6 +146,13 @@ a {
 }
 
 .routeLoading {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.workspaceEmptyState {
   align-items: center;
   display: flex;
   justify-content: center;
@@ -189,6 +201,10 @@ a {
 
 .sidebarCollapsed .sidebarHeader {
   justify-content: center;
+}
+
+.sidebarCollapsed .workspaceSelect {
+  display: none;
 }
 
 .sidebarCollapsed .navItem {

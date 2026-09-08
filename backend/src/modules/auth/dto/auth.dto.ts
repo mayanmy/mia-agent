@@ -1,4 +1,4 @@
-import { UserRole } from "@prisma/client";
+import { UserRole, WorkspaceRole } from "@prisma/client";
 
 /** 登录接口接收的最小凭证，不允许附带角色或用户 ID。 */
 export type LoginDto = {
@@ -37,28 +37,13 @@ export type AuthSessionResponse = AuthResponse & {
   refreshExpiresAt: Date;
 };
 
-/** 管理员生成成员激活链接时提交的资料；不接受初始密码。 */
-export type CreateUserInvitationDto = {
-  email?: string;
-  displayName?: string;
-  role?: UserRole;
-};
-
-/** 管理员仅在创建或重新生成时得到一次可复制的原始链接。 */
-export type UserInvitationResponse = {
-  id: string;
-  email: string;
-  displayName: string;
-  role: UserRole;
-  activateUrl: string;
-  expiresAt: Date;
-};
-
 /** 公开激活页展示的非敏感邀请资料，不返回令牌哈希或管理员信息。 */
 export type InvitationValidationResponse = {
   displayName: string;
   email: string;
   expiresAt: Date;
+  workspaceName: string;
+  role: WorkspaceRole;
 };
 
 /** 成员使用一次性链接设置首个密码的公开请求。 */

@@ -13,9 +13,13 @@ const unusedCompiler = { compile: async () => ({ valid: true, issues: [] }) };
 
 export const tests = [
   {
-    name: "WorkflowsController restricts Workflow management to administrators",
+    name: "WorkflowsController 使用项目空间管理员权限限制 Workflow 管理",
     run: () => {
-      assert.deepEqual(Reflect.getMetadata("mia:roles", WorkflowsController), ["ADMIN"]);
+      assert.deepEqual(Reflect.getMetadata("mia:roles", WorkflowsController), ["ADMIN", "USER"]);
+      assert.deepEqual(Reflect.getMetadata("mia:workspace-roles", WorkflowsController), [
+        "OWNER",
+        "ADMIN"
+      ]);
     }
   },
   {
@@ -57,6 +61,7 @@ export const tests = [
       assert.equal(result.draftRevision, 1);
       assert.equal(result.versionCount, 0);
       assert.deepEqual(createdData?.draftGraph, graph);
+      assert.equal(createdData?.workspaceId, "00000000-0000-4000-8000-000000000001");
       assert.equal(createdData?.createdByUserId, "user-1");
     }
   },
@@ -83,6 +88,7 @@ export const tests = [
 
       assert.deepEqual(updateWhere, {
         id: "workflow-1",
+        workspaceId: "00000000-0000-4000-8000-000000000001",
         deletedAt: null,
         draftRevision: 3
       });

@@ -3,6 +3,7 @@ import { AgentChatSessionMode, AgentExecutionMode, ModelConfigType, Prisma } fro
 import { randomBytes } from "node:crypto";
 
 import { AppError, ErrorCodes } from "../../core/errors";
+import { getWorkspaceId, requireWorkspaceId } from "../../core/auth/workspace-context";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PageResult } from "../../core/result";
 import { KnowledgeService } from "../knowledge/knowledge.service";
@@ -10,6 +11,7 @@ import { ModelProvidersService } from "../model-providers/model-providers.servic
 import { PrismaService } from "../prisma/prisma.service";
 import { ToolsService } from "../tools/tools.service";
 import { CurrentUserDto } from "../users/dto/user.dto";
+import { CurrentWorkspaceDto } from "../workspaces/dto/workspace.dto";
 import { WorkflowsService } from "../workflows/workflows.service";
 import {
   AgentCreateDto,
@@ -134,12 +136,14 @@ export class AgentsService {
    */
   async listAgents(
     query: AgentQueryDto,
-    currentUser?: Pick<CurrentUserDto, "role">
+    _currentUser?: Pick<CurrentUserDto, "role">,
+    currentWorkspace?: Pick<CurrentWorkspaceDto, "role">
   ): Promise<PageResult<AgentListItem>> {
     const page = normalizePageQuery(query);
     const where: Prisma.AgentWhereInput = {
+      workspaceId: requireWorkspaceId(),
       deletedAt: null,
-      ...(currentUser?.role === "USER"
+      ...(currentWorkspace?.role === "MEMBER"
         ? { enabled: true }
         : query.enabled !== undefined
           ? { enabled: this.parseEnabled(query.enabled) }
@@ -188,6 +192,7 @@ export class AgentsService {
 
     const agent = await this.prisma.agent.create({
       data: {
+        workspaceId: requireWorkspaceId(),
         name: data.name,
         description: data.description,
         systemPrompt: data.systemPrompt,
@@ -239,7 +244,7 @@ export class AgentsService {
     }
 
     const agent = await this.prisma.agent.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data: {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.description !== undefined ? { description: data.description } : {}),
@@ -287,7 +292,7 @@ export class AgentsService {
     await this.ensureAgentExists(id);
 
     await this.prisma.agent.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data: {
         deletedAt: new Date(),
         enabled: false
@@ -299,7 +304,7 @@ export class AgentsService {
   async publishAgent(id: string): Promise<AgentPublishResult> {
     await this.ensureAgentExists(id);
     const existing = await this.prisma.agent.findUnique({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       select: {
         shareToken: true,
         executionMode: true,
@@ -322,7 +327,7 @@ export class AgentsService {
     const shareToken = existing?.shareToken || this.createShareToken();
 
     const agent = await this.prisma.agent.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data: {
         published: true,
         publishedAt: new Date(),
@@ -349,7 +354,7 @@ export class AgentsService {
     await this.ensureAgentExists(id);
 
     const agent = await this.prisma.agent.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data: {
         published: false,
         publishedAt: null
@@ -379,7 +384,7 @@ export class AgentsService {
   async rotateShareToken(id: string): Promise<AgentPublishResult> {
     await this.ensureAgentExists(id);
     const agent = await this.prisma.agent.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data: { shareToken: this.createShareToken() },
       select: {
         id: true,
@@ -401,7 +406,7 @@ export class AgentsService {
   async getPublicAccessConfig(id: string): Promise<AgentPublicAccessConfig> {
     await this.ensureAgentExists(id);
     const agent = await this.prisma.agent.findUniqueOrThrow({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       select: {
         publicExpiresAt: true,
         publicAllowedOrigins: true,
@@ -433,7 +438,7 @@ export class AgentsService {
   ): Promise<AgentPublicAccessConfig> {
     await this.ensureAgentExists(id);
     const agent = await this.prisma.agent.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data: {
         publicExpiresAt: input.publicExpiresAt,
         publicAllowedOrigins: input.publicAllowedOrigins,
@@ -572,7 +577,7 @@ export class AgentsService {
   async getAgentWorkflow(id: string): Promise<AgentWorkflowBindingResult> {
     await this.ensureAgentExists(id);
     const agent = await this.prisma.agent.findUniqueOrThrow({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       select: { executionMode: true, agentWorkflow: true }
     });
     return {
@@ -603,7 +608,7 @@ export class AgentsService {
       await this.prisma.$transaction([
         this.prisma.agentWorkflow.deleteMany({ where: { agentId: id } }),
         this.prisma.agent.update({
-          where: { id },
+          where: { id, workspaceId: requireWorkspaceId() },
           data: { executionMode: AgentExecutionMode.AGENT_LOOP }
         })
       ]);
@@ -624,7 +629,7 @@ export class AgentsService {
         update: { workflowId, workflowVersionId }
       }),
       this.prisma.agent.update({
-        where: { id },
+        where: { id, workspaceId: requireWorkspaceId() },
         data: { executionMode: AgentExecutionMode.WORKFLOW }
       })
     ]);
@@ -1015,6 +1020,7 @@ export class AgentsService {
     const existing = await this.prisma.agent.findFirst({
       where: {
         id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
         deletedAt: null
       },
       select: {
@@ -1055,6 +1061,7 @@ export class AgentsService {
     const modelConfig = await this.prisma.modelConfig.findFirst({
       where: {
         id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
         deletedAt: null,
         enabled: true,
         modelType: ModelConfigType.CHAT,
@@ -1100,6 +1107,7 @@ export class AgentsService {
     const agent = await this.prisma.agent.findFirst({
       where: {
         id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
         deletedAt: null
       },
       include: {

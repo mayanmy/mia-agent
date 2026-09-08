@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import { createHash, randomBytes } from "node:crypto";
 
 import { AppError, ErrorCodes } from "../../core/errors";
+import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { AgentsService } from "../agents/agents.service";
 import { PrismaService } from "../prisma/prisma.service";
 import {
@@ -31,6 +32,7 @@ export class AgentApiKeysService {
     const { rawKey, keyPrefix, keyHash } = this.createRawKey();
     const record = await this.prisma.agentApiKey.create({
       data: {
+        workspaceId: requireWorkspaceId(),
         agentId,
         createdById,
         name,
@@ -51,7 +53,7 @@ export class AgentApiKeysService {
   async list(agentId: string): Promise<AgentApiKeyListItem[]> {
     await this.agentsService.getAgent(agentId);
     const records = await this.prisma.agentApiKey.findMany({
-      where: { agentId },
+      where: { workspaceId: requireWorkspaceId(), agentId },
       orderBy: { createdAt: "desc" }
     });
 
@@ -63,6 +65,7 @@ export class AgentApiKeysService {
   async revoke(agentId: string, keyId: string): Promise<void> {
     const result = await this.prisma.agentApiKey.updateMany({
       where: {
+        workspaceId: requireWorkspaceId(),
         id: keyId,
         agentId,
         revokedAt: null
@@ -84,6 +87,7 @@ export class AgentApiKeysService {
   async rotate(agentId: string, keyId: string, createdById: string): Promise<CreatedAgentApiKey> {
     const existing = await this.prisma.agentApiKey.findFirst({
       where: {
+        workspaceId: requireWorkspaceId(),
         id: keyId,
         agentId,
         revokedAt: null
@@ -104,6 +108,7 @@ export class AgentApiKeysService {
 
       return transaction.agentApiKey.create({
         data: {
+          workspaceId: existing.workspaceId,
           agentId,
           createdById,
           name: existing.name,

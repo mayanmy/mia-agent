@@ -17,6 +17,7 @@ import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Public } from "../../core/auth/public.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRequired } from "../../core/auth/workspace.decorator";
 import { RequestWithId } from "../../core/request-id.middleware";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import { AgentApiKeysService } from "./agent-api-keys.service";
@@ -36,6 +37,7 @@ import { AgentApiKeyGuard, AgentApiKeyRequest } from "./guards/agent-api-key.gua
 import { PublicAccessService } from "./public-access.service";
 
 @Controller("agents")
+@WorkspaceRequired()
 export class AgentApiKeysController {
   constructor(
     private readonly agentApiKeysService: AgentApiKeysService,

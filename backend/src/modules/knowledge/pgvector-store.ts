@@ -33,15 +33,17 @@ export class PgvectorVectorStore implements VectorStore {
     await this.prisma.$executeRawUnsafe(
       `INSERT INTO "${tableName}" (
         "id",
+        "workspace_id",
         "knowledge_base_id",
         "chunk_id",
         "embedding_model_config_id",
         "embedding"
-      ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::vector)
+      ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6::vector)
       ON CONFLICT ("chunk_id") DO UPDATE SET
         "embedding_model_config_id" = EXCLUDED."embedding_model_config_id",
         "embedding" = EXCLUDED."embedding"`,
       randomUUID(),
+      input.workspaceId,
       input.knowledgeBaseId,
       input.chunkId,
       input.embeddingModelConfigId,
@@ -110,11 +112,15 @@ export class PgvectorVectorStore implements VectorStore {
       INNER JOIN "knowledge_documents" d ON d."id" = c."document_id"
       WHERE c."deleted_at" IS NULL
         AND d."deleted_at" IS NULL
-        AND c."knowledge_base_id" = ANY($2::uuid[])
-        AND e."embedding_model_config_id" = $3::uuid
+        AND c."workspace_id" = $2::uuid
+        AND d."workspace_id" = $2::uuid
+        AND e."workspace_id" = $2::uuid
+        AND c."knowledge_base_id" = ANY($3::uuid[])
+        AND e."embedding_model_config_id" = $4::uuid
       ORDER BY e."embedding" <=> $1::vector
-      LIMIT $4`,
+      LIMIT $5`,
       embeddingLiteral,
+      input.workspaceId,
       input.knowledgeBaseIds,
       input.embeddingModelConfigId,
       input.topK
@@ -155,4 +161,3 @@ export class PgvectorVectorStore implements VectorStore {
     throw new Error(`暂不支持 ${embeddingDimension} 维 Embedding 向量表`);
   }
 }
-

@@ -1,9 +1,22 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req, Res } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+  Res
+} from "@nestjs/common";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { UserRole } from "@prisma/client";
 
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRequired } from "../../core/auth/workspace.decorator";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import { RequestWithId } from "../../core/request-id.middleware";
 import { ChatService } from "./chat.service";
@@ -18,6 +31,7 @@ import {
 
 @Controller("chat")
 @Roles(UserRole.ADMIN, UserRole.USER)
+@WorkspaceRequired()
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 

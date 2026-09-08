@@ -1,13 +1,15 @@
 import { Controller, Get, Param, Query } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
+import { UserRole, WorkspaceRole } from "@prisma/client";
 
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRoles } from "../../core/auth/workspace.decorator";
 import { PageResult } from "../../core/result";
 import { AgentRunsService } from "./agent-runs.service";
 import { AgentRunDetail, AgentRunListItem, AgentRunQueryDto } from "./dto/agent-run-query.dto";
 
 @Controller("agent-runs")
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.USER)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
 export class AgentRunsController {
   constructor(private readonly agentRunsService: AgentRunsService) {}
 

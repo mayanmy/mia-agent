@@ -78,6 +78,7 @@ export class RetrievalService {
           await Promise.all(
             group.knowledgeBases.map((knowledgeBase) =>
               this.vectorStore.search({
+                workspaceId: group.workspaceId,
                 namespace: knowledgeBase.namespace,
                 embedding,
                 embeddingDimension: group.embeddingDimension,
@@ -109,12 +110,14 @@ export class RetrievalService {
   private groupRetrievalConfigs(
     configs: Array<{
       id: string;
+      workspaceId: string;
       embeddingModelConfigId: string;
       embeddingDimension: number;
       vectorStoreType: "PGVECTOR";
       vectorCollectionName: string;
     }>
   ): Array<{
+    workspaceId: string;
     embeddingModelConfigId: string;
     embeddingDimension: number;
     knowledgeBases: Array<{ id: string; namespace: VectorIndexNamespace }>;
@@ -122,6 +125,7 @@ export class RetrievalService {
     const groups = new Map<
       string,
       {
+        workspaceId: string;
         embeddingModelConfigId: string;
         embeddingDimension: number;
         knowledgeBases: Array<{ id: string; namespace: VectorIndexNamespace }>;
@@ -140,6 +144,7 @@ export class RetrievalService {
 
       if (!existing) {
         groups.set(config.embeddingModelConfigId, {
+          workspaceId: config.workspaceId,
           embeddingModelConfigId: config.embeddingModelConfigId,
           embeddingDimension: config.embeddingDimension,
           knowledgeBases: [knowledgeBase]
@@ -151,6 +156,10 @@ export class RetrievalService {
         throw new Error(
           `Embedding 向量维度不匹配：同一个 Embedding 模型绑定了 ${existing.embeddingDimension} 维和 ${config.embeddingDimension} 维知识库，请重建配置异常的知识库。`
         );
+      }
+
+      if (existing.workspaceId !== config.workspaceId) {
+        throw new Error("禁止跨项目空间合并知识库检索");
       }
 
       existing.knowledgeBases.push(knowledgeBase);

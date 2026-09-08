@@ -12,6 +12,7 @@ export type VectorIndexNamespace = {
 
 /** 写入单个切片向量所需的完整维度与模型约束。 */
 export type VectorStoreUpsertEmbeddingInput = {
+  workspaceId: string;
   namespace: VectorIndexNamespace;
   knowledgeBaseId: string;
   chunkId: string;
@@ -23,6 +24,7 @@ export type VectorStoreUpsertEmbeddingInput = {
 
 /** 跨一个或多个已授权知识库执行向量检索的输入。 */
 export type VectorStoreSearchInput = {
+  workspaceId: string;
   namespace: VectorIndexNamespace;
   embedding: number[];
   embeddingDimension: number;

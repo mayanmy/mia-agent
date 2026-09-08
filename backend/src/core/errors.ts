@@ -83,6 +83,14 @@ export const ErrorCodes = {
     notFound: 9101,
     revisionConflict: 9102,
     invalidContent: 9103
+  },
+  workspace: {
+    required: 9201,
+    notFound: 9202,
+    forbidden: 9203,
+    memberNotFound: 9204,
+    invitationConflict: 9205,
+    ownerRequired: 9206
   }
 } as const;
 

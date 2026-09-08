@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Post, Put } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
+import { UserRole, WorkspaceRole } from "@prisma/client";
 
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRequired, WorkspaceRoles } from "../../core/auth/workspace.decorator";
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import { ConfiguredHttpToolsService } from "./configured-http-tools.service";
@@ -18,6 +19,7 @@ import { ToolsService } from "./tools.service";
 
 @Controller("tools")
 @Roles(UserRole.ADMIN, UserRole.USER)
+@WorkspaceRequired()
 export class ToolsController {
   constructor(
     private readonly toolsService: ToolsService,
@@ -32,14 +34,14 @@ export class ToolsController {
 
   /** HTTP 工具配置属于管理员运维面。 */
   @Get("http")
-  @Roles(UserRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async listHttpTools(): Promise<HttpToolListItem[]> {
     return this.configuredHttpTools.listHttpTools();
   }
 
   /** 创建时使用当前管理员作为工具和凭据审计主体。 */
   @Post("http")
-  @Roles(UserRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async createHttpTool(
     @Body() payload: HttpToolCreateDto,
     @CurrentUser() currentUser: CurrentUserDto
@@ -49,14 +51,14 @@ export class ToolsController {
 
   /** 详情只回显非敏感配置。 */
   @Get("http/:id")
-  @Roles(UserRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async getHttpTool(@Param("id") id: string): Promise<HttpToolDetail> {
     return this.configuredHttpTools.getHttpTool(id);
   }
 
   /** 更新凭据时允许留空以保留原 Secret。 */
   @Put("http/:id")
-  @Roles(UserRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async updateHttpTool(
     @Param("id") id: string,
     @Body() payload: HttpToolUpdateDto,
@@ -67,7 +69,7 @@ export class ToolsController {
 
   /** 删除使用软删除，保留历史 Run Trace 的工具标识。 */
   @Delete("http/:id")
-  @Roles(UserRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async deleteHttpTool(@Param("id") id: string): Promise<null> {
     await this.configuredHttpTools.deleteHttpTool(id);
     return null;
@@ -75,7 +77,7 @@ export class ToolsController {
 
   /** 测试调用复用正式 Executor，确保安全策略和 Runtime 一致。 */
   @Post("http/:id/test")
-  @Roles(UserRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async testHttpTool(
     @Param("id") id: string,
     @Body() payload: HttpToolTestDto,

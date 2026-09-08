@@ -1,8 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
+import { UserRole, WorkspaceRole } from "@prisma/client";
 
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRoles } from "../../core/auth/workspace.decorator";
 import type { PageResult } from "../../core/result";
 import type { CurrentUserDto } from "../users/dto/user.dto";
 import type {
@@ -15,7 +16,8 @@ import type {
 import { SkillsService } from "./skills.service";
 
 @Controller("skills")
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.USER)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
 export class SkillsController {
   constructor(private readonly skillsService: SkillsService) {}
 

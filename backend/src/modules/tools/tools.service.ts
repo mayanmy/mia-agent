@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 
+import { getWorkspaceId } from "../../core/auth/workspace-context";
 import { PrismaService } from "../prisma/prisma.service";
 import { McpService } from "../mcp/mcp.service";
 import { McpToolExecutor } from "../mcp/mcp-tool.executor";
@@ -274,10 +275,31 @@ export class ToolsService {
     }
 
     try {
+      const workspaceId =
+        getWorkspaceId() ??
+        (record.runId
+          ? (
+              await this.prismaService.agentRun.findUnique({
+                where: { id: record.runId },
+                select: { workspaceId: true }
+              })
+            )?.workspaceId
+          : null) ??
+        (record.agentId
+          ? (
+              await this.prismaService.agent.findUnique({
+                where: { id: record.agentId },
+                select: { workspaceId: true }
+              })
+            )?.workspaceId
+          : null);
+      if (!workspaceId) return;
+
       // 使用 Prisma create 让 schema 的 @default(uuid()) 生成主键；原始 INSERT 未写 id，
       // 在数据库默认值被迁移移除后会持续违反非空约束。
       await this.prismaService.toolCallLog.create({
         data: {
+          workspaceId,
           requestId: record.requestId,
           runId: record.runId,
           stepId: record.stepId,

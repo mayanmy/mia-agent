@@ -4,6 +4,7 @@ import type { TableProps } from "antd";
 import type { KnowledgeBaseTableItem } from "../types";
 
 export function KnowledgeBaseTable({
+  canManage,
   knowledgeBases,
   loading,
   pagination,
@@ -12,6 +13,8 @@ export function KnowledgeBaseTable({
   onDelete,
   onOpenDocuments
 }: {
+  /** 是否允许查看文档和修改知识库配置。 */
+  canManage: boolean;
   knowledgeBases: KnowledgeBaseTableItem[];
   loading: boolean;
   pagination: { page: number; pageSize: number; total: number };
@@ -20,7 +23,7 @@ export function KnowledgeBaseTable({
   onDelete: (id: string) => void;
   onOpenDocuments: (knowledgeBase: KnowledgeBaseTableItem) => void;
 }) {
-  const columns: TableProps<KnowledgeBaseTableItem>["columns"] = [
+  const columns: NonNullable<TableProps<KnowledgeBaseTableItem>["columns"]> = [
     {
       title: "名称",
       dataIndex: "name",
@@ -77,8 +80,11 @@ export function KnowledgeBaseTable({
       key: "updatedAt",
       width: 180,
       render: (updatedAt: string) => formatDate(updatedAt)
-    },
-    {
+    }
+  ];
+
+  if (canManage) {
+    columns.push({
       title: "操作",
       key: "actions",
       fixed: "right",
@@ -96,8 +102,8 @@ export function KnowledgeBaseTable({
           </Button>
         </Space>
       )
-    }
-  ];
+    });
+  }
 
   return (
     <Table<KnowledgeBaseTableItem>

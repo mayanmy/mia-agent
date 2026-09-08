@@ -4,6 +4,7 @@ import {
   notifyUnauthorized,
   refreshAccessToken
 } from "../../features/auth/auth-session";
+import { getActiveWorkspaceId } from "../../features/workspaces/workspace-session";
 
 export type Result<T> = {
   code: number;
@@ -34,6 +35,11 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
  * 主动刷新、轮询等调用可显式传入 dedupe: false。
  */
 const inFlightGetRequests = new Map<string, Promise<unknown>>();
+
+/** 切换项目空间或退出登录时清理仅用于请求合并的瞬时缓存。 */
+export function clearRequestDedupeCache(): void {
+  inFlightGetRequests.clear();
+}
 
 export async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   const { dedupe = true, ...init } = options ?? {};
@@ -75,6 +81,7 @@ function createGetRequestKey(path: string, init: RequestInit): string {
   return JSON.stringify({
     url: `${apiBaseUrl}${path}`,
     accessToken: getAccessToken() ?? "",
+    workspaceId: getActiveWorkspaceId() ?? "",
     headers,
     credentials: init.credentials ?? "include",
     cache: init.cache ?? "default"
@@ -113,12 +120,14 @@ export async function fetchWithAuth(
   const isFormData = init?.body instanceof FormData;
   // 记录本次请求实际使用的 Token，用于识别刷新完成后才返回的迟到 401。
   const requestAccessToken = getAccessToken();
+  const workspaceId = getActiveWorkspaceId();
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     credentials: "include",
     headers: {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(requestAccessToken ? { Authorization: `Bearer ${requestAccessToken}` } : {}),
+      ...(workspaceId ? { "X-Workspace-ID": workspaceId } : {}),
       ...init?.headers
     }
   });

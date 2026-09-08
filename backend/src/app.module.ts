@@ -18,14 +18,17 @@ import { ToolsModule } from "./modules/tools/tools.module";
 import { UsersModule } from "./modules/users/users.module";
 import { WorkflowsModule } from "./modules/workflows/workflows.module";
 import { WorkflowRuntimeModule } from "./modules/workflow_runtime/workflow-runtime.module";
+import { WorkspacesModule } from "./modules/workspaces/workspaces.module";
 import { JwtAuthGuard } from "./core/auth/jwt-auth.guard";
 import { RolesGuard } from "./core/auth/roles.guard";
+import { WorkspaceGuard, WorkspaceRolesGuard } from "./core/auth/workspace.guard";
 
 @Module({
   imports: [
     PrismaModule,
     UsersModule,
     AuthModule,
+    WorkspacesModule,
     HealthModule,
     ModelProvidersModule,
     McpModule,
@@ -50,6 +53,14 @@ import { RolesGuard } from "./core/auth/roles.guard";
     {
       provide: APP_GUARD,
       useClass: RolesGuard
+    },
+    {
+      provide: APP_GUARD,
+      useClass: WorkspaceGuard
+    },
+    {
+      provide: APP_GUARD,
+      useClass: WorkspaceRolesGuard
     }
   ]
 })

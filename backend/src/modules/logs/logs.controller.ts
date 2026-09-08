@@ -1,13 +1,15 @@
 import { Controller, Get, Query } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
+import { UserRole, WorkspaceRole } from "@prisma/client";
 
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRoles } from "../../core/auth/workspace.decorator";
 import { PageResult } from "../../core/result";
 import { ToolCallLogListItem, ToolCallLogQueryDto } from "./dto/log.dto";
 import { LogsService } from "./logs.service";
 
 @Controller("logs")
 @Roles(UserRole.ADMIN, UserRole.USER)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
 export class LogsController {
   constructor(private readonly logsService: LogsService) {}
 

@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import { ModelConfigType, ModelProvider, ModelProviderType, Prisma } from "@prisma/client";
 
 import { decryptSecret, encryptSecret } from "../../core/crypto";
+import { getWorkspaceId, requireWorkspaceId } from "../../core/auth/workspace-context";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PageResult } from "../../core/result";
@@ -53,6 +54,7 @@ export class ModelProvidersService {
   async listProviders(query: ProviderQueryDto): Promise<PageResult<ProviderListItem>> {
     const page = normalizePageQuery(query);
     const where: Prisma.ModelProviderWhereInput = {
+      workspaceId: requireWorkspaceId(),
       deletedAt: null
     };
 
@@ -81,6 +83,7 @@ export class ModelProvidersService {
 
     const provider = await this.prisma.modelProvider.create({
       data: {
+        workspaceId: requireWorkspaceId(),
         name: data.name,
         providerType: data.providerType,
         baseUrl: data.baseUrl,
@@ -107,7 +110,7 @@ export class ModelProvidersService {
     }
 
     const provider = await this.prisma.modelProvider.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data: {
         ...(data.name ? { name: data.name } : {}),
         ...(data.providerType ? { providerType: data.providerType } : {}),
@@ -129,6 +132,7 @@ export class ModelProvidersService {
     const activeModelConfigCount = await this.prisma.modelConfig.count({
       where: {
         providerId: id,
+        workspaceId: requireWorkspaceId(),
         deletedAt: null
       }
     });
@@ -142,7 +146,7 @@ export class ModelProvidersService {
     }
 
     await this.prisma.modelProvider.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data: { deletedAt: new Date(), enabled: false }
     });
   }
@@ -195,6 +199,7 @@ export class ModelProvidersService {
   async listModelConfigs(query: ModelConfigQueryDto): Promise<PageResult<ModelConfigListItem>> {
     const page = normalizePageQuery(query);
     const where: Prisma.ModelConfigWhereInput = {
+      workspaceId: requireWorkspaceId(),
       deletedAt: null,
       ...(query.providerId ? { providerId: query.providerId } : {}),
       ...(query.modelType ? { modelType: query.modelType } : {})
@@ -226,7 +231,7 @@ export class ModelProvidersService {
     await this.ensureModelCapability(provider, data.modelName, data.modelType);
 
     const config = await this.prisma.modelConfig.create({
-      data,
+      data: { ...data, workspaceId: requireWorkspaceId() },
       include: { provider: true }
     });
 
@@ -268,7 +273,7 @@ export class ModelProvidersService {
     await this.ensureModelCapability(provider, modelName, modelType);
 
     const config = await this.prisma.modelConfig.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data,
       include: { provider: true }
     });
@@ -283,15 +288,15 @@ export class ModelProvidersService {
     // 清理默认模型引用与软删除配置必须原子提交，避免默认设置指向已删除模型。
     await this.prisma.$transaction([
       this.prisma.defaultModelSetting.updateMany({
-        where: { chatModelConfigId: id },
+        where: { workspaceId: requireWorkspaceId(), chatModelConfigId: id },
         data: { chatModelConfigId: null }
       }),
       this.prisma.defaultModelSetting.updateMany({
-        where: { embeddingModelConfigId: id },
+        where: { workspaceId: requireWorkspaceId(), embeddingModelConfigId: id },
         data: { embeddingModelConfigId: null }
       }),
       this.prisma.modelConfig.update({
-        where: { id },
+        where: { id, workspaceId: requireWorkspaceId() },
         data: { deletedAt: new Date(), enabled: false }
       })
     ]);
@@ -339,6 +344,7 @@ export class ModelProvidersService {
     const config = await this.prisma.modelConfig.findFirst({
       where: {
         id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
         modelType,
         enabled: true,
         deletedAt: null,
@@ -365,6 +371,7 @@ export class ModelProvidersService {
     const config = await this.prisma.modelConfig.findFirst({
       where: {
         id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
         modelType: ModelConfigType.EMBEDDING,
         enabled: true,
         deletedAt: null,
@@ -410,6 +417,7 @@ export class ModelProvidersService {
     await this.prisma.modelConfig.updateMany({
       where: {
         id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
         modelType: ModelConfigType.EMBEDDING,
         deletedAt: null
       },
@@ -433,10 +441,12 @@ export class ModelProvidersService {
       await this.ensureDefaultModelConfig(embeddingModelConfigId, ModelConfigType.EMBEDDING);
     }
 
+    const workspaceId = requireWorkspaceId();
     const settings = await this.prisma.defaultModelSetting.upsert({
-      where: { id: "global" },
+      where: { workspaceId },
       create: {
-        id: "global",
+        id: workspaceId,
+        workspaceId,
         chatModelConfigId,
         embeddingModelConfigId
       },
@@ -693,7 +703,7 @@ export class ModelProvidersService {
 
   private async ensureProviderExists(id: string): Promise<ModelProvider> {
     const provider = await this.prisma.modelProvider.findFirst({
-      where: { id, deletedAt: null }
+      where: { id, workspaceId: requireWorkspaceId(), deletedAt: null }
     });
 
     if (!provider) {
@@ -706,6 +716,7 @@ export class ModelProvidersService {
   private async ensureProviderNameAvailable(name: string, excludeId?: string): Promise<void> {
     const existing = await this.prisma.modelProvider.findFirst({
       where: {
+        workspaceId: requireWorkspaceId(),
         name,
         deletedAt: null,
         ...(excludeId ? { id: { not: excludeId } } : {})
@@ -723,8 +734,10 @@ export class ModelProvidersService {
 
   private async findProviderDetail(id: string) {
     const provider = await this.prisma.modelProvider.findFirst({
-      where: { id, deletedAt: null },
-      include: { modelConfigs: { where: { deletedAt: null } } }
+      where: { id, workspaceId: requireWorkspaceId(), deletedAt: null },
+      include: {
+        modelConfigs: { where: { workspaceId: requireWorkspaceId(), deletedAt: null } }
+      }
     });
 
     if (!provider) {
@@ -742,6 +755,7 @@ export class ModelProvidersService {
   ): Promise<void> {
     const existing = await this.prisma.modelConfig.findFirst({
       where: {
+        workspaceId: requireWorkspaceId(),
         providerId,
         modelName,
         modelType,
@@ -1093,7 +1107,7 @@ export class ModelProvidersService {
 
   private async findModelConfigDetail(id: string) {
     const config = await this.prisma.modelConfig.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, workspaceId: requireWorkspaceId(), deletedAt: null },
       include: { provider: true }
     });
 
@@ -1110,7 +1124,7 @@ export class ModelProvidersService {
 
   private async findDefaultModelSettings() {
     return this.prisma.defaultModelSetting.findUnique({
-      where: { id: "global" },
+      where: { workspaceId: requireWorkspaceId() },
       include: {
         chatModelConfig: true,
         embeddingModelConfig: true
@@ -1122,6 +1136,7 @@ export class ModelProvidersService {
     const modelConfig = await this.prisma.modelConfig.findFirst({
       where: {
         id,
+        workspaceId: requireWorkspaceId(),
         modelType,
         enabled: true,
         deletedAt: null,
@@ -1145,6 +1160,7 @@ export class ModelProvidersService {
     const [agent, knowledgeBase] = await Promise.all([
       this.prisma.agent.findFirst({
         where: {
+          workspaceId: requireWorkspaceId(),
           modelConfigId: id,
           deletedAt: null
         },
@@ -1154,6 +1170,7 @@ export class ModelProvidersService {
       }),
       this.prisma.knowledgeBase.findFirst({
         where: {
+          workspaceId: requireWorkspaceId(),
           embeddingModelConfigId: id,
           deletedAt: null
         },

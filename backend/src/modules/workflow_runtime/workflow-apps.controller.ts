@@ -5,6 +5,7 @@ import type { IncomingMessage } from "node:http";
 
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRequired } from "../../core/auth/workspace.decorator";
 import { RequestWithId } from "../../core/request-id.middleware";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import { PublishedWorkflowApp } from "../workflows/dto/workflow-version.dto";
@@ -15,6 +16,7 @@ import { WorkflowRuntimeService } from "./workflow-runtime.service";
 /** 已发布 Workflow 的成员应用入口，不暴露草稿和编译计划。 */
 @Controller("workflow-apps")
 @Roles(UserRole.ADMIN, UserRole.USER)
+@WorkspaceRequired()
 export class WorkflowAppsController {
   constructor(
     private readonly workflowsService: WorkflowsService,

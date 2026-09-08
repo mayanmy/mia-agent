@@ -1,7 +1,6 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { Prisma, User, UserRole } from "@prisma/client";
 
-import { getConfig } from "../../core/config";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import { UsersService, normalizeUserEmail } from "../users/users.service";
@@ -19,18 +18,14 @@ import {
   AuthRequestContext,
   AuthResponse,
   AuthSessionResponse,
-  CreateUserInvitationDto,
   InvitationValidationResponse,
-  LoginDto,
-  UserInvitationResponse
+  LoginDto
 } from "./dto/auth.dto";
 import { PasswordService } from "./password.service";
 import { TokenService } from "./token.service";
 
 @Injectable()
 export class AuthService {
-  private readonly config = getConfig();
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
@@ -192,57 +187,6 @@ export class AuthService {
   }
 
   /**
-   * 生成或重新生成成员激活链接。
-   *
-   * 同一邮箱始终只保留一条邀请记录，管理员再次生成时会立即替换旧 Token；这样旧链接
-   * 自动失效，无需把可用的原始 Token 长期保存到数据库或页面状态。
-   */
-  async createUserInvitation(
-    invitedByUserId: string,
-    payload: CreateUserInvitationDto
-  ): Promise<UserInvitationResponse> {
-    const email = this.requireManagedEmail(payload.email);
-    const displayName = this.requireDisplayName(payload.displayName);
-    const role = this.requireManagedRole(payload.role);
-
-    if (await this.usersService.findUserIdByEmail(email)) {
-      throw new AppError(ErrorCodes.user.emailExists, "邮箱已存在", HttpStatus.CONFLICT);
-    }
-
-    const token = this.tokenService.createInvitationToken();
-    const expiresAt = new Date(Date.now() + this.config.authInvitationTtlHours * 60 * 60 * 1000);
-    const invitation = await this.prisma.userInvitation.upsert({
-      where: { email },
-      create: {
-        email,
-        displayName,
-        role,
-        tokenHash: this.tokenService.hashInvitationToken(token),
-        expiresAt,
-        invitedByUserId
-      },
-      update: {
-        displayName,
-        role,
-        tokenHash: this.tokenService.hashInvitationToken(token),
-        expiresAt,
-        acceptedAt: null,
-        revokedAt: null,
-        invitedByUserId
-      }
-    });
-
-    return {
-      id: invitation.id,
-      email: invitation.email,
-      displayName: invitation.displayName,
-      role: invitation.role,
-      activateUrl: this.createInvitationUrl(token),
-      expiresAt: invitation.expiresAt
-    };
-  }
-
-  /**
    * 校验公开激活链接是否仍可使用。
    *
    * 不区分过期、撤销、已使用和随机 Token，避免外部利用接口判断团队成员的邀请状态。
@@ -253,7 +197,9 @@ export class AuthService {
     return {
       displayName: invitation.displayName,
       email: invitation.email,
-      expiresAt: invitation.expiresAt
+      expiresAt: invitation.expiresAt,
+      workspaceName: invitation.workspace.name,
+      role: invitation.role
     };
   }
 
@@ -271,7 +217,18 @@ export class AuthService {
     const tokenHash = this.tokenService.hashInvitationToken(token);
     const invitation = await this.findUsableInvitation(token);
     const password = this.requireManagedPassword(payload.password);
-    const passwordHash = await this.passwordService.hashPassword(password);
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: invitation.email }
+    });
+    if (
+      existingUser &&
+      !(await this.passwordService.verifyPassword(existingUser.passwordHash, password))
+    ) {
+      throw this.createInvalidCredentialsError();
+    }
+    const passwordHash = existingUser
+      ? existingUser.passwordHash
+      : await this.passwordService.hashPassword(password);
     const now = new Date();
     const refreshToken = this.tokenService.createRefreshToken();
     const refreshExpiresAt = this.tokenService.getRefreshExpiresAt(now);
@@ -294,16 +251,39 @@ export class AuthService {
           throw this.createInvalidInvitationError();
         }
 
-        // User 归 users 模块管理；此处为保证一次性 Token 与账号创建的原子性，受限地在
-        // auth 的邀请事务内写入。普通成员创建仍必须通过 UsersService。
-        const createdUser = await transaction.user.create({
-          data: {
-            email: invitation.email,
-            displayName: invitation.displayName,
-            passwordHash,
+        // 已有账号只新增空间成员关系；新邮箱才创建全局 User，避免一个邮箱产生多个身份。
+        const createdUser = existingUser
+          ? await transaction.user.update({
+              where: { id: existingUser.id },
+              data: { lastLoginAt: now }
+            })
+          : await transaction.user.create({
+              data: {
+                email: invitation.email,
+                displayName: invitation.displayName,
+                passwordHash,
+                role: UserRole.USER,
+                lastLoginAt: now,
+                passwordChangedAt: now
+              }
+            });
+
+        await transaction.workspaceMember.upsert({
+          where: {
+            workspaceId_userId: {
+              workspaceId: invitation.workspaceId,
+              userId: createdUser.id
+            }
+          },
+          create: {
+            workspaceId: invitation.workspaceId,
+            userId: createdUser.id,
+            role: invitation.role
+          },
+          update: {
             role: invitation.role,
-            lastLoginAt: now,
-            passwordChangedAt: now
+            removedAt: null,
+            joinedAt: now
           }
         });
 
@@ -432,19 +412,6 @@ export class AuthService {
     return password;
   }
 
-  /** 校验管理端指定的角色，避免不可信 HTTP 请求把任意字符串写入枚举字段。 */
-  private requireManagedRole(role: UserRole | undefined): UserRole {
-    if (role === undefined) {
-      return UserRole.USER;
-    }
-
-    if (role !== UserRole.ADMIN && role !== UserRole.USER) {
-      throw new AppError(ErrorCodes.common.badRequest, "角色不正确", HttpStatus.BAD_REQUEST);
-    }
-
-    return role;
-  }
-
   /** 读取并校验链接中的原始令牌，空值和异常输入统一视为无效邀请。 */
   private requireInvitationToken(token: string | undefined): string {
     if (typeof token !== "string" || !token.trim()) {
@@ -463,7 +430,8 @@ export class AuthService {
         acceptedAt: null,
         revokedAt: null,
         expiresAt: { gt: new Date() }
-      }
+      },
+      include: { workspace: true }
     });
 
     if (!invitation) {
@@ -471,13 +439,6 @@ export class AuthService {
     }
 
     return invitation;
-  }
-
-  /** 将原始邀请令牌写入前端公开激活路由，不把管理端地址或请求 Host 作为来源。 */
-  private createInvitationUrl(token: string): string {
-    const url = new URL("/activate", this.config.publicBaseUrl);
-    url.searchParams.set("token", token);
-    return url.toString();
   }
 
   /** 创建统一的匿名登录失败错误，避免泄露账号状态或密码校验细节。 */

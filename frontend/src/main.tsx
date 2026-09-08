@@ -7,6 +7,7 @@ import "antd/dist/reset.css";
 
 import { App } from "./app/App";
 import { AuthProvider } from "./features/auth/AuthProvider";
+import { WorkspaceProvider } from "./features/workspaces/WorkspaceProvider";
 import "./styles.less";
 
 createRoot(document.getElementById("root") as HTMLElement).render(
@@ -25,7 +26,9 @@ createRoot(document.getElementById("root") as HTMLElement).render(
       <BrowserRouter>
         <AntdApp>
           <AuthProvider>
-            <App />
+            <WorkspaceProvider>
+              <App />
+            </WorkspaceProvider>
           </AuthProvider>
         </AntdApp>
       </BrowserRouter>

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, Form, Modal, message } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { useWorkspace } from "../workspaces/WorkspaceProvider";
 import { AgentsGuide } from "../../shared/components/menu-guides";
 
 import { listKnowledgeBases, type KnowledgeBaseListItem } from "../knowledge/api";
@@ -35,6 +36,8 @@ import "./agents.less";
 
 /** Agents 路由页，负责编排列表、编辑、绑定与发布流程。 */
 export function AgentsPage() {
+  const { currentWorkspace } = useWorkspace();
+  const canManage = currentWorkspace?.role !== "MEMBER";
   const navigate = useNavigate();
   const [form] = Form.useForm<AgentFormValues>();
   const [agents, setAgents] = useState<AgentTableItem[]>([]);
@@ -93,6 +96,19 @@ export function AgentsPage() {
     setLoading(true);
 
     try {
+      if (!canManage) {
+        const agentPage = await listAgents(nextPage, nextPageSize);
+        if (isActive()) {
+          setAgents(agentPage.list);
+          setPagination({
+            page: agentPage.page,
+            pageSize: agentPage.pageSize,
+            total: agentPage.total
+          });
+        }
+        return;
+      }
+
       const [agentPage, providerPage, modelConfigPage, knowledgeBasePage] = await Promise.all([
         listAgents(nextPage, nextPageSize),
         listProviders(1, 100),
@@ -402,9 +418,11 @@ export function AgentsPage() {
             <Button disabled={loading} onClick={() => void refresh()}>
               刷新
             </Button>
-            <Button type="primary" onClick={openCreateDialog}>
-              新增 Agent
-            </Button>
+            {canManage ? (
+              <Button type="primary" onClick={openCreateDialog}>
+                新增 Agent
+              </Button>
+            ) : null}
           </>
         }
         description="创建、配置和发布团队内部 AI 助手。"
@@ -413,6 +431,7 @@ export function AgentsPage() {
 
       <AgentTable
         agents={agents}
+        canManage={canManage}
         loading={loading}
         pagination={pagination}
         onCopyLink={(agent) => void copyShareLink(agent)}

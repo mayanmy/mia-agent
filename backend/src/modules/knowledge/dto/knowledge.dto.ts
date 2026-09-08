@@ -112,6 +112,8 @@ export type KnowledgeDocumentListItem = {
 
 /** Retrieval 模块读取的知识库最小运行配置，不暴露 Knowledge ORM 实体。 */
 export type KnowledgeBaseRetrievalConfig = {
+  /** 所属项目空间，用于向量查询的最后一道数据库过滤。 */
+  workspaceId: string;
   /** 知识库 ID。 */
   id: string;
   /** 生成查询向量使用的模型配置 ID。 */

@@ -4,6 +4,7 @@ import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
+import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import type { PageResult } from "../../core/result";
 import { PrismaService } from "../prisma/prisma.service";
@@ -26,6 +27,7 @@ export class SkillsService {
       .trim()
       .slice(0, 100);
     const where: Prisma.SkillWhereInput = {
+      workspaceId: requireWorkspaceId(),
       deletedAt: null,
       ...(keyword
         ? {
@@ -62,7 +64,13 @@ export class SkillsService {
   async createSkill(payload: SkillCreateDto, userId: string): Promise<SkillDetail> {
     const data = this.content(payload);
     const skill = await this.prisma.skill.create({
-      data: { id: randomUUID(), ...data, enabled: payload.enabled ?? true, createdByUserId: userId }
+      data: {
+        id: randomUUID(),
+        workspaceId: requireWorkspaceId(),
+        ...data,
+        enabled: payload.enabled ?? true,
+        createdByUserId: userId
+      }
     });
     return this.toDetail(skill);
   }
@@ -76,6 +84,7 @@ export class SkillsService {
     const skill = await this.prisma.skill.create({
       data: {
         id: randomUUID(),
+        workspaceId: requireWorkspaceId(),
         ...data,
         enabled: false,
         sourceType: this.text(payload.sourceType, "sourceType", 50),
@@ -91,7 +100,7 @@ export class SkillsService {
     const current = await this.requireSkill(id);
     this.revision(payload.expectedRevision, current.revision);
     const result = await this.prisma.skill.updateMany({
-      where: { id, revision: current.revision, deletedAt: null },
+      where: { id, workspaceId: requireWorkspaceId(), revision: current.revision, deletedAt: null },
       data: {
         ...this.content({ ...current, ...payload }),
         enabled: payload.enabled,
@@ -108,7 +117,7 @@ export class SkillsService {
     if (typeof payload.enabled !== "boolean")
       throw new AppError(ErrorCodes.skill.invalidContent, "enabled 必须是布尔值");
     const result = await this.prisma.skill.updateMany({
-      where: { id, revision: current.revision, deletedAt: null },
+      where: { id, workspaceId: requireWorkspaceId(), revision: current.revision, deletedAt: null },
       data: { enabled: payload.enabled, revision: current.revision + 1 }
     });
     this.updatedRevision(result.count);
@@ -117,8 +126,8 @@ export class SkillsService {
 
   async archiveSkill(id: string): Promise<void> {
     await this.requireSkill(id);
-    await this.prisma.skill.update({
-      where: { id },
+    await this.prisma.skill.updateMany({
+      where: { id, workspaceId: requireWorkspaceId() },
       data: { enabled: false, deletedAt: new Date(), revision: { increment: 1 } }
     });
   }
@@ -180,7 +189,9 @@ export class SkillsService {
   }
 
   private async requireSkill(id: string) {
-    const skill = await this.prisma.skill.findFirst({ where: { id, deletedAt: null } });
+    const skill = await this.prisma.skill.findFirst({
+      where: { id, workspaceId: requireWorkspaceId(), deletedAt: null }
+    });
     if (!skill) throw new AppError(ErrorCodes.skill.notFound, "Skill 不存在", 404);
     return skill;
   }

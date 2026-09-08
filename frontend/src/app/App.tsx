@@ -16,7 +16,7 @@ import {
   ToolOutlined,
   UserOutlined
 } from "@ant-design/icons";
-import { Button, Dropdown, Spin, Tooltip } from "antd";
+import { Button, Dropdown, Empty, Select, Spin, Tooltip } from "antd";
 import {
   Navigate,
   NavLink,
@@ -29,7 +29,9 @@ import {
 
 import { useAuth } from "../features/auth/AuthProvider";
 import { LoginPage } from "../features/auth/LoginPage";
-import type { UserRole } from "../features/auth/types";
+import { createWorkspace } from "../features/workspaces/api";
+import { useWorkspace } from "../features/workspaces/WorkspaceProvider";
+import type { WorkspaceRole } from "../features/workspaces/types";
 
 const AgentsPage = lazy(() =>
   import("../features/agents/AgentsPage").then((module) => ({ default: module.AgentsPage }))
@@ -96,7 +98,7 @@ const ActivateInvitationPage = lazy(() =>
 type NavConfig = {
   label: string;
   path: string;
-  roles: UserRole[];
+  roles: WorkspaceRole[];
   icon: ReactNode;
 };
 
@@ -104,35 +106,50 @@ const navConfig: NavConfig[] = [
   {
     label: "模型供应商",
     path: "/providers",
-    roles: ["ADMIN", "USER"],
+    roles: ["OWNER", "ADMIN"],
     icon: <ApiOutlined />
   },
-  { label: "Agent", path: "/agents", roles: ["ADMIN", "USER"], icon: <RobotOutlined /> },
+  {
+    label: "Agent",
+    path: "/agents",
+    roles: ["OWNER", "ADMIN", "MEMBER"],
+    icon: <RobotOutlined />
+  },
   {
     label: "知识库",
     path: "/knowledge",
-    roles: ["ADMIN", "USER"],
+    roles: ["OWNER", "ADMIN", "MEMBER"],
     icon: <DatabaseOutlined />
   },
-  { label: "工具", path: "/tools", roles: ["ADMIN"], icon: <ToolOutlined /> },
-  { label: "MCP", path: "/mcp", roles: ["ADMIN"], icon: <CloudServerOutlined /> },
-  { label: "Skill", path: "/skills", roles: ["ADMIN"], icon: <ReadOutlined /> },
-  { label: "Workflow", path: "/workflows", roles: ["ADMIN"], icon: <ApartmentOutlined /> },
+  { label: "工具", path: "/tools", roles: ["OWNER", "ADMIN"], icon: <ToolOutlined /> },
+  { label: "MCP", path: "/mcp", roles: ["OWNER", "ADMIN"], icon: <CloudServerOutlined /> },
+  { label: "Skill", path: "/skills", roles: ["OWNER", "ADMIN"], icon: <ReadOutlined /> },
+  {
+    label: "Workflow",
+    path: "/workflows",
+    roles: ["OWNER", "ADMIN"],
+    icon: <ApartmentOutlined />
+  },
   {
     label: "Workflow 应用",
     path: "/workflow-apps",
-    roles: ["ADMIN", "USER"],
+    roles: ["OWNER", "ADMIN", "MEMBER"],
     icon: <PlaySquareOutlined />
   },
-  { label: "对话", path: "/chat", roles: ["ADMIN", "USER"], icon: <MessageOutlined /> },
-  { label: "日志", path: "/logs", roles: ["ADMIN", "USER"], icon: <FileSearchOutlined /> },
+  {
+    label: "对话",
+    path: "/chat",
+    roles: ["OWNER", "ADMIN", "MEMBER"],
+    icon: <MessageOutlined />
+  },
+  { label: "日志", path: "/logs", roles: ["OWNER", "ADMIN"], icon: <FileSearchOutlined /> },
   {
     label: "Run Trace",
     path: "/agent-runs",
-    roles: ["ADMIN"],
+    roles: ["OWNER", "ADMIN"],
     icon: <FundProjectionScreenOutlined />
   },
-  { label: "成员", path: "/users", roles: ["ADMIN"], icon: <TeamOutlined /> }
+  { label: "成员", path: "/users", roles: ["OWNER", "ADMIN"], icon: <TeamOutlined /> }
 ];
 
 const SIDEBAR_COLLAPSED_KEY = "mia.workspace.sidebarCollapsed";
@@ -148,7 +165,7 @@ export function App() {
         <Route element={<RequireAuth />}>
           <Route element={<WorkspaceLayout />}>
             <Route index element={<DefaultWorkspaceRoute />} />
-            <Route element={<RequireRole roles={["ADMIN", "USER"]} />}>
+            <Route element={<RequireRole roles={["OWNER", "ADMIN", "MEMBER"]} />}>
               <Route
                 path="/providers"
                 element={
@@ -162,15 +179,15 @@ export function App() {
               <Route path="/knowledge" element={<KnowledgePage />} />
               <Route path="/workflow-apps" element={<WorkflowAppsPage />} />
               <Route path="/chat" element={<ChatPage />} />
-              <Route path="/logs" element={<LogsPage />} />
             </Route>
-            <Route element={<RequireRole roles={["ADMIN"]} />}>
+            <Route element={<RequireRole roles={["OWNER", "ADMIN"]} />}>
               <Route path="/tools" element={<ToolsPage />} />
               <Route path="/mcp" element={<McpServersPage />} />
               <Route path="/skills" element={<SkillsPage />} />
               <Route path="/workflows" element={<WorkflowsPage />} />
               <Route path="/workflows/:workflowId" element={<WorkflowsPage />} />
               <Route path="/agent-runs" element={<AgentRunsPage />} />
+              <Route path="/logs" element={<LogsPage />} />
               <Route path="/users" element={<UsersPage />} />
             </Route>
             <Route path="*" element={<DefaultWorkspaceRoute />} />
@@ -198,10 +215,10 @@ function RequireAuth() {
 }
 
 /** 阻止用户通过手输 URL 进入不属于其角色的页面。 */
-function RequireRole({ roles }: { roles: UserRole[] }) {
-  const { currentUser } = useAuth();
+function RequireRole({ roles }: { roles: WorkspaceRole[] }) {
+  const { currentWorkspace } = useWorkspace();
 
-  if (!currentUser || !roles.includes(currentUser.role)) {
+  if (!currentWorkspace || !roles.includes(currentWorkspace.role)) {
     return <Navigate replace to="/chat" />;
   }
 
@@ -216,11 +233,26 @@ function DefaultWorkspaceRoute() {
 /** 工作台壳层按当前角色渲染导航和账号退出入口。 */
 function WorkspaceLayout() {
   const { currentUser, logoutCurrentDevice } = useAuth();
+  const {
+    status: workspaceStatus,
+    workspaces,
+    currentWorkspace,
+    switchWorkspace,
+    refreshWorkspaces
+  } = useWorkspace();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const availableNavItems = navConfig.filter((item) =>
-    item.roles.includes(currentUser?.role ?? "USER")
+    item.roles.includes(currentWorkspace?.role ?? "MEMBER")
   );
+
+  if (workspaceStatus !== "ready") {
+    return <RouteLoading />;
+  }
+
+  if (!currentWorkspace) {
+    return <WorkspaceEmptyState onCreated={refreshWorkspaces} />;
+  }
 
   /** 同步保存用户的桌面布局偏好，刷新和重新登录后继续沿用。 */
   function toggleSidebar() {
@@ -256,6 +288,20 @@ function WorkspaceLayout() {
             />
           </Tooltip>
         </div>
+        <Select
+          aria-label="当前项目空间"
+          className="workspaceSelect"
+          options={workspaces.map((workspace) => ({
+            label: workspace.name,
+            value: workspace.id
+          }))}
+          popupMatchSelectWidth={240}
+          value={currentWorkspace.id}
+          onChange={(workspaceId) => {
+            switchWorkspace(workspaceId);
+            navigate("/agents", { replace: true });
+          }}
+        />
         <nav className="navList" aria-label="主导航">
           {availableNavItems.map((item) => (
             <Tooltip
@@ -298,16 +344,44 @@ function WorkspaceLayout() {
           >
             <span className="accountMenuText">
               <span>{currentUser?.displayName}</span>
-              <small>{currentUser?.role === "ADMIN" ? "管理员" : "成员"}</small>
+              <small>{formatWorkspaceRole(currentWorkspace.role)}</small>
             </span>
           </Button>
         </Dropdown>
       </aside>
       <main className="main">
-        <Outlet />
+        {/* 切换空间时强制重建路由页，避免页面状态继续保留上一空间的数据。 */}
+        <Outlet key={currentWorkspace.id} />
       </main>
     </div>
   );
+}
+
+/** 无任何成员关系的账号可以创建首个项目空间并自动成为 OWNER。 */
+function WorkspaceEmptyState({ onCreated }: { onCreated: () => Promise<void> }) {
+  const [creating, setCreating] = useState(false);
+  return (
+    <section className="workspaceEmptyState">
+      <Empty description="当前账号尚未加入项目空间">
+        <Button
+          loading={creating}
+          type="primary"
+          onClick={() => {
+            setCreating(true);
+            void createWorkspace({ name: "我的项目空间" })
+              .then(onCreated)
+              .finally(() => setCreating(false));
+          }}
+        >
+          创建项目空间
+        </Button>
+      </Empty>
+    </section>
+  );
+}
+
+function formatWorkspaceRole(role: WorkspaceRole): string {
+  return role === "OWNER" ? "所有者" : role === "ADMIN" ? "管理员" : "成员";
 }
 
 /** Storage 读取失败时使用展开态，保证无持久化能力的浏览器也可正常进入工作台。 */

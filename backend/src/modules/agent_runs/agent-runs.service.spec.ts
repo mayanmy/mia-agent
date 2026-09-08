@@ -12,9 +12,13 @@ import { AgentRunsController } from "./agent-runs.controller";
 
 export const tests = [
   {
-    name: "AgentRunsController restricts Run Trace APIs to administrators",
+    name: "AgentRunsController 使用项目空间管理员权限限制 Run Trace",
     run: () => {
-      assert.deepEqual(Reflect.getMetadata("mia:roles", AgentRunsController), ["ADMIN"]);
+      assert.deepEqual(Reflect.getMetadata("mia:roles", AgentRunsController), ["ADMIN", "USER"]);
+      assert.deepEqual(Reflect.getMetadata("mia:workspace-roles", AgentRunsController), [
+        "OWNER",
+        "ADMIN"
+      ]);
     }
   },
   {
@@ -68,6 +72,7 @@ export const tests = [
       assert.equal(result.list[0].stepCount, 2);
       assert.equal(findQuery?.skip, 10);
       assert.deepEqual(findQuery?.where, {
+        workspaceId: "00000000-0000-4000-8000-000000000001",
         agentId: "agent-1",
         workflowId: "workflow-1",
         status: AgentRunStatus.COMPLETED,
@@ -81,7 +86,7 @@ export const tests = [
       const createdAt = new Date("2026-07-22T08:00:00.000Z");
       const prisma = {
         agentRun: {
-          findUnique: async ({ where }: { where: { id: string } }) =>
+          findFirst: async ({ where }: { where: { id: string } }) =>
             where.id === "missing"
               ? null
               : {
@@ -156,6 +161,11 @@ export const tests = [
     run: async () => {
       let createdData: Record<string, unknown> | undefined;
       const prisma = {
+        agent: {
+          findUniqueOrThrow: async () => ({
+            workspaceId: "00000000-0000-4000-8000-000000000001"
+          })
+        },
         agentRun: {
           create: async ({ data }: { data: Record<string, unknown> }) => {
             createdData = data;
@@ -182,6 +192,7 @@ export const tests = [
         status: AgentRunStatus.QUEUED
       });
       assert.equal(createdData?.agentId, "agent-1");
+      assert.equal(createdData?.workspaceId, "00000000-0000-4000-8000-000000000001");
       assert.equal(typeof createdData?.inputPreview, "string");
       assert.ok(String(createdData?.inputPreview).endsWith("...[truncated]"));
     }

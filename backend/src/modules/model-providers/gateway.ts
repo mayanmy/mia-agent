@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import { ModelProvider, ModelProviderType } from "@prisma/client";
 
 import { decryptSecret } from "../../core/crypto";
+import { getWorkspaceId } from "../../core/auth/workspace-context";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import { ProviderClient } from "./clients/base.client";
@@ -163,6 +164,7 @@ export class ModelProvidersGateway {
     const modelConfig = await this.prisma.modelConfig.findFirst({
       where: {
         id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
         enabled: true,
         deletedAt: null,
         provider: {

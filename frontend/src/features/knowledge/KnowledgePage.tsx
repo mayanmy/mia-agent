@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { App as AntdApp, Button, Form, Modal } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { useWorkspace } from "../workspaces/WorkspaceProvider";
 import { KnowledgeGuide } from "../../shared/components/menu-guides";
 
 import { listModelConfigs } from "../model-providers/api";
@@ -28,6 +29,8 @@ import type {
 import "./knowledge.less";
 
 export function KnowledgePage() {
+  const { currentWorkspace } = useWorkspace();
+  const canManage = currentWorkspace?.role !== "MEMBER";
   const { message } = AntdApp.useApp();
   const [form] = Form.useForm<KnowledgeBaseFormValues>();
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseTableItem[]>([]);
@@ -86,7 +89,7 @@ export function KnowledgePage() {
       // 两个列表彼此独立，并行请求可避免管理页首屏串行等待。
       const [knowledgeBasePage, modelConfigPage] = await Promise.all([
         listKnowledgeBases(nextPage, nextPageSize),
-        listModelConfigs(1, 100)
+        canManage ? listModelConfigs(1, 100) : Promise.resolve({ list: [] })
       ]);
 
       if (isActive()) {
@@ -334,9 +337,11 @@ export function KnowledgePage() {
             <Button disabled={loading} onClick={() => void refresh()}>
               刷新
             </Button>
-            <Button type="primary" onClick={openCreateDialog}>
-              新增知识库
-            </Button>
+            {canManage ? (
+              <Button type="primary" onClick={openCreateDialog}>
+                新增知识库
+              </Button>
+            ) : null}
           </>
         }
         description="管理团队文档资料，为 Agent 提供 RAG 知识来源。"
@@ -345,6 +350,7 @@ export function KnowledgePage() {
 
       <section className="panel knowledgeTablePanel">
         <KnowledgeBaseTable
+          canManage={canManage}
           knowledgeBases={knowledgeBases}
           loading={loading}
           pagination={pagination}

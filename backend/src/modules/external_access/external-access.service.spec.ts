@@ -172,8 +172,16 @@ export const tests: TestCase[] = [
       const createdMessages: Array<Record<string, unknown>> = [];
       const service = new ExternalAccessService(
         {
+          agent: {
+            findUniqueOrThrow: async () => ({
+              workspaceId: "00000000-0000-4000-8000-000000000001"
+            })
+          },
           externalEndUser: {
-            upsert: async () => ({ id: "end-user-1" })
+            upsert: async () => ({
+              id: "end-user-1",
+              workspaceId: "00000000-0000-4000-8000-000000000001"
+            })
           },
           externalConversation: {
             create: async () => ({ id: "conversation-1" }),

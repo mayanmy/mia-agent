@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
+import { UserRole, WorkspaceRole } from "@prisma/client";
 
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRoles } from "../../core/auth/workspace.decorator";
 import { PageResult } from "../../core/result";
 import {
   ProviderCreateDto,
@@ -16,6 +17,7 @@ import { ModelProvidersService } from "./model-providers.service";
 
 @Controller("providers")
 @Roles(UserRole.ADMIN, UserRole.USER)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
 export class ModelProvidersController {
   constructor(private readonly modelProvidersService: ModelProvidersService) {}
 

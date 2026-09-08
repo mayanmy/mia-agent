@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import { HttpTool, Prisma, ToolSecret } from "@prisma/client";
 
 import { decryptSecret, encryptSecret } from "../../core/crypto";
+import { getWorkspaceId, requireWorkspaceId } from "../../core/auth/workspace-context";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import {
@@ -53,7 +54,7 @@ export class ConfiguredHttpToolsService {
   /** 返回管理页面需要的 HTTP Tool 列表，凭据只暴露是否已配置。 */
   async listHttpTools(): Promise<HttpToolListItem[]> {
     const tools = await this.prisma.httpTool.findMany({
-      where: { deletedAt: null },
+      where: { workspaceId: requireWorkspaceId(), deletedAt: null },
       include: { secret: true },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }]
     });
@@ -70,6 +71,7 @@ export class ConfiguredHttpToolsService {
       const secret = data.credentialPayload
         ? await transaction.toolSecret.create({
             data: {
+              workspaceId: requireWorkspaceId(),
               name: `${data.slug}_credential`,
               encryptedValue: encryptSecret(data.credentialPayload),
               createdByUserId: userId
@@ -79,6 +81,7 @@ export class ConfiguredHttpToolsService {
 
       return transaction.httpTool.create({
         data: {
+          workspaceId: requireWorkspaceId(),
           name: data.name,
           slug: data.slug,
           description: data.description,
@@ -129,6 +132,7 @@ export class ConfiguredHttpToolsService {
             await transaction.toolSecret.update({
               where: { id: existing.secretId },
               data: {
+                workspaceId: requireWorkspaceId(),
                 encryptedValue: encryptSecret(data.credentialPayload),
                 name: `${data.slug}_credential`
               }
@@ -136,6 +140,7 @@ export class ConfiguredHttpToolsService {
           } else {
             const secret = await transaction.toolSecret.create({
               data: {
+                workspaceId: requireWorkspaceId(),
                 name: `${data.slug}_credential`,
                 encryptedValue: encryptSecret(data.credentialPayload),
                 createdByUserId: userId
@@ -154,7 +159,7 @@ export class ConfiguredHttpToolsService {
       }
 
       const updated = await transaction.httpTool.update({
-        where: { id },
+        where: { id, workspaceId: requireWorkspaceId() },
         data: {
           name: data.name,
           slug: data.slug,
@@ -190,7 +195,7 @@ export class ConfiguredHttpToolsService {
   async deleteHttpTool(id: string): Promise<void> {
     await this.findHttpTool(id);
     await this.prisma.httpTool.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data: { enabled: false, deletedAt: new Date() }
     });
   }
@@ -204,7 +209,12 @@ export class ConfiguredHttpToolsService {
     if (ids.length === 0) return [];
 
     const tools = await this.prisma.httpTool.findMany({
-      where: { id: { in: ids }, enabled: true, deletedAt: null }
+      where: {
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
+        id: { in: ids },
+        enabled: true,
+        deletedAt: null
+      }
     });
     const byId = new Map(tools.map((tool) => [tool.id, tool]));
 
@@ -222,7 +232,12 @@ export class ConfiguredHttpToolsService {
       .filter(Boolean);
     if (ids.length === 0) return [];
     const tools = await this.prisma.httpTool.findMany({
-      where: { id: { in: ids }, enabled: true, deletedAt: null },
+      where: {
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
+        id: { in: ids },
+        enabled: true,
+        deletedAt: null
+      },
       select: { id: true, name: true, description: true }
     });
     return tools.map((tool) => ({
@@ -239,7 +254,12 @@ export class ConfiguredHttpToolsService {
     if (!runtimeId.startsWith(HTTP_TOOL_PREFIX)) return null;
     const id = runtimeId.slice(HTTP_TOOL_PREFIX.length);
     const tool = await this.prisma.httpTool.findFirst({
-      where: { id, enabled: true, deletedAt: null },
+      where: {
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
+        id,
+        enabled: true,
+        deletedAt: null
+      },
       include: { secret: true }
     });
     if (!tool) return null;
@@ -973,7 +993,11 @@ export class ConfiguredHttpToolsService {
   /** Slug 全局唯一，包含软删除记录，避免审计语义被新工具复用。 */
   private async ensureSlugAvailable(slug: string, excludedId?: string): Promise<void> {
     const existing = await this.prisma.httpTool.findFirst({
-      where: { slug, ...(excludedId ? { id: { not: excludedId } } : {}) }
+      where: {
+        workspaceId: requireWorkspaceId(),
+        slug,
+        ...(excludedId ? { id: { not: excludedId } } : {})
+      }
     });
     if (existing) {
       throw new AppError(
@@ -987,7 +1011,7 @@ export class ConfiguredHttpToolsService {
   /** 管理查询统一排除软删除记录并加载凭据配置状态。 */
   private async findHttpTool(id: string): Promise<HttpToolWithSecret> {
     const tool = await this.prisma.httpTool.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, workspaceId: requireWorkspaceId(), deletedAt: null },
       include: { secret: true }
     });
     if (!tool) {

@@ -1,9 +1,11 @@
 import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { UploadedFile, UseInterceptors } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
+import { UserRole, WorkspaceRole } from "@prisma/client";
 
+import { CurrentWorkspace } from "../../core/auth/current-workspace.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRequired, WorkspaceRoles } from "../../core/auth/workspace.decorator";
 import { PageResult } from "../../core/result";
 import {
   KnowledgeBaseCreateDto,
@@ -16,30 +18,36 @@ import {
   UploadedKnowledgeFile
 } from "./dto/knowledge.dto";
 import { KnowledgeService } from "./knowledge.service";
+import { CurrentWorkspaceDto } from "../workspaces/dto/workspace.dto";
 
 @Controller("knowledge-bases")
 @Roles(UserRole.ADMIN, UserRole.USER)
+@WorkspaceRequired()
 export class KnowledgeController {
   constructor(private readonly knowledgeService: KnowledgeService) {}
 
   @Get()
   async listKnowledgeBases(
-    @Query() query: KnowledgeBaseQueryDto
+    @Query() query: KnowledgeBaseQueryDto,
+    @CurrentWorkspace() currentWorkspace: CurrentWorkspaceDto
   ): Promise<PageResult<KnowledgeBaseListItem>> {
-    return this.knowledgeService.listKnowledgeBases(query);
+    return this.knowledgeService.listKnowledgeBases(query, currentWorkspace.role);
   }
 
   @Post()
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async createKnowledgeBase(@Body() payload: KnowledgeBaseCreateDto): Promise<KnowledgeBaseDetail> {
     return this.knowledgeService.createKnowledgeBase(payload);
   }
 
   @Get(":id")
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async getKnowledgeBase(@Param("id") id: string): Promise<KnowledgeBaseDetail> {
     return this.knowledgeService.getKnowledgeBase(id);
   }
 
   @Put(":id")
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async updateKnowledgeBase(
     @Param("id") id: string,
     @Body() payload: KnowledgeBaseUpdateDto
@@ -48,12 +56,14 @@ export class KnowledgeController {
   }
 
   @Delete(":id")
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async deleteKnowledgeBase(@Param("id") id: string): Promise<null> {
     await this.knowledgeService.deleteKnowledgeBase(id);
     return null;
   }
 
   @Get(":id/documents")
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async listKnowledgeDocuments(
     @Param("id") id: string,
     @Query() query: KnowledgeDocumentQueryDto
@@ -62,6 +72,7 @@ export class KnowledgeController {
   }
 
   @Post(":id/documents")
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   @UseInterceptors(
     FileInterceptor("file", {
       limits: {
@@ -78,6 +89,7 @@ export class KnowledgeController {
   }
 
   @Post(":id/documents/:documentId/reindex")
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async reindexKnowledgeDocument(
     @Param("id") id: string,
     @Param("documentId") documentId: string
@@ -86,6 +98,7 @@ export class KnowledgeController {
   }
 
   @Delete(":id/documents/:documentId")
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async deleteKnowledgeDocument(
     @Param("id") id: string,
     @Param("documentId") documentId: string

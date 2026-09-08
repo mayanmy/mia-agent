@@ -15,6 +15,7 @@ import {
 import { decryptSecret, encryptSecret } from "../../../core/crypto";
 import { getConfig } from "../../../core/config";
 import { AppError, ErrorCodes } from "../../../core/errors";
+import { requireWorkspaceId } from "../../../core/auth/workspace-context";
 import { PrismaService } from "../../prisma/prisma.service";
 import { createMcpSafeFetch } from "../mcp-network-policy";
 import { McpRedactor } from "../mcp-redaction";
@@ -231,6 +232,7 @@ export class McpOAuthManager {
       where: { serverId },
       create: {
         id: randomUUID(),
+        workspaceId: requireWorkspaceId(),
         serverId,
         encryptedState: encryptSecret("{}"),
         createdByUserId: userId

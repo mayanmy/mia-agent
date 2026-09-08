@@ -4,6 +4,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import { McpApprovalMode, McpToolApprovalStatus } from "@prisma/client";
 
 import { encryptSecret } from "../../core/crypto";
+import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import {
@@ -55,6 +56,7 @@ export class McpApprovalService {
     const serializedInput = this.stableJson(request.input);
     const approval = await this.prisma.mcpToolApproval.create({
       data: {
+        workspaceId: tool.workspaceId,
         serverId: tool.serverId,
         toolId: tool.id,
         runtimeId: tool.runtimeId,
@@ -151,7 +153,7 @@ export class McpApprovalService {
     status: "APPROVED" | "REJECTED"
   ): Promise<McpToolApprovalDetail> {
     const approval = await this.prisma.mcpToolApproval.findFirst({
-      where: { id: approvalId, userId }
+      where: { id: approvalId, workspaceId: requireWorkspaceId(), userId }
     });
     if (!approval)
       throw new AppError(ErrorCodes.mcp.notFound, "工具审批不存在", HttpStatus.NOT_FOUND);
@@ -160,7 +162,12 @@ export class McpApprovalService {
       throw new AppError(ErrorCodes.common.conflict, "工具审批已过期", HttpStatus.CONFLICT);
     }
     const changed = await this.prisma.mcpToolApproval.updateMany({
-      where: { id: approvalId, userId, status: McpToolApprovalStatus.PENDING },
+      where: {
+        id: approvalId,
+        workspaceId: requireWorkspaceId(),
+        userId,
+        status: McpToolApprovalStatus.PENDING
+      },
       data: { status, decidedAt: new Date() }
     });
     if (changed.count !== 1) {

@@ -2,7 +2,6 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common
 import { UserRole } from "@prisma/client";
 
 import { Roles } from "../../core/auth/roles.decorator";
-import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { PageResult } from "../../core/result";
 import {
   CreateManagedUserDto,
@@ -12,7 +11,6 @@ import {
   UserListItem,
   UserQueryDto
 } from "../users/dto/user.dto";
-import { CreateUserInvitationDto, UserInvitationResponse } from "./dto/auth.dto";
 import { AuthService } from "./auth.service";
 
 /** 成员管理接口统一由认证编排层处理，所有操作仅管理员可访问。 */
@@ -31,15 +29,6 @@ export class UserManagementController {
   @Post()
   createUser(@Body() payload: CreateManagedUserDto): Promise<CurrentUserDto> {
     return this.authService.createManagedUser(payload);
-  }
-
-  /** 生成可由管理员复制发送的一次性成员激活链接。 */
-  @Post("invitations")
-  createInvitation(
-    @CurrentUser() currentUser: CurrentUserDto,
-    @Body() payload: CreateUserInvitationDto
-  ): Promise<UserInvitationResponse> {
-    return this.authService.createUserInvitation(currentUser.id, payload);
   }
 
   /** 修改成员展示名、角色或启用状态；禁用后服务端会撤销其全部 Refresh Session。 */

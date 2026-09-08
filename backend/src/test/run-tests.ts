@@ -1,3 +1,4 @@
+import { enterWorkspaceContext } from "../core/auth/workspace-context";
 import { tests as agentTests } from "../modules/agents/agents.service.spec";
 import { tests as agentRunTests } from "../modules/agent_runs/agent-runs.service.spec";
 import { tests as agentPromptBuilderTests } from "../modules/agent_runtime/prompt-builder.spec";
@@ -28,6 +29,9 @@ type TestCase = {
   name: string;
   run: () => void | Promise<void>;
 };
+
+// 单元测试不经过 HTTP Guard，统一注入一个已验证空间，保持服务层隔离条件与生产一致。
+enterWorkspaceContext("00000000-0000-4000-8000-000000000001");
 
 const tests: TestCase[] = [
   ...authTests,

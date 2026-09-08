@@ -30,6 +30,15 @@ enum UserRole {
   @@map("user_role")
 }
 
+/// 项目空间内的授权角色；用户身份全局唯一，但权限随项目空间成员关系变化。
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+
+  @@map("workspace_role")
+}
+
 /// Agent 对话的会话生命周期。
 ///
 /// EPHEMERAL 保持测试对话的即时性；PERSISTENT 才会为每个成员保存可恢复的会话记录，
@@ -239,10 +248,46 @@ model User {
   createdMcpOAuthAuthorizations McpOAuthAuthorization[] @relation("McpOAuthAuthorizationCreator")
   mcpToolApprovals              McpToolApproval[]
   chatMessageFeedbacks          ChatMessageFeedback[]
+  workspaceMemberships          WorkspaceMember[]
+  createdWorkspaces             Workspace[]             @relation("WorkspaceCreator")
 
   @@index([role, disabledAt], map: "idx_users_role_disabled_at")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
   @@map("users")
+}
+
+/// 项目空间是 Mia 的一级数据和权限边界，同一用户可以加入多个空间。
+model Workspace {
+  id          String            @id @default(uuid()) @db.Uuid
+  name        String
+  description String            @default("") @db.Text
+  createdById String            @map("created_by_id") @db.Uuid
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?         @map("deleted_at") @db.Timestamptz(6)
+  createdBy   User              @relation("WorkspaceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  members     WorkspaceMember[]
+  invitations UserInvitation[]
+
+  @@index([deletedAt, createdAt(sort: Desc)], map: "idx_workspaces_deleted_created_at")
+  @@index([createdById], map: "idx_workspaces_created_by_id")
+  @@map("workspaces")
+}
+
+/// 用户在指定项目空间内的有效成员关系；removedAt 非空后立即失去空间访问权。
+model WorkspaceMember {
+  workspaceId String        @map("workspace_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        WorkspaceRole @default(MEMBER)
+  joinedAt    DateTime      @default(now()) @map("joined_at") @db.Timestamptz(6)
+  removedAt   DateTime?     @map("removed_at") @db.Timestamptz(6)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@index([userId, removedAt], map: "idx_workspace_members_user_removed_at")
+  @@index([workspaceId, role, removedAt], map: "idx_workspace_members_workspace_role_removed_at")
+  @@map("workspace_members")
 }
 
 /**
@@ -251,20 +296,24 @@ model User {
  * 的记录始终都是可登录的正式成员，避免引入额外的“待激活用户”状态分支。
  */
 model UserInvitation {
-  id              String    @id @default(uuid()) @db.Uuid
-  email           String    @unique(map: "uq_user_invitations_email")
-  displayName     String    @map("display_name")
-  role            UserRole  @default(USER)
-  tokenHash       String    @unique(map: "uq_user_invitations_token_hash") @map("token_hash")
-  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(6)
-  acceptedAt      DateTime? @map("accepted_at") @db.Timestamptz(6)
-  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
-  invitedByUserId String    @map("invited_by_user_id") @db.Uuid
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  invitedBy       User      @relation("UserInvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  id              String        @id @default(uuid()) @db.Uuid
+  workspaceId     String        @map("workspace_id") @db.Uuid
+  email           String
+  displayName     String        @map("display_name")
+  role            WorkspaceRole @default(MEMBER)
+  tokenHash       String        @unique(map: "uq_user_invitations_token_hash") @map("token_hash")
+  expiresAt       DateTime      @map("expires_at") @db.Timestamptz(6)
+  acceptedAt      DateTime?     @map("accepted_at") @db.Timestamptz(6)
+  revokedAt       DateTime?     @map("revoked_at") @db.Timestamptz(6)
+  invitedByUserId String        @map("invited_by_user_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  invitedBy       User          @relation("UserInvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@unique([workspaceId, email], map: "uq_user_invitations_workspace_email")
   @@index([expiresAt], map: "idx_user_invitations_expires_at")
+  @@index([workspaceId, createdAt(sort: Desc)], map: "idx_user_invitations_workspace_created_at")
   @@index([invitedByUserId, createdAt(sort: Desc)], map: "idx_user_invitations_invited_by_created_at")
   @@map("user_invitations")
 }
@@ -288,6 +337,7 @@ model AuthSession {
 
 model ModelProvider {
   id              String            @id @default(uuid()) @db.Uuid
+  workspaceId     String            @map("workspace_id") @db.Uuid
   name            String
   providerType    ModelProviderType @map("provider_type")
   baseUrl         String            @map("base_url")
@@ -305,6 +355,7 @@ model ModelProvider {
 
 model ModelConfig {
   id                       String                   @id @default(uuid()) @db.Uuid
+  workspaceId              String                   @map("workspace_id") @db.Uuid
   providerId               String                   @map("provider_id") @db.Uuid
   modelName                String                   @map("model_name")
   modelType                ModelConfigType          @map("model_type")
@@ -334,7 +385,8 @@ model ModelConfig {
 }
 
 model DefaultModelSetting {
-  id                     String       @id @default("global")
+  id                     String       @id
+  workspaceId            String       @unique(map: "uq_default_model_settings_workspace_id") @map("workspace_id") @db.Uuid
   chatModelConfigId      String?      @map("chat_model_config_id") @db.Uuid
   embeddingModelConfigId String?      @map("embedding_model_config_id") @db.Uuid
   createdAt              DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -349,6 +401,7 @@ model DefaultModelSetting {
 
 model Agent {
   id                    String                 @id @default(uuid()) @db.Uuid
+  workspaceId           String                 @map("workspace_id") @db.Uuid
   name                  String
   description           String                 @default("")
   systemPrompt          String                 @map("system_prompt") @db.Text
@@ -403,6 +456,7 @@ model AgentWorkflow {
 /// Workflow 保存可编辑草稿；正式执行只能引用 workflow_versions 中的不可变版本。
 model Workflow {
   id               String            @id @default(uuid()) @db.Uuid
+  workspaceId      String            @map("workspace_id") @db.Uuid
   name             String
   description      String            @default("") @db.Text
   status           WorkflowStatus    @default(DRAFT)
@@ -423,6 +477,7 @@ model Workflow {
 /// 发布版本不可更新；graph 用于回显，compiled_plan 从 W2 开始由编译器生成。
 model WorkflowVersion {
   id                 String   @id @default(uuid()) @db.Uuid
+  workspaceId        String   @map("workspace_id") @db.Uuid
   workflowId         String   @map("workflow_id") @db.Uuid
   version            Int
   graphSchemaVersion Int      @map("graph_schema_version")
@@ -441,6 +496,7 @@ model WorkflowVersion {
 /// Skill 是管理员维护的可复用指令；MCP Prompt 导入只创建停用草稿，不自动注入 Agent。
 model Skill {
   id              String    @id @default(uuid()) @db.Uuid
+  workspaceId     String    @map("workspace_id") @db.Uuid
   name            String
   description     String    @default("") @db.Text
   instructions    String    @db.Text
@@ -467,6 +523,7 @@ model Skill {
 /// 业务后端调用 Agent 的长期凭证。原始 Key 只在创建或轮换时返回，数据库永远不保存明文。
 model AgentApiKey {
   id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
   agentId     String    @map("agent_id") @db.Uuid
   name        String
   keyPrefix   String    @map("key_prefix")
@@ -488,6 +545,7 @@ model AgentApiKey {
 /// 公开 Widget 与 Service API 的外部用户。externalId 仅用作隔离键，不是 Mia 工作台身份。
 model ExternalEndUser {
   id            String                 @id @default(uuid()) @db.Uuid
+  workspaceId   String                 @map("workspace_id") @db.Uuid
   agentId       String                 @map("agent_id") @db.Uuid
   source        ExternalUserSource
   externalId    String                 @map("external_id")
@@ -505,6 +563,7 @@ model ExternalEndUser {
 /// 外部调用的独立会话。它不能复用工作台 ChatSession，因为后者的 owner 固定为 Mia User UUID。
 model ExternalConversation {
   id                String             @id @default(uuid()) @db.Uuid
+  workspaceId       String             @map("workspace_id") @db.Uuid
   agentId           String             @map("agent_id") @db.Uuid
   externalEndUserId String             @map("external_end_user_id") @db.Uuid
   title             String?
@@ -549,8 +608,9 @@ model AgentTool {
 /// 管理员预配置的 HTTP API 工具。运行时 ID 使用 `http_{id}`，继续兼容 AgentTool 的字符串绑定。
 model HttpTool {
   id                  String      @id @default(uuid()) @db.Uuid
+  workspaceId         String      @map("workspace_id") @db.Uuid
   name                String
-  slug                String      @unique(map: "uq_http_tools_slug")
+  slug                String
   description         String      @db.Text
   enabled             Boolean     @default(true)
   method              String
@@ -572,6 +632,7 @@ model HttpTool {
   secret              ToolSecret? @relation(fields: [secretId], references: [id], onDelete: SetNull)
   createdBy           User        @relation("HttpToolCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
 
+  @@unique([workspaceId, slug], map: "uq_http_tools_workspace_slug")
   @@index([enabled, deletedAt], map: "idx_http_tools_enabled_deleted_at")
   @@index([createdAt(sort: Desc)], map: "idx_http_tools_created_at")
   @@map("http_tools")
@@ -580,6 +641,7 @@ model HttpTool {
 /// HTTP Tool 的加密凭据。API 与日志只暴露 configured 状态，禁止返回密文。
 model ToolSecret {
   id              String    @id @default(uuid()) @db.Uuid
+  workspaceId     String    @map("workspace_id") @db.Uuid
   name            String
   encryptedValue  String    @map("encrypted_value") @db.Text
   createdByUserId String    @map("created_by_user_id") @db.Uuid
@@ -595,8 +657,9 @@ model ToolSecret {
 /// 管理员配置的 MCP Server。发现结果保存为本地快照，运行时不依赖实时 listTools。
 model McpServer {
   id                        String                 @id @default(uuid()) @db.Uuid
+  workspaceId               String                 @map("workspace_id") @db.Uuid
   name                      String
-  slug                      String                 @unique(map: "uq_mcp_servers_slug")
+  slug                      String
   description               String                 @default("") @db.Text
   transport                 McpTransport           @default(STREAMABLE_HTTP)
   endpoint                  String
@@ -630,6 +693,7 @@ model McpServer {
   oauthAuthorization        McpOAuthAuthorization?
   approvals                 McpToolApproval[]
 
+  @@unique([workspaceId, slug], map: "uq_mcp_servers_workspace_slug")
   @@index([enabled, deletedAt], map: "idx_mcp_servers_enabled_deleted_at")
   @@index([healthStatus, updatedAt(sort: Desc)], map: "idx_mcp_servers_health_updated_at")
   @@map("mcp_servers")
@@ -638,6 +702,7 @@ model McpServer {
 /// MCP Server 的认证材料独立加密保存，任何查询 DTO 和日志都不得返回密文。
 model McpServerSecret {
   id              String     @id @default(uuid()) @db.Uuid
+  workspaceId     String     @map("workspace_id") @db.Uuid
   encryptedValue  String     @map("encrypted_value") @db.Text
   createdByUserId String     @map("created_by_user_id") @db.Uuid
   createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -652,6 +717,7 @@ model McpServerSecret {
 /// 团队共享的 MCP OAuth 授权。Token、PKCE 和 Discovery 状态整体加密，state 仅保存哈希。
 model McpOAuthAuthorization {
   id              String    @id @default(uuid()) @db.Uuid
+  workspaceId     String    @map("workspace_id") @db.Uuid
   serverId        String    @unique(map: "uq_mcp_oauth_authorizations_server_id") @map("server_id") @db.Uuid
   encryptedState  String    @map("encrypted_state") @db.Text
   stateHash       String?   @unique(map: "uq_mcp_oauth_authorizations_state_hash") @map("state_hash")
@@ -669,27 +735,28 @@ model McpOAuthAuthorization {
 
 /// 远程 Tool 的本地发现快照。runtimeId 永久稳定，避免重同步破坏 Agent 已有绑定。
 model McpServerTool {
-  id            String           @id @default(uuid()) @db.Uuid
-  serverId      String           @map("server_id") @db.Uuid
-  remoteName    String           @map("remote_name")
-  runtimeId     String           @unique(map: "uq_mcp_server_tools_runtime_id") @map("runtime_id")
-  title         String?
-  description   String           @default("") @db.Text
-  inputSchema   Json             @map("input_schema") @db.JsonB
-  outputSchema  Json?            @map("output_schema") @db.JsonB
-  annotations   Json?            @db.JsonB
-  schemaHash    String           @map("schema_hash")
-  enabled       Boolean          @default(false)
-  approvalMode  McpApprovalMode? @map("approval_mode")
-  riskLevel     McpRiskLevel     @default(LOW) @map("risk_level")
-  sensitiveInputPaths  Json      @default("[]") @map("sensitive_input_paths") @db.JsonB
-  sensitiveOutputPaths Json      @default("[]") @map("sensitive_output_paths") @db.JsonB
-  lastSeenAt    DateTime         @map("last_seen_at") @db.Timestamptz(6)
-  unavailableAt DateTime?        @map("unavailable_at") @db.Timestamptz(6)
-  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  server        McpServer        @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  approvals     McpToolApproval[]
+  id                   String            @id @default(uuid()) @db.Uuid
+  workspaceId          String            @map("workspace_id") @db.Uuid
+  serverId             String            @map("server_id") @db.Uuid
+  remoteName           String            @map("remote_name")
+  runtimeId            String            @unique(map: "uq_mcp_server_tools_runtime_id") @map("runtime_id")
+  title                String?
+  description          String            @default("") @db.Text
+  inputSchema          Json              @map("input_schema") @db.JsonB
+  outputSchema         Json?             @map("output_schema") @db.JsonB
+  annotations          Json?             @db.JsonB
+  schemaHash           String            @map("schema_hash")
+  enabled              Boolean           @default(false)
+  approvalMode         McpApprovalMode?  @map("approval_mode")
+  riskLevel            McpRiskLevel      @default(LOW) @map("risk_level")
+  sensitiveInputPaths  Json              @default("[]") @map("sensitive_input_paths") @db.JsonB
+  sensitiveOutputPaths Json              @default("[]") @map("sensitive_output_paths") @db.JsonB
+  lastSeenAt           DateTime          @map("last_seen_at") @db.Timestamptz(6)
+  unavailableAt        DateTime?         @map("unavailable_at") @db.Timestamptz(6)
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  server               McpServer         @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  approvals            McpToolApproval[]
 
   @@unique([serverId, remoteName], map: "uq_mcp_server_tools_server_remote_name")
   @@index([serverId, enabled, unavailableAt], map: "idx_mcp_server_tools_server_enabled_available")
@@ -699,6 +766,7 @@ model McpServerTool {
 /// Chat Runtime 的一次性工具审批。真实参数加密保存，哈希用于防止批准后替换参数重放。
 model McpToolApproval {
   id             String                @id @default(uuid()) @db.Uuid
+  workspaceId    String                @map("workspace_id") @db.Uuid
   serverId       String                @map("server_id") @db.Uuid
   toolId         String                @map("tool_id") @db.Uuid
   runtimeId      String                @map("runtime_id")
@@ -729,6 +797,7 @@ model McpToolApproval {
 /// 每次发现都单独记录结果；失败记录不能覆盖上一份可工作的 Tool 快照。
 model McpSyncRun {
   id                 String         @id @default(uuid()) @db.Uuid
+  workspaceId        String         @map("workspace_id") @db.Uuid
   serverId           String         @map("server_id") @db.Uuid
   status             McpSyncStatus  @default(RUNNING)
   trigger            McpSyncTrigger
@@ -751,6 +820,7 @@ model McpSyncRun {
 /// 过滤，避免仅凭 session ID 访问到其他成员的对话。
 model ChatSession {
   id             String               @id @default(uuid()) @db.Uuid
+  workspaceId    String               @map("workspace_id") @db.Uuid
   agentId        String               @map("agent_id") @db.Uuid
   userId         String               @map("user_id") @db.Uuid
   title          String               @default("")
@@ -805,6 +875,7 @@ model ChatMessageFeedback {
 
 model ToolCallLog {
   id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @map("workspace_id") @db.Uuid
   requestId    String?  @map("request_id")
   agentId      String?  @map("agent_id")
   userId       String?  @map("user_id")
@@ -835,6 +906,7 @@ model ToolCallLog {
 /// 一次 Agent 执行的顶层记录。会话 ID 只作为跨模块追踪键，不建立到会话表的 ORM 关系。
 model AgentRun {
   id                     String           @id @default(uuid()) @db.Uuid
+  workspaceId            String           @map("workspace_id") @db.Uuid
   requestId              String           @map("request_id")
   source                 AgentRunSource
   agentId                String           @map("agent_id") @db.Uuid
@@ -901,6 +973,7 @@ model AgentRunStep {
 
 model KnowledgeBase {
   id                     String                   @id @default(uuid()) @db.Uuid
+  workspaceId            String                   @map("workspace_id") @db.Uuid
   name                   String
   description            String                   @default("")
   embeddingModelConfigId String                   @map("embedding_model_config_id") @db.Uuid
@@ -929,6 +1002,7 @@ model KnowledgeBase {
 
 model KnowledgeDocument {
   id               String           @id @default(uuid()) @db.Uuid
+  workspaceId      String           @map("workspace_id") @db.Uuid
   knowledgeBaseId  String           @map("knowledge_base_id") @db.Uuid
   filename         String
   originalFilename String           @map("original_filename")
@@ -954,6 +1028,7 @@ model KnowledgeDocument {
 
 model KnowledgeChunk {
   id              String                  @id @default(uuid()) @db.Uuid
+  workspaceId     String                  @map("workspace_id") @db.Uuid
   knowledgeBaseId String                  @map("knowledge_base_id") @db.Uuid
   documentId      String                  @map("document_id") @db.Uuid
   chunkIndex      Int                     @map("chunk_index")
@@ -976,6 +1051,7 @@ model KnowledgeChunk {
 
 model KnowledgeEmbedding {
   id                     String                @id @default(uuid()) @db.Uuid
+  workspaceId            String                @map("workspace_id") @db.Uuid
   knowledgeBaseId        String                @map("knowledge_base_id") @db.Uuid
   chunkId                String                @unique(map: "uq_knowledge_embeddings_chunk_id") @map("chunk_id") @db.Uuid
   embeddingModelConfigId String                @map("embedding_model_config_id") @db.Uuid
@@ -990,6 +1066,7 @@ model KnowledgeEmbedding {
 
 model KnowledgeEmbedding1024 {
   id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                @map("workspace_id") @db.Uuid
   knowledgeBaseId        String                @map("knowledge_base_id") @db.Uuid
   chunkId                String                @unique(map: "uq_knowledge_embeddings_1024_chunk_id") @map("chunk_id") @db.Uuid
   embeddingModelConfigId String                @map("embedding_model_config_id") @db.Uuid
@@ -1005,6 +1082,7 @@ model KnowledgeEmbedding1024 {
 
 model KnowledgeEmbedding1536 {
   id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                @map("workspace_id") @db.Uuid
   knowledgeBaseId        String                @map("knowledge_base_id") @db.Uuid
   chunkId                String                @unique(map: "uq_knowledge_embeddings_1536_chunk_id") @map("chunk_id") @db.Uuid
   embeddingModelConfigId String                @map("embedding_model_config_id") @db.Uuid
@@ -1020,6 +1098,7 @@ model KnowledgeEmbedding1536 {
 
 model KnowledgeEmbedding3072 {
   id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                @map("workspace_id") @db.Uuid
   knowledgeBaseId        String                @map("knowledge_base_id") @db.Uuid
   chunkId                String                @unique(map: "uq_knowledge_embeddings_3072_chunk_id") @map("chunk_id") @db.Uuid
   embeddingModelConfigId String                @map("embedding_model_config_id") @db.Uuid

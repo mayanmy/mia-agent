@@ -1,9 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Redirect } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
+import { UserRole, WorkspaceRole } from "@prisma/client";
 
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Public } from "../../core/auth/public.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRoles } from "../../core/auth/workspace.decorator";
 import { getConfig } from "../../core/config";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import {
@@ -35,7 +36,8 @@ import {
 import { McpService } from "./mcp.service";
 
 @Controller("mcp/servers")
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.USER)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
 export class McpController {
   constructor(private readonly mcpService: McpService) {}
 

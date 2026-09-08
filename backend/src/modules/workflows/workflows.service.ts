@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import { Prisma, WorkflowStatus } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
+import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PageResult } from "../../core/result";
 import { PrismaService } from "../prisma/prisma.service";
@@ -107,6 +108,7 @@ export class WorkflowsService {
     const page = normalizePageQuery(query);
     const status = this.parseOptionalStatus(query.status);
     const where: Prisma.WorkflowWhereInput = {
+      workspaceId: requireWorkspaceId(),
       deletedAt: null,
       ...(status ? { status } : {})
     };
@@ -134,6 +136,7 @@ export class WorkflowsService {
     const graph = this.normalizeGraph(payload.graph ?? EMPTY_WORKFLOW_GRAPH);
     const workflow = await this.prisma.workflow.create({
       data: {
+        workspaceId: requireWorkspaceId(),
         name: this.requireName(payload.name),
         description: this.normalizeDescription(payload.description),
         draftGraph: graph as Prisma.InputJsonValue,
@@ -147,7 +150,11 @@ export class WorkflowsService {
   /** 读取未归档 Workflow 的完整草稿详情。 */
   async getWorkflow(id: string): Promise<WorkflowDetail> {
     const workflow = await this.prisma.workflow.findFirst({
-      where: { id: this.requireId(id, "workflowId"), deletedAt: null },
+      where: {
+        id: this.requireId(id, "workflowId"),
+        workspaceId: requireWorkspaceId(),
+        deletedAt: null
+      },
       include: { _count: { select: { versions: true } } }
     });
     if (!workflow) throw this.notFound();
@@ -159,7 +166,7 @@ export class WorkflowsService {
     const workflowId = this.requireId(id, "workflowId");
     await this.ensureExists(workflowId);
     const workflow = await this.prisma.workflow.update({
-      where: { id: workflowId },
+      where: { id: workflowId, workspaceId: requireWorkspaceId() },
       data: {
         ...(payload.name !== undefined ? { name: this.requireName(payload.name) } : {}),
         ...(payload.description !== undefined
@@ -185,6 +192,7 @@ export class WorkflowsService {
     const updated = await this.prisma.workflow.updateMany({
       where: {
         id: workflowId,
+        workspaceId: requireWorkspaceId(),
         deletedAt: null,
         draftRevision: expectedRevision
       },
@@ -204,7 +212,7 @@ export class WorkflowsService {
     }
 
     const workflow = await this.prisma.workflow.findUniqueOrThrow({
-      where: { id: workflowId },
+      where: { id: workflowId, workspaceId: requireWorkspaceId() },
       select: { draftRevision: true, updatedAt: true }
     });
     return {
@@ -221,7 +229,7 @@ export class WorkflowsService {
   ): Promise<WorkflowValidationResult> {
     const workflowId = this.requireId(id, "workflowId");
     const workflow = await this.prisma.workflow.findFirst({
-      where: { id: workflowId, deletedAt: null },
+      where: { id: workflowId, workspaceId: requireWorkspaceId(), deletedAt: null },
       select: { draftGraph: true }
     });
     if (!workflow) throw this.notFound();
@@ -246,7 +254,7 @@ export class WorkflowsService {
     );
     const publisherId = this.requireId(actorUserId, "actorUserId");
     const workflow = await this.prisma.workflow.findFirst({
-      where: { id: workflowId, deletedAt: null },
+      where: { id: workflowId, workspaceId: requireWorkspaceId(), deletedAt: null },
       select: {
         draftGraph: true,
         draftRevision: true,
@@ -279,12 +287,14 @@ export class WorkflowsService {
         const updated = await transaction.workflow.updateMany({
           where: {
             id: workflowId,
+            workspaceId: requireWorkspaceId(),
             deletedAt: null,
             draftRevision: expectedRevision,
             // 同一 draftRevision 可能被两个发布请求同时读取，旧 publishedVersion 也是写入前置条件。
             publishedVersion: workflow.publishedVersion
           },
           data: {
+            workspaceId: requireWorkspaceId(),
             status: WorkflowStatus.PUBLISHED,
             publishedVersion: nextVersion
           }
@@ -293,6 +303,7 @@ export class WorkflowsService {
 
         const version = await transaction.workflowVersion.create({
           data: {
+            workspaceId: requireWorkspaceId(),
             workflowId,
             version: nextVersion,
             graphSchemaVersion: graph.schemaVersion,
@@ -320,7 +331,7 @@ export class WorkflowsService {
     const workflowId = this.requireId(id, "workflowId");
     await this.ensureExists(workflowId);
     await this.prisma.workflow.update({
-      where: { id: workflowId },
+      where: { id: workflowId, workspaceId: requireWorkspaceId() },
       data: {
         status: WorkflowStatus.ARCHIVED,
         deletedAt: new Date()
@@ -333,7 +344,7 @@ export class WorkflowsService {
     const normalizedWorkflowId = this.requireId(workflowId, "workflowId");
     await this.ensureExists(normalizedWorkflowId);
     const versions = await this.prisma.workflowVersion.findMany({
-      where: { workflowId: normalizedWorkflowId },
+      where: { workflowId: normalizedWorkflowId, workspaceId: requireWorkspaceId() },
       orderBy: { version: "desc" }
     });
     return versions.map((version) => this.toVersionListItem(version));
@@ -344,6 +355,7 @@ export class WorkflowsService {
     const version = await this.prisma.workflowVersion.findFirst({
       where: {
         id: this.requireId(versionId, "workflowVersionId"),
+        workspaceId: requireWorkspaceId(),
         workflowId: this.requireId(workflowId, "workflowId")
       }
     });
@@ -368,8 +380,10 @@ export class WorkflowsService {
     const version = await this.prisma.workflowVersion.findFirst({
       where: {
         id: this.requireId(versionId, "workflowVersionId"),
+        workspaceId: requireWorkspaceId(),
         workflowId: this.requireId(workflowId, "workflowId"),
         workflow: {
+          workspaceId: requireWorkspaceId(),
           deletedAt: null,
           status: WorkflowStatus.PUBLISHED
         }
@@ -396,7 +410,12 @@ export class WorkflowsService {
   /** 返回所有当前可运行的 Workflow 应用，普通成员无需读取草稿 Graph。 */
   async listPublishedApps(): Promise<PublishedWorkflowApp[]> {
     const workflows = await this.prisma.workflow.findMany({
-      where: { deletedAt: null, status: WorkflowStatus.PUBLISHED, publishedVersion: { not: null } },
+      where: {
+        workspaceId: requireWorkspaceId(),
+        deletedAt: null,
+        status: WorkflowStatus.PUBLISHED,
+        publishedVersion: { not: null }
+      },
       orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       include: { versions: { orderBy: { version: "desc" }, take: 1 } }
     });
@@ -421,7 +440,12 @@ export class WorkflowsService {
   async getPublishedApp(workflowId: string): Promise<PublishedWorkflowApp> {
     const id = this.requireId(workflowId, "workflowId");
     const workflow = await this.prisma.workflow.findFirst({
-      where: { id, deletedAt: null, status: WorkflowStatus.PUBLISHED },
+      where: {
+        id,
+        workspaceId: requireWorkspaceId(),
+        deletedAt: null,
+        status: WorkflowStatus.PUBLISHED
+      },
       include: { versions: { orderBy: { version: "desc" }, take: 1 } }
     });
     const version = workflow?.versions[0];
@@ -488,11 +512,16 @@ export class WorkflowsService {
 
     const versions = await this.prisma.workflowVersion.findMany({
       where: {
+        workspaceId: requireWorkspaceId(),
         OR: bindings.map((binding) => ({
           id: binding.workflowVersionId,
           workflowId: binding.workflowId
         })),
-        workflow: { deletedAt: null, status: WorkflowStatus.PUBLISHED }
+        workflow: {
+          workspaceId: requireWorkspaceId(),
+          deletedAt: null,
+          status: WorkflowStatus.PUBLISHED
+        }
       },
       include: {
         workflow: { select: { id: true, name: true, description: true } }
@@ -561,7 +590,7 @@ export class WorkflowsService {
   /** 确认 Workflow 存在且未软删除。 */
   private async ensureExists(id: string): Promise<void> {
     const workflow = await this.prisma.workflow.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, workspaceId: requireWorkspaceId(), deletedAt: null },
       select: { id: true }
     });
     if (!workflow) throw this.notFound();

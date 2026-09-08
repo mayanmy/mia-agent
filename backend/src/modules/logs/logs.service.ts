@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
+import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PageResult } from "../../core/result";
 import { PrismaService } from "../prisma/prisma.service";
@@ -32,7 +33,7 @@ export class LogsService {
   }
 
   private buildToolCallLogWhere(query: ToolCallLogQueryDto): Prisma.ToolCallLogWhereInput {
-    const where: Prisma.ToolCallLogWhereInput = {};
+    const where: Prisma.ToolCallLogWhereInput = { workspaceId: requireWorkspaceId() };
 
     if (query.requestId?.trim()) {
       where.requestId = query.requestId.trim();

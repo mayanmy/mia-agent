@@ -14,6 +14,7 @@ import {
 } from "@prisma/client";
 
 import { decryptSecret, encryptSecret } from "../../core/crypto";
+import { getWorkspaceId, requireWorkspaceId } from "../../core/auth/workspace-context";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import { KnowledgeService } from "../knowledge/knowledge.service";
@@ -100,7 +101,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
 
   async listServers(): Promise<McpServerListItem[]> {
     const servers = await this.prisma.mcpServer.findMany({
-      where: { deletedAt: null },
+      where: { workspaceId: requireWorkspaceId(), deletedAt: null },
       include: SERVER_INCLUDE,
       orderBy: { createdAt: "desc" }
     });
@@ -116,7 +117,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
   async getServer(id: string): Promise<McpServerDetail> {
     const server = await this.requireServer(id);
     const enabledToolCount = await this.prisma.mcpServerTool.count({
-      where: { serverId: id, enabled: true }
+      where: { workspaceId: requireWorkspaceId(), serverId: id, enabled: true }
     });
     return this.toDetail(server, enabledToolCount);
   }
@@ -386,7 +387,11 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       const server = await this.prisma.$transaction(async (tx) => {
         const secret = encryptedCredential
           ? await tx.mcpServerSecret.create({
-              data: { encryptedValue: encryptSecret(encryptedCredential), createdByUserId: userId }
+              data: {
+                workspaceId: requireWorkspaceId(),
+                encryptedValue: encryptSecret(encryptedCredential),
+                createdByUserId: userId
+              }
             })
           : undefined;
         return tx.mcpServer.create({
@@ -435,11 +440,19 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
           if (secretId) {
             await tx.mcpServerSecret.update({
               where: { id: secretId },
-              data: { encryptedValue: encryptSecret(encryptedCredential), createdByUserId: userId }
+              data: {
+                workspaceId: requireWorkspaceId(),
+                encryptedValue: encryptSecret(encryptedCredential),
+                createdByUserId: userId
+              }
             });
           } else {
             const secret = await tx.mcpServerSecret.create({
-              data: { encryptedValue: encryptSecret(encryptedCredential), createdByUserId: userId }
+              data: {
+                workspaceId: requireWorkspaceId(),
+                encryptedValue: encryptSecret(encryptedCredential),
+                createdByUserId: userId
+              }
             });
             secretId = secret.id;
           }
@@ -483,7 +496,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
   async deleteServer(id: string): Promise<void> {
     await this.requireServer(id);
     await this.prisma.mcpServer.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data: { deletedAt: new Date(), enabled: false }
     });
   }
@@ -559,7 +572,12 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     const server = await this.requireServer(id);
     const startedAt = Date.now();
     const syncRun = await this.prisma.mcpSyncRun.create({
-      data: { serverId: id, status: McpSyncStatus.RUNNING, trigger }
+      data: {
+        workspaceId: server.workspaceId,
+        serverId: id,
+        status: McpSyncStatus.RUNNING,
+        trigger
+      }
     });
     let client: ReturnType<McpProtocolClientFactory["create"]> | undefined;
     let runtimeConfig: McpClientRuntimeConfig | undefined;
@@ -592,6 +610,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
             await tx.mcpServerTool.create({
               data: {
                 id: toolId,
+                workspaceId: server.workspaceId,
                 serverId: id,
                 runtimeId: `mcp_${toolId}`,
                 remoteName: tool.name,
@@ -814,7 +833,11 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
 
   private async requireServer(id: string): Promise<ServerWithSummary> {
     const server = await this.prisma.mcpServer.findFirst({
-      where: { id, deletedAt: null },
+      where: {
+        id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
+        deletedAt: null
+      },
       include: SERVER_INCLUDE
     });
     if (!server) throw new AppError(ErrorCodes.mcp.notFound, "MCP Server 不存在", 404);
@@ -1035,6 +1058,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
 
   private runtimeToolWhere(): Prisma.McpServerToolWhereInput {
     return {
+      ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
       enabled: true,
       unavailableAt: null,
       server: {
@@ -1075,6 +1099,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     this.validateSlug(payload.slug);
     return {
       id: randomUUID(),
+      workspaceId: requireWorkspaceId(),
       name: payload.name.trim(),
       slug: payload.slug.trim(),
       description: payload.description?.trim() ?? "",

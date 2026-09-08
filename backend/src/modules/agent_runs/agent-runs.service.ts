@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import { AgentRun, AgentRunStatus, AgentRunStepStatus, Prisma, PrismaClient } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
+import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PageResult } from "../../core/result";
 import { PrismaService } from "../prisma/prisma.service";
@@ -69,8 +70,11 @@ export class AgentRunsService {
 
   /** 查询 Run 详情并按 sequence 返回 Timeline；不存在时返回稳定的 404 错误。 */
   async getRunDetail(runId: string): Promise<AgentRunDetail> {
-    const run = await this.prisma.agentRun.findUnique({
-      where: { id: this.requireText(runId, "runId") },
+    const run = await this.prisma.agentRun.findFirst({
+      where: {
+        id: this.requireText(runId, "runId"),
+        workspaceId: requireWorkspaceId()
+      },
       include: { steps: { orderBy: { sequence: "asc" } } }
     });
 
@@ -154,8 +158,13 @@ export class AgentRunsService {
 
   /** 创建排队态 Run，并在入口处截断用户输入，避免 Trace 表保存无限长度内容。 */
   async createRun(payload: CreateAgentRunDto): Promise<AgentRunContext> {
+    const agent = await this.prisma.agent.findUniqueOrThrow({
+      where: { id: this.requireText(payload.agentId, "agentId") },
+      select: { workspaceId: true }
+    });
     const run = await this.prisma.agentRun.create({
       data: {
+        workspaceId: agent.workspaceId,
         requestId: this.requireText(payload.requestId, "requestId"),
         source: payload.source,
         agentId: this.requireText(payload.agentId, "agentId"),
@@ -503,7 +512,7 @@ export class AgentRunsService {
 
   /** 将 Run 查询条件收敛到稳定字段，避免 Controller 或前端拼接 Prisma 条件。 */
   private buildRunWhere(query: AgentRunQueryDto): Prisma.AgentRunWhereInput {
-    const where: Prisma.AgentRunWhereInput = {};
+    const where: Prisma.AgentRunWhereInput = { workspaceId: requireWorkspaceId() };
     if (query.requestId?.trim()) where.requestId = query.requestId.trim();
     if (query.agentId?.trim()) where.agentId = query.agentId.trim();
     if (query.userId?.trim()) where.userId = query.userId.trim();

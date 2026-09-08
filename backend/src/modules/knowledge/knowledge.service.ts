@@ -1,11 +1,12 @@
 import { HttpStatus, Inject, Injectable } from "@nestjs/common";
-import { ModelConfigType, Prisma } from "@prisma/client";
+import { ModelConfigType, Prisma, WorkspaceRole } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 
 import { getConfig } from "../../core/config";
 import { AppError, ErrorCodes } from "../../core/errors";
+import { getWorkspaceId, requireWorkspaceId } from "../../core/auth/workspace-context";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PageResult } from "../../core/result";
 import { ModelProvidersService } from "../model-providers/model-providers.service";
@@ -85,11 +86,14 @@ export class KnowledgeService {
   ) {}
 
   async listKnowledgeBases(
-    query: KnowledgeBaseQueryDto
+    query: KnowledgeBaseQueryDto,
+    workspaceRole?: WorkspaceRole
   ): Promise<PageResult<KnowledgeBaseListItem>> {
     const page = normalizePageQuery(query);
     const where: Prisma.KnowledgeBaseWhereInput = {
+      workspaceId: requireWorkspaceId(),
       deletedAt: null,
+      ...(workspaceRole === WorkspaceRole.MEMBER ? { enabled: true } : {}),
       ...(query.enabled !== undefined ? { enabled: this.parseEnabled(query.enabled) } : {})
     };
 
@@ -136,6 +140,7 @@ export class KnowledgeService {
       // 当前 vector_store_type 仍是 PGVECTOR，但 collectionName 已按知识库生成，后续切 Qdrant 时可直接映射为 Collection 名。
       data: {
         id: knowledgeBaseId,
+        workspaceId: requireWorkspaceId(),
         ...data,
         embeddingDimension,
         vectorStoreType: "PGVECTOR",
@@ -167,7 +172,7 @@ export class KnowledgeService {
     }
 
     const knowledgeBase = await this.prisma.knowledgeBase.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data,
       include: this.getKnowledgeBaseInclude()
     });
@@ -183,7 +188,7 @@ export class KnowledgeService {
     await this.ensureKnowledgeBaseExists(id);
 
     await this.prisma.knowledgeBase.update({
-      where: { id },
+      where: { id, workspaceId: requireWorkspaceId() },
       data: {
         deletedAt: new Date(),
         enabled: false
@@ -198,6 +203,7 @@ export class KnowledgeService {
     await this.ensureKnowledgeBaseExists(knowledgeBaseId);
     const page = normalizePageQuery(query);
     const where: Prisma.KnowledgeDocumentWhereInput = {
+      workspaceId: requireWorkspaceId(),
       knowledgeBaseId,
       deletedAt: null,
       ...(query.status ? { status: this.normalizeDocumentStatus(query.status) } : {})
@@ -243,6 +249,7 @@ export class KnowledgeService {
       const document = await this.prisma.knowledgeDocument.create({
         data: {
           id: documentId,
+          workspaceId: requireWorkspaceId(),
           knowledgeBaseId,
           filename,
           originalFilename,
@@ -270,6 +277,7 @@ export class KnowledgeService {
     const existing = await this.prisma.knowledgeDocument.findFirst({
       where: {
         id: documentId,
+        workspaceId: requireWorkspaceId(),
         knowledgeBaseId,
         deletedAt: null
       },
@@ -304,7 +312,8 @@ export class KnowledgeService {
     await this.prisma.$transaction([
       this.prisma.knowledgeDocument.update({
         where: {
-          id: documentId
+          id: documentId,
+          workspaceId: requireWorkspaceId()
         },
         data: {
           deletedAt,
@@ -314,6 +323,7 @@ export class KnowledgeService {
       this.prisma.knowledgeChunk.updateMany({
         where: {
           documentId,
+          workspaceId: requireWorkspaceId(),
           deletedAt: null
         },
         data: {
@@ -340,7 +350,8 @@ export class KnowledgeService {
     const buffer = await readFile(document.storagePath);
     const processingDocument = await this.prisma.knowledgeDocument.update({
       where: {
-        id: document.id
+        id: document.id,
+        workspaceId: requireWorkspaceId()
       },
       data: {
         status: "pending",
@@ -351,6 +362,7 @@ export class KnowledgeService {
     await this.prisma.knowledgeChunk.updateMany({
       where: {
         documentId: document.id,
+        workspaceId: document.workspaceId,
         deletedAt: null
       },
       data: {
@@ -395,6 +407,7 @@ export class KnowledgeService {
         this.prisma.knowledgeChunk.createMany({
           data: chunks.map((chunk) => ({
             knowledgeBaseId: document.knowledgeBaseId,
+            workspaceId: document.workspaceId,
             documentId: document.id,
             chunkIndex: chunk.chunkIndex,
             content: chunk.content,
@@ -407,7 +420,8 @@ export class KnowledgeService {
         }),
         this.prisma.knowledgeDocument.update({
           where: {
-            id: document.id
+            id: document.id,
+            workspaceId: document.workspaceId
           },
           data: {
             status: "chunking",
@@ -421,6 +435,7 @@ export class KnowledgeService {
       const storedChunks = await this.prisma.knowledgeChunk.findMany({
         where: {
           documentId: document.id,
+          workspaceId: document.workspaceId,
           deletedAt: null
         },
         orderBy: {
@@ -498,6 +513,7 @@ export class KnowledgeService {
 
       try {
         await this.vectorStore.upsertEmbedding({
+          workspaceId: chunks[0].workspaceId,
           namespace: embeddingConfig.namespace,
           knowledgeBaseId,
           chunkId: chunk.id,
@@ -534,6 +550,7 @@ export class KnowledgeService {
     const knowledgeBase = await this.prisma.knowledgeBase.findFirst({
       where: {
         id: knowledgeBaseId,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
         deletedAt: null
       },
       select: {
@@ -692,6 +709,7 @@ export class KnowledgeService {
     const document = await this.prisma.knowledgeDocument.findFirst({
       where: {
         id: documentId,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
         knowledgeBaseId,
         deletedAt: null
       }
@@ -715,6 +733,7 @@ export class KnowledgeService {
 
     const existing = await this.prisma.knowledgeBase.findMany({
       where: {
+        workspaceId: requireWorkspaceId(),
         id: {
           in: ids
         },
@@ -743,6 +762,7 @@ export class KnowledgeService {
 
     const knowledgeBases = await this.prisma.knowledgeBase.findMany({
       where: {
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
         id: {
           in: ids
         },
@@ -751,6 +771,7 @@ export class KnowledgeService {
       },
       select: {
         id: true,
+        workspaceId: true,
         embeddingModelConfigId: true,
         embeddingDimension: true,
         vectorStoreType: true,
@@ -760,6 +781,7 @@ export class KnowledgeService {
 
     return knowledgeBases.map((knowledgeBase) => ({
       id: knowledgeBase.id,
+      workspaceId: knowledgeBase.workspaceId,
       embeddingModelConfigId: knowledgeBase.embeddingModelConfigId,
       embeddingDimension: knowledgeBase.embeddingDimension,
       vectorStoreType: this.toVectorNamespace(knowledgeBase).type,
@@ -939,6 +961,7 @@ export class KnowledgeService {
   private async ensureNameAvailable(name: string, excludeId?: string): Promise<void> {
     const existing = await this.prisma.knowledgeBase.findFirst({
       where: {
+        workspaceId: requireWorkspaceId(),
         name,
         deletedAt: null,
         ...(excludeId ? { id: { not: excludeId } } : {})
@@ -958,6 +981,7 @@ export class KnowledgeService {
     const existing = await this.prisma.knowledgeBase.findFirst({
       where: {
         id,
+        workspaceId: requireWorkspaceId(),
         deletedAt: null
       },
       select: {
@@ -978,6 +1002,7 @@ export class KnowledgeService {
     const knowledgeBase = await this.prisma.knowledgeBase.findFirst({
       where: {
         id,
+        workspaceId: requireWorkspaceId(),
         deletedAt: null
       },
       include: this.getKnowledgeBaseInclude()
@@ -1092,6 +1117,7 @@ export class KnowledgeService {
     const knowledgeBase = await this.prisma.knowledgeBase.findFirst({
       where: {
         id: knowledgeBaseId,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
         deletedAt: null
       },
       select: {

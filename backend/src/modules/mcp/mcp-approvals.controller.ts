@@ -3,12 +3,14 @@ import { UserRole } from "@prisma/client";
 
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRequired } from "../../core/auth/workspace.decorator";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import { McpToolApprovalDetail } from "./dto/mcp-approval.dto";
 import { McpApprovalService } from "./mcp-approval.service";
 
 @Controller("mcp/approvals")
 @Roles(UserRole.ADMIN, UserRole.USER)
+@WorkspaceRequired()
 export class McpApprovalsController {
   constructor(private readonly approvals: McpApprovalService) {}
 

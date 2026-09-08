@@ -1,8 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
+import { UserRole, WorkspaceRole } from "@prisma/client";
 
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
+import { WorkspaceRoles } from "../../core/auth/workspace.decorator";
 import { PageResult } from "../../core/result";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import {
@@ -24,7 +25,8 @@ import { WorkflowVersionDetail, WorkflowVersionListItem } from "./dto/workflow-v
 import { WorkflowsService } from "./workflows.service";
 
 @Controller("workflows")
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.USER)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
 export class WorkflowsController {
   constructor(private readonly workflowsService: WorkflowsService) {}
 
