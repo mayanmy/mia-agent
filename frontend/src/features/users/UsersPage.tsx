@@ -9,12 +9,14 @@ import {
   Select,
   Space,
   Table,
+  Tabs,
   Tag,
   Typography
 } from "antd";
 import type { TableProps } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { useAuth } from "../auth/AuthProvider";
 import {
   createWorkspace,
   createWorkspaceInvitation,
@@ -25,6 +27,7 @@ import {
 } from "../workspaces/api";
 import { useWorkspace } from "../workspaces/WorkspaceProvider";
 import type { WorkspaceInvitation, WorkspaceMember, WorkspaceRole } from "../workspaces/types";
+import { AccountManagementPanel } from "./components/AccountManagementPanel";
 
 type InvitationFormValues = {
   email: string;
@@ -37,8 +40,27 @@ type WorkspaceFormValues = {
   description?: string;
 };
 
-/** 当前页面只管理当前项目空间成员，不再枚举或修改平台全局用户。 */
+/** 成员入口区分空间成员关系与平台账号，避免两套角色和权限语义混在同一张表。 */
 export function UsersPage() {
+  const { currentUser } = useAuth();
+
+  return (
+    <div className="workspace">
+      <Tabs
+        destroyOnHidden
+        items={[
+          { key: "workspace", label: "项目空间成员", children: <WorkspaceMembersPanel /> },
+          ...(currentUser?.role === "ADMIN"
+            ? [{ key: "accounts", label: "平台账号管理", children: <AccountManagementPanel /> }]
+            : [])
+        ]}
+      />
+    </div>
+  );
+}
+
+/** 当前项目空间的成员关系、角色、邀请和所有权操作。 */
+function WorkspaceMembersPanel() {
   const { message } = AntdApp.useApp();
   const { currentWorkspace, refreshWorkspaces } = useWorkspace();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);

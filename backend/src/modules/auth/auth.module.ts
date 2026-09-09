@@ -5,11 +5,12 @@ import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { PasswordService } from "./password.service";
 import { TokenService } from "./token.service";
+import { UserManagementController } from "./user-management.controller";
 
 @Module({
   imports: [UsersModule],
-  // 全局用户管理入口不再注册；成员生命周期统一由项目空间接口管理，避免枚举其他空间账户。
-  controllers: [AuthController],
+  // 平台账号与空间成员是两条独立生命周期：只有全局 ADMIN 可以使用账号管理接口。
+  controllers: [AuthController, UserManagementController],
   providers: [AuthService, PasswordService, TokenService],
   // 外部公开访问的密码门禁复用同一套强度校验和 Argon2 配置，避免两处密码策略漂移。
   exports: [AuthService, PasswordService, TokenService]

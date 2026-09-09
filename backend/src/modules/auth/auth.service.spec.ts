@@ -4,9 +4,11 @@ import { UserRole } from "@prisma/client";
 
 import { JwtAuthGuard } from "../../core/auth/jwt-auth.guard";
 import { RolesGuard } from "../../core/auth/roles.guard";
+import { AuthModule } from "./auth.module";
 import { AuthService } from "./auth.service";
 import { PasswordService } from "./password.service";
 import { TokenService } from "./token.service";
+import { UserManagementController } from "./user-management.controller";
 
 const testUser = {
   id: "c5c177f3-3f47-4547-b520-dbd0875e5eb8",
@@ -18,6 +20,14 @@ const testUser = {
 };
 
 export const tests = [
+  {
+    name: "AuthModule 注册平台用户管理路由",
+    run: () => {
+      const controllers = Reflect.getMetadata("controllers", AuthModule) as unknown[];
+
+      assert.ok(controllers.includes(UserManagementController));
+    }
+  },
   {
     name: "PasswordService 使用 Argon2id 验证密码并拒绝弱密码",
     run: async () => {
