@@ -18,6 +18,17 @@ export function enterWorkspaceContext(workspaceId: string): void {
   workspaceContext.enterWith({ workspaceId });
 }
 
+/**
+ * 在指定项目空间上下文中执行完整异步链。
+ *
+ * Nest Guard 返回 Promise 后会切换到预先创建的 RxJS 订阅链，Guard 内直接 enterWith 的上下文
+ * 可能随之丢失；HTTP 拦截器应通过本函数包裹订阅过程，确保 Controller、Service 和异步回调
+ * 始终读取到同一个已验证空间。
+ */
+export function runInWorkspaceContext<T>(workspaceId: string, callback: () => T): T {
+  return workspaceContext.run({ workspaceId }, callback);
+}
+
 /** 获取已经由 WorkspaceGuard 验证过的项目空间 ID。 */
 export function requireWorkspaceId(): string {
   const workspaceId = workspaceContext.getStore()?.workspaceId;

@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 
 import { AgentsModule } from "./modules/agents/agents.module";
 import { AgentRunsModule } from "./modules/agent_runs/agent-runs.module";
@@ -22,6 +22,7 @@ import { WorkspacesModule } from "./modules/workspaces/workspaces.module";
 import { JwtAuthGuard } from "./core/auth/jwt-auth.guard";
 import { RolesGuard } from "./core/auth/roles.guard";
 import { WorkspaceGuard, WorkspaceRolesGuard } from "./core/auth/workspace.guard";
+import { WorkspaceContextInterceptor } from "./core/auth/workspace-context.interceptor";
 
 @Module({
   imports: [
@@ -61,6 +62,10 @@ import { WorkspaceGuard, WorkspaceRolesGuard } from "./core/auth/workspace.guard
     {
       provide: APP_GUARD,
       useClass: WorkspaceRolesGuard
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: WorkspaceContextInterceptor
     }
   ]
 })

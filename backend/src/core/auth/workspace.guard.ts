@@ -7,7 +7,6 @@ import { AppError, ErrorCodes } from "../errors";
 import { AuthenticatedRequest } from "./auth.types";
 import { IS_PUBLIC_KEY } from "./public.decorator";
 import { WORKSPACE_REQUIRED_KEY, WORKSPACE_ROLES_KEY } from "./workspace.decorator";
-import { enterWorkspaceContext } from "./workspace-context";
 
 @Injectable()
 export class WorkspaceGuard implements CanActivate {
@@ -55,7 +54,6 @@ export class WorkspaceGuard implements CanActivate {
       );
     }
     request.currentWorkspace = workspace;
-    enterWorkspaceContext(workspace.id);
     return true;
   }
 
