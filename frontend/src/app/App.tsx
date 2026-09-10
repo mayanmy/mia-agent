@@ -161,7 +161,7 @@ const navConfig: NavConfig[] = [
     roles: ["OWNER", "MANAGER"],
     icon: <FundProjectionScreenOutlined />
   },
-  { label: "空间成员", path: "/users", roles: ["OWNER"], icon: <TeamOutlined /> },
+  { label: "项目空间管理", path: "/users", roles: ["OWNER"], icon: <TeamOutlined /> },
   {
     label: "账号管理",
     path: "/admin/users",

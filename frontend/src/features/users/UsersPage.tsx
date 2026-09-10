@@ -21,8 +21,13 @@ import {
   listWorkspaceMembers,
   removeWorkspaceMember,
   transferWorkspaceOwnership,
+  updateWorkspace,
   updateWorkspaceMemberRole
 } from "../workspaces/api";
+import {
+  WorkspaceSettingsModal,
+  type WorkspaceSettingsValues
+} from "../workspaces/components/WorkspaceSettingsModal";
 import { useWorkspace } from "../workspaces/WorkspaceProvider";
 import type { WorkspaceInvitation, WorkspaceMember, WorkspaceRole } from "../workspaces/types";
 
@@ -51,6 +56,7 @@ function WorkspaceMembersPanel() {
   const [saving, setSaving] = useState(false);
   const [invitationOpen, setInvitationOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
   const [invitation, setInvitation] = useState<WorkspaceInvitation | null>(null);
   const [invitationForm] = Form.useForm<InvitationFormValues>();
   const [workspaceForm] = Form.useForm<WorkspaceFormValues>();
@@ -97,6 +103,21 @@ function WorkspaceMembersPanel() {
       message.success("项目空间已创建");
     } catch (error) {
       message.error(error instanceof Error ? error.message : "创建项目空间失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitWorkspaceSettings(values: WorkspaceSettingsValues) {
+    if (!currentWorkspace) return;
+    setSaving(true);
+    try {
+      await updateWorkspace(currentWorkspace.id, values);
+      await refreshWorkspaces(currentWorkspace.id);
+      setWorkspaceSettingsOpen(false);
+      message.success("项目空间资料已更新");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "更新项目空间失败");
     } finally {
       setSaving(false);
     }
@@ -212,11 +233,12 @@ function WorkspaceMembersPanel() {
   return (
     <section className="workspace">
       <WorkspacePageHeader
-        eyebrow="Workspace Members"
-        title="项目空间成员"
-        description={`管理“${currentWorkspace.name}”的成员和空间内角色。`}
+        eyebrow="Workspace Settings"
+        title="项目空间管理"
+        description={`管理“${currentWorkspace.name}”的资料、成员和空间内角色。`}
         actions={
           <Space>
+            <Button onClick={() => setWorkspaceSettingsOpen(true)}>编辑项目空间</Button>
             <Button onClick={() => setWorkspaceOpen(true)}>新建项目空间</Button>
             <Button
               type="primary"
@@ -237,6 +259,14 @@ function WorkspaceMembersPanel() {
         loading={loading}
         pagination={false}
         rowKey="userId"
+      />
+
+      <WorkspaceSettingsModal
+        open={workspaceSettingsOpen}
+        saving={saving}
+        workspace={currentWorkspace}
+        onCancel={() => setWorkspaceSettingsOpen(false)}
+        onSubmit={(values) => void submitWorkspaceSettings(values)}
       />
 
       <Modal
