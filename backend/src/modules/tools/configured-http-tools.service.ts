@@ -1,8 +1,12 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { HttpTool, Prisma, ToolSecret } from "@prisma/client";
+import { HttpTool, Prisma, WorkspaceRole } from "@prisma/client";
 
 import { decryptSecret, encryptSecret } from "../../core/crypto";
-import { getWorkspaceId, requireWorkspaceId } from "../../core/auth/workspace-context";
+import {
+  getWorkspaceId,
+  requireWorkspaceActor,
+  requireWorkspaceId
+} from "../../core/auth/workspace-context";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import {
@@ -45,7 +49,12 @@ const FORBIDDEN_TOKEN_HEADERS = new Set([
   "transfer-encoding"
 ]);
 
-type HttpToolWithSecret = HttpTool & { secret: ToolSecret | null };
+type HttpToolWithSecret = Prisma.HttpToolGetPayload<{
+  include: {
+    secret: true;
+    createdBy: { select: { id: true; displayName: true } };
+  };
+}>;
 
 @Injectable()
 export class ConfiguredHttpToolsService {
@@ -53,9 +62,17 @@ export class ConfiguredHttpToolsService {
 
   /** 返回管理页面需要的 HTTP Tool 列表，凭据只暴露是否已配置。 */
   async listHttpTools(): Promise<HttpToolListItem[]> {
+    const actor = requireWorkspaceActor();
     const tools = await this.prisma.httpTool.findMany({
-      where: { workspaceId: requireWorkspaceId(), deletedAt: null },
-      include: { secret: true },
+      where: {
+        workspaceId: requireWorkspaceId(),
+        deletedAt: null,
+        ...(actor.role === WorkspaceRole.MEMBER ? { createdByUserId: actor.userId } : {})
+      },
+      include: {
+        secret: true,
+        createdBy: { select: { id: true, displayName: true } }
+      },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }]
     });
     return tools.map((tool) => this.toListItem(tool));
@@ -63,7 +80,9 @@ export class ConfiguredHttpToolsService {
 
   /** 创建配置与可选 Secret，并保证任一写入失败时整体回滚。 */
   async createHttpTool(payload: HttpToolCreateDto, userId: string): Promise<HttpToolDetail> {
+    const actor = requireWorkspaceActor();
     const data = this.validateCreate(payload);
+    this.assertPrivateNetworkPermission(data.allowPrivateNetwork, actor.role);
     await this.ensureSlugAvailable(data.slug);
 
     // 凭据与工具配置必须原子创建，避免留下无法归属的 Secret 或缺少凭据的工具。
@@ -100,7 +119,10 @@ export class ConfiguredHttpToolsService {
           allowPrivateNetwork: data.allowPrivateNetwork,
           createdByUserId: userId
         },
-        include: { secret: true }
+        include: {
+          secret: true,
+          createdBy: { select: { id: true, displayName: true } }
+        }
       });
     });
 
@@ -120,6 +142,7 @@ export class ConfiguredHttpToolsService {
   ): Promise<HttpToolDetail> {
     const existing = await this.findHttpTool(id);
     const data = this.validateUpdate(payload, existing);
+    this.assertPrivateNetworkPermission(data.allowPrivateNetwork, requireWorkspaceActor().role);
     await this.ensureSlugAvailable(data.slug, id);
 
     // 凭据新增/替换/删除与工具配置更新必须同步提交，防止运行时读取到半更新状态。
@@ -178,7 +201,10 @@ export class ConfiguredHttpToolsService {
           maxResponseBytes: data.maxResponseBytes,
           allowPrivateNetwork: data.allowPrivateNetwork
         },
-        include: { secret: true }
+        include: {
+          secret: true,
+          createdBy: { select: { id: true, displayName: true } }
+        }
       });
 
       if (existing.secretId && existing.secretId !== secretId) {
@@ -1012,12 +1038,41 @@ export class ConfiguredHttpToolsService {
   private async findHttpTool(id: string): Promise<HttpToolWithSecret> {
     const tool = await this.prisma.httpTool.findFirst({
       where: { id, workspaceId: requireWorkspaceId(), deletedAt: null },
-      include: { secret: true }
+      include: {
+        secret: true,
+        createdBy: { select: { id: true, displayName: true } }
+      }
     });
     if (!tool) {
       throw new AppError(ErrorCodes.common.notFound, "http tool not found", HttpStatus.NOT_FOUND);
     }
+    this.assertCanManageHttpTool(tool.createdByUserId);
     return tool;
+  }
+
+  private assertCanManageHttpTool(createdByUserId: string): void {
+    const actor = requireWorkspaceActor();
+    if (
+      actor.role !== WorkspaceRole.OWNER &&
+      actor.role !== WorkspaceRole.MANAGER &&
+      actor.userId !== createdByUserId
+    ) {
+      throw new AppError(
+        ErrorCodes.workspace.forbidden,
+        "只能管理自己创建的 HTTP 工具",
+        HttpStatus.FORBIDDEN
+      );
+    }
+  }
+
+  private assertPrivateNetworkPermission(allowPrivateNetwork: boolean, role: WorkspaceRole): void {
+    if (allowPrivateNetwork && role === WorkspaceRole.MEMBER) {
+      throw new AppError(
+        ErrorCodes.workspace.forbidden,
+        "普通成员创建的 HTTP 工具不能访问私网",
+        HttpStatus.FORBIDDEN
+      );
+    }
   }
 
   /** 数据库配置转换为模型可见定义，不包含网络和鉴权字段。 */
@@ -1056,6 +1111,11 @@ export class ConfiguredHttpToolsService {
   private toListItem(tool: HttpToolWithSecret): HttpToolListItem {
     return {
       id: tool.id,
+      creator: {
+        id: tool.createdBy.id,
+        displayName: tool.createdBy.displayName
+      },
+      permissions: this.getHttpToolPermissions(tool.createdByUserId),
       runtimeId: this.toRuntimeId(tool.id),
       name: tool.name,
       slug: tool.slug,
@@ -1068,6 +1128,21 @@ export class ConfiguredHttpToolsService {
       secretConfigured: Boolean(tool.secret),
       allowPrivateNetwork: tool.allowPrivateNetwork,
       updatedAt: tool.updatedAt
+    };
+  }
+
+  private getHttpToolPermissions(createdByUserId: string): HttpToolListItem["permissions"] {
+    const actor = requireWorkspaceActor();
+    const canManage =
+      actor.role === WorkspaceRole.OWNER ||
+      actor.role === WorkspaceRole.MANAGER ||
+      actor.userId === createdByUserId;
+    return {
+      canEdit: canManage,
+      canDelete: canManage,
+      canTest: canManage,
+      canEnablePrivateNetwork:
+        actor.role === WorkspaceRole.OWNER || actor.role === WorkspaceRole.MANAGER
     };
   }
 

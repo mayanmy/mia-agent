@@ -26,7 +26,7 @@ import { WorkflowsService } from "./workflows.service";
 
 @Controller("workflows")
 @Roles(UserRole.ADMIN, UserRole.USER)
-@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
 export class WorkflowsController {
   constructor(private readonly workflowsService: WorkflowsService) {}
 

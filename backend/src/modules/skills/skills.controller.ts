@@ -17,7 +17,7 @@ import { SkillsService } from "./skills.service";
 
 @Controller("skills")
 @Roles(UserRole.ADMIN, UserRole.USER)
-@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
 export class SkillsController {
   constructor(private readonly skillsService: SkillsService) {}
 

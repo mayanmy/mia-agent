@@ -9,7 +9,7 @@ import { AgentRunDetail, AgentRunListItem, AgentRunQueryDto } from "./dto/agent-
 
 @Controller("agent-runs")
 @Roles(UserRole.ADMIN, UserRole.USER)
-@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
 export class AgentRunsController {
   constructor(private readonly agentRunsService: AgentRunsService) {}
 

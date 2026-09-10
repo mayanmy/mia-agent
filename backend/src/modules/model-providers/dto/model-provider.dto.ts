@@ -101,6 +101,17 @@ export type ModelConfigListItem = {
   updatedAt: Date;
 };
 
+/** Agent 表单使用的安全模型选项，不暴露供应商连接和凭据配置。 */
+export type ModelConfigOption = {
+  id: string;
+  modelName: string;
+  modelType: ModelConfigType;
+  providerId: string;
+  providerName: string;
+  providerType: ModelProviderType;
+  isDefault: boolean;
+};
+
 /** 模型配置详情及所属供应商安全摘要。 */
 export type ModelConfigDetail = ModelConfigListItem & {
   provider: ProviderListItem;

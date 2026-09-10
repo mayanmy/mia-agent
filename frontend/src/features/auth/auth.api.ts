@@ -67,7 +67,7 @@ export type InvitationValidation = {
   email: string;
   expiresAt: string;
   workspaceName: string;
-  role: "OWNER" | "ADMIN" | "MEMBER";
+  role: "OWNER" | "MANAGER" | "MEMBER";
 };
 
 /** 公开校验成员激活链接，不需要也不携带工作台 Access Token。 */

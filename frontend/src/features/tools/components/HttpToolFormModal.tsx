@@ -5,6 +5,7 @@ import type { HttpToolFormValues } from "../api";
 
 export function HttpToolFormModal({
   form,
+  canEnablePrivateNetwork,
   open,
   editing,
   saving,
@@ -13,6 +14,8 @@ export function HttpToolFormModal({
   onSubmit
 }: {
   form: FormInstance<HttpToolFormValues>;
+  /** 普通成员不能创建可访问内网的工具。 */
+  canEnablePrivateNetwork: boolean;
   open: boolean;
   editing: boolean;
   saving: boolean;
@@ -360,7 +363,7 @@ export function HttpToolFormModal({
 
         <div className="httpToolFormGrid httpToolFormSection">
           <Form.Item label="允许访问私网" name="allowPrivateNetwork" valuePropName="checked">
-            <Switch />
+            <Switch disabled={!canEnablePrivateNetwork} />
           </Form.Item>
           <Form.Item label="超时（毫秒）" name="timeoutMs">
             <InputNumber min={1} max={30000} step={1000} />

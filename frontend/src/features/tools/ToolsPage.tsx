@@ -4,6 +4,7 @@ import type { TableProps } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
 import { ToolsGuide } from "../../shared/components/menu-guides";
+import { useWorkspace } from "../workspaces/WorkspaceProvider";
 
 import {
   createHttpTool,
@@ -53,6 +54,7 @@ const defaultValues: HttpToolFormValues = {
 
 export function ToolsPage() {
   const { message } = AntdApp.useApp();
+  const { currentWorkspace } = useWorkspace();
   const [form] = Form.useForm<HttpToolFormValues>();
   const [tools, setTools] = useState<HttpToolListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -199,6 +201,7 @@ export function ToolsPage() {
 
   const columns: TableProps<HttpToolListItem>["columns"] = [
     { title: "名称", dataIndex: "name", width: 180 },
+    { title: "创建者", dataIndex: ["creator", "displayName"], width: 140 },
     {
       title: "方法",
       dataIndex: "method",
@@ -248,20 +251,26 @@ export function ToolsPage() {
       width: 190,
       render: (_, tool) => (
         <Space size={2}>
-          <Button
-            loading={openingTestId === tool.id}
-            size="small"
-            type="link"
-            onClick={() => void openTest(tool)}
-          >
-            测试
-          </Button>
-          <Button size="small" type="link" onClick={() => void openEdit(tool.id)}>
-            编辑
-          </Button>
-          <Button danger size="small" type="link" onClick={() => confirmDelete(tool)}>
-            删除
-          </Button>
+          {tool.permissions.canTest ? (
+            <Button
+              loading={openingTestId === tool.id}
+              size="small"
+              type="link"
+              onClick={() => void openTest(tool)}
+            >
+              测试
+            </Button>
+          ) : null}
+          {tool.permissions.canEdit ? (
+            <Button size="small" type="link" onClick={() => void openEdit(tool.id)}>
+              编辑
+            </Button>
+          ) : null}
+          {tool.permissions.canDelete ? (
+            <Button danger size="small" type="link" onClick={() => confirmDelete(tool)}>
+              删除
+            </Button>
+          ) : null}
         </Space>
       )
     }
@@ -295,6 +304,7 @@ export function ToolsPage() {
         />
       </section>
       <HttpToolFormModal
+        canEnablePrivateNetwork={currentWorkspace?.role !== "MEMBER"}
         editing={Boolean(editingId)}
         form={form}
         open={dialogOpen}

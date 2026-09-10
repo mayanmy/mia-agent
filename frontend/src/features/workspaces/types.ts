@@ -1,5 +1,5 @@
 /** 项目空间内固定角色。 */
-export type WorkspaceRole = "OWNER" | "ADMIN" | "MEMBER";
+export type WorkspaceRole = "OWNER" | "MANAGER" | "MEMBER";
 
 /** 当前账号可访问的项目空间摘要。 */
 export type WorkspaceListItem = {

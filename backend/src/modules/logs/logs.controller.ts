@@ -9,7 +9,7 @@ import { LogsService } from "./logs.service";
 
 @Controller("logs")
 @Roles(UserRole.ADMIN, UserRole.USER)
-@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
 export class LogsController {
   constructor(private readonly logsService: LogsService) {}
 

@@ -1,3 +1,5 @@
+import { WorkspaceRole } from "@prisma/client";
+
 import { enterWorkspaceContext } from "../core/auth/workspace-context";
 import { tests as workspaceContextTests } from "../core/auth/workspace-context.interceptor.spec";
 import { tests as agentTests } from "../modules/agents/agents.service.spec";
@@ -20,6 +22,7 @@ import { tests as mcpToolExecutorTests } from "../modules/mcp/mcp-tool.executor.
 import { tests as retrievalTests } from "../modules/retrieval/retrieval.service.spec";
 import { tests as skillTests } from "../modules/skills/skills.service.spec";
 import { tests as toolTests } from "../modules/tools/tools.service.spec";
+import { tests as configuredHttpToolTests } from "../modules/tools/configured-http-tools.service.spec";
 import { tests as workflowTests } from "../modules/workflows/workflows.service.spec";
 import { tests as workflowCompilerTests } from "../modules/workflows/workflow-compiler.spec";
 import { tests as workflowExpressionTests } from "../modules/workflows/expression-parser.spec";
@@ -32,12 +35,16 @@ type TestCase = {
 };
 
 // 单元测试不经过 HTTP Guard，统一注入一个已验证空间，保持服务层隔离条件与生产一致。
-enterWorkspaceContext("00000000-0000-4000-8000-000000000001");
+enterWorkspaceContext("00000000-0000-4000-8000-000000000001", {
+  userId: "00000000-0000-4000-8000-000000000010",
+  role: WorkspaceRole.OWNER
+});
 
 const tests: TestCase[] = [
   ...workspaceContextTests,
   ...authTests,
   ...toolTests,
+  ...configuredHttpToolTests,
   ...mcpProtocolClientTests,
   ...mcpClientCredentialsTests,
   ...mcpOAuthTests,

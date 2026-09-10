@@ -168,7 +168,7 @@ workspace_<workspaceId>__kb_<knowledgeBaseId>
 
 发布 Token 继续全局唯一，外部接口通过 Token 解析 Agent 后获得其 `workspaceId`。外部访客的 `visitor`/`user` 标识仅用于会话隔离，不具备 Workspace 成员身份。
 
-外部 API Key 需要绑定 Workspace 和 Agent；撤销 Workspace 成员资格不应自动使外部已发布 Agent 失效，除非 OWNER/ADMIN 明确下线 Agent 或撤销 API Key。
+外部 API Key 需要绑定 Workspace 和 Agent；撤销 Workspace 成员资格不应自动使外部已发布 Agent 失效，除非 OWNER/MANAGER 明确下线 Agent 或撤销 API Key。
 
 ## 7. 单团队数据迁移
 

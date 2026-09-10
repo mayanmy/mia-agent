@@ -9,6 +9,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   MessageOutlined,
+  PlusOutlined,
   PlaySquareOutlined,
   RobotOutlined,
   ReadOutlined,
@@ -29,7 +30,7 @@ import {
 
 import { useAuth } from "../features/auth/AuthProvider";
 import { LoginPage } from "../features/auth/LoginPage";
-import { createWorkspace } from "../features/workspaces/api";
+import { CreateWorkspaceModal } from "../features/workspaces/components/CreateWorkspaceModal";
 import { useWorkspace } from "../features/workspaces/WorkspaceProvider";
 import type { WorkspaceRole } from "../features/workspaces/types";
 
@@ -78,6 +79,11 @@ const KnowledgePage = lazy(() =>
 const UsersPage = lazy(() =>
   import("../features/users/UsersPage").then((module) => ({ default: module.UsersPage }))
 );
+const PlatformUsersPage = lazy(() =>
+  import("../features/users/PlatformUsersPage").then((module) => ({
+    default: module.PlatformUsersPage
+  }))
+);
 const ToolsPage = lazy(() =>
   import("../features/tools/ToolsPage").then((module) => ({ default: module.ToolsPage }))
 );
@@ -98,7 +104,8 @@ const ActivateInvitationPage = lazy(() =>
 type NavConfig = {
   label: string;
   path: string;
-  roles: WorkspaceRole[];
+  roles?: WorkspaceRole[];
+  platformAdmin?: boolean;
   icon: ReactNode;
 };
 
@@ -106,50 +113,61 @@ const navConfig: NavConfig[] = [
   {
     label: "模型供应商",
     path: "/providers",
-    roles: ["OWNER", "ADMIN"],
+    roles: ["OWNER", "MANAGER"],
     icon: <ApiOutlined />
   },
   {
     label: "Agent",
     path: "/agents",
-    roles: ["OWNER", "ADMIN", "MEMBER"],
+    roles: ["OWNER", "MANAGER", "MEMBER"],
     icon: <RobotOutlined />
   },
   {
     label: "知识库",
     path: "/knowledge",
-    roles: ["OWNER", "ADMIN", "MEMBER"],
+    roles: ["OWNER", "MANAGER", "MEMBER"],
     icon: <DatabaseOutlined />
   },
-  { label: "工具", path: "/tools", roles: ["OWNER", "ADMIN"], icon: <ToolOutlined /> },
-  { label: "MCP", path: "/mcp", roles: ["OWNER", "ADMIN"], icon: <CloudServerOutlined /> },
-  { label: "Skill", path: "/skills", roles: ["OWNER", "ADMIN"], icon: <ReadOutlined /> },
+  {
+    label: "工具",
+    path: "/tools",
+    roles: ["OWNER", "MANAGER", "MEMBER"],
+    icon: <ToolOutlined />
+  },
+  { label: "MCP", path: "/mcp", roles: ["OWNER", "MANAGER"], icon: <CloudServerOutlined /> },
+  { label: "Skill", path: "/skills", roles: ["OWNER", "MANAGER"], icon: <ReadOutlined /> },
   {
     label: "Workflow",
     path: "/workflows",
-    roles: ["OWNER", "ADMIN"],
+    roles: ["OWNER", "MANAGER"],
     icon: <ApartmentOutlined />
   },
   {
     label: "Workflow 应用",
     path: "/workflow-apps",
-    roles: ["OWNER", "ADMIN", "MEMBER"],
+    roles: ["OWNER", "MANAGER", "MEMBER"],
     icon: <PlaySquareOutlined />
   },
   {
     label: "对话",
     path: "/chat",
-    roles: ["OWNER", "ADMIN", "MEMBER"],
+    roles: ["OWNER", "MANAGER", "MEMBER"],
     icon: <MessageOutlined />
   },
-  { label: "日志", path: "/logs", roles: ["OWNER", "ADMIN"], icon: <FileSearchOutlined /> },
+  { label: "日志", path: "/logs", roles: ["OWNER", "MANAGER"], icon: <FileSearchOutlined /> },
   {
     label: "Run Trace",
     path: "/agent-runs",
-    roles: ["OWNER", "ADMIN"],
+    roles: ["OWNER", "MANAGER"],
     icon: <FundProjectionScreenOutlined />
   },
-  { label: "成员", path: "/users", roles: ["OWNER", "ADMIN"], icon: <TeamOutlined /> }
+  { label: "空间成员", path: "/users", roles: ["OWNER"], icon: <TeamOutlined /> },
+  {
+    label: "账号管理",
+    path: "/admin/users",
+    platformAdmin: true,
+    icon: <UserOutlined />
+  }
 ];
 
 const SIDEBAR_COLLAPSED_KEY = "mia.workspace.sidebarCollapsed";
@@ -165,7 +183,13 @@ export function App() {
         <Route element={<RequireAuth />}>
           <Route element={<WorkspaceLayout />}>
             <Route index element={<DefaultWorkspaceRoute />} />
-            <Route element={<RequireRole roles={["OWNER", "ADMIN", "MEMBER"]} />}>
+            <Route element={<RequireRole roles={["OWNER", "MANAGER", "MEMBER"]} />}>
+              <Route path="/agents" element={<AgentsPage />} />
+              <Route path="/knowledge" element={<KnowledgePage />} />
+              <Route path="/workflow-apps" element={<WorkflowAppsPage />} />
+              <Route path="/chat" element={<ChatPage />} />
+            </Route>
+            <Route element={<RequireRole roles={["OWNER", "MANAGER"]} />}>
               <Route
                 path="/providers"
                 element={
@@ -175,20 +199,21 @@ export function App() {
                   </>
                 }
               />
-              <Route path="/agents" element={<AgentsPage />} />
-              <Route path="/knowledge" element={<KnowledgePage />} />
-              <Route path="/workflow-apps" element={<WorkflowAppsPage />} />
-              <Route path="/chat" element={<ChatPage />} />
-            </Route>
-            <Route element={<RequireRole roles={["OWNER", "ADMIN"]} />}>
-              <Route path="/tools" element={<ToolsPage />} />
               <Route path="/mcp" element={<McpServersPage />} />
               <Route path="/skills" element={<SkillsPage />} />
               <Route path="/workflows" element={<WorkflowsPage />} />
               <Route path="/workflows/:workflowId" element={<WorkflowsPage />} />
               <Route path="/agent-runs" element={<AgentRunsPage />} />
               <Route path="/logs" element={<LogsPage />} />
+            </Route>
+            <Route element={<RequireRole roles={["OWNER"]} />}>
               <Route path="/users" element={<UsersPage />} />
+            </Route>
+            <Route element={<RequireRole roles={["OWNER", "MANAGER", "MEMBER"]} />}>
+              <Route path="/tools" element={<ToolsPage />} />
+            </Route>
+            <Route element={<RequirePlatformAdmin />}>
+              <Route path="/admin/users" element={<PlatformUsersPage />} />
             </Route>
             <Route path="*" element={<DefaultWorkspaceRoute />} />
           </Route>
@@ -225,6 +250,17 @@ function RequireRole({ roles }: { roles: WorkspaceRole[] }) {
   return <Outlet />;
 }
 
+/** 平台账号安全操作只看全局角色，不因当前空间身份变化。 */
+function RequirePlatformAdmin() {
+  const { currentUser } = useAuth();
+
+  if (currentUser?.role !== "ADMIN") {
+    return <Navigate replace to="/agents" />;
+  }
+
+  return <Outlet />;
+}
+
 /** 所有已登录成员都可使用 Agent，成员管理仍通过独立管理员路由保护。 */
 function DefaultWorkspaceRoute() {
   return <Navigate replace to="/agents" />;
@@ -241,9 +277,13 @@ function WorkspaceLayout() {
     refreshWorkspaces
   } = useWorkspace();
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const availableNavItems = navConfig.filter((item) =>
-    item.roles.includes(currentWorkspace?.role ?? "MEMBER")
+    item.platformAdmin
+      ? currentUser?.role === "ADMIN"
+      : item.roles?.includes(currentWorkspace?.role ?? "MEMBER")
   );
 
   if (workspaceStatus !== "ready") {
@@ -251,7 +291,60 @@ function WorkspaceLayout() {
   }
 
   if (!currentWorkspace) {
-    return <WorkspaceEmptyState onCreated={refreshWorkspaces} />;
+    if (currentUser?.role === "ADMIN" && location.pathname === "/admin/users") {
+      return (
+        <div className="platformStandalone">
+          <header className="platformStandaloneHeader">
+            <strong>Mia 平台管理</strong>
+            <div>
+              <Button icon={<PlusOutlined />} onClick={() => setCreateWorkspaceOpen(true)}>
+                新建项目空间
+              </Button>
+              <Button
+                onClick={() => {
+                  void logoutCurrentDevice().then(() => navigate("/login", { replace: true }));
+                }}
+              >
+                退出登录
+              </Button>
+            </div>
+          </header>
+          <main className="main">
+            <Outlet />
+          </main>
+          <CreateWorkspaceModal
+            open={createWorkspaceOpen}
+            onCancel={() => setCreateWorkspaceOpen(false)}
+            onCreated={async (workspace) => {
+              await refreshWorkspaces(workspace.id);
+              setCreateWorkspaceOpen(false);
+              navigate("/agents", { replace: true });
+            }}
+          />
+        </div>
+      );
+    }
+    return (
+      <WorkspaceEmptyState
+        canManageAccounts={currentUser?.role === "ADMIN"}
+        onCreate={() => setCreateWorkspaceOpen(true)}
+        onLogout={async () => {
+          await logoutCurrentDevice();
+          navigate("/login", { replace: true });
+        }}
+        onManageAccounts={() => navigate("/admin/users")}
+      >
+        <CreateWorkspaceModal
+          open={createWorkspaceOpen}
+          onCancel={() => setCreateWorkspaceOpen(false)}
+          onCreated={async (workspace) => {
+            await refreshWorkspaces(workspace.id);
+            setCreateWorkspaceOpen(false);
+            navigate("/agents", { replace: true });
+          }}
+        />
+      </WorkspaceEmptyState>
+    );
   }
 
   /** 同步保存用户的桌面布局偏好，刷新和重新登录后继续沿用。 */
@@ -297,6 +390,20 @@ function WorkspaceLayout() {
           }))}
           popupMatchSelectWidth={240}
           value={currentWorkspace.id}
+          popupRender={(menu) => (
+            <>
+              {menu}
+              <Button
+                block
+                icon={<PlusOutlined />}
+                type="text"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setCreateWorkspaceOpen(true)}
+              >
+                新建项目空间
+              </Button>
+            </>
+          )}
           onChange={(workspaceId) => {
             switchWorkspace(workspaceId);
             navigate("/agents", { replace: true });
@@ -353,35 +460,60 @@ function WorkspaceLayout() {
         {/* 切换空间时强制重建路由页，避免页面状态继续保留上一空间的数据。 */}
         <Outlet key={currentWorkspace.id} />
       </main>
+      <CreateWorkspaceModal
+        open={createWorkspaceOpen}
+        onCancel={() => setCreateWorkspaceOpen(false)}
+        onCreated={async (workspace) => {
+          await refreshWorkspaces(workspace.id);
+          setCreateWorkspaceOpen(false);
+          navigate("/agents", { replace: true });
+        }}
+      />
     </div>
   );
 }
 
-/** 无任何成员关系的账号可以创建首个项目空间并自动成为 OWNER。 */
-function WorkspaceEmptyState({ onCreated }: { onCreated: () => Promise<void> }) {
-  const [creating, setCreating] = useState(false);
+/** 无空间账号仍保留创建、平台管理和退出入口，避免落入无法操作的空白页。 */
+function WorkspaceEmptyState({
+  canManageAccounts,
+  children,
+  onCreate,
+  onLogout,
+  onManageAccounts
+}: {
+  canManageAccounts: boolean;
+  children: ReactNode;
+  onCreate: () => void;
+  onLogout: () => Promise<void>;
+  onManageAccounts: () => void;
+}) {
+  const [loggingOut, setLoggingOut] = useState(false);
   return (
     <section className="workspaceEmptyState">
       <Empty description="当前账号尚未加入项目空间">
-        <Button
-          loading={creating}
-          type="primary"
-          onClick={() => {
-            setCreating(true);
-            void createWorkspace({ name: "我的项目空间" })
-              .then(onCreated)
-              .finally(() => setCreating(false));
-          }}
-        >
-          创建项目空间
-        </Button>
+        <div className="workspaceEmptyActions">
+          <Button type="primary" onClick={onCreate}>
+            创建项目空间
+          </Button>
+          {canManageAccounts ? <Button onClick={onManageAccounts}>账号管理</Button> : null}
+          <Button
+            loading={loggingOut}
+            onClick={() => {
+              setLoggingOut(true);
+              void onLogout().finally(() => setLoggingOut(false));
+            }}
+          >
+            退出登录
+          </Button>
+        </div>
       </Empty>
+      {children}
     </section>
   );
 }
 
 function formatWorkspaceRole(role: WorkspaceRole): string {
-  return role === "OWNER" ? "所有者" : role === "ADMIN" ? "管理员" : "成员";
+  return role === "OWNER" ? "所有者" : role === "MANAGER" ? "项目管理员" : "成员";
 }
 
 /** Storage 读取失败时使用展开态，保证无持久化能力的浏览器也可正常进入工作台。 */

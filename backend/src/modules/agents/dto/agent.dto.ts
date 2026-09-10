@@ -74,6 +74,17 @@ export type AgentModelConfigSummary = {
 export type AgentListItem = {
   /** Agent ID。 */
   id: string;
+  /** 创建者安全摘要，不暴露账号角色或登录信息。 */
+  creator: {
+    id: string;
+    displayName: string;
+  };
+  /** 服务端根据创建者和当前空间角色计算的可用操作。 */
+  permissions: {
+    canEdit: boolean;
+    canDelete: boolean;
+    canPublish: boolean;
+  };
   /** Agent 展示名称。 */
   name: string;
   /** Agent 用途说明。 */

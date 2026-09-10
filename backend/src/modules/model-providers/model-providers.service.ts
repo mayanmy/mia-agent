@@ -22,6 +22,7 @@ import {
   ModelConfigCreateDto,
   ModelConfigDetail,
   ModelConfigListItem,
+  ModelConfigOption,
   ModelConfigQueryDto,
   ModelConfigUpdateDto,
   ProviderCreateDto,
@@ -222,6 +223,35 @@ export class ModelProvidersService {
       page.page,
       page.pageSize
     );
+  }
+
+  /** 仅返回 Agent 表单所需字段，避免成员读取供应商连接与凭据摘要。 */
+  async listChatModelOptions(): Promise<ModelConfigOption[]> {
+    const workspaceId = requireWorkspaceId();
+    const [configs, settings] = await this.prisma.$transaction([
+      this.prisma.modelConfig.findMany({
+        where: {
+          workspaceId,
+          modelType: ModelConfigType.CHAT,
+          enabled: true,
+          deletedAt: null,
+          provider: { enabled: true, deletedAt: null }
+        },
+        include: { provider: true },
+        orderBy: [{ provider: { name: "asc" } }, { modelName: "asc" }]
+      }),
+      this.prisma.defaultModelSetting.findUnique({ where: { workspaceId } })
+    ]);
+
+    return configs.map((config) => ({
+      id: config.id,
+      modelName: config.modelName,
+      modelType: config.modelType,
+      providerId: config.providerId,
+      providerName: config.provider.name,
+      providerType: config.provider.providerType,
+      isDefault: settings?.chatModelConfigId === config.id
+    }));
   }
 
   async createModelConfig(payload: ModelConfigCreateDto): Promise<ModelConfigDetail> {

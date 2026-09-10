@@ -8,7 +8,7 @@ import { ModelProvidersService } from "./model-providers.service";
 
 @Controller("model-defaults")
 @Roles(UserRole.ADMIN, UserRole.USER)
-@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
 export class ModelDefaultsController {
   constructor(private readonly modelProvidersService: ModelProvidersService) {}
 

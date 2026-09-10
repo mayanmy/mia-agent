@@ -33,7 +33,7 @@ enum UserRole {
 /// 项目空间内的授权角色；用户身份全局唯一，但权限随项目空间成员关系变化。
 enum WorkspaceRole {
   OWNER
-  ADMIN
+  MANAGER
   MEMBER
 
   @@map("workspace_role")
@@ -240,6 +240,7 @@ model User {
   sentInvitations               UserInvitation[]        @relation("UserInvitationInviter")
   chatSessions                  ChatSession[]
   createdAgentApiKeys           AgentApiKey[]           @relation("AgentApiKeyCreator")
+  createdAgents                 Agent[]                 @relation("AgentCreator")
   agentRuns                     AgentRun[]
   createdHttpTools              HttpTool[]              @relation("HttpToolCreator")
   createdToolSecrets            ToolSecret[]            @relation("ToolSecretCreator")
@@ -402,6 +403,7 @@ model DefaultModelSetting {
 model Agent {
   id                    String                 @id @default(uuid()) @db.Uuid
   workspaceId           String                 @map("workspace_id") @db.Uuid
+  createdByUserId       String                 @map("created_by_user_id") @db.Uuid
   name                  String
   description           String                 @default("")
   systemPrompt          String                 @map("system_prompt") @db.Text
@@ -424,6 +426,7 @@ model Agent {
   updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt             DateTime?              @map("deleted_at") @db.Timestamptz(6)
   modelConfig           ModelConfig            @relation(fields: [modelConfigId], references: [id])
+  createdBy             User                   @relation("AgentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   agentTools            AgentTool[]
   agentKnowledgeBases   AgentKnowledgeBase[]
   chatSessions          ChatSession[]
@@ -437,6 +440,7 @@ model Agent {
   @@index([modelConfigId], map: "idx_agents_model_config_id")
   @@index([enabled, createdAt(sort: Desc)], map: "idx_agents_enabled_created_at")
   @@index([published, publishedAt(sort: Desc)], map: "idx_agents_published_published_at")
+  @@index([workspaceId, createdByUserId, deletedAt, createdAt(sort: Desc)], map: "idx_agents_workspace_creator_deleted_created")
   @@map("agents")
 }
 
@@ -635,6 +639,7 @@ model HttpTool {
   @@unique([workspaceId, slug], map: "uq_http_tools_workspace_slug")
   @@index([enabled, deletedAt], map: "idx_http_tools_enabled_deleted_at")
   @@index([createdAt(sort: Desc)], map: "idx_http_tools_created_at")
+  @@index([workspaceId, createdByUserId, deletedAt, createdAt(sort: Desc)], map: "idx_http_tools_workspace_creator_deleted_created")
   @@map("http_tools")
 }
 

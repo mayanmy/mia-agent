@@ -46,7 +46,7 @@ export class AgentsController {
   /** 创建 Agent 基础配置。 */
   @Post()
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async createAgent(@Body() payload: AgentCreateDto): Promise<AgentDetail> {
     return this.agentsService.createAgent(payload);
   }
@@ -61,7 +61,7 @@ export class AgentsController {
   /** 获取 Agent 编辑详情。 */
   @Get(":id")
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async getAgent(@Param("id") id: string): Promise<AgentDetail> {
     return this.agentsService.getAgent(id);
   }
@@ -69,7 +69,7 @@ export class AgentsController {
   /** 更新 Agent 基础配置。 */
   @Put(":id")
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async updateAgent(
     @Param("id") id: string,
     @Body() payload: AgentUpdateDto
@@ -80,7 +80,7 @@ export class AgentsController {
   /** 软删除 Agent。 */
   @Delete(":id")
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async deleteAgent(@Param("id") id: string): Promise<null> {
     await this.agentsService.deleteAgent(id);
     return null;
@@ -89,7 +89,7 @@ export class AgentsController {
   /** 发布 Agent 并返回分享令牌。 */
   @Post(":id/publish")
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async publishAgent(@Param("id") id: string): Promise<AgentPublishResult> {
     return this.agentsService.publishAgent(id);
   }
@@ -97,7 +97,7 @@ export class AgentsController {
   /** 取消发布并作废分享入口。 */
   @Delete(":id/publish")
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async unpublishAgent(@Param("id") id: string): Promise<AgentPublishResult> {
     return this.agentsService.unpublishAgent(id);
   }
@@ -105,7 +105,7 @@ export class AgentsController {
   /** 获取 Agent 工具绑定。 */
   @Get(":id/tools")
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async getAgentTools(@Param("id") id: string): Promise<AgentToolBindingResult> {
     return this.agentsService.getAgentTools(id);
   }
@@ -113,7 +113,7 @@ export class AgentsController {
   /** 批量替换 Agent 工具绑定。 */
   @Put(":id/tools")
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async updateAgentTools(
     @Param("id") id: string,
     @Body() payload: AgentToolBindingDto
@@ -124,7 +124,7 @@ export class AgentsController {
   /** 获取 Agent 知识库绑定。 */
   @Get(":id/knowledge-bases")
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async getAgentKnowledgeBases(@Param("id") id: string): Promise<AgentKnowledgeBaseBindingResult> {
     return this.agentsService.getAgentKnowledgeBases(id);
   }
@@ -132,7 +132,7 @@ export class AgentsController {
   /** 批量替换 Agent 知识库绑定。 */
   @Put(":id/knowledge-bases")
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async updateAgentKnowledgeBases(
     @Param("id") id: string,
     @Body() payload: AgentKnowledgeBaseBindingDto
@@ -143,7 +143,7 @@ export class AgentsController {
   /** 获取 Agent 工作流执行策略。 */
   @Get(":id/workflow")
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async getAgentWorkflow(@Param("id") id: string): Promise<AgentWorkflowBindingResult> {
     return this.agentsService.getAgentWorkflow(id);
   }
@@ -151,7 +151,7 @@ export class AgentsController {
   /** 更新 Agent 工作流执行策略。 */
   @Put(":id/workflow")
   @Roles(UserRole.ADMIN, UserRole.USER)
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
   async updateAgentWorkflow(
     @Param("id") id: string,
     @Body() payload: AgentWorkflowBindingDto

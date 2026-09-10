@@ -9,14 +9,12 @@ import {
   Select,
   Space,
   Table,
-  Tabs,
   Tag,
   Typography
 } from "antd";
 import type { TableProps } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
-import { useAuth } from "../auth/AuthProvider";
 import {
   createWorkspace,
   createWorkspaceInvitation,
@@ -27,12 +25,11 @@ import {
 } from "../workspaces/api";
 import { useWorkspace } from "../workspaces/WorkspaceProvider";
 import type { WorkspaceInvitation, WorkspaceMember, WorkspaceRole } from "../workspaces/types";
-import { AccountManagementPanel } from "./components/AccountManagementPanel";
 
 type InvitationFormValues = {
   email: string;
   displayName: string;
-  role: "ADMIN" | "MEMBER";
+  role: "MANAGER" | "MEMBER";
 };
 
 type WorkspaceFormValues = {
@@ -40,23 +37,9 @@ type WorkspaceFormValues = {
   description?: string;
 };
 
-/** 成员入口区分空间成员关系与平台账号，避免两套角色和权限语义混在同一张表。 */
+/** 项目空间 OWNER 管理当前空间成员，不包含平台账号安全操作。 */
 export function UsersPage() {
-  const { currentUser } = useAuth();
-
-  return (
-    <div className="workspace">
-      <Tabs
-        destroyOnHidden
-        items={[
-          { key: "workspace", label: "项目空间成员", children: <WorkspaceMembersPanel /> },
-          ...(currentUser?.role === "ADMIN"
-            ? [{ key: "accounts", label: "平台账号管理", children: <AccountManagementPanel /> }]
-            : [])
-        ]}
-      />
-    </div>
-  );
+  return <WorkspaceMembersPanel />;
 }
 
 /** 当前项目空间的成员关系、角色、邀请和所有权操作。 */
@@ -119,7 +102,7 @@ function WorkspaceMembersPanel() {
     }
   }
 
-  async function changeRole(member: WorkspaceMember, role: "ADMIN" | "MEMBER") {
+  async function changeRole(member: WorkspaceMember, role: "MANAGER" | "MEMBER") {
     if (!currentWorkspace) return;
     try {
       await updateWorkspaceMemberRole(currentWorkspace.id, member.userId, role);
@@ -173,12 +156,12 @@ function WorkspaceMembersPanel() {
       render: (role: WorkspaceRole, member) => {
         if (role === "OWNER") return <Tag color="gold">所有者</Tag>;
         if (!canManageAdmins) {
-          return <Tag color={role === "ADMIN" ? "blue" : "default"}>{roleLabel(role)}</Tag>;
+          return <Tag color={role === "MANAGER" ? "blue" : "default"}>{roleLabel(role)}</Tag>;
         }
         return (
           <Select
             options={[
-              { label: "管理员", value: "ADMIN" },
+              { label: "项目管理员", value: "MANAGER" },
               { label: "成员", value: "MEMBER" }
             ]}
             value={role}
@@ -199,7 +182,7 @@ function WorkspaceMembersPanel() {
       width: 210,
       render: (_, member) => {
         if (member.role === "OWNER") return null;
-        if (currentWorkspace.role === "ADMIN" && member.role !== "MEMBER") return null;
+        if (currentWorkspace.role === "MANAGER" && member.role !== "MEMBER") return null;
         return (
           <Space>
             {currentWorkspace.role === "OWNER" ? (
@@ -274,7 +257,7 @@ function WorkspaceMembersPanel() {
             <Select
               options={[
                 { label: "成员", value: "MEMBER" },
-                ...(canManageAdmins ? [{ label: "管理员", value: "ADMIN" as const }] : [])
+                ...(canManageAdmins ? [{ label: "项目管理员", value: "MANAGER" as const }] : [])
               ]}
             />
           </Form.Item>
@@ -324,5 +307,5 @@ function WorkspaceMembersPanel() {
 }
 
 function roleLabel(role: WorkspaceRole): string {
-  return role === "OWNER" ? "所有者" : role === "ADMIN" ? "管理员" : "成员";
+  return role === "OWNER" ? "所有者" : role === "MANAGER" ? "项目管理员" : "成员";
 }

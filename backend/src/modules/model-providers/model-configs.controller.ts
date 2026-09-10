@@ -11,6 +11,7 @@ import {
   ModelConfigCreateDto,
   ModelConfigDetail,
   ModelConfigListItem,
+  ModelConfigOption,
   ModelConfigQueryDto,
   ModelConfigUpdateDto
 } from "./dto/model-provider.dto";
@@ -18,7 +19,7 @@ import { ModelProvidersService } from "./model-providers.service";
 
 @Controller("model-configs")
 @Roles(UserRole.ADMIN, UserRole.USER)
-@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
 export class ModelConfigsController {
   constructor(private readonly modelProvidersService: ModelProvidersService) {}
 
@@ -27,6 +28,12 @@ export class ModelConfigsController {
     @Query() query: ModelConfigQueryDto
   ): Promise<PageResult<ModelConfigListItem>> {
     return this.modelProvidersService.listModelConfigs(query);
+  }
+
+  @Get("options")
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
+  async listModelConfigOptions(): Promise<ModelConfigOption[]> {
+    return this.modelProvidersService.listChatModelOptions();
   }
 
   @Post()

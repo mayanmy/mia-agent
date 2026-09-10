@@ -16,8 +16,6 @@ type AgentTablePagination = {
 
 /** Agent 表格的展示数据与操作回调。 */
 type AgentTableProps = {
-  /** 是否允许显示配置、发布和删除操作。 */
-  canManage: boolean;
   /** 当前页 Agent 数据。 */
   agents: AgentTableItem[];
   /** 是否正在加载列表。 */
@@ -48,7 +46,6 @@ type AgentTableProps = {
 
 /** 展示 Agent 状态、绑定摘要及管理操作。 */
 export function AgentTable({
-  canManage,
   agents,
   loading,
   pagination,
@@ -64,6 +61,12 @@ export function AgentTable({
   onDelete
 }: AgentTableProps) {
   const columns: TableProps<AgentTableItem>["columns"] = [
+    {
+      title: "创建者",
+      dataIndex: ["creator", "displayName"],
+      key: "creator",
+      width: 140
+    },
     {
       title: "名称",
       dataIndex: "name",
@@ -217,7 +220,7 @@ export function AgentTable({
             <Button type="link" size="small" onClick={() => onTest(record.id)}>
               测试对话
             </Button>
-            {canManage ? (
+            {record.permissions.canEdit ? (
               <Dropdown menu={{ items: menuItems, onClick: handleMenuClick }} trigger={["click"]}>
                 <Button aria-label="更多操作" icon={<MoreOutlined />} size="small" type="text" />
               </Dropdown>

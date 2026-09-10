@@ -52,6 +52,16 @@ export class WorkspacesService {
   async createWorkspace(userId: string, payload: WorkspaceCreateDto): Promise<WorkspaceListItem> {
     const name = this.requireName(payload?.name);
     const description = this.normalizeDescription(payload?.description);
+    const ownedWorkspaceCount = await this.prisma.workspace.count({
+      where: { createdById: userId, deletedAt: null }
+    });
+    if (ownedWorkspaceCount >= 20) {
+      throw new AppError(
+        ErrorCodes.common.conflict,
+        "每个账号最多创建 20 个有效项目空间",
+        HttpStatus.CONFLICT
+      );
+    }
 
     const workspace = await this.prisma.$transaction(async (transaction) => {
       const created = await transaction.workspace.create({
@@ -86,16 +96,13 @@ export class WorkspacesService {
     );
   }
 
-  /** OWNER/ADMIN 可以修改项目空间基础资料，角色校验始终来自实时成员关系。 */
+  /** 只有 OWNER 可以修改项目空间资料；平台或项目管理员都不能绕过所有权。 */
   async updateWorkspace(
     actorUserId: string,
     workspaceId: string,
     payload: WorkspaceUpdateDto
   ): Promise<WorkspaceListItem> {
-    const actor = await this.requireRole(actorUserId, workspaceId, [
-      WorkspaceRole.OWNER,
-      WorkspaceRole.ADMIN
-    ]);
+    const actor = await this.requireRole(actorUserId, workspaceId, [WorkspaceRole.OWNER]);
     const data: Prisma.WorkspaceUpdateInput = {
       ...(payload.name !== undefined ? { name: this.requireName(payload.name) } : {}),
       ...(payload.description !== undefined
@@ -159,19 +166,16 @@ export class WorkspacesService {
     }));
   }
 
-  /** 创建或重新生成空间邀请；ADMIN 只能邀请 MEMBER，OWNER 可以邀请 ADMIN。 */
+  /** OWNER 创建或重新生成空间邀请，可委派 MANAGER 或邀请普通 MEMBER。 */
   async createInvitation(
     actorUserId: string,
     workspaceId: string,
     payload: WorkspaceInvitationCreateDto
   ): Promise<WorkspaceInvitationResponse> {
-    const actor = await this.requireRole(actorUserId, workspaceId, [
-      WorkspaceRole.OWNER,
-      WorkspaceRole.ADMIN
-    ]);
+    await this.requireRole(actorUserId, workspaceId, [WorkspaceRole.OWNER]);
     const email = this.requireEmail(payload?.email);
     const displayName = this.requireDisplayName(payload?.displayName);
-    const role = this.requireInvitationRole(payload?.role, actor.role);
+    const role = this.requireInvitationRole(payload?.role);
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
       select: { id: true }
@@ -225,13 +229,13 @@ export class WorkspacesService {
     };
   }
 
-  /** OWNER/ADMIN 可以撤销当前空间尚未使用的邀请。 */
+  /** OWNER 可以撤销当前空间尚未使用的邀请。 */
   async revokeInvitation(
     actorUserId: string,
     workspaceId: string,
     invitationId: string
   ): Promise<void> {
-    await this.requireRole(actorUserId, workspaceId, [WorkspaceRole.OWNER, WorkspaceRole.ADMIN]);
+    await this.requireRole(actorUserId, workspaceId, [WorkspaceRole.OWNER]);
     const result = await this.prisma.userInvitation.updateMany({
       where: { id: invitationId, workspaceId, acceptedAt: null, revokedAt: null },
       data: { revokedAt: new Date() }
@@ -248,16 +252,13 @@ export class WorkspacesService {
     targetUserId: string,
     payload: WorkspaceMemberRoleUpdateDto
   ): Promise<void> {
-    const actor = await this.requireRole(actorUserId, workspaceId, [
-      WorkspaceRole.OWNER,
-      WorkspaceRole.ADMIN
-    ]);
+    await this.requireRole(actorUserId, workspaceId, [WorkspaceRole.OWNER]);
     const target = await this.requireMembership(targetUserId, workspaceId);
     const role = payload?.role;
-    if (role !== WorkspaceRole.ADMIN && role !== WorkspaceRole.MEMBER) {
+    if (role !== WorkspaceRole.MANAGER && role !== WorkspaceRole.MEMBER) {
       throw new AppError(ErrorCodes.common.badRequest, "成员角色不正确");
     }
-    if (target.role === WorkspaceRole.OWNER || actor.role === WorkspaceRole.ADMIN) {
+    if (target.role === WorkspaceRole.OWNER) {
       throw this.forbidden("只有项目空间所有者可以调整管理员角色");
     }
     await this.prisma.workspaceMember.update({
@@ -272,10 +273,7 @@ export class WorkspacesService {
     workspaceId: string,
     targetUserId: string
   ): Promise<void> {
-    const actor = await this.requireRole(actorUserId, workspaceId, [
-      WorkspaceRole.OWNER,
-      WorkspaceRole.ADMIN
-    ]);
+    await this.requireRole(actorUserId, workspaceId, [WorkspaceRole.OWNER]);
     const target = await this.requireMembership(targetUserId, workspaceId);
     if (target.role === WorkspaceRole.OWNER) {
       throw new AppError(
@@ -284,16 +282,13 @@ export class WorkspacesService {
         HttpStatus.CONFLICT
       );
     }
-    if (actor.role === WorkspaceRole.ADMIN && target.role !== WorkspaceRole.MEMBER) {
-      throw this.forbidden("管理员只能移除普通成员");
-    }
     await this.prisma.workspaceMember.update({
       where: { workspaceId_userId: { workspaceId, userId: targetUserId } },
       data: { removedAt: new Date() }
     });
   }
 
-  /** OWNER 显式把所有权转给有效成员，旧 OWNER 原子降级为 ADMIN。 */
+  /** OWNER 显式把所有权转给有效成员，旧 OWNER 原子降级为 MANAGER。 */
   async transferOwnership(
     actorUserId: string,
     workspaceId: string,
@@ -308,7 +303,7 @@ export class WorkspacesService {
     await this.prisma.$transaction(async (transaction) => {
       await transaction.workspaceMember.update({
         where: { workspaceId_userId: { workspaceId, userId: actorUserId } },
-        data: { role: WorkspaceRole.ADMIN }
+        data: { role: WorkspaceRole.MANAGER }
       });
       await transaction.workspaceMember.update({
         where: { workspaceId_userId: { workspaceId, userId: targetUserId } },
@@ -414,16 +409,10 @@ export class WorkspacesService {
     return name;
   }
 
-  private requireInvitationRole(
-    role: WorkspaceRole | undefined,
-    actorRole: WorkspaceRole
-  ): WorkspaceRole {
+  private requireInvitationRole(role: WorkspaceRole | undefined): WorkspaceRole {
     const normalized = role ?? WorkspaceRole.MEMBER;
     if (normalized === WorkspaceRole.OWNER) {
       throw new AppError(ErrorCodes.common.badRequest, "所有者必须通过所有权转让产生");
-    }
-    if (actorRole === WorkspaceRole.ADMIN && normalized !== WorkspaceRole.MEMBER) {
-      throw this.forbidden("管理员只能邀请普通成员");
     }
     return normalized;
   }

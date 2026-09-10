@@ -1,9 +1,19 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { AgentChatSessionMode, AgentExecutionMode, ModelConfigType, Prisma } from "@prisma/client";
+import {
+  AgentChatSessionMode,
+  AgentExecutionMode,
+  ModelConfigType,
+  Prisma,
+  WorkspaceRole
+} from "@prisma/client";
 import { randomBytes } from "node:crypto";
 
 import { AppError, ErrorCodes } from "../../core/errors";
-import { getWorkspaceId, requireWorkspaceId } from "../../core/auth/workspace-context";
+import {
+  getWorkspaceId,
+  requireWorkspaceActor,
+  requireWorkspaceId
+} from "../../core/auth/workspace-context";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PageResult } from "../../core/result";
 import { KnowledgeService } from "../knowledge/knowledge.service";
@@ -55,6 +65,13 @@ type AgentWithModelConfig = Prisma.AgentGetPayload<{
     };
     /** Agent 工具绑定记录。 */
     agentTools: true;
+    /** 资源创建者用于成员级修改授权和列表展示。 */
+    createdBy: {
+      select: {
+        id: true;
+        displayName: true;
+      };
+    };
     /** Agent 工作流绑定记录。 */
     agentWorkflow: true;
     /** Agent 知识库绑定及可用性判断所需字段。 */
@@ -136,15 +153,18 @@ export class AgentsService {
    */
   async listAgents(
     query: AgentQueryDto,
-    _currentUser?: Pick<CurrentUserDto, "role">,
+    currentUser?: Pick<CurrentUserDto, "id" | "role">,
     currentWorkspace?: Pick<CurrentWorkspaceDto, "role">
   ): Promise<PageResult<AgentListItem>> {
     const page = normalizePageQuery(query);
+    const actor = requireWorkspaceActor();
     const where: Prisma.AgentWhereInput = {
       workspaceId: requireWorkspaceId(),
       deletedAt: null,
       ...(currentWorkspace?.role === "MEMBER"
-        ? { enabled: true }
+        ? {
+            OR: [{ enabled: true }, { createdByUserId: currentUser?.id ?? actor.userId }]
+          }
         : query.enabled !== undefined
           ? { enabled: this.parseEnabled(query.enabled) }
           : {})
@@ -159,6 +179,7 @@ export class AgentsService {
               provider: true
             }
           },
+          createdBy: { select: { id: true, displayName: true } },
           agentTools: true,
           agentWorkflow: true,
           agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
@@ -186,6 +207,7 @@ export class AgentsService {
 
   /** 创建 Agent，并在同一事务中写入基础配置。 */
   async createAgent(payload: AgentCreateDto): Promise<AgentDetail> {
+    const actor = requireWorkspaceActor();
     const data = this.validateAgentCreate(payload);
     const modelConfigId = await this.resolveCreateModelConfigId(data.modelConfigId);
     await this.ensureChatModelConfig(modelConfigId);
@@ -193,12 +215,11 @@ export class AgentsService {
     const agent = await this.prisma.agent.create({
       data: {
         workspaceId: requireWorkspaceId(),
+        createdByUserId: actor.userId,
         name: data.name,
         description: data.description,
         systemPrompt: data.systemPrompt,
-        modelConfig: {
-          connect: { id: modelConfigId }
-        },
+        modelConfigId,
         temperature: data.temperature,
         maxTokens: data.maxTokens,
         timeoutSeconds: data.timeoutSeconds,
@@ -213,6 +234,7 @@ export class AgentsService {
             provider: true
           }
         },
+        createdBy: { select: { id: true, displayName: true } },
         agentTools: true,
         agentWorkflow: true,
         agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
@@ -231,12 +253,13 @@ export class AgentsService {
   /** 读取 Agent 完整详情，已软删除记录视为不存在。 */
   async getAgent(id: string): Promise<AgentDetail> {
     const agent = await this.findAgentDetail(id);
+    this.assertCanManageAgent(agent.createdByUserId);
     return this.toAgentDetail(agent);
   }
 
   /** 更新 Agent 基础配置；模型引用在写入前由模型模块校验。 */
   async updateAgent(id: string, payload: AgentUpdateDto): Promise<AgentDetail> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
     const data = this.validateAgentUpdate(payload);
 
     if (data.modelConfigId) {
@@ -272,6 +295,7 @@ export class AgentsService {
             provider: true
           }
         },
+        createdBy: { select: { id: true, displayName: true } },
         agentTools: true,
         agentWorkflow: true,
         agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
@@ -289,7 +313,7 @@ export class AgentsService {
 
   /** 软删除 Agent，保留审计与历史运行关联。 */
   async deleteAgent(id: string): Promise<void> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
 
     await this.prisma.agent.update({
       where: { id, workspaceId: requireWorkspaceId() },
@@ -302,7 +326,7 @@ export class AgentsService {
 
   /** 发布 Agent 并生成不可预测的公开分享令牌。 */
   async publishAgent(id: string): Promise<AgentPublishResult> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
     const existing = await this.prisma.agent.findUnique({
       where: { id, workspaceId: requireWorkspaceId() },
       select: {
@@ -351,7 +375,7 @@ export class AgentsService {
 
   /** 取消发布并使现有公开链接立即失效。 */
   async unpublishAgent(id: string): Promise<AgentPublishResult> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
 
     const agent = await this.prisma.agent.update({
       where: { id, workspaceId: requireWorkspaceId() },
@@ -382,7 +406,7 @@ export class AgentsService {
    * 用于 Token 泄露或不再信任旧嵌入代码时的快速止损。
    */
   async rotateShareToken(id: string): Promise<AgentPublishResult> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
     const agent = await this.prisma.agent.update({
       where: { id, workspaceId: requireWorkspaceId() },
       data: { shareToken: this.createShareToken() },
@@ -404,7 +428,7 @@ export class AgentsService {
 
   /** 读取公开发布治理配置；密码字段只转换为是否启用，永不返回哈希。 */
   async getPublicAccessConfig(id: string): Promise<AgentPublicAccessConfig> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
     const agent = await this.prisma.agent.findUniqueOrThrow({
       where: { id, workspaceId: requireWorkspaceId() },
       select: {
@@ -436,7 +460,7 @@ export class AgentsService {
       publicPasswordHash?: string | null;
     }
   ): Promise<AgentPublicAccessConfig> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
     const agent = await this.prisma.agent.update({
       where: { id, workspaceId: requireWorkspaceId() },
       data: {
@@ -556,7 +580,7 @@ export class AgentsService {
 
   /** 读取 Agent 已绑定的工具 ID。 */
   async getAgentTools(id: string): Promise<AgentToolBindingResult> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
 
     const tools = await this.prisma.agentTool.findMany({
       where: {
@@ -575,7 +599,7 @@ export class AgentsService {
 
   /** 读取 Agent 当前执行策略；绑定表由 agents 模块独占写入。 */
   async getAgentWorkflow(id: string): Promise<AgentWorkflowBindingResult> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
     const agent = await this.prisma.agent.findUniqueOrThrow({
       where: { id, workspaceId: requireWorkspaceId() },
       select: { executionMode: true, agentWorkflow: true }
@@ -600,7 +624,7 @@ export class AgentsService {
     id: string,
     payload: AgentWorkflowBindingDto
   ): Promise<AgentWorkflowBindingResult> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
     const executionMode = this.normalizeExecutionMode(payload.executionMode);
 
     if (executionMode === AgentExecutionMode.AGENT_LOOP) {
@@ -645,7 +669,7 @@ export class AgentsService {
     id: string,
     payload: AgentToolBindingDto
   ): Promise<AgentToolBindingResult> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
     const toolIds = this.normalizeToolIds(payload.toolIds);
     await this.ensureToolIdsExist(toolIds);
 
@@ -676,7 +700,7 @@ export class AgentsService {
 
   /** 读取 Agent 已绑定的知识库 ID。 */
   async getAgentKnowledgeBases(id: string): Promise<AgentKnowledgeBaseBindingResult> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
 
     const knowledgeBases = await this.prisma.agentKnowledgeBase.findMany({
       where: {
@@ -698,7 +722,7 @@ export class AgentsService {
     id: string,
     payload: AgentKnowledgeBaseBindingDto
   ): Promise<AgentKnowledgeBaseBindingResult> {
-    await this.ensureAgentExists(id);
+    await this.ensureCanManageAgent(id);
     const knowledgeBaseIds = this.normalizeKnowledgeBaseIds(payload.knowledgeBaseIds);
     await this.knowledgeService.ensureKnowledgeBaseIdsExist(knowledgeBaseIds);
 
@@ -1015,8 +1039,8 @@ export class AgentsService {
     throw new AppError(ErrorCodes.common.badRequest, "enabled must be true or false");
   }
 
-  /** 确认 Agent 存在且未软删除。 */
-  private async ensureAgentExists(id: string): Promise<void> {
+  /** 确认 Agent 属于当前空间，且当前成员是创建者或项目管理者。 */
+  private async ensureCanManageAgent(id: string): Promise<void> {
     const existing = await this.prisma.agent.findFirst({
       where: {
         id,
@@ -1024,12 +1048,29 @@ export class AgentsService {
         deletedAt: null
       },
       select: {
-        id: true
+        id: true,
+        createdByUserId: true
       }
     });
 
     if (!existing) {
       throw new AppError(ErrorCodes.agent.notFound, "agent not found", HttpStatus.NOT_FOUND);
+    }
+    this.assertCanManageAgent(existing.createdByUserId);
+  }
+
+  private assertCanManageAgent(createdByUserId: string): void {
+    const actor = requireWorkspaceActor();
+    if (
+      actor.role !== WorkspaceRole.OWNER &&
+      actor.role !== WorkspaceRole.MANAGER &&
+      actor.userId !== createdByUserId
+    ) {
+      throw new AppError(
+        ErrorCodes.workspace.forbidden,
+        "只能管理自己创建的 Agent",
+        HttpStatus.FORBIDDEN
+      );
     }
   }
 
@@ -1116,6 +1157,7 @@ export class AgentsService {
             provider: true
           }
         },
+        createdBy: { select: { id: true, displayName: true } },
         agentTools: true,
         agentWorkflow: true,
         agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
@@ -1139,6 +1181,11 @@ export class AgentsService {
   private toAgentListItem(agent: AgentWithModelConfig): AgentListItem {
     return {
       id: agent.id,
+      creator: {
+        id: agent.createdBy.id,
+        displayName: agent.createdBy.displayName
+      },
+      permissions: this.getAgentPermissions(agent.createdByUserId),
       name: agent.name,
       description: agent.description,
       modelConfigId: agent.modelConfigId,
@@ -1159,6 +1206,15 @@ export class AgentsService {
       createdAt: agent.createdAt,
       updatedAt: agent.updatedAt
     };
+  }
+
+  private getAgentPermissions(createdByUserId: string): AgentListItem["permissions"] {
+    const actor = requireWorkspaceActor();
+    const canManage =
+      actor.role === WorkspaceRole.OWNER ||
+      actor.role === WorkspaceRole.MANAGER ||
+      actor.userId === createdByUserId;
+    return { canEdit: canManage, canDelete: canManage, canPublish: canManage };
   }
 
   /** 将模块内部 Prisma 投影转换为详情 DTO。 */

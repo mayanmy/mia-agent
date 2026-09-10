@@ -101,6 +101,18 @@ export type HttpToolUpdateDto = Partial<HttpToolCreateDto>;
 /** HTTP 工具管理列表的安全摘要。 */
 export type HttpToolListItem = {
   id: string;
+  /** 创建者摘要，用于区分成员自己的工具。 */
+  creator: {
+    id: string;
+    displayName: string;
+  };
+  /** 当前成员可执行的管理操作，由服务端计算。 */
+  permissions: {
+    canEdit: boolean;
+    canDelete: boolean;
+    canTest: boolean;
+    canEnablePrivateNetwork: boolean;
+  };
   runtimeId: string;
   name: string;
   slug: string;

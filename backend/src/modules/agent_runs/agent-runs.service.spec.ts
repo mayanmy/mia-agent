@@ -17,7 +17,7 @@ export const tests = [
       assert.deepEqual(Reflect.getMetadata("mia:roles", AgentRunsController), ["ADMIN", "USER"]);
       assert.deepEqual(Reflect.getMetadata("mia:workspace-roles", AgentRunsController), [
         "OWNER",
-        "ADMIN"
+        "MANAGER"
       ]);
     }
   },

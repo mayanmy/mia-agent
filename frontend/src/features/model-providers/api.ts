@@ -110,6 +110,17 @@ export type DefaultModelSettings = {
   updatedAt: string | null;
 };
 
+/** Agent 表单可读取的安全模型选项。 */
+export type ModelConfigOption = {
+  id: string;
+  modelName: string;
+  modelType: "CHAT" | "EMBEDDING";
+  providerId: string;
+  providerName: string;
+  providerType: ModelProviderType;
+  isDefault: boolean;
+};
+
 /** 更新系统默认模型的请求；null 表示显式清除。 */
 export type DefaultModelSettingsPayload = {
   chatModelConfigId: string | null;
@@ -167,6 +178,10 @@ export function listModelConfigs(
   }
 
   return request<PageResult<ModelConfigListItem>>(`/api/v1/model-configs?${params.toString()}`);
+}
+
+export function listModelConfigOptions(): Promise<ModelConfigOption[]> {
+  return request<ModelConfigOption[]>("/api/v1/model-configs/options");
 }
 
 export function createModelConfig(payload: ModelConfigPayload): Promise<ModelConfigDetail> {

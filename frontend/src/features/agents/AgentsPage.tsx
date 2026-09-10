@@ -3,12 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Button, Form, Modal, message } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
-import { useWorkspace } from "../workspaces/WorkspaceProvider";
 import { AgentsGuide } from "../../shared/components/menu-guides";
 
 import { listKnowledgeBases, type KnowledgeBaseListItem } from "../knowledge/api";
-import { getDefaultModelSettings, listModelConfigs, listProviders } from "../model-providers/api";
-import type { ModelConfigListItem, ProviderListItem } from "../model-providers/api";
+import { listModelConfigOptions, type ModelConfigOption } from "../model-providers/api";
 import { listTools, type ToolListItem } from "../tools/api";
 import { listPublishedWorkflowApps, workflowToolId } from "../workflows/api";
 import {
@@ -36,13 +34,10 @@ import "./agents.less";
 
 /** Agents 路由页，负责编排列表、编辑、绑定与发布流程。 */
 export function AgentsPage() {
-  const { currentWorkspace } = useWorkspace();
-  const canManage = currentWorkspace?.role !== "MEMBER";
   const navigate = useNavigate();
   const [form] = Form.useForm<AgentFormValues>();
   const [agents, setAgents] = useState<AgentTableItem[]>([]);
-  const [providers, setProviders] = useState<ProviderListItem[]>([]);
-  const [modelConfigs, setModelConfigs] = useState<ModelConfigListItem[]>([]);
+  const [modelConfigs, setModelConfigs] = useState<ModelConfigOption[]>([]);
   const [tools, setTools] = useState<ToolListItem[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseListItem[]>([]);
   const [defaultChatModelConfigId, setDefaultChatModelConfigId] = useState<string | null>(null);
@@ -59,13 +54,12 @@ export function AgentsPage() {
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
 
   const modelOptions = useMemo(() => {
-    return providers
+    return Array.from(new Map(modelConfigs.map((config) => [config.providerId, config])).values())
       .map((provider) => ({
-        label: provider.name,
+        label: provider.providerName,
         options: modelConfigs
           .filter(
-            (config) =>
-              config.providerId === provider.id && config.modelType === "CHAT" && config.enabled
+            (config) => config.providerId === provider.providerId && config.modelType === "CHAT"
           )
           .map((config) => ({
             label: config.modelName,
@@ -73,7 +67,7 @@ export function AgentsPage() {
           }))
       }))
       .filter((group) => group.options.length > 0);
-  }, [modelConfigs, providers]);
+  }, [modelConfigs]);
 
   useEffect(() => {
     let disposed = false;
@@ -96,35 +90,19 @@ export function AgentsPage() {
     setLoading(true);
 
     try {
-      if (!canManage) {
-        const agentPage = await listAgents(nextPage, nextPageSize);
-        if (isActive()) {
-          setAgents(agentPage.list);
-          setPagination({
-            page: agentPage.page,
-            pageSize: agentPage.pageSize,
-            total: agentPage.total
-          });
-        }
-        return;
-      }
-
-      const [agentPage, providerPage, modelConfigPage, knowledgeBasePage] = await Promise.all([
+      const [agentPage, modelConfigOptions, knowledgeBasePage] = await Promise.all([
         listAgents(nextPage, nextPageSize),
-        listProviders(1, 100),
-        listModelConfigs(1, 100),
+        listModelConfigOptions(),
         listKnowledgeBases(1, 100)
       ]);
-      const [defaultSettings, toolList, workflowApps] = await Promise.all([
-        getDefaultModelSettings().catch(() => null),
+      const [toolList, workflowApps] = await Promise.all([
         listTools(),
         listPublishedWorkflowApps()
       ]);
 
       if (isActive()) {
         setAgents(agentPage.list);
-        setProviders(providerPage.list);
-        setModelConfigs(modelConfigPage.list);
+        setModelConfigs(modelConfigOptions);
         setKnowledgeBases(knowledgeBasePage.list);
         setTools([
           ...toolList.map((tool) => ({ ...tool, source: "standard" as const })),
@@ -137,7 +115,9 @@ export function AgentsPage() {
             workflowVersion: app.version
           }))
         ]);
-        setDefaultChatModelConfigId(defaultSettings?.chatModelConfigId ?? null);
+        setDefaultChatModelConfigId(
+          modelConfigOptions.find((config) => config.isDefault)?.id ?? null
+        );
         setPagination({
           page: agentPage.page,
           pageSize: agentPage.pageSize,
@@ -168,8 +148,7 @@ export function AgentsPage() {
 
   function resolveDefaultChatModelConfigId(): string {
     const defaultModelAvailable = modelConfigs.some(
-      (config) =>
-        config.id === defaultChatModelConfigId && config.modelType === "CHAT" && config.enabled
+      (config) => config.id === defaultChatModelConfigId && config.modelType === "CHAT"
     );
 
     if (defaultChatModelConfigId && defaultModelAvailable) {
@@ -418,11 +397,9 @@ export function AgentsPage() {
             <Button disabled={loading} onClick={() => void refresh()}>
               刷新
             </Button>
-            {canManage ? (
-              <Button type="primary" onClick={openCreateDialog}>
-                新增 Agent
-              </Button>
-            ) : null}
+            <Button type="primary" onClick={openCreateDialog}>
+              新增 Agent
+            </Button>
           </>
         }
         description="创建、配置和发布团队内部 AI 助手。"
@@ -431,7 +408,6 @@ export function AgentsPage() {
 
       <AgentTable
         agents={agents}
-        canManage={canManage}
         loading={loading}
         pagination={pagination}
         onCopyLink={(agent) => void copyShareLink(agent)}

@@ -43,7 +43,7 @@ export class WorkspacesController {
     return this.workspacesService.getWorkspace(currentUser.id, workspaceId);
   }
 
-  /** OWNER/ADMIN 更新项目空间资料。 */
+  /** OWNER 更新项目空间资料。 */
   @Put(":workspaceId")
   update(
     @CurrentUser() currentUser: CurrentUserDto,
@@ -72,7 +72,7 @@ export class WorkspacesController {
     return this.workspacesService.listMembers(currentUser.id, workspaceId);
   }
 
-  /** OWNER/ADMIN 创建或重新生成空间邀请。 */
+  /** OWNER 创建或重新生成空间邀请。 */
   @Post(":workspaceId/invitations")
   createInvitation(
     @CurrentUser() currentUser: CurrentUserDto,
@@ -82,7 +82,7 @@ export class WorkspacesController {
     return this.workspacesService.createInvitation(currentUser.id, workspaceId, payload);
   }
 
-  /** OWNER/ADMIN 撤销尚未使用的空间邀请。 */
+  /** OWNER 撤销尚未使用的空间邀请。 */
   @Delete(":workspaceId/invitations/:invitationId")
   async revokeInvitation(
     @CurrentUser() currentUser: CurrentUserDto,

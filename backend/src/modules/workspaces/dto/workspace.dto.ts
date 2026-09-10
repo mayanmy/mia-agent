@@ -54,7 +54,7 @@ export type WorkspaceInvitationCreateDto = {
   email?: string;
   /** 新账号激活页使用的展示名称。 */
   displayName?: string;
-  /** OWNER 不能通过邀请产生，只允许 ADMIN 或 MEMBER。 */
+  /** OWNER 不能通过邀请产生，只允许 MANAGER 或 MEMBER。 */
   role?: WorkspaceRole;
 };
 

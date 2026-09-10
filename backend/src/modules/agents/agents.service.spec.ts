@@ -1,10 +1,37 @@
 import * as assert from "node:assert/strict";
-import { AgentExecutionMode } from "@prisma/client";
+import { AgentExecutionMode, WorkspaceRole } from "@prisma/client";
 
+import { runInWorkspaceContext } from "../../core/auth/workspace-context";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { AgentsService } from "./agents.service";
 
 export const tests = [
+  {
+    name: "AgentsService rejects a MEMBER updating another creator's Agent",
+    run: async () => {
+      const service = new AgentsService(
+        {
+          agent: {
+            findFirst: async () => ({ id: "agent-id", createdByUserId: "other-user" })
+          }
+        } as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never
+      );
+
+      await assert.rejects(
+        () =>
+          runInWorkspaceContext(
+            "00000000-0000-4000-8000-000000000001",
+            { userId: "member-user", role: WorkspaceRole.MEMBER },
+            () => service.updateAgent("agent-id", { name: "updated" })
+          ),
+        /只能管理自己创建的 Agent/u
+      );
+    }
+  },
   {
     name: "AgentsService.updateAgentTools rejects unknown tool IDs",
     run: async () => {

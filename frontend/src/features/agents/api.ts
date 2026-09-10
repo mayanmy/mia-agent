@@ -10,6 +10,10 @@ export type AgentChatSessionMode = "EPHEMERAL" | "PERSISTENT";
 export type AgentListItem = {
   /** Agent ID。 */
   id: string;
+  /** 创建者摘要。 */
+  creator: { id: string; displayName: string };
+  /** 当前成员可用的管理操作，由后端计算。 */
+  permissions: { canEdit: boolean; canDelete: boolean; canPublish: boolean };
   /** Agent 展示名称。 */
   name: string;
   /** Agent 用途说明。 */

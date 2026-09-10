@@ -37,7 +37,7 @@ import { McpService } from "./mcp.service";
 
 @Controller("mcp/servers")
 @Roles(UserRole.ADMIN, UserRole.USER)
-@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
 export class McpController {
   constructor(private readonly mcpService: McpService) {}
 

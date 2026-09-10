@@ -35,19 +35,19 @@ export class KnowledgeController {
   }
 
   @Post()
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
   async createKnowledgeBase(@Body() payload: KnowledgeBaseCreateDto): Promise<KnowledgeBaseDetail> {
     return this.knowledgeService.createKnowledgeBase(payload);
   }
 
   @Get(":id")
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
   async getKnowledgeBase(@Param("id") id: string): Promise<KnowledgeBaseDetail> {
     return this.knowledgeService.getKnowledgeBase(id);
   }
 
   @Put(":id")
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
   async updateKnowledgeBase(
     @Param("id") id: string,
     @Body() payload: KnowledgeBaseUpdateDto
@@ -56,14 +56,14 @@ export class KnowledgeController {
   }
 
   @Delete(":id")
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
   async deleteKnowledgeBase(@Param("id") id: string): Promise<null> {
     await this.knowledgeService.deleteKnowledgeBase(id);
     return null;
   }
 
   @Get(":id/documents")
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
   async listKnowledgeDocuments(
     @Param("id") id: string,
     @Query() query: KnowledgeDocumentQueryDto
@@ -72,7 +72,7 @@ export class KnowledgeController {
   }
 
   @Post(":id/documents")
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
   @UseInterceptors(
     FileInterceptor("file", {
       limits: {
@@ -89,7 +89,7 @@ export class KnowledgeController {
   }
 
   @Post(":id/documents/:documentId/reindex")
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
   async reindexKnowledgeDocument(
     @Param("id") id: string,
     @Param("documentId") documentId: string
@@ -98,7 +98,7 @@ export class KnowledgeController {
   }
 
   @Delete(":id/documents/:documentId")
-  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
   async deleteKnowledgeDocument(
     @Param("id") id: string,
     @Param("documentId") documentId: string

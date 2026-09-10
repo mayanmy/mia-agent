@@ -87,6 +87,15 @@ export type HttpToolFormValues = {
 /** HTTP 工具管理列表的安全摘要。 */
 export type HttpToolListItem = {
   id: string;
+  /** 创建者摘要。 */
+  creator: { id: string; displayName: string };
+  /** 当前成员可用的管理操作。 */
+  permissions: {
+    canEdit: boolean;
+    canDelete: boolean;
+    canTest: boolean;
+    canEnablePrivateNetwork: boolean;
+  };
   runtimeId: string;
   name: string;
   slug: string;

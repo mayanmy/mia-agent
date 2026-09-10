@@ -189,9 +189,9 @@ type CurrentWorkspace = {
 - `@WorkspaceRoles(...)`：声明空间内角色。
 - `@WorkspaceOptional()`：仅用于同时支持登录态和外部 Token 的受控入口。
 - `WorkspaceGuard`：验证成员关系并填充请求上下文。
-- `WorkspaceRolesGuard`：执行 OWNER/ADMIN/MEMBER 授权。
+- `WorkspaceRolesGuard`：执行 OWNER/MANAGER/MEMBER 授权。
 
-`@Roles(UserRole.ADMIN)` 在业务模块中逐步替换为 `@WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)`。
+业务模块使用 `@WorkspaceRoles(...)` 声明项目角色；平台 `UserRole.ADMIN` 只用于账号与登录安全管理，不自动获得项目数据权限。
 
 ## 6. Service 与跨模块调用
 
@@ -233,12 +233,12 @@ Chat(workspaceId)
 
 ## 7. 模块权限与隔离
 
-| 模块                 | OWNER/ADMIN      | MEMBER                 | 隔离重点                     |
-| -------------------- | ---------------- | ---------------------- | ---------------------------- |
+| 模块                 | OWNER/MANAGER    | MEMBER                         | 隔离重点                     |
+| -------------------- | ---------------- | ------------------------------ | ---------------------------- |
 | Model Providers      | 完整管理         | 不显示管理入口         | API Key、默认模型按空间隔离  |
-| Agents               | 完整管理         | 查看并使用已启用 Agent | 详情、发布、绑定均校验空间   |
+| Agents               | 完整管理         | 创建并管理本人 Agent           | 详情、发布、绑定均校验空间   |
 | Knowledge            | 完整管理         | 只读查看启用知识库     | 文件、Chunk、向量均带空间    |
-| Tools / MCP / Skills | 完整管理         | Runtime 使用已启用项   | Secret 与 OAuth Token 隔离   |
+| Tools / MCP / Skills | 完整管理         | 创建本人 HTTP Tool、使用启用项 | Secret 与 OAuth Token 隔离   |
 | Workflows            | 编辑、发布、运行 | 运行已发布应用         | 编译资源必须同空间           |
 | Chat                 | 查看自己的会话   | 查看自己的会话         | 同时校验 workspaceId、userId |
 | Logs / Run Trace     | 查看空间日志     | 不开放全空间列表       | 日志直接记录 workspaceId     |
@@ -324,8 +324,8 @@ POST   /api/v1/workspaces/:workspaceId/transfer-ownership
 
 - 左侧导航品牌区增加项目空间选择器。
 - “成员”页面改为当前项目空间成员，不再管理平台全部用户。
-- OWNER/ADMIN 显示完整管理菜单。
-- MEMBER 显示 Agent、知识库只读、Workflow 应用和对话。
+- OWNER/MANAGER 显示项目级管理菜单。
+- MEMBER 可以使用共享资源，并创建、管理本人创建的 Agent 和 HTTP Tool。
 - 切换空间后回到当前角色可访问的默认路由。
 
 ## 11. 迁移与发布
@@ -335,7 +335,7 @@ POST   /api/v1/workspaces/:workspaceId/transfer-ownership
 1. 备份 PostgreSQL、上传文件和环境变量。
 2. 创建 Workspace、WorkspaceMember 和 WorkspaceRole。
 3. 创建“默认项目空间”。
-4. 最早创建的有效全局 ADMIN 成为 OWNER；其他 ADMIN 成为 Workspace ADMIN；USER 成为 MEMBER。
+4. 最早创建的有效全局 ADMIN 成为 OWNER；其他 ADMIN 成为 Workspace MANAGER；USER 成为 MEMBER。
 5. 所有业务表增加可空 `workspace_id`。
 6. 根据根资源和外键链批量回填默认空间。
 7. 校验每张表 `workspace_id IS NULL` 数量为 0。
@@ -415,10 +415,10 @@ POST   /api/v1/workspaces/:workspaceId/transfer-ownership
 
 - 已增加 Workspace、WorkspaceMember、空间邀请和两阶段数据迁移。
 - 已在主要业务资源、会话、日志、Run Trace、MCP 状态及向量表写入 `workspace_id`。
-- 已增加 `X-Workspace-ID` 校验、异步请求上下文和 `OWNER / ADMIN / MEMBER` 授权。
+- 已增加 `X-Workspace-ID` 校验、异步请求上下文和 `OWNER / MANAGER / MEMBER` 授权。
 - 已把模型、Agent、知识库、Workflow、Skill、工具、MCP、Chat、日志和 Run Trace 查询收敛到当前空间。
-- 已关闭全局用户管理 Controller，成员邀请和管理统一从项目空间入口完成。
+- 已将平台账号管理与项目成员管理拆分；平台管理员可独立管理账号，项目 OWNER 管理成员。
 - 前端已增加空间选择、切换后页面重建、成员管理、邀请、角色调整和所有权转让。
-- MEMBER 只显示并使用已启用 Agent、启用知识库、Workflow 应用和个人对话；管理入口由 OWNER/ADMIN 使用。
+- MEMBER 可以使用共享资源，并创建、管理本人创建的 Agent 和 HTTP Tool；OWNER/MANAGER 可管理空间内全部业务资源。
 
 部署前需要执行 Prisma migration。生产数据库迁移前必须先完成数据库和上传文件备份；本次实现没有自动修改当前数据库。
