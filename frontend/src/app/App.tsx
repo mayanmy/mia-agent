@@ -17,7 +17,7 @@ import {
   ToolOutlined,
   UserOutlined
 } from "@ant-design/icons";
-import { Button, Dropdown, Empty, Select, Spin, Tooltip } from "antd";
+import { Button, Dropdown, Empty, Spin, Tooltip } from "antd";
 import {
   Navigate,
   NavLink,
@@ -31,6 +31,7 @@ import {
 import { useAuth } from "../features/auth/AuthProvider";
 import { LoginPage } from "../features/auth/LoginPage";
 import { CreateWorkspaceModal } from "../features/workspaces/components/CreateWorkspaceModal";
+import { WorkspaceSwitcher } from "../features/workspaces/components/WorkspaceSwitcher";
 import { useWorkspace } from "../features/workspaces/WorkspaceProvider";
 import type { WorkspaceRole } from "../features/workspaces/types";
 
@@ -381,30 +382,12 @@ function WorkspaceLayout() {
             />
           </Tooltip>
         </div>
-        <Select
-          aria-label="当前项目空间"
-          className="workspaceSelect"
-          options={workspaces.map((workspace) => ({
-            label: workspace.name,
-            value: workspace.id
-          }))}
-          popupMatchSelectWidth={240}
-          value={currentWorkspace.id}
-          popupRender={(menu) => (
-            <>
-              {menu}
-              <Button
-                block
-                icon={<PlusOutlined />}
-                type="text"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => setCreateWorkspaceOpen(true)}
-              >
-                新建项目空间
-              </Button>
-            </>
-          )}
-          onChange={(workspaceId) => {
+        <WorkspaceSwitcher
+          collapsed={sidebarCollapsed}
+          currentWorkspace={currentWorkspace}
+          workspaces={workspaces}
+          onCreate={() => setCreateWorkspaceOpen(true)}
+          onSwitch={(workspaceId) => {
             switchWorkspace(workspaceId);
             navigate("/agents", { replace: true });
           }}
