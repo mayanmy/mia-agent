@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
+  App as AntdApp,
   Button,
   DatePicker,
   Drawer,
@@ -9,8 +10,7 @@ import {
   Space,
   Table,
   Tag,
-  Typography,
-  message
+  Typography
 } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import type { TableProps } from "antd";
@@ -36,6 +36,7 @@ type LogFilters = Omit<ToolCallLogQuery, "page" | "pageSize" | "createdFrom" | "
 };
 
 export function LogsPage() {
+  const { message } = AntdApp.useApp();
   const [searchParams] = useSearchParams();
   const initialRequestId = searchParams.get("requestId")?.trim() || undefined;
   const [toolCallLogs, setToolCallLogs] = useState<ToolCallLogListItem[]>([]);

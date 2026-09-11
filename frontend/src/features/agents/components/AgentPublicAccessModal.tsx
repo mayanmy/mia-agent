@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
-import { Button, Form, Input, Modal, Popconfirm, Space, Switch, Typography, message } from "antd";
+import {
+  App as AntdApp,
+  Button,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Space,
+  Switch,
+  Typography
+} from "antd";
 
 import {
   getAgentPublicAccess,
@@ -37,6 +47,7 @@ export function AgentPublicAccessModal({
   onCancel,
   onTokenRotated
 }: AgentPublicAccessModalProps) {
+  const { message } = AntdApp.useApp();
   const [form] = Form.useForm<PublicAccessFormValues>();
   const [config, setConfig] = useState<AgentPublicAccessConfig | null>(null);
   const [loading, setLoading] = useState(false);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Form, Modal, message } from "antd";
+import { App as AntdApp, Button, Form, Modal } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
 import { AgentsGuide } from "../../shared/components/menu-guides";
@@ -34,6 +34,7 @@ import "./agents.less";
 
 /** Agents 路由页，负责编排列表、编辑、绑定与发布流程。 */
 export function AgentsPage() {
+  const { message } = AntdApp.useApp();
   const navigate = useNavigate();
   const [form] = Form.useForm<AgentFormValues>();
   const [agents, setAgents] = useState<AgentTableItem[]>([]);

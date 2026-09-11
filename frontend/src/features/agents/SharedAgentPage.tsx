@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Result, Spin, Tag, message } from "antd";
+import { App as AntdApp, Result, Spin, Tag } from "antd";
 
 import { getSharedAgent, type SharedAgentDetail } from "./api";
 import "./agents.less";
 
 export function SharedAgentPage() {
+  const { message } = AntdApp.useApp();
   const { token } = useParams();
   const widgetContainerRef = useRef<HTMLDivElement | null>(null);
   const [agent, setAgent] = useState<SharedAgentDetail | null>(null);

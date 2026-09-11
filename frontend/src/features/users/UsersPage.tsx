@@ -164,7 +164,7 @@ function WorkspaceMembersPanel() {
       title: "成员",
       key: "member",
       render: (_, member) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Typography.Text strong>{member.displayName}</Typography.Text>
           <Typography.Text type="secondary">{member.email}</Typography.Text>
         </Space>

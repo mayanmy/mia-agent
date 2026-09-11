@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ReloadOutlined } from "@ant-design/icons";
 import {
+  App as AntdApp,
   Button,
   DatePicker,
   Drawer,
@@ -11,8 +12,7 @@ import {
   Table,
   Tag,
   Timeline,
-  Typography,
-  message
+  Typography
 } from "antd";
 import type { Dayjs } from "dayjs";
 import type { TableProps } from "antd";
@@ -47,6 +47,7 @@ const sourceOptions = ["INTERNAL_CHAT", "PUBLIC_WIDGET", "SERVICE_API", "ASYNC_T
 );
 
 export function AgentRunsPage() {
+  const { message } = AntdApp.useApp();
   const [runs, setRuns] = useState<AgentRunListItem[]>([]);
   const [filters, setFilters] = useState<Filters>({});
   const [paging, setPaging] = useState({ page: 1, pageSize: 20, total: 0 });

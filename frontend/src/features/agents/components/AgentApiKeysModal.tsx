@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Form, Input, Modal, Popconfirm, Space, Table, Tag, message } from "antd";
+import {
+  Alert,
+  App as AntdApp,
+  Button,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Space,
+  Table,
+  Tag
+} from "antd";
 import type { TableProps } from "antd";
 
 import {
@@ -31,6 +42,7 @@ export function AgentApiKeysModal({
   agent,
   onCancel
 }: AgentApiKeysModalProps) {
+  const { message } = AntdApp.useApp();
   const [form] = Form.useForm<AgentApiKeyFormValues>();
   const [keys, setKeys] = useState<AgentApiKeyListItem[]>([]);
   const [loading, setLoading] = useState(false);
