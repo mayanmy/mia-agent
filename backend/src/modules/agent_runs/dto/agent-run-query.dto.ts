@@ -43,7 +43,7 @@ export type AgentRunListItem = {
   /** 当前或最终运行状态。 */
   status: AgentRunStatus;
   /** 执行使用的 Agent ID。 */
-  agentId: string;
+  agentId: string | null;
   /** 匿名运行时为空。 */
   userId: string | null;
   /** 临时会话或外部调用时为空。 */

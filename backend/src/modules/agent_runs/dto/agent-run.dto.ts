@@ -6,8 +6,8 @@ export type CreateAgentRunDto = {
   requestId: string;
   /** 区分内部 Chat、公开 API 或 Workflow 等运行入口。 */
   source: AgentRunSource;
-  /** 本次运行使用的 Agent ID。 */
-  agentId: string;
+  /** 本次运行使用的 Agent ID；独立 Workflow 应用运行时为空。 */
+  agentId?: string;
   /** 匿名入口没有用户 ID。 */
   userId?: string;
   /** 持久会话 ID；临时对话为空。 */

@@ -3,7 +3,8 @@ import {
   AgentRunSource,
   AgentRunStatus,
   AgentRunStepStatus,
-  AgentRunStepType
+  AgentRunStepType,
+  WorkflowRunMode
 } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
@@ -195,6 +196,34 @@ export const tests = [
       assert.equal(createdData?.workspaceId, "00000000-0000-4000-8000-000000000001");
       assert.equal(typeof createdData?.inputPreview, "string");
       assert.ok(String(createdData?.inputPreview).endsWith("...[truncated]"));
+    }
+  },
+  {
+    name: "AgentRunsService creates a standalone Workflow Run without an Agent",
+    run: async () => {
+      let createdData: Record<string, unknown> | undefined;
+      const prisma = {
+        agentRun: {
+          create: async ({ data }: { data: Record<string, unknown> }) => {
+            createdData = data;
+            return { id: "run-workflow", requestId: data.requestId, status: AgentRunStatus.QUEUED };
+          }
+        }
+      };
+
+      await new AgentRunsService(prisma as never).createRun({
+        requestId: "request-workflow",
+        source: AgentRunSource.WORKFLOW_APP,
+        userId: "user-1",
+        workflowId: "workflow-1",
+        workflowVersionId: "version-1",
+        workflowRunMode: WorkflowRunMode.PUBLISHED,
+        inputPreview: "{}"
+      });
+
+      assert.equal(createdData?.agentId, undefined);
+      assert.equal(createdData?.workflowId, "workflow-1");
+      assert.equal(createdData?.workspaceId, "00000000-0000-4000-8000-000000000001");
     }
   },
   {

@@ -42,9 +42,13 @@ const statusOptions = [
   "CANCELED",
   "TIMED_OUT"
 ].map((value) => ({ label: value, value }));
-const sourceOptions = ["INTERNAL_CHAT", "PUBLIC_WIDGET", "SERVICE_API", "ASYNC_TASK"].map(
-  (value) => ({ label: value, value })
-);
+const sourceOptions = [
+  "INTERNAL_CHAT",
+  "PUBLIC_WIDGET",
+  "SERVICE_API",
+  "ASYNC_TASK",
+  "WORKFLOW_APP"
+].map((value) => ({ label: value, value }));
 
 export function AgentRunsPage() {
   const { message } = AntdApp.useApp();

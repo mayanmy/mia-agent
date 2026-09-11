@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 
 import { ModelProvidersModule } from "../model-providers/model-providers.module";
+import { AgentRunsModule } from "../agent_runs/agent-runs.module";
 import { RetrievalModule } from "../retrieval/retrieval.module";
 import { ToolsModule } from "../tools/tools.module";
 import { WorkflowsModule } from "../workflows/workflows.module";
@@ -15,12 +16,14 @@ import { WorkflowExpressionResolver } from "./expression-resolver";
 import { WorkflowNodeExecutorRegistry } from "./node-executor.registry";
 import { WorkflowRuntimeService } from "./workflow-runtime.service";
 import { WorkflowAppsController } from "./workflow-apps.controller";
+import { WorkflowAppRunsService } from "./workflow-app-runs.service";
 
 @Module({
-  imports: [WorkflowsModule, ModelProvidersModule, RetrievalModule, ToolsModule],
+  imports: [AgentRunsModule, WorkflowsModule, ModelProvidersModule, RetrievalModule, ToolsModule],
   controllers: [WorkflowAppsController],
   providers: [
     WorkflowExpressionResolver,
+    WorkflowAppRunsService,
     StartNodeExecutor,
     TemplateNodeExecutor,
     ConditionNodeExecutor,

@@ -4,7 +4,8 @@ import { request, type PageResult } from "../../shared/api/client";
 export type AgentRunStatus =
   "QUEUED" | "RUNNING" | "WAITING_APPROVAL" | "COMPLETED" | "FAILED" | "CANCELED" | "TIMED_OUT";
 /** Run 的入口来源。 */
-export type AgentRunSource = "INTERNAL_CHAT" | "PUBLIC_WIDGET" | "SERVICE_API" | "ASYNC_TASK";
+export type AgentRunSource =
+  "INTERNAL_CHAT" | "PUBLIC_WIDGET" | "SERVICE_API" | "ASYNC_TASK" | "WORKFLOW_APP";
 
 /** Run Trace 列表中的运行摘要。 */
 export type AgentRunListItem = {
@@ -12,7 +13,7 @@ export type AgentRunListItem = {
   requestId: string;
   source: AgentRunSource;
   status: AgentRunStatus;
-  agentId: string;
+  agentId: string | null;
   userId: string | null;
   sessionId: string | null;
   modelConfigId: string | null;

@@ -158,16 +158,30 @@ export class AgentRunsService {
 
   /** 创建排队态 Run，并在入口处截断用户输入，避免 Trace 表保存无限长度内容。 */
   async createRun(payload: CreateAgentRunDto): Promise<AgentRunContext> {
-    const agent = await this.prisma.agent.findUniqueOrThrow({
-      where: { id: this.requireText(payload.agentId, "agentId") },
-      select: { workspaceId: true }
-    });
+    const agentId = this.optionalText(payload.agentId);
+    // 公开 Agent 入口可能没有 Workspace Context，因此仍从 Agent 归属解析空间；
+    // 独立 Workflow 入口则由已鉴权的请求上下文提供空间，避免跨模块查询 Workflow 表。
+    const workspaceId = agentId
+      ? (
+          await this.prisma.agent.findUniqueOrThrow({
+            where: { id: agentId },
+            select: { workspaceId: true }
+          })
+        ).workspaceId
+      : requireWorkspaceId();
+    if (!agentId && !this.optionalText(payload.workflowId)) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "无 Agent 的 Run 必须关联 Workflow",
+        HttpStatus.BAD_REQUEST
+      );
+    }
     const run = await this.prisma.agentRun.create({
       data: {
-        workspaceId: agent.workspaceId,
+        workspaceId,
         requestId: this.requireText(payload.requestId, "requestId"),
         source: payload.source,
-        agentId: this.requireText(payload.agentId, "agentId"),
+        agentId,
         userId: this.optionalText(payload.userId),
         sessionId: this.optionalText(payload.sessionId),
         externalConversationId: this.optionalText(payload.externalConversationId),

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Req } from "@nestjs/common";
-import { UserRole, WorkflowRunMode } from "@prisma/client";
+import { UserRole } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 
@@ -11,7 +11,7 @@ import { CurrentUserDto } from "../users/dto/user.dto";
 import { PublishedWorkflowApp } from "../workflows/dto/workflow-version.dto";
 import { WorkflowsService } from "../workflows/workflows.service";
 import { WorkflowAppRunDto, WorkflowAppRunResult } from "./dto/workflow-run.dto";
-import { WorkflowRuntimeService } from "./workflow-runtime.service";
+import { WorkflowAppRunsService } from "./workflow-app-runs.service";
 
 /** 已发布 Workflow 的成员应用入口，不暴露草稿和编译计划。 */
 @Controller("workflow-apps")
@@ -20,7 +20,7 @@ import { WorkflowRuntimeService } from "./workflow-runtime.service";
 export class WorkflowAppsController {
   constructor(
     private readonly workflowsService: WorkflowsService,
-    private readonly workflowRuntimeService: WorkflowRuntimeService
+    private readonly workflowAppRunsService: WorkflowAppRunsService
   ) {}
 
   /** 返回当前可直接运行的 Workflow 应用。 */
@@ -43,46 +43,13 @@ export class WorkflowAppsController {
     @CurrentUser() currentUser: CurrentUserDto,
     @Req() request: IncomingMessage & RequestWithId
   ): Promise<WorkflowAppRunResult> {
-    const app = await this.workflowsService.getPublishedApp(workflowId);
-    if (payload.workflowVersionId && payload.workflowVersionId !== app.workflowVersionId) {
-      return {
-        requestId: request.requestId ?? randomUUID(),
-        workflowId,
-        workflowVersionId: app.workflowVersionId,
-        ok: false,
-        error: {
-          type: "workflow_version_changed",
-          message: "Workflow 已发布新版本，请刷新运行表单",
-          retryable: true
-        },
-        events: []
-      };
-    }
     const requestId = request.requestId ?? randomUUID();
-    const events = [];
-    for await (const event of this.workflowRuntimeService.runWorkflow({
+    return this.workflowAppRunsService.runWorkflowApp({
       requestId,
       userId: currentUser.id,
       workflowId,
-      workflowVersionId: app.workflowVersionId,
-      mode: WorkflowRunMode.PUBLISHED,
+      workflowVersionId: payload.workflowVersionId,
       inputs: payload.inputs ?? {}
-    })) {
-      events.push(event);
-    }
-    const completed = [...events].reverse().find((event) => event.type === "workflow_completed");
-    const failed = [...events].reverse().find((event) => event.type === "workflow_failed");
-    const output = completed?.type === "workflow_completed" ? completed.data.output : undefined;
-    return {
-      requestId,
-      workflowId,
-      workflowVersionId: app.workflowVersionId,
-      ok: Boolean(completed),
-      ...(output && typeof output === "object" && !Array.isArray(output)
-        ? { output: output as Record<string, unknown> }
-        : {}),
-      ...(failed?.type === "workflow_failed" ? { error: failed.data.error } : {}),
-      events
-    };
+    });
   }
 }

@@ -109,6 +109,7 @@ enum AgentRunSource {
   PUBLIC_WIDGET
   SERVICE_API
   ASYNC_TASK
+  WORKFLOW_APP
 
   @@map("agent_run_source")
 }
@@ -914,7 +915,7 @@ model AgentRun {
   workspaceId            String           @map("workspace_id") @db.Uuid
   requestId              String           @map("request_id")
   source                 AgentRunSource
-  agentId                String           @map("agent_id") @db.Uuid
+  agentId                String?          @map("agent_id") @db.Uuid
   userId                 String?          @map("user_id") @db.Uuid
   sessionId              String?          @map("session_id") @db.Uuid
   externalConversationId String?          @map("external_conversation_id") @db.Uuid
@@ -935,7 +936,7 @@ model AgentRun {
   errorMessage           String?          @map("error_message") @db.Text
   createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  agent                  Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agent                  Agent?           @relation(fields: [agentId], references: [id], onDelete: SetNull)
   user                   User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   steps                  AgentRunStep[]
 
