@@ -94,7 +94,7 @@ export function HomePage() {
           icon={<RobotOutlined />}
           label="构建 Agent"
           path="/agents"
-          tone="violet"
+          tone="primary"
         />
         <HomeQuickLink
           description="立即开始一次智能对话"

@@ -120,7 +120,7 @@ export function AgentGallery(props: AgentGalleryProps) {
                     <DatabaseOutlined /> {agent.knowledgeBaseCount}
                   </span>
                 </Tooltip>
-                <Tag bordered={false} color={agent.published ? "purple" : "default"}>
+                <Tag bordered={false} color={agent.published ? "blue" : "default"}>
                   {agent.published ? "已发布" : agent.enabled ? "可用" : "已停用"}
                 </Tag>
               </div>
