@@ -297,14 +297,14 @@ function WorkflowSectionTabs() {
   const { currentWorkspace } = useWorkspace();
   const tabs =
     currentWorkspace?.role === "MEMBER"
-      ? [{ label: "应用", path: "/workflows/apps" }]
+      ? [{ label: "已发布应用", path: "/workflows/apps" }]
       : [
           {
             label: "编排",
             path: "/workflows/design",
             match: (pathname: string) => pathname.startsWith("/workflows/design")
           },
-          { label: "应用", path: "/workflows/apps" }
+          { label: "已发布应用", path: "/workflows/apps" }
         ];
   return <WorkspaceSectionTabs tabs={tabs} />;
 }
@@ -491,9 +491,9 @@ function WorkspaceLayout() {
               <NavLink
                 aria-label={item.label}
                 className={({ isActive }) => `navItem${isActive ? " active" : ""}`}
-                end={!["/workflows", "/capabilities", "/operations", "/settings"].includes(
-                  item.path
-                )}
+                end={
+                  !["/workflows", "/capabilities", "/operations", "/settings"].includes(item.path)
+                }
                 to={item.path}
               >
                 <span className="navItemIcon">{item.icon}</span>
