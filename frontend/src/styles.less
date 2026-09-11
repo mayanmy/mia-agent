@@ -272,6 +272,12 @@ a {
   max-width: 1180px;
 }
 
+/* 折叠菜单释放出的空间应交给页面使用，避免表格页仍停留在展开态宽度。 */
+.sidebarCollapsed .workspace {
+  max-width: none;
+  width: 100%;
+}
+
 .pageHeader {
   display: flex;
   align-items: center;
