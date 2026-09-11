@@ -19,7 +19,7 @@ import {
   uploadKnowledgeDocument
 } from "./api";
 import { KnowledgeBaseFormModal } from "./components/KnowledgeBaseFormModal";
-import { KnowledgeBaseTable } from "./components/KnowledgeBaseTable";
+import { KnowledgeBaseGallery } from "./components/KnowledgeBaseGallery";
 import { KnowledgeDocumentDrawer } from "./components/KnowledgeDocumentDrawer";
 import type {
   KnowledgeBaseFormValues,
@@ -348,18 +348,16 @@ export function KnowledgePage() {
         title="知识库"
       />
 
-      <section className="panel knowledgeTablePanel">
-        <KnowledgeBaseTable
-          canManage={canManage}
-          knowledgeBases={knowledgeBases}
-          loading={loading}
-          pagination={pagination}
-          onDelete={confirmDelete}
-          onEdit={(id) => void openEditDialog(id)}
-          onOpenDocuments={(knowledgeBase) => void openDocumentDrawer(knowledgeBase)}
-          onPageChange={(page, pageSize) => void refresh(page, pageSize)}
-        />
-      </section>
+      <KnowledgeBaseGallery
+        canManage={canManage}
+        knowledgeBases={knowledgeBases}
+        loading={loading}
+        pagination={pagination}
+        onDelete={confirmDelete}
+        onEdit={(id) => void openEditDialog(id)}
+        onOpenDocuments={(knowledgeBase) => void openDocumentDrawer(knowledgeBase)}
+        onPageChange={(page, pageSize) => void refresh(page, pageSize)}
+      />
 
       <KnowledgeBaseFormModal
         editing={Boolean(editingId)}

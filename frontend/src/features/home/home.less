@@ -1,0 +1,248 @@
+.homeWorkspace {
+  display: grid;
+  gap: 28px;
+  margin: 0 auto;
+  max-width: 1320px;
+  width: 100%;
+}
+
+.homeHero {
+  align-items: flex-end;
+  background:
+    radial-gradient(circle at 85% 20%, rgb(125 92 255 / 22%), transparent 28%),
+    linear-gradient(135deg, #17152a 0%, #262149 52%, #433a78 100%);
+  border-radius: 22px;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  min-height: 210px;
+  overflow: hidden;
+  padding: 36px 40px;
+  position: relative;
+}
+
+.homeHero h1 {
+  color: #fff;
+  font-size: 36px;
+  letter-spacing: -0.03em;
+  margin: 8px 0 10px;
+}
+.homeHero p {
+  color: rgb(255 255 255 / 68%);
+  font-size: 16px;
+  margin: 0;
+}
+.homeEyebrow {
+  color: #cfc8ff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.homeHero .ant-btn-primary {
+  background: #fff;
+  border-color: #fff;
+  color: #29224f;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
+}
+
+.homeQuickGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.homeQuickCard {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--mia-border);
+  border-radius: 16px;
+  display: grid;
+  gap: 13px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  padding: 17px;
+  transition: 160ms ease;
+}
+.homeQuickCard:hover {
+  border-color: #c8c2f6;
+  box-shadow: var(--mia-shadow-md);
+  transform: translateY(-2px);
+}
+.homeQuickCard > span {
+  align-items: center;
+  border-radius: 12px;
+  display: flex;
+  font-size: 19px;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+.homeQuickCard.violet > span {
+  background: #eeeaff;
+  color: #6c50d9;
+}
+.homeQuickCard.blue > span {
+  background: #e8f2ff;
+  color: #3274d9;
+}
+.homeQuickCard.green > span {
+  background: #e7f7ef;
+  color: #25855a;
+}
+.homeQuickCard.orange > span {
+  background: #fff0df;
+  color: #c76b17;
+}
+.homeQuickCard strong,
+.homeQuickCard small {
+  display: block;
+}
+.homeQuickCard small {
+  color: var(--mia-text-muted);
+  margin-top: 3px;
+}
+.homeQuickCard > .anticon {
+  color: #a3a7b2;
+  font-size: 12px;
+}
+
+.homeOverviewGrid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 260px;
+}
+.homeResourceSection {
+  background: #fff;
+  border: 1px solid var(--mia-border);
+  border-radius: 18px;
+  padding: 22px;
+}
+.homeSectionHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.homeSectionHeader h2 {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+.homeSectionHeader span {
+  color: var(--mia-text-muted);
+  font-size: 12px;
+}
+.homeSectionHeader > a {
+  color: #6253c5;
+  font-size: 13px;
+}
+.homeRecentList {
+  display: grid;
+  gap: 4px;
+}
+.homeRecentItem {
+  align-items: center;
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  padding: 10px;
+}
+.homeRecentItem:hover {
+  background: #f7f7fb;
+}
+.homeRecentItem strong,
+.homeRecentItem small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.homeRecentItem small {
+  color: var(--mia-text-muted);
+  margin-top: 3px;
+}
+.homeRecentItem > .anticon {
+  color: #b1b3bc;
+  font-size: 11px;
+}
+.homeRecentIcon {
+  align-items: center;
+  border-radius: 10px;
+  display: flex;
+  height: 38px;
+  justify-content: center;
+}
+.homeRecentIcon.agent {
+  background: #eeeaff;
+  color: #6c50d9;
+}
+.homeRecentIcon.knowledge {
+  background: #e7f7ef;
+  color: #25855a;
+}
+.homeEmpty {
+  align-items: center;
+  background: #f8f8fb;
+  border-radius: 12px;
+  color: var(--mia-text-muted);
+  display: flex;
+  justify-content: space-between;
+  padding: 18px;
+}
+
+.homeCapabilityBanner {
+  align-items: center;
+  background: #f0edff;
+  border: 1px solid #ddd6fe;
+  border-radius: 16px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  padding: 18px 22px;
+}
+.homeCapabilityBanner > span {
+  align-items: center;
+  background: #fff;
+  border-radius: 12px;
+  color: #6c50d9;
+  display: flex;
+  height: 42px;
+  justify-content: center;
+}
+.homeCapabilityBanner strong,
+.homeCapabilityBanner small {
+  display: block;
+}
+.homeCapabilityBanner small {
+  color: #716b8a;
+  margin-top: 3px;
+}
+.homeCapabilityBanner a {
+  color: #5a45c2;
+  font-weight: 600;
+}
+
+@media (max-width: 980px) {
+  .homeQuickGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .homeOverviewGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .homeHero {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 24px;
+    padding: 28px;
+  }
+  .homeQuickGrid {
+    grid-template-columns: 1fr;
+  }
+  .homeCapabilityBanner {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+  .homeCapabilityBanner a {
+    grid-column: 2;
+  }
+}

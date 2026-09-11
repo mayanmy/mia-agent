@@ -4,6 +4,7 @@ import {
   ApartmentOutlined,
   DatabaseOutlined,
   FileSearchOutlined,
+  HomeOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   MessageOutlined,
@@ -37,6 +38,9 @@ import {
 
 const AgentsPage = lazy(() =>
   import("../features/agents/AgentsPage").then((module) => ({ default: module.AgentsPage }))
+);
+const HomePage = lazy(() =>
+  import("../features/home/HomePage").then((module) => ({ default: module.HomePage }))
 );
 const SharedAgentPage = lazy(() =>
   import("../features/agents/SharedAgentPage").then((module) => ({
@@ -112,6 +116,12 @@ type NavConfig = {
 
 const navConfig: NavConfig[] = [
   {
+    label: "工作台",
+    path: "/home",
+    roles: ["OWNER", "MANAGER", "MEMBER"],
+    icon: <HomeOutlined />
+  },
+  {
     label: "模型供应商",
     path: "/providers",
     roles: ["OWNER", "MANAGER"],
@@ -176,6 +186,7 @@ export function App() {
           <Route element={<WorkspaceLayout />}>
             <Route index element={<DefaultWorkspaceRoute />} />
             <Route element={<RequireRole roles={["OWNER", "MANAGER", "MEMBER"]} />}>
+              <Route path="/home" element={<HomePage />} />
               <Route path="/agents" element={<AgentsPage />} />
               <Route path="/knowledge" element={<KnowledgePage />} />
               <Route path="/chat" element={<ChatPage />} />
@@ -280,7 +291,7 @@ function RequirePlatformAdmin() {
 
 /** 所有已登录成员都可使用 Agent，成员管理仍通过独立管理员路由保护。 */
 function DefaultWorkspaceRoute() {
-  return <Navigate replace to="/agents" />;
+  return <Navigate replace to="/home" />;
 }
 
 function WorkflowDefaultRoute() {
@@ -408,7 +419,7 @@ function WorkspaceLayout() {
             onCreated={async (workspace) => {
               await refreshWorkspaces(workspace.id);
               setCreateWorkspaceOpen(false);
-              navigate("/agents", { replace: true });
+              navigate("/home", { replace: true });
             }}
           />
         </div>
@@ -430,7 +441,7 @@ function WorkspaceLayout() {
           onCreated={async (workspace) => {
             await refreshWorkspaces(workspace.id);
             setCreateWorkspaceOpen(false);
-            navigate("/agents", { replace: true });
+            navigate("/home", { replace: true });
           }}
         />
       </WorkspaceEmptyState>
@@ -478,28 +489,32 @@ function WorkspaceLayout() {
           onCreate={() => setCreateWorkspaceOpen(true)}
           onSwitch={(workspaceId) => {
             switchWorkspace(workspaceId);
-            navigate("/agents", { replace: true });
+            navigate("/home", { replace: true });
           }}
         />
         <nav className="navList" aria-label="主导航">
           {availableNavItems.map((item) => (
-            <Tooltip
+            <div
+              className={item.path === "/capabilities" ? "navGroupStart" : undefined}
               key={item.path}
-              placement="right"
-              title={sidebarCollapsed ? item.label : undefined}
             >
-              <NavLink
-                aria-label={item.label}
-                className={({ isActive }) => `navItem${isActive ? " active" : ""}`}
-                end={
-                  !["/workflows", "/capabilities", "/operations", "/settings"].includes(item.path)
-                }
-                to={item.path}
-              >
-                <span className="navItemIcon">{item.icon}</span>
-                <span className="navItemLabel">{item.label}</span>
-              </NavLink>
-            </Tooltip>
+              {item.path === "/capabilities" && !sidebarCollapsed ? (
+                <span className="navGroupLabel">管理与扩展</span>
+              ) : null}
+              <Tooltip placement="right" title={sidebarCollapsed ? item.label : undefined}>
+                <NavLink
+                  aria-label={item.label}
+                  className={({ isActive }) => `navItem${isActive ? " active" : ""}`}
+                  end={
+                    !["/workflows", "/capabilities", "/operations", "/settings"].includes(item.path)
+                  }
+                  to={item.path}
+                >
+                  <span className="navItemIcon">{item.icon}</span>
+                  <span className="navItemLabel">{item.label}</span>
+                </NavLink>
+              </Tooltip>
+            </div>
           ))}
         </nav>
         <Dropdown
@@ -540,7 +555,7 @@ function WorkspaceLayout() {
         onCreated={async (workspace) => {
           await refreshWorkspaces(workspace.id);
           setCreateWorkspaceOpen(false);
-          navigate("/agents", { replace: true });
+          navigate("/home", { replace: true });
         }}
       />
     </div>

@@ -26,7 +26,7 @@ import { AgentApiKeysModal } from "./components/AgentApiKeysModal";
 import { AgentPublicAccessModal } from "./components/AgentPublicAccessModal";
 import { AgentEmbedModal } from "./components/AgentEmbedModal";
 import { AgentFormModal } from "./components/AgentFormModal";
-import { AgentTable } from "./components/AgentTable";
+import { AgentGallery } from "./components/AgentGallery";
 import type { AgentFormValues, AgentTableItem, EmbedScenario } from "./types";
 import { defaultAgentFormValues, toAgentFormValues, toAgentPayload } from "./utils/agent-form";
 import { getEmbedCode, getShareUrl } from "./utils/embed-code";
@@ -404,10 +404,10 @@ export function AgentsPage() {
           </>
         }
         description="创建、配置和发布团队内部 AI 助手。"
-        title="Agent 管理"
+        title="Agent"
       />
 
-      <AgentTable
+      <AgentGallery
         agents={agents}
         loading={loading}
         pagination={pagination}

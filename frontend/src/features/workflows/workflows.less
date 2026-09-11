@@ -73,18 +73,18 @@
 .workflowGalleryGrid {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
 .workflowGalleryCard {
   background: #fff;
-  border: 1px solid #e1e6ed;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgb(15 23 42 / 4%);
+  border: 1px solid var(--mia-border);
+  border-radius: 17px;
+  box-shadow: var(--mia-shadow-sm);
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  min-height: 210px;
+  min-height: 230px;
   padding: 20px;
   transition:
     border-color 140ms ease,
@@ -94,8 +94,8 @@
 
 .workflowGalleryCard:hover,
 .workflowGalleryCard:focus-visible {
-  border-color: #9bbcf2;
-  box-shadow: 0 10px 24px rgb(37 99 235 / 10%);
+  border-color: #c9c2f0;
+  box-shadow: var(--mia-shadow-md);
   outline: none;
   transform: translateY(-2px);
 }
@@ -194,9 +194,9 @@
 
 .workflowGalleryCardIcon {
   align-items: center;
-  background: linear-gradient(145deg, #e8f2ff, #f0eaff);
-  border-radius: 11px;
-  color: #2866c7;
+  background: linear-gradient(145deg, #ece8ff, #f3efff);
+  border-radius: 13px;
+  color: #654bd0;
   display: inline-flex;
   font-size: 21px;
   height: 44px;

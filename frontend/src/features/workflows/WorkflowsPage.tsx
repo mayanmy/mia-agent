@@ -545,7 +545,7 @@ export function WorkflowsPage() {
             </>
           ) : undefined
         }
-        title={workflowId ? workflow?.name || "正在加载 Workflow…" : "Workflow 工作室"}
+        title={workflowId ? workflow?.name || "正在加载 Workflow…" : "Workflow"}
         onBack={workflowId ? () => navigate("/workflows/design") : undefined}
       />
 

@@ -1,6 +1,15 @@
 :root {
-  color: #1f2937;
-  background: #f7f8fb;
+  --mia-brand: #6d54d9;
+  --mia-brand-soft: #efecff;
+  --mia-bg: #f6f6f9;
+  --mia-surface: #ffffff;
+  --mia-border: #e7e7ed;
+  --mia-text: #24242c;
+  --mia-text-muted: #777883;
+  --mia-shadow-sm: 0 1px 2px rgb(31 31 40 / 4%);
+  --mia-shadow-md: 0 12px 32px rgb(36 33 61 / 9%);
+  color: var(--mia-text);
+  background: var(--mia-bg);
   font-family:
     Inter,
     ui-sans-serif,
@@ -28,6 +37,7 @@
 }
 
 body {
+  background: var(--mia-bg);
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
@@ -41,30 +51,30 @@ a {
 .appShell {
   display: grid;
   height: 100vh;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
   overflow: hidden;
   transition: grid-template-columns 180ms ease;
 }
 
 .appShell.sidebarCollapsed {
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 68px minmax(0, 1fr);
 }
 
 .sidebar {
   display: flex;
   flex-direction: column;
   max-height: 100vh;
-  border-right: 1px solid #dde3eb;
-  background: #ffffff;
+  border-right: 1px solid var(--mia-border);
+  background: #f1f1f5;
   overflow: hidden;
-  padding: 20px 14px;
+  padding: 16px 12px;
 }
 
 .sidebarHeader {
-  align-items: flex-start;
+  align-items: center;
   display: flex;
   justify-content: space-between;
-  min-height: 58px;
+  min-height: 48px;
 }
 
 .brand {
@@ -72,7 +82,16 @@ a {
   align-items: center;
   gap: 12px;
   min-width: 0;
-  padding: 0 6px;
+  padding: 0 8px;
+}
+
+.brandLogo {
+  border-radius: 10px;
+  height: 32px;
+  width: 32px;
+}
+.brandText {
+  min-width: 0;
 }
 
 .brandMark {
@@ -87,23 +106,31 @@ a {
 }
 
 .brandName {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
 }
 
 .brandMeta {
-  color: #6b7280;
-  font-size: 12px;
+  color: #8a8b94;
+  font-size: 11px;
   line-height: 1.4;
 }
 
 .sidebarToggle {
   flex: none;
+  color: #858691;
 }
 
 .workspaceSelect {
-  margin: 10px 4px 14px;
+  margin: 12px 2px 18px;
   width: calc(100% - 8px);
+}
+
+.workspaceSelect .ant-select-selector {
+  background: rgb(255 255 255 / 72%) !important;
+  border-color: #dedee5 !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
 }
 
 .workspaceSwitcherCollapsed {
@@ -122,7 +149,7 @@ a {
 
 .navList {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -133,8 +160,11 @@ a {
   gap: 9px;
   justify-content: flex-start;
   margin-top: auto;
-  min-height: 52px;
-  padding: 8px 12px;
+  background: rgb(255 255 255 / 55%);
+  border: 1px solid #e1e1e7;
+  border-radius: 12px;
+  min-height: 50px;
+  padding: 7px 10px;
   text-align: left;
   width: 100%;
 }
@@ -195,16 +225,17 @@ a {
 
 .navItem {
   align-items: center;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 0;
   background: transparent;
-  color: #4b5563;
+  color: #62636d;
   cursor: pointer;
   display: flex;
   font-size: 14px;
   gap: 10px;
-  font-weight: 600;
-  padding: 10px 12px;
+  font-weight: 550;
+  min-height: 40px;
+  padding: 9px 11px;
   text-align: left;
   text-decoration: none;
 }
@@ -212,9 +243,23 @@ a {
 .navItemIcon {
   display: inline-grid;
   flex: none;
-  font-size: 16px;
+  font-size: 17px;
   place-items: center;
   width: 18px;
+}
+
+.navGroupStart {
+  border-top: 1px solid #dfdfe5;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.navGroupLabel {
+  color: #9a9ba4;
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0 11px 7px;
 }
 
 .navItemLabel {
@@ -257,21 +302,23 @@ a {
 
 .navItem.active,
 .navItem:hover {
-  background: #eef4ff;
-  color: #1d4ed8;
+  background: #ffffff;
+  box-shadow: var(--mia-shadow-sm);
+  color: #5a46bd;
 }
 
 .main {
+  background: var(--mia-bg);
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 32px;
+  padding: 28px 32px 40px;
 }
 
 // 一级菜单只表达业务域，域内页面通过轻量页签切换。
 .workspaceSectionTabs {
-  margin-bottom: 20px;
-  max-width: 1180px;
+  margin-bottom: 24px;
+  max-width: 1320px;
 }
 
 .workspaceSectionTabs .ant-tabs-nav {
@@ -279,7 +326,8 @@ a {
 }
 
 .workspace {
-  max-width: 1180px;
+  max-width: 1320px;
+  margin-inline: auto;
 }
 
 /* 折叠菜单释放出的空间应交给页面使用，避免表格页仍停留在展开态宽度。 */
@@ -325,9 +373,8 @@ a {
   display: flex;
   gap: 24px;
   justify-content: space-between;
-  margin-bottom: 20px;
-  min-height: 64px;
-  min-width: 0;
+  margin-bottom: 26px;
+  min-height: 60px;
 }
 
 .workspacePageHeaderIdentity {
@@ -364,7 +411,8 @@ a {
 }
 
 .workspacePageTitleRow h1 {
-  font-size: 28px;
+  font-size: 27px;
+  letter-spacing: -0.025em;
   line-height: 1.2;
   max-width: 520px;
   overflow: hidden;
@@ -373,7 +421,7 @@ a {
 }
 
 .workspacePageHeading > p {
-  color: #667085;
+  color: var(--mia-text-muted);
   font-size: 14px;
   line-height: 1.45;
   margin: 5px 0 0;
@@ -385,6 +433,33 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.workspacePageActions .ant-btn {
+  border-radius: 9px;
+  min-height: 38px;
+}
+.workspacePageActions .ant-btn-primary {
+  background: var(--mia-brand);
+  box-shadow: 0 5px 14px rgb(109 84 217 / 20%);
+}
+
+.resourceToolbar {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.resourceToolbar .ant-input-search {
+  max-width: 360px;
+}
+.resourceToolbar .ant-input-affix-wrapper {
+  border-radius: 10px;
+}
+.resourceToolbar > span {
+  color: var(--mia-text-muted);
+  font-size: 13px;
 }
 
 .workspacePageMeta {
@@ -476,9 +551,10 @@ h2 {
 }
 
 .panel {
-  border: 1px solid #dde3eb;
-  border-radius: 8px;
+  border: 1px solid var(--mia-border);
+  border-radius: 14px;
   background: #ffffff;
+  box-shadow: var(--mia-shadow-sm);
 }
 
 .panelHeader {

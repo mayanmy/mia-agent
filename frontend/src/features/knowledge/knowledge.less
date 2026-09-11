@@ -1,6 +1,119 @@
 .knowledgeWorkspace {
-  max-width: 1280px;
+  max-width: 1320px;
   min-width: 0;
+}
+
+.knowledgeGallery {
+  min-height: 420px;
+}
+.knowledgeGalleryGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+.knowledgeGallery > .ant-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+.knowledgeCard {
+  background: #fff;
+  border: 1px solid var(--mia-border);
+  border-radius: 17px;
+  display: flex;
+  flex-direction: column;
+  min-height: 292px;
+  padding: 20px;
+  transition: 160ms ease;
+}
+.knowledgeCard.interactive {
+  cursor: pointer;
+}
+.knowledgeCard.interactive:hover,
+.knowledgeCard.interactive:focus-visible {
+  border-color: #b8dfcb;
+  box-shadow: var(--mia-shadow-md);
+  outline: 0;
+  transform: translateY(-2px);
+}
+.knowledgeCard > header {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+}
+.knowledgeCardIcon {
+  align-items: center;
+  background: #e5f7ed;
+  border-radius: 13px;
+  color: #27875a;
+  display: flex;
+  font-size: 20px;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+.knowledgeCard header strong,
+.knowledgeCard header small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.knowledgeCard header strong {
+  font-size: 16px;
+}
+.knowledgeCard header small {
+  color: var(--mia-text-muted);
+  font-size: 11px;
+  margin-top: 4px;
+}
+.knowledgeCard > p {
+  color: var(--mia-text-muted);
+  display: -webkit-box;
+  flex: 1;
+  line-height: 1.65;
+  margin: 18px 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.knowledgeCardStats {
+  background: #f7f8f9;
+  border-radius: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: 16px;
+  padding: 13px 4px;
+}
+.knowledgeCardStats > div {
+  align-items: center;
+  color: #8a8b93;
+  display: grid;
+  gap: 2px 7px;
+  grid-template-columns: auto auto 1fr;
+  justify-content: center;
+}
+.knowledgeCardStats > div + div {
+  border-left: 1px solid #e2e4e7;
+}
+.knowledgeCardStats strong {
+  color: #34353c;
+  font-size: 16px;
+}
+.knowledgeCardStats span {
+  font-size: 11px;
+}
+.knowledgeCardHealth > div {
+  align-items: center;
+  color: var(--mia-text-muted);
+  display: flex;
+  font-size: 11px;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+.knowledgeCardHealth .ant-tag {
+  margin: 0;
 }
 
 .knowledgeHeaderActions {
