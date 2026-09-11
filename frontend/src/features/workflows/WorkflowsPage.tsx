@@ -407,7 +407,7 @@ export function WorkflowsPage() {
     try {
       const created = await createWorkflow({ ...values, graph: createDefaultGraph() });
       setCreateOpen(false);
-      navigate(`/workflows/${created.id}`);
+      navigate(`/workflows/design/${created.id}`);
       message.success("Workflow 已创建");
     } catch (error) {
       message.error(error instanceof Error ? error.message : "创建失败");
@@ -477,7 +477,7 @@ export function WorkflowsPage() {
         if (workflow?.id === item.id) {
           setWorkflow(null);
           setSelectedNodeId(null);
-          navigate("/workflows");
+          navigate("/workflows/design");
         }
       }
     });
@@ -546,7 +546,7 @@ export function WorkflowsPage() {
           ) : undefined
         }
         title={workflowId ? workflow?.name || "正在加载 Workflow…" : "Workflow 工作室"}
-        onBack={workflowId ? () => navigate("/workflows") : undefined}
+        onBack={workflowId ? () => navigate("/workflows/design") : undefined}
       />
 
       {!workflowId ? (
@@ -556,7 +556,7 @@ export function WorkflowsPage() {
           onArchive={confirmArchive}
           onCreate={() => setCreateOpen(true)}
           onEdit={setEditingWorkflow}
-          onOpen={(id) => navigate(`/workflows/${id}`)}
+          onOpen={(id) => navigate(`/workflows/design/${id}`)}
           onRun={(item) => void openRunDialog(item)}
         />
       ) : null}

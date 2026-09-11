@@ -877,7 +877,9 @@ export function ChatPage() {
               showScrollBottom={showScrollBottom}
               onCopyMessage={(content) => void copyMessageContent(content)}
               onRetryMessage={handleRetryMessage}
-              onOpenLogs={(requestId) => navigate(`/logs?requestId=${encodeURIComponent(requestId)}`)}
+              onOpenLogs={(requestId) =>
+                navigate(`/operations/logs?requestId=${encodeURIComponent(requestId)}`)
+              }
               onFeedback={(messageId, rating) => void handleMessageFeedback(messageId, rating)}
               onLoadMoreHistory={() => void loadOlderMessages()}
               onScroll={releaseAutoScrollIfNeeded}

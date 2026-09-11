@@ -1,19 +1,14 @@
 import { lazy, Suspense, useState, type ReactNode } from "react";
 import {
-  ApiOutlined,
   ApartmentOutlined,
-  CloudServerOutlined,
   DatabaseOutlined,
   FileSearchOutlined,
-  FundProjectionScreenOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   MessageOutlined,
   PlusOutlined,
-  PlaySquareOutlined,
   RobotOutlined,
-  ReadOutlined,
-  TeamOutlined,
+  SettingOutlined,
   ToolOutlined,
   UserOutlined
 } from "@ant-design/icons";
@@ -34,6 +29,10 @@ import { CreateWorkspaceModal } from "../features/workspaces/components/CreateWo
 import { WorkspaceSwitcher } from "../features/workspaces/components/WorkspaceSwitcher";
 import { useWorkspace } from "../features/workspaces/WorkspaceProvider";
 import type { WorkspaceRole } from "../features/workspaces/types";
+import {
+  WorkspaceSectionTabs,
+  type WorkspaceSectionTab
+} from "../shared/components/WorkspaceSectionTabs";
 
 const AgentsPage = lazy(() =>
   import("../features/agents/AgentsPage").then((module) => ({ default: module.AgentsPage }))
@@ -112,16 +111,16 @@ type NavConfig = {
 
 const navConfig: NavConfig[] = [
   {
-    label: "模型供应商",
-    path: "/providers",
-    roles: ["OWNER", "MANAGER"],
-    icon: <ApiOutlined />
-  },
-  {
     label: "Agent",
     path: "/agents",
     roles: ["OWNER", "MANAGER", "MEMBER"],
     icon: <RobotOutlined />
+  },
+  {
+    label: "对话",
+    path: "/chat",
+    roles: ["OWNER", "MANAGER", "MEMBER"],
+    icon: <MessageOutlined />
   },
   {
     label: "知识库",
@@ -130,44 +129,29 @@ const navConfig: NavConfig[] = [
     icon: <DatabaseOutlined />
   },
   {
-    label: "工具",
-    path: "/tools",
-    roles: ["OWNER", "MANAGER", "MEMBER"],
-    icon: <ToolOutlined />
-  },
-  { label: "MCP", path: "/mcp", roles: ["OWNER", "MANAGER"], icon: <CloudServerOutlined /> },
-  { label: "Skill", path: "/skills", roles: ["OWNER", "MANAGER"], icon: <ReadOutlined /> },
-  {
     label: "Workflow",
     path: "/workflows",
-    roles: ["OWNER", "MANAGER"],
+    roles: ["OWNER", "MANAGER", "MEMBER"],
     icon: <ApartmentOutlined />
   },
   {
-    label: "Workflow 应用",
-    path: "/workflow-apps",
+    label: "扩展能力",
+    path: "/capabilities",
     roles: ["OWNER", "MANAGER", "MEMBER"],
-    icon: <PlaySquareOutlined />
+    icon: <ToolOutlined />
   },
   {
-    label: "对话",
-    path: "/chat",
-    roles: ["OWNER", "MANAGER", "MEMBER"],
-    icon: <MessageOutlined />
-  },
-  { label: "日志", path: "/logs", roles: ["OWNER", "MANAGER"], icon: <FileSearchOutlined /> },
-  {
-    label: "Run Trace",
-    path: "/agent-runs",
+    label: "运行记录",
+    path: "/operations",
     roles: ["OWNER", "MANAGER"],
-    icon: <FundProjectionScreenOutlined />
+    icon: <FileSearchOutlined />
   },
-  { label: "项目空间管理", path: "/users", roles: ["OWNER"], icon: <TeamOutlined /> },
   {
-    label: "账号管理",
-    path: "/admin/users",
+    label: "设置",
+    path: "/settings",
+    roles: ["OWNER", "MANAGER"],
     platformAdmin: true,
-    icon: <UserOutlined />
+    icon: <SettingOutlined />
   }
 ];
 
@@ -187,34 +171,58 @@ export function App() {
             <Route element={<RequireRole roles={["OWNER", "MANAGER", "MEMBER"]} />}>
               <Route path="/agents" element={<AgentsPage />} />
               <Route path="/knowledge" element={<KnowledgePage />} />
-              <Route path="/workflow-apps" element={<WorkflowAppsPage />} />
               <Route path="/chat" element={<ChatPage />} />
             </Route>
+
+            <Route path="/workflows" element={<WorkflowSectionTabs />}>
+              <Route index element={<WorkflowDefaultRoute />} />
+              <Route element={<RequireRole roles={["OWNER", "MANAGER"]} />}>
+                <Route path="design" element={<WorkflowsPage />} />
+                <Route path="design/:workflowId" element={<WorkflowsPage />} />
+              </Route>
+              <Route element={<RequireRole roles={["OWNER", "MANAGER", "MEMBER"]} />}>
+                <Route path="apps" element={<WorkflowAppsPage />} />
+              </Route>
+            </Route>
+
+            <Route path="/capabilities" element={<CapabilitySectionTabs />}>
+              <Route index element={<Navigate replace to="tools" />} />
+              <Route element={<RequireRole roles={["OWNER", "MANAGER", "MEMBER"]} />}>
+                <Route path="tools" element={<ToolsPage />} />
+              </Route>
+              <Route element={<RequireRole roles={["OWNER", "MANAGER"]} />}>
+                <Route path="mcp" element={<McpServersPage />} />
+                <Route path="skills" element={<SkillsPage />} />
+              </Route>
+            </Route>
+
             <Route element={<RequireRole roles={["OWNER", "MANAGER"]} />}>
-              <Route
-                path="/providers"
-                element={
-                  <>
-                    <ProvidersPage />
-                    <HealthPage compact />
-                  </>
-                }
-              />
-              <Route path="/mcp" element={<McpServersPage />} />
-              <Route path="/skills" element={<SkillsPage />} />
-              <Route path="/workflows" element={<WorkflowsPage />} />
-              <Route path="/workflows/:workflowId" element={<WorkflowsPage />} />
-              <Route path="/agent-runs" element={<AgentRunsPage />} />
-              <Route path="/logs" element={<LogsPage />} />
+              <Route path="/operations" element={<OperationSectionTabs />}>
+                <Route index element={<Navigate replace to="logs" />} />
+                <Route path="logs" element={<LogsPage />} />
+                <Route path="traces" element={<AgentRunsPage />} />
+              </Route>
             </Route>
-            <Route element={<RequireRole roles={["OWNER"]} />}>
-              <Route path="/users" element={<UsersPage />} />
-            </Route>
-            <Route element={<RequireRole roles={["OWNER", "MANAGER", "MEMBER"]} />}>
-              <Route path="/tools" element={<ToolsPage />} />
-            </Route>
-            <Route element={<RequirePlatformAdmin />}>
-              <Route path="/admin/users" element={<PlatformUsersPage />} />
+
+            <Route path="/settings" element={<SettingsSectionTabs />}>
+              <Route index element={<SettingsDefaultRoute />} />
+              <Route element={<RequireRole roles={["OWNER", "MANAGER"]} />}>
+                <Route
+                  path="providers"
+                  element={
+                    <>
+                      <ProvidersPage />
+                      <HealthPage compact />
+                    </>
+                  }
+                />
+              </Route>
+              <Route element={<RequireRole roles={["OWNER"]} />}>
+                <Route path="members" element={<UsersPage />} />
+              </Route>
+              <Route element={<RequirePlatformAdmin />}>
+                <Route path="accounts" element={<PlatformUsersPage />} />
+              </Route>
             </Route>
             <Route path="*" element={<DefaultWorkspaceRoute />} />
           </Route>
@@ -267,6 +275,82 @@ function DefaultWorkspaceRoute() {
   return <Navigate replace to="/agents" />;
 }
 
+function WorkflowDefaultRoute() {
+  const { currentWorkspace } = useWorkspace();
+  return (
+    <Navigate
+      replace
+      to={currentWorkspace?.role === "MEMBER" ? "/workflows/apps" : "/workflows/design"}
+    />
+  );
+}
+
+function WorkflowSectionTabs() {
+  const { currentWorkspace } = useWorkspace();
+  const tabs =
+    currentWorkspace?.role === "MEMBER"
+      ? [{ label: "应用", path: "/workflows/apps" }]
+      : [
+          {
+            label: "编排",
+            path: "/workflows/design",
+            match: (pathname: string) => pathname.startsWith("/workflows/design")
+          },
+          { label: "应用", path: "/workflows/apps" }
+        ];
+  return <WorkspaceSectionTabs tabs={tabs} />;
+}
+
+function CapabilitySectionTabs() {
+  const { currentWorkspace } = useWorkspace();
+  const tabs = [{ label: "工具", path: "/capabilities/tools" }];
+  if (currentWorkspace?.role !== "MEMBER") {
+    tabs.push(
+      { label: "MCP", path: "/capabilities/mcp" },
+      { label: "Skill", path: "/capabilities/skills" }
+    );
+  }
+  return <WorkspaceSectionTabs tabs={tabs} />;
+}
+
+function OperationSectionTabs() {
+  return (
+    <WorkspaceSectionTabs
+      tabs={[
+        { label: "请求日志", path: "/operations/logs" },
+        { label: "运行链路", path: "/operations/traces" }
+      ]}
+    />
+  );
+}
+
+function SettingsDefaultRoute() {
+  const { currentUser } = useAuth();
+  const { currentWorkspace } = useWorkspace();
+  if (currentWorkspace?.role === "OWNER" || currentWorkspace?.role === "MANAGER") {
+    return <Navigate replace to="/settings/providers" />;
+  }
+  return <Navigate replace to={currentUser?.role === "ADMIN" ? "/settings/accounts" : "/agents"} />;
+}
+
+function SettingsSectionTabs() {
+  const { currentUser } = useAuth();
+  const { currentWorkspace } = useWorkspace();
+  const tabs: WorkspaceSectionTab[] = [];
+
+  if (currentWorkspace?.role === "OWNER" || currentWorkspace?.role === "MANAGER") {
+    tabs.push({ label: "模型供应商", path: "/settings/providers" });
+  }
+  if (currentWorkspace?.role === "OWNER") {
+    tabs.push({ label: "项目成员", path: "/settings/members" });
+  }
+  if (currentUser?.role === "ADMIN") {
+    tabs.push({ label: "平台账号", path: "/settings/accounts" });
+  }
+
+  return <WorkspaceSectionTabs tabs={tabs} />;
+}
+
 /** 工作台壳层按当前角色渲染导航和账号退出入口。 */
 function WorkspaceLayout() {
   const { currentUser, logoutCurrentDevice } = useAuth();
@@ -281,10 +365,10 @@ function WorkspaceLayout() {
   const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
-  const availableNavItems = navConfig.filter((item) =>
-    item.platformAdmin
-      ? currentUser?.role === "ADMIN"
-      : item.roles?.includes(currentWorkspace?.role ?? "MEMBER")
+  const availableNavItems = navConfig.filter(
+    (item) =>
+      Boolean(item.roles?.includes(currentWorkspace?.role ?? "MEMBER")) ||
+      Boolean(item.platformAdmin && currentUser?.role === "ADMIN")
   );
 
   if (workspaceStatus !== "ready") {
@@ -292,7 +376,7 @@ function WorkspaceLayout() {
   }
 
   if (!currentWorkspace) {
-    if (currentUser?.role === "ADMIN" && location.pathname === "/admin/users") {
+    if (currentUser?.role === "ADMIN" && location.pathname === "/settings/accounts") {
       return (
         <div className="platformStandalone">
           <header className="platformStandaloneHeader">
@@ -333,7 +417,7 @@ function WorkspaceLayout() {
           await logoutCurrentDevice();
           navigate("/login", { replace: true });
         }}
-        onManageAccounts={() => navigate("/admin/users")}
+        onManageAccounts={() => navigate("/settings/accounts")}
       >
         <CreateWorkspaceModal
           open={createWorkspaceOpen}
@@ -402,7 +486,9 @@ function WorkspaceLayout() {
               <NavLink
                 aria-label={item.label}
                 className={({ isActive }) => `navItem${isActive ? " active" : ""}`}
-                end={item.path !== "/workflows"}
+                end={!["/workflows", "/capabilities", "/operations", "/settings"].includes(
+                  item.path
+                )}
                 to={item.path}
               >
                 <span className="navItemIcon">{item.icon}</span>
