@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState, type ReactNode } from "react";
 import {
+  ApiOutlined,
   ApartmentOutlined,
   DatabaseOutlined,
   FileSearchOutlined,
@@ -111,6 +112,12 @@ type NavConfig = {
 
 const navConfig: NavConfig[] = [
   {
+    label: "模型供应商",
+    path: "/providers",
+    roles: ["OWNER", "MANAGER"],
+    icon: <ApiOutlined />
+  },
+  {
     label: "Agent",
     path: "/agents",
     roles: ["OWNER", "MANAGER", "MEMBER"],
@@ -149,7 +156,7 @@ const navConfig: NavConfig[] = [
   {
     label: "设置",
     path: "/settings",
-    roles: ["OWNER", "MANAGER"],
+    roles: ["OWNER"],
     platformAdmin: true,
     icon: <SettingOutlined />
   }
@@ -172,6 +179,18 @@ export function App() {
               <Route path="/agents" element={<AgentsPage />} />
               <Route path="/knowledge" element={<KnowledgePage />} />
               <Route path="/chat" element={<ChatPage />} />
+            </Route>
+
+            <Route element={<RequireRole roles={["OWNER", "MANAGER"]} />}>
+              <Route
+                path="/providers"
+                element={
+                  <>
+                    <ProvidersPage />
+                    <HealthPage compact />
+                  </>
+                }
+              />
             </Route>
 
             <Route path="/workflows" element={<WorkflowSectionTabs />}>
@@ -206,17 +225,6 @@ export function App() {
 
             <Route path="/settings" element={<SettingsSectionTabs />}>
               <Route index element={<SettingsDefaultRoute />} />
-              <Route element={<RequireRole roles={["OWNER", "MANAGER"]} />}>
-                <Route
-                  path="providers"
-                  element={
-                    <>
-                      <ProvidersPage />
-                      <HealthPage compact />
-                    </>
-                  }
-                />
-              </Route>
               <Route element={<RequireRole roles={["OWNER"]} />}>
                 <Route path="members" element={<UsersPage />} />
               </Route>
@@ -327,8 +335,8 @@ function OperationSectionTabs() {
 function SettingsDefaultRoute() {
   const { currentUser } = useAuth();
   const { currentWorkspace } = useWorkspace();
-  if (currentWorkspace?.role === "OWNER" || currentWorkspace?.role === "MANAGER") {
-    return <Navigate replace to="/settings/providers" />;
+  if (currentWorkspace?.role === "OWNER") {
+    return <Navigate replace to="/settings/members" />;
   }
   return <Navigate replace to={currentUser?.role === "ADMIN" ? "/settings/accounts" : "/agents"} />;
 }
@@ -338,9 +346,6 @@ function SettingsSectionTabs() {
   const { currentWorkspace } = useWorkspace();
   const tabs: WorkspaceSectionTab[] = [];
 
-  if (currentWorkspace?.role === "OWNER" || currentWorkspace?.role === "MANAGER") {
-    tabs.push({ label: "模型供应商", path: "/settings/providers" });
-  }
   if (currentWorkspace?.role === "OWNER") {
     tabs.push({ label: "项目成员", path: "/settings/members" });
   }
