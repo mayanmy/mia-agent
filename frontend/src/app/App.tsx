@@ -35,6 +35,7 @@ import {
   WorkspaceSectionTabs,
   type WorkspaceSectionTab
 } from "../shared/components/WorkspaceSectionTabs";
+import { useDisableNonLoginAutofill } from "../shared/hooks/useDisableNonLoginAutofill";
 
 const AgentsPage = lazy(() =>
   import("../features/agents/AgentsPage").then((module) => ({ default: module.AgentsPage }))
@@ -176,6 +177,8 @@ const SIDEBAR_COLLAPSED_KEY = "mia.workspace.sidebarCollapsed";
 
 /** 应用路由把公开分享页、登录页和受保护工作台明确分开。 */
 export function App() {
+  useDisableNonLoginAutofill();
+
   return (
     <Suspense fallback={<RouteLoading />}>
       <Routes>

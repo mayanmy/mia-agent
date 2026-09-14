@@ -50,7 +50,12 @@ export function LoginPage() {
         </div>
         <h1>登录工作台</h1>
         <p>使用团队账号访问 Agent、知识库和模型配置。</p>
-        <Form layout="vertical" requiredMark={false} onFinish={handleFinish}>
+        <Form
+          data-allow-autofill="true"
+          layout="vertical"
+          requiredMark={false}
+          onFinish={handleFinish}
+        >
           <Form.Item
             label="邮箱"
             name="email"
