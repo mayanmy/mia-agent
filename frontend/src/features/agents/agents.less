@@ -196,6 +196,126 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.agentStudioModal .ant-modal-content {
+  border: 1px solid #dfe7f2;
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 18%);
+  overflow: hidden;
+  padding: 0;
+}
+
+.agentStudioModal .ant-modal-header {
+  border-bottom: 1px solid #edf0f5;
+  margin: 0;
+  padding: 19px 24px;
+}
+
+.agentStudioModal .ant-modal-title {
+  font-size: 18px;
+}
+
+.agentStudioModal .ant-modal-close {
+  top: 15px;
+}
+
+.agentStudioModal .ant-modal-body {
+  padding: 22px 24px 0;
+}
+
+.agentStudioModal .ant-modal-footer {
+  background: #fbfcfe;
+  border-top: 1px solid #edf0f5;
+  margin: 18px 0 0;
+  padding: 14px 24px;
+}
+
+.agentFormSummary {
+  align-items: center;
+  background: linear-gradient(135deg, #eff6ff, #f8fbff);
+  border: 1px solid #bfdbfe;
+  border-radius: 15px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  margin-bottom: 18px;
+  padding: 15px 17px;
+}
+
+.agentFormSummaryIcon {
+  align-items: center;
+  background: #fff;
+  border-radius: 13px;
+  box-shadow: 0 5px 14px rgb(37 99 235 / 12%);
+  color: #2563eb;
+  display: flex;
+  font-size: 21px;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+
+.agentFormSummaryCopy strong,
+.agentFormSummaryCopy small {
+  display: block;
+}
+
+.agentFormSummaryCopy strong {
+  color: #172033;
+  font-size: 15px;
+}
+
+.agentFormSummaryCopy small {
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.agentFormSummaryStats {
+  display: flex;
+  gap: 7px;
+}
+
+.agentFormSummaryStats span {
+  align-items: center;
+  background: rgb(255 255 255 / 75%);
+  border: 1px solid #dbeafe;
+  border-radius: 9px;
+  color: #475569;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 5px;
+  padding: 7px 9px;
+}
+
+.agentStudioTabs > .ant-tabs-nav {
+  margin-bottom: 18px;
+}
+
+.agentStudioTabs > .ant-tabs-nav::before {
+  border-color: #edf0f5;
+}
+
+.agentStudioTabs .ant-tabs-tab {
+  padding: 10px 4px;
+}
+
+.agentStudioTabs .ant-tabs-content-holder {
+  max-height: 52vh;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.agentStudioTabs .ant-form-item-label > label {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agentStudioTabs .ant-input,
+.agentStudioTabs .ant-input-number,
+.agentStudioTabs .ant-select-selector {
+  border-radius: 9px !important;
+}
+
 .agentFormFull {
   grid-column: 1 / -1;
 }
@@ -372,5 +492,13 @@
 
   .agentApiKeyReveal {
     grid-template-columns: 1fr;
+  }
+
+  .agentFormSummary {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .agentFormSummaryStats {
+    grid-column: 1 / -1;
   }
 }

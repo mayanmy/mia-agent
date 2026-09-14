@@ -1,4 +1,9 @@
-import { DeleteOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
+import {
+  AppstoreAddOutlined,
+  DeleteOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined
+} from "@ant-design/icons";
 import { Button, Input, InputNumber, Select, Tooltip } from "antd";
 
 import type { WorkflowGraph, WorkflowNode, WorkflowResources } from "../types";
@@ -59,7 +64,13 @@ export function NodeInspector({
             <Button icon={<MenuUnfoldOutlined />} type="text" onClick={onToggleCollapsed} />
           </Tooltip>
         </div>
-        <p>选择节点后编辑配置</p>
+        <div className="workflowInspectorEmptyState">
+          <span>
+            <AppstoreAddOutlined />
+          </span>
+          <strong>选择一个节点</strong>
+          <p>在画布中选择节点后，可在这里配置输入、模型和输出。</p>
+        </div>
       </aside>
     );
   }

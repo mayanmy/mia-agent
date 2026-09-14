@@ -473,12 +473,14 @@ export function ChatPage() {
       mimeType,
       dataUrl
     }));
-    const currentFiles = (retry ? [] : files).map(({ name, mimeType, size, content: fileContent }) => ({
-      name,
-      mimeType,
-      size,
-      content: fileContent
-    }));
+    const currentFiles = (retry ? [] : files).map(
+      ({ name, mimeType, size, content: fileContent }) => ({
+        name,
+        mimeType,
+        size,
+        content: fileContent
+      })
+    );
     const nextUserMessage: ChatUiMessage = {
       id: createMessageId(),
       role: "user",
@@ -587,7 +589,8 @@ export function ChatPage() {
                 modelName: event.data.modelName,
                 providerName: event.data.providerName,
                 usage: event.data.usage,
-                elapsedMs: Date.now() - (streamStartedAtRef.current.get(assistantMessageId) ?? Date.now())
+                elapsedMs:
+                  Date.now() - (streamStartedAtRef.current.get(assistantMessageId) ?? Date.now())
               });
               if (event.data.messageId) {
                 updateAssistantPersistedId(assistantMessageId, event.data.messageId);
@@ -798,7 +801,8 @@ export function ChatPage() {
       ...messages.flatMap((item) => [
         `## ${item.role === "user" ? "用户" : "Agent"}`,
         "",
-        item.content || (item.generationStatus === "error" ? `> ${item.errorMessage || "回答失败"}` : ""),
+        item.content ||
+          (item.generationStatus === "error" ? `> ${item.errorMessage || "回答失败"}` : ""),
         "",
         ...(item.role === "assistant" && item.runtimeMetadata?.requestId
           ? [`Request ID：${item.runtimeMetadata.requestId}`, ""]
@@ -881,6 +885,7 @@ export function ChatPage() {
                 navigate(`/operations/logs?requestId=${encodeURIComponent(requestId)}`)
               }
               onFeedback={(messageId, rating) => void handleMessageFeedback(messageId, rating)}
+              onUsePrompt={setInput}
               onLoadMoreHistory={() => void loadOlderMessages()}
               onScroll={releaseAutoScrollIfNeeded}
               onScrollBottom={scrollMessagesToBottom}

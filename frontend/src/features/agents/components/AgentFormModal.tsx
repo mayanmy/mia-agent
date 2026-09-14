@@ -6,6 +6,7 @@ import type { ToolListItem } from "../../tools/api";
 import type { AgentFormValues } from "../types";
 import { defaultAgentFormValues } from "../utils/agent-form";
 import { AgentKnowledgeBaseSelector } from "./AgentKnowledgeBaseSelector";
+import { AgentFormSummary } from "./AgentFormSummary";
 import { AgentToolSelector } from "./AgentToolSelector";
 
 /** 分组模型下拉框中的单个选项。 */
@@ -69,12 +70,13 @@ export function AgentFormModal({
 
   return (
     <Modal
+      className="agentStudioModal"
       destroyOnHidden
       confirmLoading={saving}
       okText={editing ? "保存" : "创建"}
       open={open}
       title={editing ? "编辑 Agent" : "新增 Agent"}
-      width={760}
+      width={980}
       onCancel={onCancel}
       onOk={() => form.submit()}
     >
@@ -88,7 +90,14 @@ export function AgentFormModal({
         <Form.Item name="toolIds" noStyle>
           <BindingField />
         </Form.Item>
+        <AgentFormSummary
+          editing={editing}
+          knowledgeCount={selectedKnowledgeBaseIds.length}
+          toolCount={selectedStandardToolIds.length}
+          workflowCount={selectedWorkflowIds.length}
+        />
         <Tabs
+          className="agentStudioTabs"
           items={[
             {
               key: "basic",
@@ -121,17 +130,17 @@ export function AgentFormModal({
                     <Input.TextArea autoSize={{ minRows: 6, maxRows: 12 }} />
                   </Form.Item>
                   <Form.Item
-                    label="temperature"
+                    label="创造性 (Temperature)"
                     name="temperature"
                     rules={[{ required: true, message: "请选择 temperature" }]}
                   >
                     <Slider min={0} max={1} step={0.1} marks={{ 0: "0", 1: "1" }} />
                   </Form.Item>
-                  <Form.Item label="max_tokens" name="maxTokens">
+                  <Form.Item label="最大输出 Token" name="maxTokens">
                     <InputNumber min={1} precision={0} style={{ width: "100%" }} />
                   </Form.Item>
                   <Form.Item
-                    label="max_context_turns"
+                    label="上下文轮数"
                     name="historyTurns"
                     rules={[{ required: true, message: "请输入 max_context_turns" }]}
                   >

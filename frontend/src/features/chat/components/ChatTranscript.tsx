@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
-import { Button, Empty } from "antd";
-import { ArrowDownOutlined } from "@ant-design/icons";
+import { Button } from "antd";
+import { ArrowDownOutlined, RobotOutlined } from "@ant-design/icons";
 
 import type { ChatUiMessage } from "../types";
 import { ChatMessageItem } from "./ChatMessageItem";
@@ -32,6 +32,8 @@ type ChatTranscriptProps = {
   /** 按 request_id 打开日志页。 */
   onOpenLogs: (requestId: string) => void;
   onFeedback: (messageId: string, rating: "UP" | "DOWN") => void;
+  /** 将推荐问题填入输入框，便于用户继续编辑后发送。 */
+  onUsePrompt: (prompt: string) => void;
 };
 
 /** 展示消息时间线并协调历史分页和滚动跟随。 */
@@ -48,7 +50,8 @@ export function ChatTranscript({
   onCopyMessage,
   onRetryMessage,
   onOpenLogs,
-  onFeedback
+  onFeedback,
+  onUsePrompt
 }: ChatTranscriptProps) {
   return (
     <>
@@ -71,7 +74,22 @@ export function ChatTranscript({
           </button>
         ) : null}
         {messages.length === 0 ? (
-          <Empty description="发送一条消息测试 Agent" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <div className="chatWelcome">
+            <span className="chatWelcomeIcon">
+              <RobotOutlined />
+            </span>
+            <div>
+              <h2>今天想一起完成什么？</h2>
+              <p>直接描述目标，Agent 会结合已配置的知识与工具回答。</p>
+            </div>
+            <div className="chatPromptSuggestions">
+              {["介绍一下你能做什么", "总结核心知识内容", "帮我制定一个执行计划"].map((prompt) => (
+                <button key={prompt} type="button" onClick={() => onUsePrompt(prompt)}>
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
         ) : (
           messages.map((item, index) => (
             <ChatMessageItem

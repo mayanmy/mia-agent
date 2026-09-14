@@ -1,5 +1,6 @@
 import type { ClipboardEvent } from "react";
-import { Button, Input, Upload } from "antd";
+import { FileTextOutlined, PictureOutlined, SendOutlined } from "@ant-design/icons";
+import { Button, Input, Tooltip, Upload } from "antd";
 import type { UploadProps } from "antd";
 
 import type { ChatFileAttachment, ChatImageAttachment } from "../api";
@@ -70,9 +71,16 @@ export function ChatComposer({
           maxCount={4}
           showUploadList={false}
         >
-          <Button className="chatComposerToolButton" disabled={controlsDisabled}>
-            上传图片
-          </Button>
+          <Tooltip title="上传图片">
+            <Button
+              aria-label="上传图片"
+              className="chatComposerToolButton"
+              disabled={controlsDisabled}
+              icon={<PictureOutlined />}
+              shape="circle"
+              type="text"
+            />
+          </Tooltip>
         </Upload>
         <Upload
           accept={supportedTextFileExtensions.join(",")}
@@ -81,9 +89,16 @@ export function ChatComposer({
           maxCount={4}
           showUploadList={false}
         >
-          <Button className="chatComposerToolButton" disabled={controlsDisabled}>
-            上传文件
-          </Button>
+          <Tooltip title="上传文本文件">
+            <Button
+              aria-label="上传文本文件"
+              className="chatComposerToolButton"
+              disabled={controlsDisabled}
+              icon={<FileTextOutlined />}
+              shape="circle"
+              type="text"
+            />
+          </Tooltip>
         </Upload>
       </div>
       <div className="chatComposerInput">
@@ -96,7 +111,9 @@ export function ChatComposer({
         <Input.TextArea
           autoSize={{ minRows: 2, maxRows: 6 }}
           disabled={controlsDisabled}
-          placeholder={disabled ? "已归档会话仅可查看，恢复后可继续对话" : "输入消息，或直接粘贴图片"}
+          placeholder={
+            disabled ? "已归档会话仅可查看，恢复后可继续对话" : "输入消息，或直接粘贴图片"
+          }
           value={input}
           onChange={(event) => onInputChange(event.target.value)}
           onPaste={onPaste}
@@ -109,8 +126,12 @@ export function ChatComposer({
         />
       </div>
       <Button
+        aria-label={sending ? "停止生成" : "发送消息"}
+        className="chatSendButton"
         disabled={disabled || sendButtonDisabled}
         danger={sending}
+        icon={sending ? undefined : <SendOutlined />}
+        shape={sending ? undefined : "circle"}
         type="primary"
         onClick={() => {
           if (sending) {
@@ -121,7 +142,7 @@ export function ChatComposer({
           onSend();
         }}
       >
-        {sending ? "停止" : "发送"}
+        {sending ? "停止" : null}
       </Button>
     </div>
   );
