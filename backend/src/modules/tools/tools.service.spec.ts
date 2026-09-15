@@ -482,8 +482,8 @@ export const tests = [
         });
 
         assert.equal(result.ok, false);
-        assert.equal(result.errorType, "canceled");
-        assert.equal(result.errorMessage, "工具调用超时或已取消");
+        assert.equal(result.errorType, "tool_timeout");
+        assert.equal(result.errorMessage, "HTTP 工具调用超时");
       } finally {
         globalThis.fetch = originalFetch;
 
@@ -530,6 +530,41 @@ export const tests = [
           token: "[REDACTED]",
           note: "[REDACTED] suffix"
         });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
+  },
+
+  {
+    name: "HttpToolExecutor distinguishes its own timeout from upstream cancellation",
+    run: async () => {
+      const executor = new HttpToolExecutor();
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = ((_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => {
+              const error = new Error("The operation was aborted.");
+              error.name = "AbortError";
+              reject(error);
+            },
+            { once: true }
+          );
+        })) as typeof fetch;
+
+      try {
+        await assert.rejects(
+          () =>
+            executor.execute({ ...configuredHttpTool, timeoutMs: 1 }, { orderId: "slow-order" }),
+          (error: unknown) => {
+            assert.ok(error instanceof Error && "errorType" in error);
+            assert.equal((error as Error & { errorType: string }).errorType, "tool_timeout");
+            assert.equal(error.message, "HTTP 工具调用超时");
+            return true;
+          }
+        );
       } finally {
         globalThis.fetch = originalFetch;
       }

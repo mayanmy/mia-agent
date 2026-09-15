@@ -11,6 +11,7 @@ import {
   HttpToolRuntimeConfig
 } from "../dto/http-tool.dto";
 import { ToolJsonValue } from "../dto/tool.dto";
+import { ToolRuntimeError } from "../tool-runtime.error";
 
 const MAX_REDIRECTS = 3;
 const MAX_TOKEN_RESPONSE_BYTES = 1_000_000;
@@ -38,7 +39,11 @@ export class HttpToolExecutor {
     const input = this.validateInput(config.parameters, rawInput);
     const request = this.buildRequest(config, input);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, config.timeoutMs);
     const abortUpstream = () => controller.abort();
     upstreamSignal?.addEventListener("abort", abortUpstream, { once: true });
 
@@ -81,10 +86,21 @@ export class HttpToolExecutor {
           authentication.sensitiveValues
         )
       };
+    } catch (error) {
+      if (this.isAbortError(error) && timedOut && !upstreamSignal?.aborted) {
+        throw new ToolRuntimeError("tool_timeout", "HTTP 工具调用超时");
+      }
+      throw error;
     } finally {
       clearTimeout(timeout);
       upstreamSignal?.removeEventListener("abort", abortUpstream);
     }
+  }
+
+  private isAbortError(error: unknown): boolean {
+    return Boolean(
+      error && typeof error === "object" && "name" in error && error.name === "AbortError"
+    );
   }
 
   /** 校验模型参数并补入服务端默认值，拒绝未声明字段。 */
@@ -152,11 +168,7 @@ export class HttpToolExecutor {
         );
       } else if (parameter.location === "query") {
         this.appendQueryValue(query, targetName, value);
-        this.appendQueryValue(
-          displayQuery,
-          targetName,
-          parameter.sensitive ? "[REDACTED]" : value
-        );
+        this.appendQueryValue(displayQuery, targetName, parameter.sensitive ? "[REDACTED]" : value);
       } else if (parameter.location === "header") {
         if (FORBIDDEN_MODEL_HEADERS.has(targetName.toLowerCase())) {
           throw new Error(`${targetName} header is not allowed`);

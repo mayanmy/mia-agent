@@ -301,6 +301,39 @@ export const tests = [
     }
   },
   {
+    name: "ToolNodeExecutor treats tool timeout as Workflow failure instead of cancellation",
+    run: async () => {
+      const executor = new ToolNodeExecutor(
+        {
+          executeTool: async () => ({
+            toolId: "http_weather",
+            ok: false,
+            errorType: "tool_timeout",
+            errorMessage: "HTTP 工具调用超时",
+            elapsedMs: 25_000
+          })
+        } as never,
+        resolver
+      );
+      const node: CompiledWorkflowNode = {
+        id: "tool",
+        type: "tool",
+        name: "天气工具",
+        config: { toolId: "http_weather", arguments: {} }
+      };
+
+      await assert.rejects(
+        () => executor.execute({ node, context: createContext() }),
+        (error: unknown) => {
+          assert.ok(error instanceof WorkflowRuntimeError);
+          assert.equal(error.type, "workflow_tool_failed");
+          assert.equal(error.message, "HTTP 工具调用超时");
+          return true;
+        }
+      );
+    }
+  },
+  {
     name: "ToolNodeExecutor never continues after cancellation",
     run: async () => {
       const executor = new ToolNodeExecutor(

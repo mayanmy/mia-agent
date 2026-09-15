@@ -60,7 +60,8 @@ export class AgentPromptBuilder {
       "```",
       "可用工具：",
       toolDescriptions,
-      "拿到工具结果后，再基于工具结果用自然语言回答用户。"
+      "拿到工具结果后，再基于工具结果用自然语言回答用户。",
+      "如果工具结果包含 errorType 或 errorMessage，只能说明工具或 Workflow 执行失败；不得把错误文案推断为被查询业务对象的真实状态。"
     );
 
     return sections.join("\n");

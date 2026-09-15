@@ -123,5 +123,23 @@ export const tests = [
         ["createRun", "startRun", "startStep", "failStep", "failRun"]
       );
     }
+  },
+  {
+    name: "WorkflowToolRunsService distinguishes execution cancellation from business output",
+    run: async () => {
+      const { calls, service } = createService([
+        { type: "workflow_canceled", data: { nodeId: "tool-1" } }
+      ]);
+
+      const result = await service.execute(request);
+
+      assert.equal(result.ok, false);
+      assert.equal(result.errorType, "workflow_canceled");
+      assert.equal(result.errorMessage, "Workflow 执行已中止，未获得业务系统结果");
+      assert.deepEqual(
+        calls.map((call) => call.method),
+        ["createRun", "startRun", "cancelRun"]
+      );
+    }
   }
 ];

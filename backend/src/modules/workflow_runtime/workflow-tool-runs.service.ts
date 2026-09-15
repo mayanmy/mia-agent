@@ -95,7 +95,10 @@ export class WorkflowToolRunsService {
       }
       if (event.type === "workflow_failed") failure = event.data.error;
       if (event.type === "workflow_canceled") {
-        failure = { type: "canceled", message: "Workflow 已取消" };
+        failure = {
+          type: "workflow_canceled",
+          message: "Workflow 执行已中止，未获得业务系统结果"
+        };
       }
     }
 

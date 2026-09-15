@@ -231,9 +231,33 @@ function getFailureSummary(toolEvent: ChatToolEvent): ToolFailureSummary {
 
   if (toolEvent.errorType === "canceled") {
     return {
-      title: "超时或已取消",
+      title: "调用已取消",
       typeLabel: "调用取消",
-      description: "工具调用超过超时时间，或本次对话已被停止。"
+      description: "本次对话或上游调用已被主动停止。"
+    };
+  }
+
+  if (toolEvent.errorType === "tool_timeout") {
+    return {
+      title: "工具调用超时",
+      typeLabel: "工具执行超时",
+      description: "工具未在配置的时间内返回结果，不代表被查询的业务任务已取消。"
+    };
+  }
+
+  if (toolEvent.errorType === "workflow_canceled") {
+    return {
+      title: "Workflow 执行中止",
+      typeLabel: "Workflow 调用中止",
+      description: "这是 Workflow 执行链路的状态，不代表被查询的业务任务已取消。"
+    };
+  }
+
+  if (toolEvent.errorType === "workflow_tool_failed") {
+    return {
+      title: "Workflow 执行失败",
+      typeLabel: "Workflow 节点异常",
+      description: "Workflow 内部节点执行失败，应结合失败原因和 Trace 定位具体节点。"
     };
   }
 

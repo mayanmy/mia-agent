@@ -1,6 +1,7 @@
 import type { BuiltinTool, ToolExecutionContext } from "../registry";
 import { getConfig } from "../../../core/config";
 import { ToolJsonValue } from "../dto/tool.dto";
+import { ToolRuntimeError } from "../tool-runtime.error";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 1_000_000;
@@ -44,15 +45,24 @@ export const httpRequestTool: BuiltinTool = {
     const body = normalizeBody(input.body);
     const timeoutMs = normalizeTimeoutMs(input.timeoutMs);
     const startedAt = Date.now();
-    const response = await fetch(url, {
-      method,
-      headers: {
-        accept: "application/json, text/plain;q=0.9, */*;q=0.8",
-        ...(method === "POST" ? { "content-type": "application/json" } : {})
-      },
-      body: method === "POST" && body !== undefined ? JSON.stringify(body) : undefined,
-      signal: buildTimeoutSignal(context, timeoutMs)
-    });
+    const timeoutSignal = buildTimeoutSignal(context, timeoutMs);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers: {
+          accept: "application/json, text/plain;q=0.9, */*;q=0.8",
+          ...(method === "POST" ? { "content-type": "application/json" } : {})
+        },
+        body: method === "POST" && body !== undefined ? JSON.stringify(body) : undefined,
+        signal: timeoutSignal.signal
+      });
+    } catch (error) {
+      if (isAbortError(error) && timeoutSignal.didTimeout() && !context.signal?.aborted) {
+        throw new ToolRuntimeError("tool_timeout", "HTTP 工具调用超时");
+      }
+      throw error;
+    }
     const text = await readLimitedResponse(response);
 
     return {
@@ -177,14 +187,21 @@ function normalizeTimeoutMs(value: ToolJsonValue): number {
   return value;
 }
 
-function buildTimeoutSignal(context: ToolExecutionContext, timeoutMs: number): AbortSignal {
+function buildTimeoutSignal(
+  context: ToolExecutionContext,
+  timeoutMs: number
+): { signal: AbortSignal; didTimeout: () => boolean } {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
 
   if (context.signal?.aborted) {
     clearTimeout(timeout);
     controller.abort();
-    return controller.signal;
+    return { signal: controller.signal, didTimeout: () => timedOut };
   }
 
   context.signal?.addEventListener(
@@ -198,7 +215,13 @@ function buildTimeoutSignal(context: ToolExecutionContext, timeoutMs: number): A
 
   controller.signal.addEventListener("abort", () => clearTimeout(timeout), { once: true });
 
-  return controller.signal;
+  return { signal: controller.signal, didTimeout: () => timedOut };
+}
+
+function isAbortError(error: unknown): boolean {
+  return Boolean(
+    error && typeof error === "object" && "name" in error && error.name === "AbortError"
+  );
 }
 
 async function readLimitedResponse(response: Response): Promise<string> {
