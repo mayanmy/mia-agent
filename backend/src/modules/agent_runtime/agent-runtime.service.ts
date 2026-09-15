@@ -21,6 +21,7 @@ import { ToolCallLogRecord, ToolDefinition, ToolJsonValue } from "../tools/dto/t
 import { ToolsService } from "../tools/tools.service";
 import { WorkflowRuntimeEvent } from "../workflow_runtime/dto/workflow-run.dto";
 import { WorkflowRuntimeService } from "../workflow_runtime/workflow-runtime.service";
+import { WorkflowToolRunsService } from "../workflow_runtime/workflow-tool-runs.service";
 import { AgentRunRequest } from "./dto/agent-run.dto";
 import { AgentRuntimeEvent } from "./dto/runtime-event.dto";
 import { AgentPromptBuilder } from "./prompt-builder";
@@ -52,7 +53,8 @@ export class AgentRuntimeService {
     @Optional() private readonly toolsService?: ToolsService,
     @Optional() private readonly retrievalService?: RetrievalService,
     @Optional() private readonly promptBuilder?: AgentPromptBuilder,
-    @Optional() private readonly workflowRuntimeService?: WorkflowRuntimeService
+    @Optional() private readonly workflowRuntimeService?: WorkflowRuntimeService,
+    @Optional() private readonly workflowToolRunsService?: WorkflowToolRunsService
   ) {}
 
   /**
@@ -1290,7 +1292,10 @@ export class AgentRuntimeService {
       };
       const isWorkflowTool = toolCall.name.startsWith("workflow:");
       let result = isWorkflowTool
-        ? await this.requireWorkflowRuntimeService().executeAsTool(executionRequest)
+        ? await this.requireWorkflowToolRunsService().execute({
+            ...executionRequest,
+            runSource: request.source
+          })
         : await this.requireToolsService().executeTool(executionRequest);
       let approvalDenied = false;
       if (
@@ -1493,6 +1498,14 @@ export class AgentRuntimeService {
       throw new Error("Agent Runtime 缺少 WorkflowRuntimeService");
     }
     return this.workflowRuntimeService;
+  }
+
+  /** Workflow Tool 需要独立 Run 编排器，不能直接绕过 Trace 调用底层 Runtime。 */
+  private requireWorkflowToolRunsService(): WorkflowToolRunsService {
+    if (!this.workflowToolRunsService) {
+      throw new Error("Agent Runtime 缺少 WorkflowToolRunsService");
+    }
+    return this.workflowToolRunsService;
   }
 
   /** Runtime 依赖缺失属于部署错误，在知识检索前给出明确诊断。 */

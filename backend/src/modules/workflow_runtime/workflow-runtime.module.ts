@@ -17,13 +17,17 @@ import { WorkflowNodeExecutorRegistry } from "./node-executor.registry";
 import { WorkflowRuntimeService } from "./workflow-runtime.service";
 import { WorkflowAppsController } from "./workflow-apps.controller";
 import { WorkflowAppRunsService } from "./workflow-app-runs.service";
+import { WorkflowRunTraceService } from "./workflow-run-trace.service";
+import { WorkflowToolRunsService } from "./workflow-tool-runs.service";
 
 @Module({
   imports: [AgentRunsModule, WorkflowsModule, ModelProvidersModule, RetrievalModule, ToolsModule],
   controllers: [WorkflowAppsController],
   providers: [
     WorkflowExpressionResolver,
+    WorkflowRunTraceService,
     WorkflowAppRunsService,
+    WorkflowToolRunsService,
     StartNodeExecutor,
     TemplateNodeExecutor,
     ConditionNodeExecutor,
@@ -55,6 +59,6 @@ import { WorkflowAppRunsService } from "./workflow-app-runs.service";
     },
     WorkflowRuntimeService
   ],
-  exports: [WorkflowRuntimeService, WorkflowNodeExecutorRegistry]
+  exports: [WorkflowRuntimeService, WorkflowNodeExecutorRegistry, WorkflowToolRunsService]
 })
 export class WorkflowRuntimeModule {}

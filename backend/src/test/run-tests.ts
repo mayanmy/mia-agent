@@ -29,6 +29,7 @@ import { tests as workflowExpressionTests } from "../modules/workflows/expressio
 import { tests as workflowRuntimeTests } from "../modules/workflow_runtime/workflow-runtime.service.spec";
 import { tests as workflowCapabilityTests } from "../modules/workflow_runtime/capability-executors.spec";
 import { tests as workflowAppRunTests } from "../modules/workflow_runtime/workflow-app-runs.service.spec";
+import { tests as workflowToolRunTests } from "../modules/workflow_runtime/workflow-tool-runs.service.spec";
 
 type TestCase = {
   name: string;
@@ -64,6 +65,7 @@ const tests: TestCase[] = [
   ...workflowTests,
   ...workflowRuntimeTests,
   ...workflowAppRunTests,
+  ...workflowToolRunTests,
   ...workflowCapabilityTests,
   ...knowledgeTests,
   ...retrievalTests,

@@ -2,6 +2,7 @@ import * as assert from "node:assert/strict";
 import { AgentRunSource, AgentRunStepType } from "@prisma/client";
 
 import { WorkflowAppRunsService } from "./workflow-app-runs.service";
+import { WorkflowRunTraceService } from "./workflow-run-trace.service";
 
 function createService(events: Array<{ type: string; data: Record<string, unknown> }>) {
   const calls: Array<{ method: string; payload?: unknown }> = [];
@@ -35,7 +36,11 @@ function createService(events: Array<{ type: string; data: Record<string, unknow
   };
   return {
     calls,
-    service: new WorkflowAppRunsService(workflows as never, runtime as never, runs as never)
+    service: new WorkflowAppRunsService(
+      workflows as never,
+      runtime as never,
+      new WorkflowRunTraceService(runs as never)
+    )
   };
 }
 
