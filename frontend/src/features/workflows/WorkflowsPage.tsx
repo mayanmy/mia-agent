@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PlusOutlined } from "@ant-design/icons";
-import { App as AntdApp, Button, Spin, Tag } from "antd";
+import { App as AntdApp, Button, Spin } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { listKnowledgeBases } from "../knowledge/api";
@@ -27,6 +27,7 @@ import { EditWorkflowModal, type WorkflowMetadataValues } from "./components/Edi
 import { ValidationPanel } from "./components/ValidationPanel";
 import { WorkflowCanvas } from "./components/WorkflowCanvas";
 import { WorkflowEditorActions } from "./components/WorkflowEditorActions";
+import { WorkflowEditorChrome } from "./components/WorkflowEditorChrome";
 import { WorkflowGuide } from "./components/WorkflowGuide";
 import { WorkflowGallery } from "./components/WorkflowGallery";
 import { WorkflowRunModal } from "./components/WorkflowRunModal";
@@ -483,71 +484,66 @@ export function WorkflowsPage() {
     });
   }
 
+  const editorActions = workflow ? (
+    <WorkflowEditorActions
+      canRedo={canRedo}
+      canUndo={canUndo}
+      conflicted={saveStatus === "conflict"}
+      saveFailed={saveStatus === "failed"}
+      saveNeeded={saveStatus === "dirty" || saveStatus === "failed"}
+      saving={saving}
+      onCopyConflictGraph={() => {
+        void navigator.clipboard
+          .writeText(JSON.stringify(graph, null, 2))
+          .then(() => message.success("本地 Graph 已复制"))
+          .catch(() => message.error("复制失败，请使用浏览器剪贴板权限后重试"));
+      }}
+      onOpenTrace={() => setTraceOpen(true)}
+      onPublish={() => void publish()}
+      onRedo={() => {
+        redo();
+        setDirty(true);
+        setSaveStatus("dirty");
+      }}
+      onReloadConflict={() => void openWorkflow(workflow.id)}
+      onSave={() => void saveDraftWithFeedback()}
+      onUndo={() => {
+        undo();
+        setDirty(true);
+        setSaveStatus("dirty");
+      }}
+      onValidate={() => void runValidation()}
+    />
+  ) : null;
+
   return (
     <section
       className={`workspace workflowWorkspace${workflowId ? " workflowWorkspaceDetail" : ""}`}
     >
-      <WorkspacePageHeader
-        actions={
-          !workflowId ? (
-            <>
-              <WorkflowGuide />
-              <Button icon={<PlusOutlined />} type="primary" onClick={() => setCreateOpen(true)}>
-                新建 Workflow
-              </Button>
-            </>
-          ) : workflow ? (
-            <WorkflowEditorActions
-              canRedo={canRedo}
-              canUndo={canUndo}
-              conflicted={saveStatus === "conflict"}
-              saveFailed={saveStatus === "failed"}
-              saveNeeded={saveStatus === "dirty" || saveStatus === "failed"}
-              saving={saving}
-              onCopyConflictGraph={() => {
-                void navigator.clipboard
-                  .writeText(JSON.stringify(graph, null, 2))
-                  .then(() => message.success("本地 Graph 已复制"))
-                  .catch(() => message.error("复制失败，请使用浏览器剪贴板权限后重试"));
-              }}
-              onOpenTrace={() => setTraceOpen(true)}
-              onPublish={() => void publish()}
-              onRedo={() => {
-                redo();
-                setDirty(true);
-                setSaveStatus("dirty");
-              }}
-              onReloadConflict={() => void openWorkflow(workflow.id)}
-              onSave={() => void saveDraftWithFeedback()}
-              onUndo={() => {
-                undo();
-                setDirty(true);
-                setSaveStatus("dirty");
-              }}
-              onValidate={() => void runValidation()}
-            />
-          ) : undefined
-        }
-        backLabel="返回 Workflow 工作室"
-        description={
-          workflowId
-            ? workflow?.description || "构建确定性 Agent 流程，校验后发布为不可变版本。"
-            : "创建和管理团队的确定性 Agent 流程。"
-        }
-        eyebrow={workflowId ? "Workflow 编排" : undefined}
-        meta={
-          workflow ? (
-            <>
-              <Tag color={workflow.status === "PUBLISHED" ? "green" : "default"}>
-                {workflow.publishedVersion ? `已发布 v${workflow.publishedVersion}` : "未发布"}
-              </Tag>
-              <span>{formatSaveStatus(saveStatus, workflow.draftRevision, lastSavedAt)}</span>
-            </>
-          ) : undefined
-        }
-        title={workflowId ? workflow?.name || "正在加载 Workflow…" : "Workflow"}
-        onBack={workflowId ? () => navigate("/workflows/design") : undefined}
-      />
+      {!workflowId ? (
+        <WorkspacePageHeader
+          actions={
+            !workflowId ? (
+              <>
+                <WorkflowGuide />
+                <Button icon={<PlusOutlined />} type="primary" onClick={() => setCreateOpen(true)}>
+                  新建 Workflow
+                </Button>
+              </>
+            ) : undefined
+          }
+          backLabel="返回 Workflow 工作室"
+          description={
+            workflowId
+              ? workflow?.description || "构建确定性 Agent 流程，校验后发布为不可变版本。"
+              : "创建和管理团队的确定性 Agent 流程。"
+          }
+          eyebrow={workflowId ? "Workflow 编排" : undefined}
+          meta={undefined}
+          title={workflowId ? workflow?.name || "正在加载 Workflow…" : "Workflow"}
+          onBack={workflowId ? () => navigate("/workflows/design") : undefined}
+        />
+      ) : null}
 
       {!workflowId ? (
         <WorkflowGallery
@@ -565,6 +561,13 @@ export function WorkflowsPage() {
         <div className="workflowWorkbench detailOnly">
           {workflow ? (
             <main className="workflowEditor">
+              <WorkflowEditorChrome
+                actions={editorActions}
+                name={workflow.name}
+                publishedVersion={workflow.publishedVersion}
+                saveStatus={formatSaveStatus(saveStatus, workflow.draftRevision, lastSavedAt)}
+                onBack={() => navigate("/workflows/design")}
+              />
               <div
                 className={`workflowEditorBody${paletteCollapsed ? " paletteCollapsed" : ""}${inspectorCollapsed ? " inspectorCollapsed" : ""}`}
               >

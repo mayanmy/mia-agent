@@ -7,9 +7,15 @@
 .workflowWorkspaceDetail {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 64px);
+  height: calc(100vh - 24px);
   min-height: 0;
   overflow: hidden;
+}
+
+// 详情编辑路由贴近主内容边缘，把视口优先交给画布。
+.main:has(.workflowWorkspaceDetail) {
+  overflow: hidden;
+  padding: 12px;
 }
 
 .workflowWorkspaceDetail .workflowPageHeader {
@@ -324,6 +330,62 @@
   grid-template-rows: minmax(0, 1fr);
   min-width: 0;
   overflow: hidden;
+  position: relative;
+}
+
+.workflowEditorChrome {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  left: 188px;
+  pointer-events: none;
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  z-index: 12;
+}
+
+.workflowEditorIdentity,
+.workflowEditorFloatingActions {
+  align-items: center;
+  backdrop-filter: blur(12px);
+  background: rgb(255 255 255 / 92%);
+  border: 1px solid #e2e7ee;
+  border-radius: 12px;
+  box-shadow: 0 5px 18px rgb(15 23 42 / 10%);
+  display: flex;
+  pointer-events: auto;
+}
+
+.workflowEditorIdentity {
+  gap: 8px;
+  max-width: min(420px, 38vw);
+  padding: 5px 9px 5px 5px;
+}
+
+.workflowEditorIdentityText {
+  display: grid;
+  min-width: 0;
+}
+
+.workflowEditorIdentityText strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflowEditorIdentityText span {
+  color: #718096;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.workflowEditorFloatingActions {
+  padding: 5px;
+}
+
+.workflowEditorFloatingActions .workflowEditorActions {
+  gap: 6px;
 }
 
 .workflowToolbar {
@@ -411,6 +473,10 @@
 
 .workflowEditorBody.paletteCollapsed {
   grid-template-columns: 52px minmax(360px, 1fr) 340px;
+}
+
+.workflowEditor:has(.workflowEditorBody.paletteCollapsed) .workflowEditorChrome {
+  left: 64px;
 }
 
 .workflowEditorBody.inspectorCollapsed {
@@ -1215,6 +1281,14 @@
     grid-template-columns: 48px minmax(320px, 1fr) 48px;
   }
 
+  .workflowEditorChrome {
+    left: 144px;
+  }
+
+  .workflowEditor:has(.workflowEditorBody.paletteCollapsed) .workflowEditorChrome {
+    left: 60px;
+  }
+
   .workflowPalette .ant-btn {
     font-size: 12px;
     padding: 0 7px;
@@ -1249,6 +1323,15 @@
   .workflowToolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .workflowEditorChrome {
+    left: 94px;
+  }
+
+  .workflowEditorIdentityText span,
+  .workflowEditorFloatingActions .ant-btn > span:not(.anticon) {
+    display: none;
   }
 
   .workflowEditorActions {

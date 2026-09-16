@@ -13,15 +13,15 @@ export function WorkspaceSectionTabs({ tabs }: { tabs: WorkspaceSectionTab[] }) 
   const location = useLocation();
   const navigate = useNavigate();
   const activeKey =
-    tabs.find((tab) =>
-      tab.match ? tab.match(location.pathname) : location.pathname === tab.path
-    )?.path ?? tabs[0]?.path;
+    tabs.find((tab) => (tab.match ? tab.match(location.pathname) : location.pathname === tab.path))
+      ?.path ?? tabs[0]?.path;
+  const hideTabs = /^\/workflows\/design\/[^/]+\/?$/.test(location.pathname);
 
   return (
     <>
       <Tabs
         activeKey={activeKey}
-        className="workspaceSectionTabs"
+        className={`workspaceSectionTabs${hideTabs ? " detailHidden" : ""}`}
         items={tabs.map(({ label, path }) => ({ key: path, label }))}
         onChange={(path) => navigate(path)}
       />
