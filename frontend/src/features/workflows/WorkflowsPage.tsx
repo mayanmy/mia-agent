@@ -33,6 +33,7 @@ import { WorkflowGallery } from "./components/WorkflowGallery";
 import { WorkflowRunModal } from "./components/WorkflowRunModal";
 import { WorkflowTraceDrawer } from "./components/WorkflowTraceDrawer";
 import { appendNodeToGraph, insertNodeOnEdge } from "./editor/graph-commands";
+import { autoLayoutWorkflowGraph } from "./editor/auto-layout";
 import { useWorkflowEditor } from "./editor/useWorkflowEditor";
 import type {
   WorkflowDetail,
@@ -499,6 +500,7 @@ export function WorkflowsPage() {
           .catch(() => message.error("复制失败，请使用浏览器剪贴板权限后重试"));
       }}
       onOpenTrace={() => setTraceOpen(true)}
+      onAutoLayout={() => changeGraph(autoLayoutWorkflowGraph(graph))}
       onPublish={() => void publish()}
       onRedo={() => {
         redo();

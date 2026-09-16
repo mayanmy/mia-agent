@@ -1,4 +1,5 @@
 import {
+  ApartmentOutlined,
   CheckOutlined,
   CloudUploadOutlined,
   HistoryOutlined,
@@ -28,6 +29,8 @@ export type WorkflowEditorActionsProps = {
   onRedo: () => void;
   /** 打开 Workflow 运行记录。 */
   onOpenTrace: () => void;
+  /** 根据节点依赖重新排列画布。 */
+  onAutoLayout: () => void;
   /** 使用当前 Graph 执行发布前校验。 */
   onValidate: () => void;
   /** 显式保存当前草稿。 */
@@ -54,6 +57,7 @@ export function WorkflowEditorActions({
   onUndo,
   onRedo,
   onOpenTrace,
+  onAutoLayout,
   onValidate,
   onSave,
   onPublish,
@@ -98,6 +102,11 @@ export function WorkflowEditorActions({
       <div className="workflowToolbarDivider" />
 
       <div className="workflowToolbarGroup">
+        <Tooltip title="自动排列节点">
+          <Button icon={<ApartmentOutlined />} onClick={onAutoLayout}>
+            自动布局
+          </Button>
+        </Tooltip>
         <Button icon={<HistoryOutlined />} onClick={onOpenTrace}>
           运行记录
         </Button>
