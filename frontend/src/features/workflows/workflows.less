@@ -340,7 +340,7 @@
   left: 188px;
   pointer-events: none;
   position: absolute;
-  right: 14px;
+  right: 354px;
   top: 12px;
   z-index: 12;
 }
@@ -477,6 +477,10 @@
 
 .workflowEditor:has(.workflowEditorBody.paletteCollapsed) .workflowEditorChrome {
   left: 64px;
+}
+
+.workflowEditor:has(.workflowEditorBody.inspectorCollapsed) .workflowEditorChrome {
+  right: 66px;
 }
 
 .workflowEditorBody.inspectorCollapsed {
@@ -1283,10 +1287,15 @@
 
   .workflowEditorChrome {
     left: 144px;
+    right: 294px;
   }
 
   .workflowEditor:has(.workflowEditorBody.paletteCollapsed) .workflowEditorChrome {
     left: 60px;
+  }
+
+  .workflowEditor:has(.workflowEditorBody.inspectorCollapsed) .workflowEditorChrome {
+    right: 62px;
   }
 
   .workflowPalette .ant-btn {
@@ -1327,6 +1336,7 @@
 
   .workflowEditorChrome {
     left: 94px;
+    right: 14px;
   }
 
   .workflowEditorIdentityText span,
