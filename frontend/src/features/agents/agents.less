@@ -78,15 +78,20 @@
   outline: 0;
   transform: translateY(-2px);
 }
+.agentCardHeader {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+}
 .agentCardAvatar {
   align-items: center;
-  border-radius: 14px;
+  border-radius: 13px;
   display: flex;
-  font-size: 23px;
-  height: 52px;
+  font-size: 20px;
+  height: 46px;
   justify-content: center;
-  margin-bottom: 18px;
-  width: 52px;
+  width: 46px;
 }
 .agentCardAvatar.tone-0 {
   background: #e8f2ff;
@@ -109,10 +114,7 @@
   color: #c64d78;
 }
 .agentCardTitle {
-  align-items: flex-start;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
+  min-width: 0;
 }
 .agentCardTitle strong,
 .agentCardTitle span {
@@ -121,14 +123,14 @@
 .agentCardTitle strong {
   color: var(--mia-text);
   font-size: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .agentCardTitle span {
   color: var(--mia-text-muted);
   font-size: 11px;
   margin-top: 4px;
-}
-.agentCardTitle .ant-btn {
-  margin: -6px -7px 0 0;
 }
 .agentCard > p {
   color: var(--mia-text-muted);

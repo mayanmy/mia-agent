@@ -1,9 +1,17 @@
 import {
   ApiOutlined,
+  CodeOutlined,
+  CopyOutlined,
   DatabaseOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  GlobalOutlined,
+  KeyOutlined,
   MessageOutlined,
   MoreOutlined,
+  StopOutlined,
   RobotOutlined,
+  UploadOutlined,
   ToolOutlined
 } from "@ant-design/icons";
 import { Button, Dropdown, Empty, Input, Pagination, Spin, Tag, Tooltip } from "antd";
@@ -76,11 +84,11 @@ export function AgentGallery(props: AgentGalleryProps) {
                   }
                 }}
             >
-              <div className={`agentCardAvatar tone-${index % 5}`}>
-                <RobotOutlined />
-              </div>
-              <div className="agentCardTitle">
-                <div>
+              <header className="agentCardHeader">
+                <span className={`agentCardAvatar tone-${index % 5}`}>
+                  <RobotOutlined />
+                </span>
+                <div className="agentCardTitle">
                   <strong>{agent.name}</strong>
                   <span>由 {agent.creator.displayName} 创建</span>
                 </div>
@@ -88,7 +96,11 @@ export function AgentGallery(props: AgentGalleryProps) {
                   <Dropdown
                     menu={{
                       items: createMenuItems(agent),
-                      onClick: ({ key }) => handleMenu(key, agent, props)
+                      onClick: ({ key, domEvent }) => {
+                        // Dropdown 通过 Portal 渲染，但 React 事件仍会冒泡到卡片，必须在这里阻断。
+                        domEvent.stopPropagation();
+                        handleMenu(key, agent, props);
+                      }
                     }}
                     trigger={["click"]}
                   >
@@ -97,10 +109,11 @@ export function AgentGallery(props: AgentGalleryProps) {
                       icon={<MoreOutlined />}
                       type="text"
                       onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
                     />
                   </Dropdown>
                 ) : null}
-              </div>
+              </header>
 
               <p>{agent.description || "暂无描述，为这个 Agent 补充用途说明。"}</p>
 
@@ -155,18 +168,20 @@ export function AgentGallery(props: AgentGalleryProps) {
 
 function createMenuItems(agent: AgentTableItem): MenuProps["items"] {
   return [
-    agent.published ? { key: "copy", label: "复制分享链接" } : { key: "publish", label: "发布" },
+    agent.published
+      ? { key: "copy", icon: <CopyOutlined />, label: "复制分享链接" }
+      : { key: "publish", icon: <UploadOutlined />, label: "发布 Agent" },
     ...(agent.published
       ? [
-          { key: "embed", label: "嵌入代码" },
-          { key: "api-keys", label: "服务端 API Key" },
-          { key: "public-access", label: "公开访问设置" },
-          { key: "unpublish", label: "取消发布" }
+          { key: "embed", icon: <CodeOutlined />, label: "嵌入代码" },
+          { key: "api-keys", icon: <KeyOutlined />, label: "服务端 API Key" },
+          { key: "public-access", icon: <GlobalOutlined />, label: "公开访问设置" },
+          { key: "unpublish", icon: <StopOutlined />, label: "取消发布" }
         ]
       : []),
     { type: "divider" },
-    { key: "edit", label: "编辑" },
-    { key: "delete", label: "删除", danger: true }
+    { key: "edit", icon: <EditOutlined />, label: "编辑 Agent" },
+    { key: "delete", icon: <DeleteOutlined />, label: "删除 Agent", danger: true }
   ];
 }
 
