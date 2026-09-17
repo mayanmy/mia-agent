@@ -14,6 +14,7 @@ import {
   ReactFlow,
   applyNodeChanges,
   getSmoothStepPath,
+  useNodesState,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -126,6 +127,7 @@ export function WorkflowCanvas({
   onInsertNode
 }: WorkflowCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
   const onAppendNodeRef = useRef(onAppendNode);
   const onInsertNodeRef = useRef(onInsertNode);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -153,7 +155,7 @@ export function WorkflowCanvas({
     }
     return counts;
   }, [issues]);
-  const nodes: CanvasNode[] = useMemo(
+  const projectedNodes: CanvasNode[] = useMemo(
     () =>
       graph.nodes.map((node) => ({
         id: node.id,
@@ -169,6 +171,12 @@ export function WorkflowCanvas({
       })),
     [graph.nodes, handleAppendNode, issueCountByNodeId, selectedNodeId, traceStatuses]
   );
+  const [nodes, setNodes, applyCanvasNodeChanges] = useNodesState<CanvasNode>(projectedNodes);
+
+  // 服务端加载、Undo/Redo 和属性修改会刷新投影视图；拖动期间则由 React Flow 独占每帧坐标。
+  useEffect(() => {
+    if (!draggingRef.current) setNodes(projectedNodes);
+  }, [projectedNodes, setNodes]);
   const edges: CanvasEdge[] = useMemo(
     () =>
       graph.edges.map((edge) => ({
@@ -185,8 +193,9 @@ export function WorkflowCanvas({
 
   /** React Flow change 先作用到视图模型，再投影回稳定的 Mia Graph DTO。 */
   function handleNodeChanges(changes: NodeChange<CanvasNode>[]) {
+    applyCanvasNodeChanges(changes);
     // 选择态由页面单独管理，不能因为点击节点就把草稿误标记为已修改。
-    // 拖动过程由 React Flow 内部展示，只有 drag stop 才提交快照，避免一次拖动污染 Undo 栈。
+    // 拖动帧只进入画布本地状态，只有 drag stop 才提交快照，避免父页面渲染和 Undo 栈污染。
     const graphChanges = changes.filter((change) => change.type === "remove");
     if (graphChanges.length === 0) return;
     const next = applyNodeChanges(graphChanges, nodes);
@@ -290,7 +299,11 @@ export function WorkflowCanvas({
           setSelectedEdgeId(null);
           onOpenNodeInspector(node.id);
         }}
+        onNodeDragStart={() => {
+          draggingRef.current = true;
+        }}
         onNodeDragStop={(_, flowNode) => {
+          draggingRef.current = false;
           onGraphChange({
             ...graph,
             nodes: graph.nodes.map((node) =>
