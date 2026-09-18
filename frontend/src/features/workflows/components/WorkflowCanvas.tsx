@@ -21,7 +21,8 @@ import {
   type EdgeProps,
   type Node,
   type NodeChange,
-  type NodeProps
+  type NodeProps,
+  type ReactFlowInstance
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -64,6 +65,8 @@ type CanvasEdge = Edge<WorkflowEdgeData, "workflow">;
 export type WorkflowCanvasProps = {
   /** 当前完整 Graph。 */
   graph: WorkflowGraph;
+  /** 自增时让画布重新适配全部节点，用于自动布局完成后的视口定位。 */
+  fitViewRevision: number;
   /** 当前选中的节点 ID。 */
   selectedNodeId: string | null;
   /** 当前 Graph 的校验问题。 */
@@ -116,6 +119,7 @@ const EDGE_TYPES = {
 /** 在 React Flow 上编辑 Mia Graph，并隔离画布视图状态与持久化 DTO。 */
 export function WorkflowCanvas({
   graph,
+  fitViewRevision,
   selectedNodeId,
   issues,
   traceStatuses,
@@ -127,6 +131,7 @@ export function WorkflowCanvas({
   onInsertNode
 }: WorkflowCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const flowInstanceRef = useRef<ReactFlowInstance<CanvasNode, CanvasEdge> | null>(null);
   const draggingRef = useRef(false);
   const onAppendNodeRef = useRef(onAppendNode);
   const onInsertNodeRef = useRef(onInsertNode);
@@ -177,6 +182,14 @@ export function WorkflowCanvas({
   useEffect(() => {
     if (!draggingRef.current) setNodes(projectedNodes);
   }, [projectedNodes, setNodes]);
+
+  useEffect(() => {
+    if (fitViewRevision === 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      void flowInstanceRef.current?.fitView({ padding: 0.2, maxZoom: 1, duration: 280 });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [fitViewRevision]);
   const edges: CanvasEdge[] = useMemo(
     () =>
       graph.edges.map((edge) => ({
@@ -286,6 +299,9 @@ export function WorkflowCanvas({
         panOnDrag
         zoomOnScroll
         onConnect={handleConnect}
+        onInit={(instance) => {
+          flowInstanceRef.current = instance;
+        }}
         onEdgeClick={(_, edge) => {
           setSelectedEdgeId(edge.id);
           onSelectNode(null);

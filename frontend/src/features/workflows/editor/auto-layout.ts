@@ -2,11 +2,13 @@ import type { WorkflowGraph } from "../types";
 
 const HORIZONTAL_GAP = 260;
 const VERTICAL_GAP = 140;
+const ROW_GAP = 90;
+const MAX_COLUMNS = 4;
 const ORIGIN_X = 80;
 const ORIGIN_Y = 110;
 
 /**
- * 按依赖层级从左到右排列节点；同层节点垂直展开，并兼容孤立节点和意外环路。
+ * 按依赖层级紧凑排列节点；同层节点纵向展开，长主链达到列上限后自动换行。
  * 这里只更新编辑器坐标，不改变节点、连线或分支语义。
  */
 export function autoLayoutWorkflowGraph(graph: WorkflowGraph): WorkflowGraph {
@@ -46,17 +48,33 @@ export function autoLayoutWorkflowGraph(graph: WorkflowGraph): WorkflowGraph {
     const nodeRank = rank.get(node.id) ?? 0;
     layers.set(nodeRank, [...(layers.get(nodeRank) ?? []), node.id]);
   }
-  const widestLayer = Math.max(1, ...[...layers.values()].map((layer) => layer.length));
-
   const positions = new Map<string, { x: number; y: number }>();
-  for (const [nodeRank, layer] of layers) {
-    const offset = ((widestLayer - layer.length) * VERTICAL_GAP) / 2;
-    layer.forEach((id, index) => {
-      positions.set(id, {
-        x: ORIGIN_X + nodeRank * HORIZONTAL_GAP,
-        y: ORIGIN_Y + offset + index * VERTICAL_GAP
+  const maxRank = Math.max(0, ...rank.values());
+  let rowTop = ORIGIN_Y;
+
+  for (let row = 0; row <= Math.floor(maxRank / MAX_COLUMNS); row += 1) {
+    const firstRank = row * MAX_COLUMNS;
+    const rowRanks = Array.from(
+      { length: Math.min(MAX_COLUMNS, maxRank - firstRank + 1) },
+      (_, index) => firstRank + index
+    );
+    const rowLayerSize = Math.max(
+      1,
+      ...rowRanks.map((nodeRank) => layers.get(nodeRank)?.length ?? 0)
+    );
+    const rowHeight = (rowLayerSize - 1) * VERTICAL_GAP;
+
+    for (const nodeRank of rowRanks) {
+      const layer = layers.get(nodeRank) ?? [];
+      const verticalOffset = ((rowLayerSize - layer.length) * VERTICAL_GAP) / 2;
+      layer.forEach((id, index) => {
+        positions.set(id, {
+          x: ORIGIN_X + (nodeRank % MAX_COLUMNS) * HORIZONTAL_GAP,
+          y: rowTop + verticalOffset + index * VERTICAL_GAP
+        });
       });
-    });
+    }
+    rowTop += rowHeight + VERTICAL_GAP + ROW_GAP;
   }
 
   return {

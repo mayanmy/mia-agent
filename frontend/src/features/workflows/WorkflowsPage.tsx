@@ -81,6 +81,7 @@ export function WorkflowsPage() {
   const [runResult, setRunResult] = useState<WorkflowAppRunResult | null>(null);
   const [runningWorkflow, setRunningWorkflow] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
+  const [fitViewRevision, setFitViewRevision] = useState(0);
   const [paletteCollapsed, setPaletteCollapsed] = useState(() =>
     readCollapsedState(WORKFLOW_PALETTE_COLLAPSED_KEY)
   );
@@ -500,7 +501,10 @@ export function WorkflowsPage() {
           .catch(() => message.error("复制失败，请使用浏览器剪贴板权限后重试"));
       }}
       onOpenTrace={() => setTraceOpen(true)}
-      onAutoLayout={() => changeGraph(autoLayoutWorkflowGraph(graph))}
+      onAutoLayout={() => {
+        changeGraph(autoLayoutWorkflowGraph(graph));
+        setFitViewRevision((revision) => revision + 1);
+      }}
       onPublish={() => void publish()}
       onRedo={() => {
         redo();
@@ -586,6 +590,7 @@ export function WorkflowsPage() {
                 />
                 <div className="workflowCanvasRegion">
                   <WorkflowCanvas
+                    fitViewRevision={fitViewRevision}
                     graph={graph}
                     issues={issues}
                     selectedNodeId={selectedNodeId}
