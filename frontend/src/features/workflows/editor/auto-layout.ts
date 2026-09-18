@@ -1,7 +1,7 @@
 import type { WorkflowGraph } from "../types";
 
-const HORIZONTAL_GAP = 300;
-const VERTICAL_GAP = 170;
+const HORIZONTAL_GAP = 260;
+const VERTICAL_GAP = 140;
 const ORIGIN_X = 80;
 const ORIGIN_Y = 110;
 

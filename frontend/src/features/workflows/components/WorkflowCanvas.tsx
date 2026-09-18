@@ -274,7 +274,8 @@ export function WorkflowCanvas({
         deleteKeyCode={null}
         edges={edges}
         fitView
-        fitViewOptions={{ padding: 0.25 }}
+        // 小型 Graph 不自动放大节点；用户仍可通过缩放控件主动放大查看。
+        fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
         minZoom={0.35}
         maxZoom={1.6}
         // 大型 Graph 只挂载视口内的节点与连线，减少平移缩放时的 DOM、布局和绘制开销。
