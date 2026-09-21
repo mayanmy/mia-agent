@@ -15,6 +15,8 @@ export function WorkspaceSectionTabs({ tabs }: { tabs: WorkspaceSectionTab[] }) 
   const activeKey =
     tabs.find((tab) => (tab.match ? tab.match(location.pathname) : location.pathname === tab.path))
       ?.path ?? tabs[0]?.path;
+  // Workflow 详情页采用全高画布，隐藏域内页签以释放顶部空间；列表和应用页仍保留导航。
+  // 这里只改变页签可见性，Outlet 始终渲染，避免详情路由因导航优化被卸载。
   const hideTabs = /^\/workflows\/design\/[^/]+\/?$/.test(location.pathname);
 
   return (

@@ -133,7 +133,9 @@ export function WorkflowCanvas({
   onInsertNode
 }: WorkflowCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  // React Flow 实例只用于视口操作，不进入业务 Graph，避免持久化第三方运行时对象。
   const flowInstanceRef = useRef<ReactFlowInstance<CanvasNode, CanvasEdge> | null>(null);
+  // 拖动期间阻止父 Graph 投影覆盖本地坐标，否则受控节点会在 pointermove 中回弹。
   const draggingRef = useRef(false);
   const onAppendNodeRef = useRef(onAppendNode);
   const onInsertNodeRef = useRef(onInsertNode);
@@ -162,6 +164,7 @@ export function WorkflowCanvas({
     }
     return counts;
   }, [issues]);
+  // 持久化 DTO 只保存业务字段和坐标；这里将其投影成 React Flow 的视图节点。
   const projectedNodes: CanvasNode[] = useMemo(
     () =>
       graph.nodes.map((node) => ({
@@ -178,6 +181,7 @@ export function WorkflowCanvas({
       })),
     [graph.nodes, handleAppendNode, issueCountByNodeId, selectedNodeId, traceStatuses]
   );
+  // 拖动帧必须留在画布局部状态，不能逐帧触发页面 Undo、自动保存和属性面板重绘。
   const [nodes, setNodes, applyCanvasNodeChanges] = useNodesState<CanvasNode>(projectedNodes);
 
   // 服务端加载、Undo/Redo 和属性修改会刷新投影视图；拖动期间则由 React Flow 独占每帧坐标。
@@ -187,11 +191,13 @@ export function WorkflowCanvas({
 
   useEffect(() => {
     if (fitViewRevision === 0) return;
+    // 等一帧让 React Flow 先测量自动布局后的节点，再基于新边界计算 viewport。
     const frame = window.requestAnimationFrame(() => {
       void flowInstanceRef.current?.fitView({ padding: 0.2, maxZoom: 1, duration: 280 });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [fitViewRevision]);
+  // routeOffset 由 Edge ID 稳定计算，只作为视图路由参数，不污染后端 Graph DTO。
   const edges: CanvasEdge[] = useMemo(
     () =>
       graph.edges.map((edge) => ({
@@ -319,10 +325,12 @@ export function WorkflowCanvas({
           onOpenNodeInspector(node.id);
         }}
         onNodeDragStart={() => {
+          // 从此刻开始 React Flow 独占位置更新，父页面仍保留拖动前的可撤销快照。
           draggingRef.current = true;
         }}
         onNodeDragStop={(_, flowNode) => {
           draggingRef.current = false;
+          // 松手后仅提交最终坐标，因此一次拖动只产生一个 Undo 快照和一次自动保存。
           onGraphChange({
             ...graph,
             nodes: graph.nodes.map((node) =>
@@ -419,6 +427,7 @@ function areWorkflowNodeCardPropsEqual(
 function WorkflowQuickInsertEdge(props: EdgeProps<CanvasEdge>) {
   const [hovered, setHovered] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 前向边使用固定短出口；自动布局换行造成的回程边才错开通道，避免无意义绕行。
   const [path, labelX, labelY] = getSmoothStepPath({
     ...props,
     borderRadius: 8,
@@ -444,6 +453,7 @@ function WorkflowQuickInsertEdge(props: EdgeProps<CanvasEdge>) {
   const shouldRenderInsertAction = Boolean(props.selected || hovered);
   return (
     <>
+      {/* Halo 在交叉处切断下层灰线；它不响应指针，真实交互由透明宽路径承担。 */}
       <path className="workflowEdgeHalo" d={path} fill="none" />
       <BaseEdge
         id={props.id}
@@ -486,6 +496,7 @@ function routeOffsetForEdge(edgeId: string) {
   for (let index = 0; index < edgeId.length; index += 1) {
     hash = (hash * 31 + edgeId.charCodeAt(index)) >>> 0;
   }
+  // 七条离散通道在可读性和占用空间之间折中；超过七条时允许复用并依赖高亮辨识。
   return 18 + (hash % 7) * 7;
 }
 
@@ -572,5 +583,5 @@ function miniMapColor(node: Node<WorkflowNodeData>) {
   if (node.data.traceStatus === "COMPLETED") return "#2f855a";
   if (node.data.traceStatus === "SKIPPED") return "#94a3b8";
   if (node.data.issueCount > 0) return "#d97706";
-  return "#6b7a90";
+  return "#cbd1db";
 }

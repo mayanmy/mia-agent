@@ -338,8 +338,10 @@
   gap: 12px;
   justify-content: space-between;
   left: 188px;
+  // Chrome 只负责定位，透明区域必须允许用户继续拖动画布。
   pointer-events: none;
   position: absolute;
+  // 340px 属性面板 + 14px 间距，防止右上操作按钮遮挡节点编辑表单。
   right: 354px;
   top: 12px;
   z-index: 12;
@@ -354,6 +356,7 @@
   border-radius: 12px;
   box-shadow: 0 5px 18px rgb(15 23 42 / 10%);
   display: flex;
+  // 仅实际可见的身份和操作浮层恢复点击能力。
   pointer-events: auto;
 }
 
@@ -476,10 +479,12 @@
 }
 
 .workflowEditor:has(.workflowEditorBody.paletteCollapsed) .workflowEditorChrome {
+  // 左侧节点库折叠后释放空间，让标题浮层同步贴近画布边缘。
   left: 64px;
 }
 
 .workflowEditor:has(.workflowEditorBody.inspectorCollapsed) .workflowEditorChrome {
+  // 属性面板折叠到 52px 后，操作区可安全扩展至其左侧。
   right: 66px;
 }
 
@@ -637,6 +642,7 @@
   border-left: 4px solid #64748b;
   border-radius: 12px;
   box-shadow: 0 5px 16px rgb(15 23 42 / 8%);
+  // 卡片保持紧凑，复杂 Graph 在 100% 缩放下仍能同时展示多条分支。
   min-height: 64px;
   padding: 9px 24px 8px 12px;
   position: relative;
@@ -785,6 +791,7 @@
   aspect-ratio: 1;
   background: #2563eb;
   border: 2px solid #fff;
+  // 同时锁定逻辑尺寸、物理尺寸和 min/max，抵消 Ant Design 按钮默认最小宽度。
   block-size: 20px;
   border-radius: 999px !important;
   box-sizing: border-box;

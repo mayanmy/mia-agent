@@ -81,6 +81,8 @@ export function WorkflowsPage() {
   const [runResult, setRunResult] = useState<WorkflowAppRunResult | null>(null);
   const [runningWorkflow, setRunningWorkflow] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
+  // 自动布局坐标提交后递增版本号，通知画布在节点完成测量后重新适配视口。
+  // 不直接从页面调用 React Flow 实例，保持路由页只负责业务状态编排。
   const [fitViewRevision, setFitViewRevision] = useState(0);
   const [paletteCollapsed, setPaletteCollapsed] = useState(() =>
     readCollapsedState(WORKFLOW_PALETTE_COLLAPSED_KEY)
@@ -486,6 +488,7 @@ export function WorkflowsPage() {
     });
   }
 
+  // 操作区作为纯展示内容注入悬浮 Chrome；保存、校验、发布仍由页面持有业务流程。
   const editorActions = workflow ? (
     <WorkflowEditorActions
       canRedo={canRedo}
@@ -502,6 +505,7 @@ export function WorkflowsPage() {
       }}
       onOpenTrace={() => setTraceOpen(true)}
       onAutoLayout={() => {
+        // 布局本身作为一次 Graph 修改进入 Undo/自动保存；随后单独触发视口动画。
         changeGraph(autoLayoutWorkflowGraph(graph));
         setFitViewRevision((revision) => revision + 1);
       }}
