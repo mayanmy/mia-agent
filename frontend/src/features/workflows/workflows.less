@@ -585,6 +585,40 @@
   stroke-width: 3;
 }
 
+// 白色底描边在交叉点切开下层线路，避免多条灰线融合成一条。
+.workflowEdgeHalo {
+  pointer-events: none;
+  stroke: rgb(255 255 255 / 92%);
+  stroke-width: 5px;
+}
+
+.workflowCanvas .react-flow__edge-path,
+.workflowCanvas .workflowEdgeHalo {
+  transition:
+    opacity 120ms ease,
+    stroke 120ms ease,
+    stroke-width 120ms ease;
+}
+
+.workflowCanvas .react-flow__edge:has(.workflowEdgeHoverTarget:hover) .react-flow__edge-path {
+  stroke: #2563eb;
+  stroke-width: 3px;
+}
+
+// 聚焦单条连线时压低其他线路，复杂路由中仍能连续追踪起点和终点。
+.workflowCanvas:has(.workflowEdgeHoverTarget:hover)
+  .react-flow__edge:not(:has(.workflowEdgeHoverTarget:hover))
+  .react-flow__edge-path,
+.workflowCanvas:has(.react-flow__edge.selected)
+  .react-flow__edge:not(.selected)
+  .react-flow__edge-path,
+.workflowCanvas:has(.workflowEdgeHoverTarget:hover)
+  .react-flow__edge:not(:has(.workflowEdgeHoverTarget:hover))
+  .workflowEdgeHalo,
+.workflowCanvas:has(.react-flow__edge.selected) .react-flow__edge:not(.selected) .workflowEdgeHalo {
+  opacity: 0.18;
+}
+
 .workflowCanvas .react-flow__controls,
 .workflowCanvas .react-flow__minimap {
   border: 1px solid #d7dee8;

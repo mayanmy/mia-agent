@@ -57,6 +57,8 @@ type CanvasNode = Node<WorkflowNodeData, "workflow">;
 type WorkflowEdgeData = Record<string, unknown> & {
   /** 在当前连线中间插入节点。 */
   onInsertNode: (edgeId: string, type: WorkflowNodeType) => void;
+  /** 错开正交连线出口，防止复杂 Graph 的回程线路完全重叠。 */
+  routeOffset: number;
 };
 /** React Flow 使用的 Workflow 连线类型。 */
 type CanvasEdge = Edge<WorkflowEdgeData, "workflow">;
@@ -197,7 +199,7 @@ export function WorkflowCanvas({
         interactionWidth: 24,
         selected: edge.id === activeSelectedEdgeId,
         type: "workflow",
-        data: { onInsertNode: handleInsertNode },
+        data: { onInsertNode: handleInsertNode, routeOffset: routeOffsetForEdge(edge.id) },
         markerEnd: WORKFLOW_EDGE_MARKER_END,
         style: WORKFLOW_EDGE_STYLE
       })),
@@ -417,7 +419,11 @@ function areWorkflowNodeCardPropsEqual(
 function WorkflowQuickInsertEdge(props: EdgeProps<CanvasEdge>) {
   const [hovered, setHovered] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [path, labelX, labelY] = getSmoothStepPath(props);
+  const [path, labelX, labelY] = getSmoothStepPath({
+    ...props,
+    borderRadius: 8,
+    offset: props.data?.routeOffset ?? 20
+  });
   const showInsertAction = () => {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     hideTimerRef.current = null;
@@ -437,6 +443,7 @@ function WorkflowQuickInsertEdge(props: EdgeProps<CanvasEdge>) {
   const shouldRenderInsertAction = Boolean(props.selected || hovered);
   return (
     <>
+      <path className="workflowEdgeHalo" d={path} fill="none" />
       <BaseEdge
         id={props.id}
         interactionWidth={0}
@@ -470,6 +477,15 @@ function WorkflowQuickInsertEdge(props: EdgeProps<CanvasEdge>) {
       ) : null}
     </>
   );
+}
+
+/** Edge ID 的稳定散列让通道分配不因删除相邻边而整体跳动。 */
+function routeOffsetForEdge(edgeId: string) {
+  let hash = 0;
+  for (let index = 0; index < edgeId.length; index += 1) {
+    hash = (hash * 31 + edgeId.charCodeAt(index)) >>> 0;
+  }
+  return 18 + (hash % 7) * 7;
 }
 
 /** Edge 只依赖路径坐标和插入动作，忽略 React Flow 传入但未参与渲染的其他字段。 */

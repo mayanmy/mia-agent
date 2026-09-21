@@ -3,7 +3,7 @@ import type { WorkflowGraph } from "../types";
 const HORIZONTAL_GAP = 260;
 const VERTICAL_GAP = 140;
 const ROW_GAP = 90;
-const MAX_COLUMNS = 4;
+const MAX_COLUMNS = 6; // 每行最多放置 6 个拓扑层级
 const ORIGIN_X = 80;
 const ORIGIN_Y = 110;
 
