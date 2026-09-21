@@ -422,7 +422,8 @@ function WorkflowQuickInsertEdge(props: EdgeProps<CanvasEdge>) {
   const [path, labelX, labelY] = getSmoothStepPath({
     ...props,
     borderRadius: 8,
-    offset: props.data?.routeOffset ?? 20
+    // 普通前向边走最短路径；只有换行产生的回程边才分配独立外侧通道。
+    offset: props.sourceX >= props.targetX ? (props.data?.routeOffset ?? 20) : 20
   });
   const showInsertAction = () => {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
