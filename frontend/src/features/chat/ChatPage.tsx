@@ -24,6 +24,7 @@ import { ChatTranscript } from "./components/ChatTranscript";
 import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useChatAttachments } from "./hooks/useChatAttachments";
 import { useChatMessageEvents } from "./hooks/useChatMessageEvents";
+import { useTokenBuffer } from "./hooks/useTokenBuffer";
 import { buildTransportHistory } from "./history";
 import type { ChatUiMessage } from "./types";
 import { createMessageId, isLikelyVisionModel } from "./utils";
@@ -68,6 +69,13 @@ export function ChatPage() {
     resolveToolApproval
   } = useChatMessageEvents(setMessages);
   const {
+    append: appendBufferedToken,
+    flush: flushBufferedTokens,
+    clear: clearBufferedTokens
+  } = useTokenBuffer({
+    onFlush: ({ messageId, content }) => appendAssistantToken(messageId, content)
+  });
+  const {
     images,
     files,
     handleBeforeUpload,
@@ -96,6 +104,7 @@ export function ChatPage() {
     const requestVersion = ++sessionLoadVersionRef.current;
 
     // 切换 Agent 时先停止旧流，避免旧 Agent 的 token 混入新 Agent 恢复出的会话。
+    clearBufferedTokens();
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setSending(false);
@@ -155,7 +164,14 @@ export function ChatPage() {
     return () => {
       disposed = true;
     };
-  }, [messageApi, resetAutoScroll, selectedAgent?.chatSessionMode, selectedAgentId, sessionStatus]);
+  }, [
+    clearBufferedTokens,
+    messageApi,
+    resetAutoScroll,
+    selectedAgent?.chatSessionMode,
+    selectedAgentId,
+    sessionStatus
+  ]);
   const sendButtonDisabled =
     !sending &&
     (sessionStatus === "ARCHIVED" ||
@@ -172,10 +188,11 @@ export function ChatPage() {
       disposed = true;
       disposedRef.current = true;
       // 页面离开时必须中断 SSE，避免后端继续生成并让旧回调写入已销毁的对话界面。
+      clearBufferedTokens();
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
     };
-  }, []);
+  }, [clearBufferedTokens]);
 
   async function refreshAgents(isActive: () => boolean = () => true) {
     if (!isActive()) {
@@ -218,6 +235,7 @@ export function ChatPage() {
 
   /** 返回卡片列表时中止生成并清空 URL 选择，详情状态由现有切换 Effect 统一复位。 */
   function handleBackToAgents() {
+    clearBufferedTokens();
     abortControllerRef.current?.abort();
     setSearchParams({});
   }
@@ -247,6 +265,7 @@ export function ChatPage() {
 
     const requestVersion = ++sessionLoadVersionRef.current;
     historyLoadVersionRef.current += 1;
+    clearBufferedTokens();
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setSending(false);
@@ -468,6 +487,9 @@ export function ChatPage() {
       return;
     }
 
+    // 只有请求确定可以启动后才清理旧批次；输入校验失败不能影响正在展示的消息。
+    clearBufferedTokens();
+
     const currentImages = (retry ? [] : images).map(({ name, mimeType, dataUrl }) => ({
       name,
       mimeType,
@@ -553,7 +575,7 @@ export function ChatPage() {
                     Date.now() - (streamStartedAtRef.current.get(assistantMessageId) ?? Date.now())
                 });
               }
-              appendAssistantToken(assistantMessageId, event.data.content);
+              appendBufferedToken(assistantMessageId, event.data.content);
             }
 
             if (event.type === "message_start" && event.data.sessionId) {
@@ -579,8 +601,10 @@ export function ChatPage() {
               });
             }
 
+            // message_end 清空缓冲并使用最终正文覆盖
             if (event.type === "message_end" && typeof event.data.content === "string") {
               // Workflow End answer 是最终权威内容，可能没有 token，也可能转换过中间模型输出。
+              clearBufferedTokens();
               replaceAssistantContent(assistantMessageId, event.data.content);
               updateAssistantGeneration(assistantMessageId, "completed");
               updateAssistantRuntimeMetadata(assistantMessageId, {
@@ -654,9 +678,12 @@ export function ChatPage() {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         if (!disposedRef.current) {
+          // 用户停止时保留已经收到但尚未进入 React 状态的尾部 Token。
+          flushBufferedTokens();
           updateAssistantGeneration(assistantMessageId, "stopped");
         }
       } else if (!disposedRef.current) {
+        flushBufferedTokens();
         updateAssistantGeneration(
           assistantMessageId,
           "error",

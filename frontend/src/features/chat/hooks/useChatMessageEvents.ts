@@ -4,9 +4,7 @@ import type { ChatRetrievalEvent, ChatToolEvent, ChatUiMessage } from "../types"
 import { findLastToolEventIndex } from "../utils";
 
 /** 集中处理 SSE 事件对消息视图模型的归并，避免路由页承载大量不可复用的数组更新。 */
-export function useChatMessageEvents(
-  setMessages: Dispatch<SetStateAction<ChatUiMessage[]>>
-) {
+export function useChatMessageEvents(setMessages: Dispatch<SetStateAction<ChatUiMessage[]>>) {
   const update = (messageId: string, transform: (item: ChatUiMessage) => ChatUiMessage) =>
     setMessages((current) =>
       current.map((item) => (item.id === messageId ? transform(item) : item))

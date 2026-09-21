@@ -84,7 +84,11 @@ export function ChatMessageItem({
               <strong>回答生成失败</strong>
               <span>{item.errorMessage || "服务暂时不可用，请稍后重试。"}</span>
             </div>
-            {onRetry ? <Button size="small" onClick={onRetry}>重试</Button> : null}
+            {onRetry ? (
+              <Button size="small" onClick={onRetry}>
+                重试
+              </Button>
+            ) : null}
           </div>
         ) : null}
         {item.generationStatus === "stopped" ? (
@@ -246,8 +250,9 @@ function GeneratingIndicator() {
 
 function getCitationSources(item: ChatUiMessage): ChatRetrievalSource[] {
   const retrievalEvents =
-    item.retrievalEvents?.filter((event) => event.status === "success" && event.sources.length > 0) ??
-    [];
+    item.retrievalEvents?.filter(
+      (event) => event.status === "success" && event.sources.length > 0
+    ) ?? [];
   const retrievalEvent = retrievalEvents[retrievalEvents.length - 1];
 
   return retrievalEvent?.sources ?? [];
@@ -270,7 +275,8 @@ function CitationSourceList({ sources }: CitationSourceListProps) {
             <span className="chatCitationIndex">[{index + 1}]</span>
             <span className="chatCitationName">{source.documentName}</span>
             <span className="chatCitationMeta">
-              #{source.chunkIndex} · 相关度 {Math.max(0, Math.min(100, Math.round(source.score * 100)))}%
+              #{source.chunkIndex} · 相关度{" "}
+              {Math.max(0, Math.min(100, Math.round(source.score * 100)))}%
             </span>
           </div>
         ))}
