@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { App as AntdApp, Result, Spin, Tag } from "antd";
+import { App as AntdApp, Result, Spin } from "antd";
 
 import { getSharedAgent, type SharedAgentDetail } from "./api";
 import "./agents.less";
@@ -98,19 +98,6 @@ export function SharedAgentPage() {
 
   return (
     <section className="workspace sharedAgentWorkspace">
-      <div className="sharedAgentPanel">
-        <div>
-          <p className="eyebrow">Shared Agent</p>
-          <h1>{agent.name}</h1>
-          <p className="sharedAgentDescription">{agent.description || "这个 Agent 暂无描述。"}</p>
-          <div className="sharedAgentMeta">
-            <Tag color="blue">已发布</Tag>
-            <span>
-              {agent.providerName} / {agent.modelName}
-            </span>
-          </div>
-        </div>
-      </div>
       <div className="sharedAgentChat" id="mia-public-agent-chat" ref={widgetContainerRef} />
     </section>
   );

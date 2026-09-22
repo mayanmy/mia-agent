@@ -1,41 +1,16 @@
 .sharedAgentWorkspace {
-  display: grid;
-  gap: 20px;
-  min-height: calc(100vh - 64px);
-  padding-block: 28px;
-  place-items: start center;
-}
-
-.sharedAgentPanel {
-  display: grid;
-  width: min(640px, 100%);
-  gap: 24px;
-  border: 1px solid #dde3eb;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 32px;
+  align-items: stretch;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding-block: 20px;
 }
 
 .sharedAgentChat {
-  height: min(680px, calc(100vh - 330px));
-  min-height: 460px;
-  width: min(760px, 100%);
-}
-
-.sharedAgentDescription {
-  color: #64748b;
-  font-size: 15px;
-  line-height: 1.7;
-  margin: 16px 0;
-}
-
-.sharedAgentMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  color: #64748b;
-  font-size: 14px;
+  height: calc(100vh - 40px);
+  max-height: 920px;
+  min-height: 520px;
+  width: min(900px, 100%);
 }
 
 .agentWorkspace {
@@ -484,6 +459,17 @@
 }
 
 @media (max-width: 760px) {
+  .sharedAgentWorkspace {
+    padding: 0;
+  }
+
+  .sharedAgentChat {
+    height: 100vh;
+    max-height: none;
+    min-height: 480px;
+    width: 100%;
+  }
+
   .agentFormGrid {
     grid-template-columns: 1fr;
   }

@@ -129,7 +129,7 @@
     '<button class="mia-agent-launcher" type="button" aria-label="打开 Mia 对话"></button>' +
     '<section class="mia-agent-panel" aria-label="Mia 对话窗口">' +
     '<header class="mia-agent-header">' +
-    '<div><div class="mia-agent-title">Mia</div><div class="mia-agent-subtitle">AI Agent</div></div>' +
+    '<div class="mia-agent-heading"><div class="mia-agent-title">Mia</div><div class="mia-agent-subtitle">AI Agent</div></div>' +
     '<select class="mia-agent-selector" aria-label="选择 Agent"></select>' +
     '<button class="mia-agent-fullscreen" type="button" aria-label="全屏">⛶</button>' +
     '<button class="mia-agent-close" type="button" aria-label="关闭">×</button>' +
@@ -171,13 +171,14 @@
     ".mia-agent-widget-fullscreen{position:fixed!important;left:12px!important;top:12px!important;right:auto!important;bottom:auto!important;width:calc(100vw - 24px)!important;height:calc(100vh - 24px)!important;z-index:2147483647}" +
     ".mia-agent-widget-fullscreen .mia-agent-panel{display:flex!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;border-radius:14px;box-shadow:0 24px 80px rgba(15,23,42,.28);min-height:0}" +
     ".mia-agent-widget-inline .mia-agent-launcher{display:none}" +
-    ".mia-agent-widget-inline .mia-agent-panel{display:flex;width:100%;height:100%;max-width:none;max-height:none;box-shadow:none}" +
+    ".mia-agent-widget-inline .mia-agent-panel{display:flex;width:100%;height:100%;max-width:none;max-height:none;border-radius:14px;box-shadow:none}" +
     ".mia-agent-widget-inline .mia-agent-close{display:none}" +
     ".mia-agent-widget-inline .mia-agent-header{cursor:default}" +
-    ".mia-agent-header{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:10px;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;background:#f8fafc;cursor:grab;user-select:none}" +
+    ".mia-agent-header{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid #e5e7eb;background:#f8fafc;cursor:grab;user-select:none}" +
     ".mia-agent-header:active{cursor:grabbing}" +
+    ".mia-agent-heading{min-width:0}" +
     ".mia-agent-title{font-size:16px;font-weight:800;line-height:1.2}" +
-    ".mia-agent-subtitle{margin-top:4px;color:#64748b;font-size:12px;line-height:1.2}" +
+    ".mia-agent-subtitle{margin-top:3px;overflow:hidden;color:#64748b;font-size:12px;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}" +
     ".mia-agent-selector{max-width:132px;height:32px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#111827;padding:0 8px;font:inherit;font-size:12px;outline:none;cursor:pointer}" +
     ".mia-agent-close,.mia-agent-fullscreen{width:30px;height:30px;border:0;border-radius:999px;background:#e5e7eb;color:#334155;font-size:18px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}" +
     ".mia-agent-messages{flex:1 1 auto;min-height:0;overflow:auto;padding:16px;background:#fff}" +
