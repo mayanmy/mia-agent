@@ -31,7 +31,7 @@ SSE token
 
 ### 2.2 非目标
 
-- 本方案不实现 SSE 断线续流。
+- Token 批处理本身不负责 SSE 断线续流；续流已经作为独立传输层能力实现，详见 `docs/chat-sse-resumable-stream-technical-design.md`。
 - 不修改后端 Token 事件的生成和合并策略。
 - 不修改消息数据库结构。
 - 不引入 Redux、Zustand 等全局状态库。
