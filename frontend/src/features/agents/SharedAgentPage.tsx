@@ -5,6 +5,8 @@ import { App as AntdApp, Result, Spin } from "antd";
 import { getSharedAgent, type SharedAgentDetail } from "./api";
 import "./agents.less";
 
+const PUBLIC_WIDGET_ASSET_VERSION = "20260824-2";
+
 export function SharedAgentPage() {
   const { message } = AntdApp.useApp();
   const { token } = useParams();
@@ -57,7 +59,8 @@ export function SharedAgentPage() {
     const script = document.createElement("script");
     // 公开页复用同一份压缩 Widget；它只携带可公开的 agentToken，不会引入工作台登录 Token。
     script.async = true;
-    script.src = `${window.location.origin}/mia-agent-widget.min.js`;
+    // public 目录资产没有 Vite 内容哈希，显式版本用于部署后立即绕过浏览器和 CDN 的旧 Widget 缓存。
+    script.src = `${window.location.origin}/mia-agent-widget.min.js?v=${PUBLIC_WIDGET_ASSET_VERSION}`;
     script.setAttribute("data-agent-token", token);
     const externalUserId = new URLSearchParams(window.location.search).get("user_id");
     if (externalUserId) {

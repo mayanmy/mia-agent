@@ -135,9 +135,12 @@
     '<button class="mia-agent-close" type="button" aria-label="关闭">×</button>' +
     "</header>" +
     '<section class="mia-agent-access-gate mia-agent-hidden">' +
-    '<strong>请输入访问密码</strong><span>此 Agent 已开启访问保护</span>' +
-    '<div><input class="mia-agent-access-password" type="password" autocomplete="current-password" placeholder="访问密码" />' +
+    '<div class="mia-agent-access-card">' +
+    '<div class="mia-agent-access-icon" aria-hidden="true">●</div>' +
+    '<strong>访问受保护</strong><span>输入密码后即可开始与此 Agent 对话</span>' +
+    '<div class="mia-agent-access-form"><input class="mia-agent-access-password" type="password" autocomplete="current-password" placeholder="请输入访问密码" />' +
     '<button class="mia-agent-access-submit" type="button">进入对话</button></div>' +
+    "</div>" +
     "</section>" +
     '<main class="mia-agent-messages"></main>' +
     '<button class="mia-agent-scroll-bottom mia-agent-hidden" type="button" aria-label="回到底部">↓</button>' +
@@ -185,8 +188,11 @@
     ".mia-agent-message{margin-bottom:12px;display:flex;flex-direction:column}" +
     ".mia-agent-message-user{align-items:flex-end}" +
     ".mia-agent-message-assistant{align-items:flex-start}" +
-    ".mia-agent-access-gate{display:grid;gap:8px;margin:16px;padding:16px;border:1px solid #dbe3ef;border-radius:12px;background:#f8fafc;color:#334155;font-size:13px;line-height:1.45}" +
-    ".mia-agent-access-gate strong{color:#111827;font-size:15px}.mia-agent-access-gate span{color:#64748b}.mia-agent-access-gate>div{display:flex;gap:8px}.mia-agent-access-password{min-width:0;flex:1;height:36px;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;font:inherit;outline:none}.mia-agent-access-password:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.mia-agent-access-submit{height:36px;border:0;border-radius:8px;background:#2563eb;color:#fff;padding:0 12px;font:inherit;cursor:pointer;white-space:nowrap}" +
+    ".mia-agent-access-gate{display:flex;flex:1 1 auto;min-height:0;align-items:center;justify-content:center;padding:28px;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);color:#334155;font-size:13px;line-height:1.45}" +
+    ".mia-agent-access-card{display:grid;width:min(100%,400px);gap:10px;justify-items:center;border:1px solid #dbe3ef;border-radius:16px;background:#fff;padding:28px;box-shadow:0 16px 40px rgba(15,23,42,.08);text-align:center}" +
+    ".mia-agent-access-icon{position:relative;display:flex;width:44px;height:44px;align-items:center;justify-content:center;margin-bottom:2px;border-radius:999px;background:#eaf2ff;color:#2563eb;font-size:0}" +
+    ".mia-agent-access-icon:before{content:'';width:14px;height:12px;border:2px solid currentColor;border-radius:3px}.mia-agent-access-icon:after{content:'';position:absolute;width:8px;height:8px;margin-top:-12px;border:2px solid currentColor;border-bottom:0;border-radius:8px 8px 0 0}" +
+    ".mia-agent-access-card strong{color:#111827;font-size:18px;line-height:1.35}.mia-agent-access-card>span{color:#64748b;font-size:13px}.mia-agent-access-form{display:grid;width:100%;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:8px}.mia-agent-access-password{min-width:0;height:42px;border:1px solid #cbd5e1;border-radius:10px;padding:0 12px;font:inherit;outline:none}.mia-agent-access-password:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.mia-agent-access-submit{height:42px;border:0;border-radius:10px;background:#2563eb;color:#fff;padding:0 16px;font:inherit;font-weight:700;cursor:pointer;white-space:nowrap}.mia-agent-access-submit:disabled{background:#93b4f5;cursor:wait}" +
     ".mia-agent-bubble{max-width:84%;overflow-wrap:anywhere;border:1px solid #dde3eb;border-radius:8px;background:#fff;color:#111827;padding:12px 14px;font-size:14px;line-height:1.7}" +
     ".mia-agent-message-user .mia-agent-bubble{white-space:pre-wrap;border-color:#2563eb;background:#2563eb;color:#fff}" +
     ".mia-agent-markdown>:first-child{margin-top:0}.mia-agent-markdown>:last-child{margin-bottom:0}" +
@@ -233,9 +239,14 @@
     ".mia-agent-toast-visible{opacity:1;transform:translate(-50%,0)}" +
     ".mia-agent-toast-success{border-left:4px solid #22c55e}" +
     ".mia-agent-toast-error{border-left:4px solid #ef4444}" +
-    ".mia-agent-hidden{display:none}";
+    ".mia-agent-hidden{display:none}" +
+    "@media(max-width:520px){.mia-agent-widget-inline .mia-agent-panel{border:0;border-radius:0}.mia-agent-access-gate{padding:20px}.mia-agent-access-card{padding:24px 20px}.mia-agent-access-form{grid-template-columns:1fr}.mia-agent-access-submit{width:100%}}";
 
-  if (!document.getElementById(styleId)) {
+  var existingStyle = document.getElementById(styleId);
+  if (existingStyle) {
+    // SPA 路由切换或 Widget 脚本升级时刷新旧样式，避免新 DOM 继续套用缓存中的旧布局。
+    existingStyle.textContent = style.textContent;
+  } else {
     document.head.appendChild(style);
   }
   mountTarget.appendChild(root);
@@ -248,6 +259,7 @@
   var accessPasswordInput = root.querySelector(".mia-agent-access-password");
   var accessSubmitButton = root.querySelector(".mia-agent-access-submit");
   var messagesEl = root.querySelector(".mia-agent-messages");
+  var composerEl = root.querySelector(".mia-agent-composer");
   var scrollBottomButton = root.querySelector(".mia-agent-scroll-bottom");
   var input = root.querySelector(".mia-agent-input");
   var sendButton = root.querySelector(".mia-agent-send");
@@ -556,6 +568,7 @@
     if (entry.agent.passwordRequired && !entry.accessGranted) {
       accessGate.classList.remove("mia-agent-hidden");
       messagesEl.classList.add("mia-agent-hidden");
+      composerEl.classList.add("mia-agent-hidden");
       input.disabled = true;
       imageButton.disabled = true;
       fileButton.disabled = true;
@@ -565,6 +578,7 @@
 
     accessGate.classList.add("mia-agent-hidden");
     messagesEl.classList.remove("mia-agent-hidden");
+    composerEl.classList.remove("mia-agent-hidden");
     updateStreamingControls();
     restoreExternalConversation(entry, shouldGreet);
   }
