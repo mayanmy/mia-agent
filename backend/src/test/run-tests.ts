@@ -10,6 +10,7 @@ import { tests as agentRuntimeTests } from "../modules/agent_runtime/agent-runti
 import { tests as authTests } from "../modules/auth/auth.service.spec";
 import { tests as chatTests } from "../modules/chat/chat.service.spec";
 import { tests as chatSessionTests } from "../modules/chat/chat-sessions.service.spec";
+import { tests as chatStreamTests } from "../modules/chat/chat-streams.service.spec";
 import { tests as externalAccessTests } from "../modules/external_access/external-access.service.spec";
 import { tests as knowledgeTests } from "../modules/knowledge/knowledge.service.spec";
 import { tests as mcpProtocolClientTests } from "../modules/mcp/clients/mcp-protocol.client.spec";
@@ -70,6 +71,7 @@ const tests: TestCase[] = [
   ...knowledgeTests,
   ...retrievalTests,
   ...chatSessionTests,
+  ...chatStreamTests,
   ...externalAccessTests,
   ...chatTests
 ];

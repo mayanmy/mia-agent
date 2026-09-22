@@ -5,6 +5,7 @@ import { App as AntdApp, Input } from "antd";
 import { listAgents, type AgentListItem } from "../agents/api";
 import {
   archiveChatSession,
+  cancelChatStream,
   createChatSession,
   deleteChatSession,
   getChatSessionMessages,
@@ -35,6 +36,7 @@ export function ChatPage() {
   const { message: messageApi, modal } = AntdApp.useApp();
   const navigate = useNavigate();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const activeStreamIdRef = useRef<string | null>(null);
   const streamStartedAtRef = useRef<Map<string, number>>(new Map());
   const firstTokenRecordedRef = useRef<Set<string>>(new Set());
   const disposedRef = useRef(false);
@@ -105,6 +107,7 @@ export function ChatPage() {
 
     // 切换 Agent 时先停止旧流，避免旧 Agent 的 token 混入新 Agent 恢复出的会话。
     clearBufferedTokens();
+    cancelActiveStream();
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setSending(false);
@@ -189,6 +192,7 @@ export function ChatPage() {
       disposedRef.current = true;
       // 页面离开时必须中断 SSE，避免后端继续生成并让旧回调写入已销毁的对话界面。
       clearBufferedTokens();
+      cancelActiveStream();
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
     };
@@ -236,6 +240,7 @@ export function ChatPage() {
   /** 返回卡片列表时中止生成并清空 URL 选择，详情状态由现有切换 Effect 统一复位。 */
   function handleBackToAgents() {
     clearBufferedTokens();
+    cancelActiveStream();
     abortControllerRef.current?.abort();
     setSearchParams({});
   }
@@ -266,6 +271,7 @@ export function ChatPage() {
     const requestVersion = ++sessionLoadVersionRef.current;
     historyLoadVersionRef.current += 1;
     clearBufferedTokens();
+    cancelActiveStream();
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setSending(false);
@@ -547,6 +553,7 @@ export function ChatPage() {
     }
     setSending(true);
     const controller = new AbortController();
+    let createdStreamId: string | null = null;
     abortControllerRef.current = controller;
 
     try {
@@ -561,6 +568,10 @@ export function ChatPage() {
         },
         {
           signal: controller.signal,
+          onStreamCreated: (streamId) => {
+            createdStreamId = streamId;
+            activeStreamIdRef.current = streamId;
+          },
           onEvent: (event) => {
             // Abort 后仍可能有一个已经排队的 SSE 事件到达，不能让它更新已停止或已卸载的页面。
             if (disposedRef.current || controller.signal.aborted) {
@@ -694,6 +705,9 @@ export function ChatPage() {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
       }
+      if (activeStreamIdRef.current === createdStreamId) {
+        activeStreamIdRef.current = null;
+      }
       streamStartedAtRef.current.delete(assistantMessageId);
       firstTokenRecordedRef.current.delete(assistantMessageId);
 
@@ -730,7 +744,17 @@ export function ChatPage() {
   }
 
   function handleStop() {
+    cancelActiveStream();
     abortControllerRef.current?.abort();
+  }
+
+  /** 主动离开或停止必须通知服务端；只有网络异常才允许进入 60 秒续流宽限期。 */
+  function cancelActiveStream() {
+    const streamId = activeStreamIdRef.current;
+    activeStreamIdRef.current = null;
+    if (streamId) {
+      void cancelChatStream(streamId).catch(() => undefined);
+    }
   }
 
   function handleRetryMessage(assistantMessageId: string) {

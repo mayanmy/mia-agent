@@ -20,6 +20,7 @@ import { WorkspaceRequired } from "../../core/auth/workspace.decorator";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import { RequestWithId } from "../../core/request-id.middleware";
 import { ChatService } from "./chat.service";
+import { ChatStreamsService } from "./chat-streams.service";
 import { ChatCompletionDto, ChatCompletionResult } from "./dto/chat.dto";
 import {
   ChatMessageQueryDto,
@@ -33,7 +34,10 @@ import {
 @Roles(UserRole.ADMIN, UserRole.USER)
 @WorkspaceRequired()
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly chatStreamsService: ChatStreamsService
+  ) {}
 
   /** 非流式对话入口，透传当前用户与 requestId 给编排层。 */
   @Post("completions")
@@ -132,6 +136,78 @@ export class ChatController {
     return null;
   }
 
+  /** 创建与 HTTP 连接解耦的生成任务，后续通过 streamId 订阅和断线补发。 */
+  @Post("streams")
+  createResumableStream(
+    @Body() payload: ChatCompletionDto,
+    @CurrentUser() currentUser: CurrentUserDto,
+    @Req() request: IncomingMessage & RequestWithId
+  ) {
+    return this.chatStreamsService.createStream(payload, {
+      requestId: request.requestId,
+      userId: currentUser.id
+    });
+  }
+
+  /** 按事件游标订阅生成任务；网络重连时只补发 after 之后的事件。 */
+  @Get("streams/:streamId/events")
+  async subscribeResumableStream(
+    @Param("streamId") streamId: string,
+    @Query("after") after: string | undefined,
+    @CurrentUser() currentUser: CurrentUserDto,
+    @Req() request: IncomingMessage,
+    @Res() response: ServerResponse
+  ): Promise<void> {
+    // SSE Headers 发出后无法再由全局异常过滤器返回标准 404，因此必须先完成归属校验。
+    this.chatStreamsService.assertStreamAccess(streamId, currentUser.id);
+    const connectionController = new AbortController();
+    const detach = () => connectionController.abort();
+    request.on("aborted", detach);
+    response.on("close", detach);
+    response.statusCode = 200;
+    response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    response.setHeader("Cache-Control", "no-cache, no-transform");
+    response.setHeader("Connection", "keep-alive");
+    response.setHeader("X-Accel-Buffering", "no");
+    response.flushHeaders?.();
+    const afterEventId = this.parseEventCursor(after);
+    const heartbeat = setInterval(() => {
+      if (!response.writableEnded) {
+        response.write("event: ping\n");
+        response.write(`data: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+      }
+    }, 15000);
+
+    try {
+      for await (const event of this.chatStreamsService.subscribe(
+        streamId,
+        currentUser.id,
+        afterEventId,
+        connectionController.signal
+      )) {
+        if (connectionController.signal.aborted || response.writableEnded) break;
+        response.write(`id: ${event.id}\n`);
+        response.write(`event: ${event.type}\n`);
+        response.write(`data: ${JSON.stringify(event.data)}\n\n`);
+      }
+    } finally {
+      clearInterval(heartbeat);
+      request.off("aborted", detach);
+      response.off("close", detach);
+      if (!response.writableEnded) response.end();
+    }
+  }
+
+  /** 用户主动停止时立即取消上游生成；网络断开不会调用此接口。 */
+  @Delete("streams/:streamId")
+  cancelResumableStream(
+    @Param("streamId") streamId: string,
+    @CurrentUser() currentUser: CurrentUserDto
+  ): null {
+    this.chatStreamsService.cancelStream(streamId, currentUser.id);
+    return null;
+  }
+
   /**
    * 建立 SSE 响应并把客户端断开转换为 AbortSignal。
    * 心跳用于穿透反向代理空闲超时，事件内容由 ChatService 统一定义。
@@ -179,5 +255,11 @@ export class ChatController {
       response.off("close", abort);
       response.end();
     }
+  }
+
+  private parseEventCursor(value: string | undefined): number {
+    if (!value) return 0;
+    const cursor = Number(value);
+    return Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0;
   }
 }

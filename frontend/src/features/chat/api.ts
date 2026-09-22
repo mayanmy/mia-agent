@@ -275,6 +275,8 @@ export type ChatStreamEventData = {
 
 /** 浏览器消费的单个 Chat SSE 事件。 */
 export type ChatStreamEvent = {
+  /** 服务端可恢复流中的递增游标；ping 等瞬时事件可以为空。 */
+  eventId?: number;
   /** 决定 UI 状态流转方式的事件名称。 */
   type: ChatStreamEventType;
   /** 与事件类型对应的可选字段集合。 */
@@ -303,8 +305,15 @@ export type GetChatSessionMessagesOptions = {
 export type StreamChatCompletionOptions = {
   /** 用于停止读取并取消上游请求的信号。 */
   signal?: AbortSignal;
+  /** 创建服务端生成任务后立即回传 ID，供用户停止和页面离开时主动取消。 */
+  onStreamCreated?: (streamId: string) => void;
   /** 每解析出一个完整 SSE 事件时调用。 */
   onEvent: (event: ChatStreamEvent) => void;
+};
+
+type ChatStreamCreateResponse = {
+  streamId: string;
+  reconnectWindowMs: number;
 };
 
 /** 获取当前成员在保留型 Agent 下的个人会话；单次模式会返回空会话。 */
@@ -427,53 +436,151 @@ export async function streamChatCompletion(
   payload: ChatCompletionPayload,
   options: StreamChatCompletionOptions
 ): Promise<void> {
-  const response = await fetchWithAuth("/api/v1/chat/stream", {
+  const stream = await request<ChatStreamCreateResponse>("/api/v1/chat/streams", {
     method: "POST",
     body: JSON.stringify(payload),
     signal: options.signal
   });
+  options.onStreamCreated?.(stream.streamId);
 
-  if (!response.body) {
-    throw new Error("流式对话请求失败");
+  let lastEventId = 0;
+  let completed = false;
+  let retryAttempt = 0;
+  const reconnectDeadline = Date.now() + stream.reconnectWindowMs;
+
+  while (!completed && !options.signal?.aborted) {
+    try {
+      const response = await fetchWithAuth(
+        `/api/v1/chat/streams/${encodeURIComponent(stream.streamId)}/events?after=${lastEventId}`,
+        {
+          method: "GET",
+          headers: { Accept: "text/event-stream" },
+          signal: options.signal
+        }
+      );
+
+      if (!response.body) {
+        throw new RetryableChatStreamError("流式对话响应为空");
+      }
+
+      if (!response.ok) {
+        throw new NonRetryableChatStreamError(await readErrorMessage(response));
+      }
+
+      const result = await consumeChatEventStream(response.body, lastEventId, options);
+      lastEventId = result.lastEventId;
+      completed = result.completed;
+      if (!completed) {
+        throw new RetryableChatStreamError("流式连接已断开");
+      }
+      retryAttempt = 0;
+    } catch (error) {
+      if (options.signal?.aborted || isAbortError(error)) throw error;
+      if (error instanceof ChatStreamConsumerError) throw error.cause;
+      if (error instanceof NonRetryableChatStreamError || Date.now() >= reconnectDeadline)
+        throw error;
+
+      const delayMs = Math.min(500 * 2 ** retryAttempt, 5_000);
+      retryAttempt += 1;
+      await waitForReconnect(delayMs, options.signal);
+    }
   }
+}
 
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
-  }
+/** 用户主动停止或离开页面时取消服务端任务；网络波动不调用此接口。 */
+export function cancelChatStream(streamId: string): Promise<null> {
+  return request<null>(`/api/v1/chat/streams/${encodeURIComponent(streamId)}`, {
+    method: "DELETE"
+  });
+}
 
-  const reader = response.body.getReader();
+async function consumeChatEventStream(
+  body: ReadableStream<Uint8Array>,
+  initialEventId: number,
+  options: StreamChatCompletionOptions
+): Promise<{ lastEventId: number; completed: boolean }> {
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let lastEventId = initialEventId;
+  let completed = false;
 
-  while (true) {
-    const { done, value } = await reader.read();
+  const consumeRawEvent = (rawEvent: string) => {
+    const event = parseSseEvent(rawEvent);
+    if (!event) return;
 
-    if (done) {
-      break;
+    if (event.eventId !== undefined) {
+      if (event.eventId <= lastEventId) return;
+      lastEventId = event.eventId;
     }
 
-    buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split(/\n\n/u);
-    buffer = events.pop() ?? "";
+    try {
+      options.onEvent(event);
+    } catch (error) {
+      throw new ChatStreamConsumerError(error);
+    }
 
-    for (const rawEvent of events) {
-      const event = parseSseEvent(rawEvent);
+    if (event.type === "message_end" || event.type === "error") completed = true;
+  };
 
-      if (event) {
-        options.onEvent(event);
+  try {
+    while (!completed) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split(/\n\n/u);
+      buffer = events.pop() ?? "";
+      for (const rawEvent of events) {
+        consumeRawEvent(rawEvent);
+        if (completed) break;
       }
     }
+  } catch (error) {
+    if (error instanceof ChatStreamConsumerError) throw error;
+    if (isAbortError(error)) throw error;
+    throw new RetryableChatStreamError(error instanceof Error ? error.message : "流式连接已断开");
+  } finally {
+    reader.releaseLock();
   }
 
-  reader.releaseLock();
+  if (!completed && buffer.trim()) {
+    consumeRawEvent(buffer);
+  }
 
-  if (buffer.trim()) {
-    const event = parseSseEvent(buffer);
+  return { lastEventId, completed };
+}
 
-    if (event) {
-      options.onEvent(event);
+class RetryableChatStreamError extends Error {}
+
+class NonRetryableChatStreamError extends Error {}
+
+class ChatStreamConsumerError extends Error {
+  constructor(readonly cause: unknown) {
+    super("chat stream consumer failed");
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function waitForReconnect(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
+
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(done, delayMs);
+    const abort = () => {
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    function done() {
+      signal?.removeEventListener("abort", abort);
+      resolve();
     }
-  }
+    signal?.addEventListener("abort", abort, { once: true });
+  });
 }
 
 /** 尽量读取后端统一错误消息，响应体异常时回退到稳定文案。 */
@@ -489,6 +596,7 @@ async function readErrorMessage(response: Response): Promise<string> {
 /** 将单个 SSE 文本块解析为前端事件；畸形 JSON 会转换为可展示的 error 事件。 */
 function parseSseEvent(rawEvent: string): ChatStreamEvent | null {
   const lines = rawEvent.split(/\r?\n/u);
+  const eventIdLine = lines.find((line) => line.startsWith("id:"));
   const eventTypeLine = lines.find((line) => line.startsWith("event:"));
   const dataLines = lines.filter((line) => line.startsWith("data:"));
   const type = eventTypeLine?.slice("event:".length).trim() as ChatStreamEventType | undefined;
@@ -499,7 +607,12 @@ function parseSseEvent(rawEvent: string): ChatStreamEvent | null {
   }
 
   try {
+    const parsedEventId = eventIdLine ? Number(eventIdLine.slice("id:".length).trim()) : undefined;
     return {
+      eventId:
+        parsedEventId !== undefined && Number.isSafeInteger(parsedEventId)
+          ? parsedEventId
+          : undefined,
       type,
       data: dataText ? JSON.parse(dataText) : {}
     };

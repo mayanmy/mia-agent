@@ -9,6 +9,7 @@ import { ToolsModule } from "../tools/tools.module";
 import { ChatController } from "./chat.controller";
 import { ChatSessionsService } from "./chat-sessions.service";
 import { ChatService } from "./chat.service";
+import { ChatStreamsService } from "./chat-streams.service";
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { ChatService } from "./chat.service";
     RetrievalModule
   ],
   controllers: [ChatController],
-  providers: [ChatService, ChatSessionsService],
+  providers: [ChatService, ChatSessionsService, ChatStreamsService],
   exports: [ChatService]
 })
 export class ChatModule {}
