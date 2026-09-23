@@ -80,17 +80,7 @@ export const providerTemplates: ProviderTemplate[] = [
     accent: "#7b61ff"
   },
   {
-    name: "智谱 GLM‑5",
-    author: "mia",
-    downloads: "176,351",
-    description: "智谱AI GLM‑5 系列",
-    providerType: "OPENAI_COMPATIBLE",
-    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
-    logo: "G",
-    accent: "#0084ff"
-  },
-  {
-    name: "文心一言(千帆兼容)",
+    name: "文心一言",
     author: "mia",
     downloads: "143,628",
     description: "百度文心一言ERNIE",
@@ -100,35 +90,46 @@ export const providerTemplates: ProviderTemplate[] = [
     accent: "#2f80ed"
   },
   {
-    name: "OpenAI",
+    name: "智谱 GLM‑5",
     author: "mia",
-    downloads: "687,536",
-    description: "OpenAI 当前的语言、嵌入、内容审核与音频模型。",
+    downloads: "176,351",
+    description: "智谱AI GLM‑5 系列",
     providerType: "OPENAI_COMPATIBLE",
-    baseUrl: "https://api.openai.com/v1",
-    logo: "O",
-    accent: "#16c784"
-  },
-  {
-    name: "Anthropic",
-    author: "mia",
-    downloads: "173,537",
-    description: "Anthropic 的强大模型。",
-    providerType: "ANTHROPIC",
-    baseUrl: "https://api.anthropic.com/v1",
-    logo: "AI",
-    accent: "#d6a170"
-  },
-  {
-    name: "Gemini",
-    author: "mia",
-    downloads: "347,369",
-    description: "谷歌提供的 Gemini 模型。",
-    providerType: "GEMINI",
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-    logo: "✦",
-    accent: "#4f7cff"
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    logo: "G",
+    accent: "#0084ff"
   }
+  // },
+  // {
+  //   name: "OpenAI",
+  //   author: "mia",
+  //   downloads: "687,536",
+  //   description: "OpenAI 当前的语言、嵌入、内容审核与音频模型。",
+  //   providerType: "OPENAI_COMPATIBLE",
+  //   baseUrl: "https://api.openai.com/v1",
+  //   logo: "O",
+  //   accent: "#16c784"
+  // },
+  // {
+  //   name: "Anthropic",
+  //   author: "mia",
+  //   downloads: "173,537",
+  //   description: "Anthropic 的强大模型。",
+  //   providerType: "ANTHROPIC",
+  //   baseUrl: "https://api.anthropic.com/v1",
+  //   logo: "AI",
+  //   accent: "#d6a170"
+  // },
+  // {
+  //   name: "Gemini",
+  //   author: "mia",
+  //   downloads: "347,369",
+  //   description: "谷歌提供的 Gemini 模型。",
+  //   providerType: "GEMINI",
+  //   baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+  //   logo: "✦",
+  //   accent: "#4f7cff"
+  // }
   // {
   //   name: "Amazon Bedrock",
   //   author: "mia",
