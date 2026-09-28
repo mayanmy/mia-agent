@@ -50,7 +50,7 @@ export const tests = [
               knowledgeBaseId: knowledgeBaseIds[0],
               documentId: "document-id",
               documentName: "manual.md",
-              chunkId: "chunk-id",
+              chunkId: `${knowledgeBaseIds[0]}-chunk-id`,
               chunkIndex: 0,
               content: "chunk content",
               score: 0.8
@@ -62,6 +62,7 @@ export const tests = [
         getRetrievalConfigs: async () => [
           {
             id: "kb-a",
+            workspaceId: "workspace-a",
             embeddingModelConfigId: "embedding-a",
             embeddingDimension: 1536,
             vectorStoreType: "PGVECTOR",
@@ -69,12 +70,14 @@ export const tests = [
           },
           {
             id: "kb-b",
+            workspaceId: "workspace-a",
             embeddingModelConfigId: "embedding-b",
             embeddingDimension: 1024,
             vectorStoreType: "PGVECTOR",
             vectorCollectionName: "kb-kb-b"
           }
-        ]
+        ],
+        searchKeywordChunks: async () => []
       };
       const modelProvidersService = {
         createEmbedding: async ({ modelConfigId }: { modelConfigId: string }) => {
@@ -117,10 +120,22 @@ export const tests = [
         getRetrievalConfigs: async () => [
           {
             id: "kb-a",
+            workspaceId: "workspace-a",
             embeddingModelConfigId: "embedding-a",
             embeddingDimension: 1536,
             vectorStoreType: "PGVECTOR",
             vectorCollectionName: "kb-kb-a"
+          }
+        ],
+        searchKeywordChunks: async () => [
+          {
+            knowledgeBaseId: "kb-a",
+            documentId: "document-id",
+            documentName: "manual.md",
+            chunkId: "keyword-result",
+            chunkIndex: 0,
+            content: "keyword fallback",
+            score: 1
           }
         ]
       };
@@ -164,12 +179,14 @@ export const tests = [
           getRetrievalConfigs: async () => [
             {
               id: "kb-a",
+              workspaceId: "workspace-a",
               embeddingModelConfigId: "embedding-a",
               embeddingDimension: 2,
               vectorStoreType: "PGVECTOR",
               vectorCollectionName: "kb-a"
             }
-          ]
+          ],
+          searchKeywordChunks: async () => []
         } as never,
         {
           createEmbedding: async ({ signal: requestSignal }: { signal?: AbortSignal }) => {
@@ -179,8 +196,24 @@ export const tests = [
         } as never,
         {
           search: async () => [
-            { content: "high", score: 0.9 },
-            { content: "low", score: 0.4 }
+            {
+              knowledgeBaseId: "kb-a",
+              documentId: "document-id",
+              documentName: "manual.md",
+              chunkId: "high",
+              chunkIndex: 0,
+              content: "high",
+              score: 0.9
+            },
+            {
+              knowledgeBaseId: "kb-a",
+              documentId: "document-id",
+              documentName: "manual.md",
+              chunkId: "low",
+              chunkIndex: 1,
+              content: "low",
+              score: 0.4
+            }
           ]
         } as never
       );
@@ -206,6 +239,143 @@ export const tests = [
       assert.deepEqual(
         resultWithInvalidThreshold.sources.map((source) => source.content),
         ["high", "low"]
+      );
+    }
+  },
+  {
+    name: "RetrievalService boosts chunks matched by both vector and keyword channels",
+    run: async () => {
+      const source = (chunkId: string, content: string, score: number) => ({
+        knowledgeBaseId: "kb-a",
+        documentId: "document-id",
+        documentName: "manual.md",
+        chunkId,
+        chunkIndex: 0,
+        content,
+        score
+      });
+      const service = new RetrievalService(
+        {
+          getRetrievalConfigs: async () => [
+            {
+              id: "kb-a",
+              workspaceId: "workspace-a",
+              embeddingModelConfigId: "embedding-a",
+              embeddingDimension: 2,
+              vectorStoreType: "PGVECTOR",
+              vectorCollectionName: "kb-a"
+            }
+          ],
+          searchKeywordChunks: async () => [
+            source("shared", "shared result", 0.9),
+            source("keyword-only", "ERR_DEPLOY_042", 0.95)
+          ]
+        } as never,
+        { createEmbedding: async () => ({ embeddings: [[0.1, 0.2]] }) } as never,
+        {
+          search: async () => [
+            source("shared", "shared result", 0.8),
+            source("vector-only", "semantic result", 0.85)
+          ]
+        } as never
+      );
+
+      const result = await service.retrieveKnowledgeContext({
+        query: "ERR_DEPLOY_042 是什么",
+        knowledgeBaseIds: ["kb-a"]
+      });
+
+      assert.equal(result.sources[0].chunkId, "shared");
+      assert.deepEqual(result.sources[0].matchedBy, ["vector", "keyword"]);
+      assert.equal(result.sources.filter((item) => item.chunkId === "shared").length, 1);
+      assert.deepEqual(result.diagnostics, {
+        strategy: "hybrid_rrf",
+        vectorCandidateCount: 2,
+        keywordCandidateCount: 2,
+        fusedCandidateCount: 3,
+        degradedChannels: []
+      });
+    }
+  },
+  {
+    name: "RetrievalService degrades to keyword retrieval when embedding provider fails",
+    run: async () => {
+      const service = new RetrievalService(
+        {
+          getRetrievalConfigs: async () => [
+            {
+              id: "kb-a",
+              workspaceId: "workspace-a",
+              embeddingModelConfigId: "embedding-a",
+              embeddingDimension: 2,
+              vectorStoreType: "PGVECTOR",
+              vectorCollectionName: "kb-a"
+            }
+          ],
+          searchKeywordChunks: async () => [
+            {
+              knowledgeBaseId: "kb-a",
+              documentId: "document-id",
+              documentName: "manual.md",
+              chunkId: "keyword-only",
+              chunkIndex: 0,
+              content: "exact keyword result",
+              score: 1
+            }
+          ]
+        } as never,
+        {
+          createEmbedding: async () => {
+            throw new Error("provider unavailable");
+          }
+        } as never,
+        {} as never
+      );
+
+      const result = await service.retrieveKnowledgeContext({
+        query: "exact keyword",
+        knowledgeBaseIds: ["kb-a"]
+      });
+
+      assert.equal(result.sources[0].chunkId, "keyword-only");
+      assert.deepEqual(result.sources[0].matchedBy, ["keyword"]);
+      assert.deepEqual(result.diagnostics?.degradedChannels, ["vector"]);
+    }
+  },
+  {
+    name: "RetrievalService fails when vector and keyword channels both fail",
+    run: async () => {
+      const service = new RetrievalService(
+        {
+          getRetrievalConfigs: async () => [
+            {
+              id: "kb-a",
+              workspaceId: "workspace-a",
+              embeddingModelConfigId: "embedding-a",
+              embeddingDimension: 2,
+              vectorStoreType: "PGVECTOR",
+              vectorCollectionName: "kb-a"
+            }
+          ],
+          searchKeywordChunks: async () => {
+            throw new Error("database timeout");
+          }
+        } as never,
+        {
+          createEmbedding: async () => {
+            throw new Error("provider unavailable");
+          }
+        } as never,
+        {} as never
+      );
+
+      await assert.rejects(
+        () =>
+          service.retrieveKnowledgeContext({
+            query: "hello",
+            knowledgeBaseIds: ["kb-a"]
+          }),
+        /向量检索和关键词检索均失败/u
       );
     }
   }

@@ -18,6 +18,8 @@ import {
   KnowledgeBaseQueryDto,
   KnowledgeBaseUpdateDto,
   KnowledgeBaseRetrievalConfig,
+  KnowledgeKeywordSearchRequest,
+  KnowledgeKeywordSearchResult,
   KnowledgeDocumentStatus,
   KnowledgeDocumentListItem,
   KnowledgeDocumentQueryDto,
@@ -49,6 +51,19 @@ const KNOWLEDGE_DOCUMENT_STATUSES: KnowledgeDocumentStatus[] = [
   "failed",
   "deleted"
 ];
+const KEYWORD_QUERY_MAX_LENGTH = 1_000;
+const KEYWORD_CANDIDATE_MAX_LIMIT = 100;
+const KEYWORD_QUERY_TIMEOUT_MS = 2_000;
+
+type KeywordRetrievalRow = {
+  knowledge_base_id: string;
+  document_id: string;
+  document_name: string;
+  chunk_id: string;
+  chunk_index: number;
+  content: string;
+  score: number;
+};
 
 type KnowledgeBaseWithStats = Prisma.KnowledgeBaseGetPayload<{
   include: {
@@ -786,6 +801,98 @@ export class KnowledgeService {
       embeddingDimension: knowledgeBase.embeddingDimension,
       vectorStoreType: this.toVectorNamespace(knowledgeBase).type,
       vectorCollectionName: knowledgeBase.vectorCollectionName
+    }));
+  }
+
+  /**
+   * 使用 PostgreSQL FTS + pg_trgm 执行关键词召回。
+   *
+   * `simple` FTS 适合英文、路径和错误码，trigram 补齐中文连续文本与无空格标识符；
+   * 查询只允许命中已完成索引的文档，并通过数据库 statement_timeout 限制慢查询影响面。
+   */
+  async searchKeywordChunks({
+    workspaceId,
+    knowledgeBaseIds,
+    query,
+    limit
+  }: KnowledgeKeywordSearchRequest): Promise<KnowledgeKeywordSearchResult[]> {
+    const normalizedQuery = query.trim().slice(0, KEYWORD_QUERY_MAX_LENGTH);
+    const normalizedLimit = Math.min(
+      Math.max(Number.isInteger(limit) && limit > 0 ? limit : 1, 1),
+      KEYWORD_CANDIDATE_MAX_LIMIT
+    );
+
+    if (!normalizedQuery || knowledgeBaseIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.prisma.$transaction(async (transaction) => {
+      // SET LOCAL 仅在当前事务生效，避免一次异常查询污染连接池中的后续请求。
+      await transaction.$queryRawUnsafe<Array<{ set_config: string }>>(
+        "SELECT set_config('statement_timeout', $1, true)",
+        String(KEYWORD_QUERY_TIMEOUT_MS)
+      );
+
+      return transaction.$queryRawUnsafe<KeywordRetrievalRow[]>(
+        `WITH input AS (
+          SELECT
+            websearch_to_tsquery('simple', $3::text) AS ts_query,
+            lower($3::text) AS normalized_query
+        ), scored AS (
+          SELECT
+            c."knowledge_base_id",
+            c."document_id",
+            d."original_filename" AS "document_name",
+            c."id" AS "chunk_id",
+            c."chunk_index",
+            c."content",
+            ts_rank_cd(to_tsvector('simple', c."content"), input.ts_query, 32) AS fts_score,
+            similarity(lower(c."content"), input.normalized_query) AS trigram_score,
+            CASE
+              WHEN strpos(lower(c."content"), input.normalized_query) > 0 THEN 1.0
+              ELSE 0.0
+            END AS exact_score
+          FROM "knowledge_chunks" c
+          INNER JOIN "knowledge_documents" d ON d."id" = c."document_id"
+          CROSS JOIN input
+          WHERE c."workspace_id" = $1::uuid
+            AND d."workspace_id" = $1::uuid
+            AND c."knowledge_base_id" = ANY($2::uuid[])
+            AND c."deleted_at" IS NULL
+            AND d."deleted_at" IS NULL
+            AND d."status" = 'indexed'
+            AND (
+              to_tsvector('simple', c."content") @@ input.ts_query
+              OR lower(c."content") % input.normalized_query
+              OR strpos(lower(c."content"), input.normalized_query) > 0
+            )
+        )
+        SELECT
+          "knowledge_base_id",
+          "document_id",
+          "document_name",
+          "chunk_id",
+          "chunk_index",
+          "content",
+          LEAST(1.0, GREATEST(fts_score, trigram_score, exact_score))::double precision AS "score"
+        FROM scored
+        ORDER BY "score" DESC, "chunk_id" ASC
+        LIMIT $4`,
+        workspaceId,
+        knowledgeBaseIds,
+        normalizedQuery,
+        normalizedLimit
+      );
+    });
+
+    return rows.map((row) => ({
+      knowledgeBaseId: row.knowledge_base_id,
+      documentId: row.document_id,
+      documentName: row.document_name,
+      chunkId: row.chunk_id,
+      chunkIndex: row.chunk_index,
+      content: row.content,
+      score: Math.max(0, Math.min(1, Number(row.score)))
     }));
   }
 

@@ -12,8 +12,24 @@ export type RetrievalSource = {
   chunkIndex: number;
   /** 进入 RAG 上下文的切片正文。 */
   content: string;
-  /** 向量相似度分数，越高表示越相关。 */
+  /** 融合并校准后的相关度分数，范围为 0-1。 */
   score: number;
+  /** 向量通道原始相似度；关键词单路命中时为空。 */
+  vectorScore?: number;
+  /** 关键词通道原始相关度；向量单路命中时为空。 */
+  keywordScore?: number;
+  /** 归一化后的 RRF 排名融合分数。 */
+  fusionScore?: number;
+  /** 实际命中的召回通道，用于运行追踪和质量分析。 */
+  matchedBy?: Array<"vector" | "keyword">;
+};
+
+export type RetrievalDiagnostics = {
+  strategy: "hybrid_rrf";
+  vectorCandidateCount: number;
+  keywordCandidateCount: number;
+  fusedCandidateCount: number;
+  degradedChannels: Array<"vector" | "keyword">;
 };
 
 /** Retrieval 模块返回给 Chat/Workflow 的完整可序列化上下文。 */
@@ -24,6 +40,8 @@ export type RetrievalContext = {
   sources: RetrievalSource[];
   /** 包含 Embedding 与向量查询的总耗时毫秒数。 */
   elapsedMs: number;
+  /** 双路召回质量与降级信息，不包含敏感内容。 */
+  diagnostics?: RetrievalDiagnostics;
 };
 
 /** 跨模块发起知识检索所需的稳定参数。 */

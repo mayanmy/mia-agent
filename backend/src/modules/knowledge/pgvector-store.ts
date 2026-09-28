@@ -112,6 +112,7 @@ export class PgvectorVectorStore implements VectorStore {
       INNER JOIN "knowledge_documents" d ON d."id" = c."document_id"
       WHERE c."deleted_at" IS NULL
         AND d."deleted_at" IS NULL
+        AND d."status" = 'indexed'
         AND c."workspace_id" = $2::uuid
         AND d."workspace_id" = $2::uuid
         AND e."workspace_id" = $2::uuid

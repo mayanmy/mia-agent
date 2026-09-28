@@ -56,7 +56,8 @@ export class RetrievalNodeExecutor implements WorkflowNodeExecutor {
             chunkIndex: source.chunkIndex,
             score: source.score
           })),
-          elapsedMs: context.elapsedMs
+          elapsedMs: context.elapsedMs,
+          diagnostics: context.diagnostics
         }
       };
     } catch (error) {

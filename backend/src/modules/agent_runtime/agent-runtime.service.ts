@@ -185,6 +185,7 @@ export class AgentRuntimeService {
           type: "retrieval_completed",
           data: {
             elapsedMs: retrievalContext.elapsedMs,
+            diagnostics: retrievalContext.diagnostics,
             sources: retrievalContext.sources.map((source) => ({
               knowledgeBaseId: source.knowledgeBaseId,
               documentId: source.documentId,
@@ -192,6 +193,10 @@ export class AgentRuntimeService {
               chunkId: source.chunkId,
               chunkIndex: source.chunkIndex,
               score: source.score,
+              ...(source.matchedBy ? { matchedBy: source.matchedBy } : {}),
+              ...(source.vectorScore !== undefined ? { vectorScore: source.vectorScore } : {}),
+              ...(source.keywordScore !== undefined ? { keywordScore: source.keywordScore } : {}),
+              ...(source.fusionScore !== undefined ? { fusionScore: source.fusionScore } : {}),
               contentPreview: this.requirePromptBuilder().formatRetrievalSourcePreview(
                 source.content
               )
@@ -999,11 +1004,16 @@ export class AgentRuntimeService {
       await this.completeStep(step, {
         elapsedMs: context.elapsedMs,
         chunkCount: context.sources.length,
+        diagnostics: context.diagnostics ?? null,
         sources: context.sources.map((source) => ({
           knowledgeBaseId: source.knowledgeBaseId,
           documentId: source.documentId,
           chunkId: source.chunkId,
           score: source.score,
+          matchedBy: source.matchedBy ?? [],
+          vectorScore: source.vectorScore ?? null,
+          keywordScore: source.keywordScore ?? null,
+          fusionScore: source.fusionScore ?? null,
           contentPreview: this.requirePromptBuilder().formatRetrievalSourcePreview(source.content)
         }))
       });

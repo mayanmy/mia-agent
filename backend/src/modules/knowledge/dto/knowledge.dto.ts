@@ -126,6 +126,30 @@ export type KnowledgeBaseRetrievalConfig = {
   vectorCollectionName: string;
 };
 
+/** Retrieval 模块通过 Knowledge Service 发起关键词召回，禁止跨模块直接查询 Chunk 表。 */
+export type KnowledgeKeywordSearchRequest = {
+  /** 已由知识库运行配置确认的项目空间。 */
+  workspaceId: string;
+  /** Agent 已绑定且当前启用的知识库。 */
+  knowledgeBaseIds: string[];
+  /** 归一化后的用户查询，服务端仍会限制最大长度。 */
+  query: string;
+  /** 关键词通道候选集上限。 */
+  limit: number;
+};
+
+/** 关键词检索命中；字段与向量检索来源对齐，便于 Retrieval 模块无损融合。 */
+export type KnowledgeKeywordSearchResult = {
+  knowledgeBaseId: string;
+  documentId: string;
+  documentName: string;
+  chunkId: string;
+  chunkIndex: number;
+  content: string;
+  /** FTS、trigram 与精确短语命中的综合分数，范围为 0-1。 */
+  score: number;
+};
+
 /** 文件上传适配层传给 Knowledge Service 的最小文件结构。 */
 export type UploadedKnowledgeFile = {
   /** 用户上传时的原始文件名。 */
