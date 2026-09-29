@@ -353,8 +353,8 @@
   backdrop-filter: blur(12px);
   background: rgb(255 255 255 / 92%);
   border: 1px solid #e2e7ee;
-  border-radius: 12px;
-  box-shadow: 0 5px 18px rgb(15 23 42 / 10%);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgb(23 32 43 / 9%);
   display: flex;
   // 仅实际可见的身份和操作浮层恢复点击能力。
   pointer-events: auto;
@@ -363,7 +363,7 @@
 .workflowEditorIdentity {
   gap: 8px;
   max-width: min(420px, 38vw);
-  padding: 5px 9px 5px 5px;
+  padding: 3px 8px 3px 3px;
 }
 
 .workflowEditorIdentityText {
@@ -379,12 +379,13 @@
 
 .workflowEditorIdentityText span {
   color: #718096;
-  font-size: 11px;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
   white-space: nowrap;
 }
 
 .workflowEditorFloatingActions {
-  padding: 5px;
+  padding: 4px;
 }
 
 .workflowEditorFloatingActions .workflowEditorActions {
@@ -437,9 +438,9 @@
 }
 
 .workflowHistoryActions {
-  background: #f5f7fa;
-  border: 1px solid #e3e7ed;
-  border-radius: 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
   gap: 0;
   padding: 2px;
 }
@@ -466,6 +467,12 @@
 
 .workflowDeliveryActions .ant-btn-primary {
   box-shadow: 0 2px 7px rgb(37 99 235 / 18%);
+}
+
+// 顶部命令带使用统一的小圆角和无阴影按钮，避免每个动作都像独立悬浮卡片。
+.workflowEditorFloatingActions .ant-btn {
+  border-radius: 6px;
+  box-shadow: none;
 }
 
 .workflowEditorBody {

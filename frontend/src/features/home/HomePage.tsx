@@ -76,16 +76,26 @@ export function HomePage() {
   return (
     <section className="homeWorkspace">
       <header className="homeHero">
-        <div>
-          <span className="homeEyebrow">{currentWorkspace?.name}</span>
-          <h1>你好，{displayName}</h1>
-          <p>从一个想法开始，构建属于团队的 Agent、知识和自动化流程。</p>
+        <div className="homeHeroIntro">
+          <span className="homeEyebrow">{currentWorkspace?.name} / CONTROL DESK</span>
+          <h1>{displayName}，今天从哪里开始？</h1>
+          <p>构建、使用和观察团队 Agent，都集中在这一个工作台。</p>
         </div>
-        <Link to="/agents">
-          <Button icon={<PlusOutlined />} size="large" type="primary">
-            创建 Agent
-          </Button>
-        </Link>
+        <div className="homeHeroAction">
+          <Link to="/agents">
+            <Button icon={<PlusOutlined />} size="large" type="primary">
+              创建 Agent
+            </Button>
+          </Link>
+        </div>
+        <div className="homeRuntimeRail" aria-label="工作空间资源概览">
+          <span className="homeRuntimePulse" aria-hidden="true" />
+          <strong>工作空间就绪</strong>
+          <div><b>{summary.agentTotal}</b><small>Agent</small></div>
+          <div><b>{summary.knowledgeTotal}</b><small>知识库</small></div>
+          <div><b>{summary.workflowTotal}</b><small>Workflow</small></div>
+          <Link to="/operations">查看运行状态 <ArrowRightOutlined /></Link>
+        </div>
       </header>
 
       <section className="homeQuickGrid" aria-label="快捷入口">

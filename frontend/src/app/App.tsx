@@ -110,6 +110,7 @@ const ActivateInvitationPage = lazy(() =>
 type NavConfig = {
   label: string;
   path: string;
+  group: "overview" | "build" | "use" | "observe" | "admin";
   roles?: WorkspaceRole[];
   platformAdmin?: boolean;
   icon: ReactNode;
@@ -119,54 +120,63 @@ const navConfig: NavConfig[] = [
   {
     label: "工作台",
     path: "/home",
+    group: "overview",
     roles: ["OWNER", "MANAGER", "MEMBER"],
     icon: <HomeOutlined />
   },
   {
     label: "模型供应商",
     path: "/providers",
+    group: "build",
     roles: ["OWNER", "MANAGER"],
     icon: <ApiOutlined />
   },
   {
     label: "Agent",
     path: "/agents",
+    group: "build",
     roles: ["OWNER", "MANAGER", "MEMBER"],
     icon: <RobotOutlined />
   },
   {
-    label: "对话",
-    path: "/chat",
-    roles: ["OWNER", "MANAGER", "MEMBER"],
-    icon: <MessageOutlined />
-  },
-  {
     label: "知识库",
     path: "/knowledge",
+    group: "build",
     roles: ["OWNER", "MANAGER", "MEMBER"],
     icon: <DatabaseOutlined />
   },
   {
     label: "Workflow",
     path: "/workflows",
+    group: "build",
     roles: ["OWNER", "MANAGER", "MEMBER"],
     icon: <ApartmentOutlined />
   },
   {
     label: "扩展能力",
     path: "/capabilities",
+    group: "build",
     roles: ["OWNER", "MANAGER", "MEMBER"],
     icon: <ToolOutlined />
   },
   {
+    label: "对话",
+    path: "/chat",
+    group: "use",
+    roles: ["OWNER", "MANAGER", "MEMBER"],
+    icon: <MessageOutlined />
+  },
+  {
     label: "运行记录",
     path: "/operations",
+    group: "observe",
     roles: ["OWNER", "MANAGER"],
     icon: <FileSearchOutlined />
   },
   {
     label: "设置",
     path: "/settings",
+    group: "admin",
     roles: ["OWNER"],
     platformAdmin: true,
     icon: <SettingOutlined />
@@ -496,13 +506,16 @@ function WorkspaceLayout() {
           }}
         />
         <nav className="navList" aria-label="主导航">
-          {availableNavItems.map((item) => (
+          {availableNavItems.map((item, index) => {
+            const startsGroup = index === 0 || availableNavItems[index - 1]?.group !== item.group;
+            const groupLabel = getNavGroupLabel(item.group);
+            return (
             <div
-              className={item.path === "/capabilities" ? "navGroupStart" : undefined}
+              className={startsGroup && index > 0 ? "navGroupStart" : undefined}
               key={item.path}
             >
-              {item.path === "/capabilities" && !sidebarCollapsed ? (
-                <span className="navGroupLabel">管理与扩展</span>
+              {startsGroup && groupLabel && !sidebarCollapsed ? (
+                <span className="navGroupLabel">{groupLabel}</span>
               ) : null}
               <Tooltip placement="right" title={sidebarCollapsed ? item.label : undefined}>
                 <NavLink
@@ -518,7 +531,8 @@ function WorkspaceLayout() {
                 </NavLink>
               </Tooltip>
             </div>
-          ))}
+            );
+          })}
         </nav>
         <Dropdown
           menu={{
@@ -606,6 +620,15 @@ function WorkspaceEmptyState({
 
 function formatWorkspaceRole(role: WorkspaceRole): string {
   return role === "OWNER" ? "所有者" : role === "MANAGER" ? "项目管理员" : "成员";
+}
+
+/** 导航分组直接表达用户任务，避免把不同性质的功能堆成一张技术模块清单。 */
+function getNavGroupLabel(group: NavConfig["group"]): string | null {
+  if (group === "build") return "构建";
+  if (group === "use") return "使用";
+  if (group === "observe") return "观察";
+  if (group === "admin") return "管理";
+  return null;
 }
 
 /** Storage 读取失败时使用展开态，保证无持久化能力的浏览器也可正常进入工作台。 */
