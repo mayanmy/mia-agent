@@ -126,7 +126,9 @@ export class AgentApiKeysService {
   }
 
   /** Guard 使用 SHA-256 查找可用 Key；更新 lastUsedAt 失败不应阻断模型调用。 */
-  async authenticate(rawKey: string): Promise<{ id: string; agentId: string } | null> {
+  async authenticate(
+    rawKey: string
+  ): Promise<{ id: string; agentId: string; workspaceId: string } | null> {
     if (!rawKey.startsWith("mia_agent_")) {
       return null;
     }
@@ -145,7 +147,8 @@ export class AgentApiKeysService {
       },
       select: {
         id: true,
-        agentId: true
+        agentId: true,
+        workspaceId: true
       }
     });
 

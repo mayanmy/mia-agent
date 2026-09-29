@@ -231,6 +231,8 @@ export type SharedAgentDetail = {
 
 /** 仅供 external_access 模块使用的公开运行时配置，不可返回给通用工作台接口。 */
 export type AgentPublicAccessRuntime = SharedAgentDetail & {
+  /** 服务端根据分享令牌解析的可信空间 ID，禁止从公开请求 Body 接收。 */
+  workspaceId: string;
   /** 公开访问到期时间；null 表示不过期。 */
   publicExpiresAt: Date | null;
   /** 允许嵌入 Widget 的来源白名单。 */

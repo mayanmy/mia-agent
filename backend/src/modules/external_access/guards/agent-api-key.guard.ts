@@ -10,6 +10,7 @@ export type AgentApiKeyRequest = Request & {
   agentApiKey?: {
     id: string;
     agentId: string;
+    workspaceId: string;
   };
 };
 

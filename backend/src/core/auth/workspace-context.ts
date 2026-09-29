@@ -35,7 +35,7 @@ export function enterWorkspaceContext(workspaceId: string, actor?: WorkspaceActo
  */
 export function runInWorkspaceContext<T>(
   workspaceId: string,
-  actor: WorkspaceActor,
+  actor: WorkspaceActor | undefined,
   callback: () => T
 ): T {
   return workspaceContext.run({ workspaceId, actor }, callback);

@@ -530,6 +530,7 @@ export class AgentsService {
 
     return {
       id: agent.id,
+      workspaceId: agent.workspaceId,
       name: agent.name,
       description: agent.description,
       modelName: agent.modelConfig.modelName,

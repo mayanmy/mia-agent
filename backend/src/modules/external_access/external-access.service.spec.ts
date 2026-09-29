@@ -1,7 +1,10 @@
 import { ExternalUserSource } from "@prisma/client";
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 
+import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { AgentApiKeysService } from "./agent-api-keys.service";
+import { PublicAgentsController } from "./external-access.controller";
 import { ExternalAccessService } from "./external-access.service";
 import { PublicAccessService } from "./public-access.service";
 
@@ -84,6 +87,7 @@ export const tests: TestCase[] = [
         {
           getPublicAccessRuntime: async () => ({
             id: "agent-1",
+            workspaceId: "00000000-0000-4000-8000-000000000001",
             name: "受保护 Agent",
             description: "",
             modelName: "qwen",
@@ -114,6 +118,7 @@ export const tests: TestCase[] = [
         {
           getPublicAccessRuntime: async () => ({
             id: "agent-1",
+            workspaceId: "00000000-0000-4000-8000-000000000001",
             name: "受密码保护 Agent",
             description: "",
             modelName: "qwen",
@@ -138,6 +143,98 @@ export const tests: TestCase[] = [
       assert(rejected, "错误密码必须被公开访问入口拒绝");
 
       await service.verifyAccess("share-token", undefined, "Mia12345");
+    }
+  },
+  {
+    name: "PublicAgentsController injects the token-derived workspace into Widget history calls",
+    async run() {
+      const workspaceId = "00000000-0000-4000-8000-000000000001";
+      let observedWorkspaceId: string | null = null;
+      const controller = new PublicAgentsController(
+        {
+          listConversationMessages: async () => {
+            observedWorkspaceId = requireWorkspaceId();
+            return [];
+          }
+        } as never,
+        {
+          assertAllowed: () => undefined
+        } as never,
+        {
+          resolvePublicAgent: async () => ({
+            id: "agent-1",
+            workspaceId
+          })
+        } as never
+      );
+
+      await controller.getMessages(
+        "conversation-1",
+        {
+          agentToken: "share-token",
+          sessionId: "widget-session-1"
+        },
+        {
+          headers: {},
+          socket: { remoteAddress: "127.0.0.1" }
+        } as never
+      );
+
+      assert(
+        observedWorkspaceId === workspaceId,
+        "Widget 的下游调用必须读取到分享令牌对应的可信空间"
+      );
+    }
+  },
+  {
+    name: "PublicAgentsController preserves the token-derived workspace while consuming Widget SSE",
+    async run() {
+      const workspaceId = "00000000-0000-4000-8000-000000000001";
+      let observedWorkspaceId: string | null = null;
+      const controller = new PublicAgentsController(
+        {
+          async *streamMessage() {
+            observedWorkspaceId = requireWorkspaceId();
+            yield { type: "message_end", data: { content: "ok" } };
+          }
+        } as never,
+        {
+          assertAllowed: () => undefined
+        } as never,
+        {
+          resolvePublicAgent: async () => ({
+            id: "agent-1",
+            workspaceId
+          })
+        } as never
+      );
+      const request = Object.assign(new EventEmitter(), {
+        headers: {},
+        socket: { remoteAddress: "127.0.0.1" },
+        requestId: "request-1"
+      });
+      const response = Object.assign(new EventEmitter(), {
+        statusCode: 0,
+        setHeader: () => undefined,
+        flushHeaders: () => undefined,
+        write: () => true,
+        end: () => undefined
+      });
+
+      await controller.chat(
+        {
+          agentToken: "share-token",
+          sessionId: "widget-session-1",
+          message: "为什么流水线取消了"
+        },
+        request as never,
+        response as never
+      );
+
+      assert(
+        observedWorkspaceId === workspaceId,
+        "Widget SSE 的 AsyncGenerator 迭代期间必须保持可信空间上下文"
+      );
     }
   },
   {

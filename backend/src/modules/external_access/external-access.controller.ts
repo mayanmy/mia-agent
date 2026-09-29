@@ -18,6 +18,7 @@ import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Public } from "../../core/auth/public.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
 import { WorkspaceRequired } from "../../core/auth/workspace.decorator";
+import { runInWorkspaceContext } from "../../core/auth/workspace-context";
 import { RequestWithId } from "../../core/request-id.middleware";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import { AgentApiKeysService } from "./agent-api-keys.service";
@@ -166,22 +167,26 @@ export class PublicAgentsController {
       payload.password
     );
 
-    await streamSse(request, response, (signal) =>
-      this.externalAccessService.streamMessage(
-        {
-          agentId: agent.id,
-          source: "WIDGET",
-          externalId: sessionId,
-          conversationId: payload.conversationId
-        },
-        {
-          agentId: agent.id,
-          message: payload.message,
-          images: payload.images,
-          files: payload.files
-        },
-        signal,
-        request.requestId
+    // 分享令牌已在服务端解析到 Agent 归属空间；必须包住整个 SSE 消费过程，
+    // 不能只在 AsyncLocalStorage 中创建 AsyncGenerator，否则迭代时上下文仍会丢失。
+    await runInWorkspaceContext(agent.workspaceId, undefined, () =>
+      streamSse(request, response, (signal) =>
+        this.externalAccessService.streamMessage(
+          {
+            agentId: agent.id,
+            source: "WIDGET",
+            externalId: sessionId,
+            conversationId: payload.conversationId
+          },
+          {
+            agentId: agent.id,
+            message: payload.message,
+            images: payload.images,
+            files: payload.files
+          },
+          signal,
+          request.requestId
+        )
       )
     );
   }
@@ -206,14 +211,16 @@ export class PublicAgentsController {
       payload.password
     );
 
-    return this.externalAccessService.listConversationMessages(
-      {
-        agentId: agent.id,
-        source: "WIDGET",
-        externalId: sessionId,
-        conversationId
-      },
-      payload.limit
+    return runInWorkspaceContext(agent.workspaceId, undefined, () =>
+      this.externalAccessService.listConversationMessages(
+        {
+          agentId: agent.id,
+          source: "WIDGET",
+          externalId: sessionId,
+          conversationId
+        },
+        payload.limit
+      )
     );
   }
 
@@ -251,34 +258,36 @@ export class ServiceApiController {
     const key = request.agentApiKey!;
     const user = payload.user?.trim() ?? "";
     this.rateLimiter.assertAllowed("service-chat", `${key.id}:${user}`, 60);
-    const createStream = (signal?: AbortSignal) =>
-      this.externalAccessService.streamMessage(
-        {
-          agentId: key.agentId,
-          source: "SERVICE_API",
-          externalId: user,
-          conversationId: payload.conversation_id
-        },
-        {
-          agentId: key.agentId,
-          message: payload.query,
-          images: payload.images,
-          files: payload.files
-        },
-        signal,
-        request.requestId
-      );
+    await runInWorkspaceContext(key.workspaceId, undefined, async () => {
+      const createStream = (signal?: AbortSignal) =>
+        this.externalAccessService.streamMessage(
+          {
+            agentId: key.agentId,
+            source: "SERVICE_API",
+            externalId: user,
+            conversationId: payload.conversation_id
+          },
+          {
+            agentId: key.agentId,
+            message: payload.query,
+            images: payload.images,
+            files: payload.files
+          },
+          signal,
+          request.requestId
+        );
 
-    // v1.1 以 streaming 为默认实现；blocking 在同一编排器上收集 token 后返回，避免两套模型逻辑。
-    if (payload.response_mode === "blocking") {
-      const collected = await collectStream(createStream());
-      response.statusCode = 200;
-      response.setHeader("Content-Type", "application/json; charset=utf-8");
-      response.end(JSON.stringify({ code: 200, message: "success", data: collected }));
-      return;
-    }
+      // v1.1 以 streaming 为默认实现；blocking 在同一编排器上收集 token 后返回，避免两套模型逻辑。
+      if (payload.response_mode === "blocking") {
+        const collected = await collectStream(createStream());
+        response.statusCode = 200;
+        response.setHeader("Content-Type", "application/json; charset=utf-8");
+        response.end(JSON.stringify({ code: 200, message: "success", data: collected }));
+        return;
+      }
 
-    await streamSse(request, response, createStream);
+      await streamSse(request, response, createStream);
+    });
   }
 
   @Get("conversations")
@@ -287,10 +296,9 @@ export class ServiceApiController {
     @Query() query: ExternalConversationListQueryDto,
     @Req() request: AgentApiKeyRequest
   ) {
-    return this.externalAccessService.listConversations(
-      request.agentApiKey!.agentId,
-      query.user ?? "",
-      query.limit
+    const key = request.agentApiKey!;
+    return runInWorkspaceContext(key.workspaceId, undefined, () =>
+      this.externalAccessService.listConversations(key.agentId, query.user ?? "", query.limit)
     );
   }
 
@@ -301,11 +309,14 @@ export class ServiceApiController {
     @Query() query: ExternalConversationMessageQueryDto,
     @Req() request: AgentApiKeyRequest
   ) {
-    return this.externalAccessService.listMessages(
-      request.agentApiKey!.agentId,
-      query.user ?? "",
-      conversationId,
-      query.limit
+    const key = request.agentApiKey!;
+    return runInWorkspaceContext(key.workspaceId, undefined, () =>
+      this.externalAccessService.listMessages(
+        key.agentId,
+        query.user ?? "",
+        conversationId,
+        query.limit
+      )
     );
   }
 }
