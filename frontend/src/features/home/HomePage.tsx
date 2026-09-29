@@ -77,7 +77,7 @@ export function HomePage() {
     <section className="homeWorkspace">
       <header className="homeHero">
         <div className="homeHeroIntro">
-          <span className="homeEyebrow">{currentWorkspace?.name} / CONTROL DESK</span>
+          <span className="homeEyebrow">{currentWorkspace?.name}</span>
           <h1>{displayName}，今天从哪里开始？</h1>
           <p>构建、使用和观察团队 Agent，都集中在这一个工作台。</p>
         </div>
@@ -91,10 +91,21 @@ export function HomePage() {
         <div className="homeRuntimeRail" aria-label="工作空间资源概览">
           <span className="homeRuntimePulse" aria-hidden="true" />
           <strong>工作空间就绪</strong>
-          <div><b>{summary.agentTotal}</b><small>Agent</small></div>
-          <div><b>{summary.knowledgeTotal}</b><small>知识库</small></div>
-          <div><b>{summary.workflowTotal}</b><small>Workflow</small></div>
-          <Link to="/operations">查看运行状态 <ArrowRightOutlined /></Link>
+          <div>
+            <b>{summary.agentTotal}</b>
+            <small>Agent</small>
+          </div>
+          <div>
+            <b>{summary.knowledgeTotal}</b>
+            <small>知识库</small>
+          </div>
+          <div>
+            <b>{summary.workflowTotal}</b>
+            <small>Workflow</small>
+          </div>
+          <Link to="/operations">
+            查看运行状态 <ArrowRightOutlined />
+          </Link>
         </div>
       </header>
 
