@@ -41,7 +41,7 @@ export const providerTemplates: ProviderTemplate[] = [
   },
   {
     name: "Seed 豆包(火山方舟)",
-    author: "mia",
+    author: "字节跳动",
     downloads: "162,473",
     description: "字节跳动Seed豆包大模型",
     providerType: "OPENAI_COMPATIBLE",
@@ -51,7 +51,7 @@ export const providerTemplates: ProviderTemplate[] = [
   },
   {
     name: "DeepSeek",
-    author: "mia",
+    author: "深度求索",
     downloads: "1,250,314",
     description: "DeepSeek 提供的模型，例如 deepseek-chat、deepseek-reasoner 等。",
     providerType: "OPENAI_COMPATIBLE",
@@ -61,7 +61,7 @@ export const providerTemplates: ProviderTemplate[] = [
   },
   {
     name: "通义千问",
-    author: "mia",
+    author: "阿里云",
     downloads: "312,806",
     description: "阿里云提供的通义千问 Qwen 系列模型。",
     providerType: "OPENAI_COMPATIBLE",
@@ -71,7 +71,7 @@ export const providerTemplates: ProviderTemplate[] = [
   },
   {
     name: "Kimi 月之暗面",
-    author: "mia",
+    author: "月之暗面 Moonshot AI",
     downloads: "198,742",
     description: "Moonshot Kimi，超长上下文",
     providerType: "OPENAI_COMPATIBLE",
@@ -81,7 +81,7 @@ export const providerTemplates: ProviderTemplate[] = [
   },
   {
     name: "文心一言",
-    author: "mia",
+    author: "百度千帆",
     downloads: "143,628",
     description: "百度文心一言ERNIE",
     providerType: "OPENAI_COMPATIBLE",
@@ -91,7 +91,7 @@ export const providerTemplates: ProviderTemplate[] = [
   },
   {
     name: "智谱 GLM‑5",
-    author: "mia",
+    author: "智谱AI",
     downloads: "176,351",
     description: "智谱AI GLM‑5 系列",
     providerType: "OPENAI_COMPATIBLE",
