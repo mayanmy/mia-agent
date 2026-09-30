@@ -195,6 +195,11 @@
     ".mia-agent-access-card strong{color:#111827;font-size:18px;line-height:1.35}.mia-agent-access-card>span{color:#64748b;font-size:13px}.mia-agent-access-form{display:grid;width:100%;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:8px}.mia-agent-access-password{min-width:0;height:42px;border:1px solid #cbd5e1;border-radius:10px;padding:0 12px;font:inherit;outline:none}.mia-agent-access-password:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.mia-agent-access-submit{height:42px;border:0;border-radius:10px;background:#2563eb;color:#fff;padding:0 16px;font:inherit;font-weight:700;cursor:pointer;white-space:nowrap}.mia-agent-access-submit:disabled{background:#93b4f5;cursor:wait}" +
     ".mia-agent-bubble{max-width:84%;overflow-wrap:anywhere;border:1px solid #dde3eb;border-radius:8px;background:#fff;color:#111827;padding:12px 14px;font-size:14px;line-height:1.7}" +
     ".mia-agent-message-user .mia-agent-bubble{white-space:pre-wrap;border-color:#2563eb;background:#2563eb;color:#fff}" +
+    ".mia-agent-bubble-typing{display:inline-flex;min-width:52px;min-height:40px;align-items:center;justify-content:center;gap:5px;padding:10px 14px}" +
+    ".mia-agent-typing-dot{width:6px;height:6px;border-radius:999px;background:#64748b;opacity:.35;animation:mia-agent-typing 1.2s ease-in-out infinite}" +
+    ".mia-agent-typing-dot:nth-child(2){animation-delay:.16s}.mia-agent-typing-dot:nth-child(3){animation-delay:.32s}" +
+    "@keyframes mia-agent-typing{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-3px);opacity:1}}" +
+    "@media (prefers-reduced-motion:reduce){.mia-agent-typing-dot{animation:none;opacity:.65}.mia-agent-typing-dot:nth-child(2){opacity:.8}.mia-agent-typing-dot:nth-child(3){opacity:1}}" +
     ".mia-agent-markdown>:first-child{margin-top:0}.mia-agent-markdown>:last-child{margin-bottom:0}" +
     ".mia-agent-markdown h1,.mia-agent-markdown h2,.mia-agent-markdown h3,.mia-agent-markdown h4,.mia-agent-markdown h5,.mia-agent-markdown h6{margin:18px 0 8px;color:#111827;line-height:1.35}" +
     ".mia-agent-markdown h1{font-size:20px}.mia-agent-markdown h2{font-size:18px}.mia-agent-markdown h3{font-size:16px}.mia-agent-markdown h4,.mia-agent-markdown h5,.mia-agent-markdown h6{font-size:14px}" +
@@ -742,7 +747,7 @@
     state.autoScroll = true;
     renderAttachments();
     appendMessage("user", buildUserDisplayContent(content, currentImages, currentFiles));
-    var assistantMessage = appendMessage("assistant", "");
+    var assistantMessage = appendMessage("assistant", "", true);
     state.streaming = true;
     updateStreamingControls();
     state.abortController = new AbortController();
@@ -770,6 +775,7 @@
 
         return readStream(response.body, function (event) {
           if (event.type === "token" && event.data.content) {
+            assistantMessage.loading = false;
             assistantMessage.content += event.data.content;
             renderMessageContent(assistantMessage);
             scrollToBottomIfNeeded();
@@ -781,7 +787,9 @@
 
           if (event.type === "message_end" && typeof event.data.content === "string") {
             // End answer 是 Workflow 的最终结果，覆盖可能为空或仅代表中间节点的 token。
-            assistantMessage.content = event.data.content;
+            assistantMessage.loading = false;
+            assistantMessage.content =
+              event.data.content || assistantMessage.content || "未收到回复，请重试。";
             renderMessageContent(assistantMessage);
             scrollToBottomIfNeeded();
           }
@@ -802,6 +810,7 @@
         });
       })
       .catch(function (error) {
+        assistantMessage.loading = false;
         if (isAbortError(error)) {
           if (!assistantMessage.content) {
             assistantMessage.content = "已停止生成。";
@@ -820,6 +829,11 @@
         }
       })
       .finally(function () {
+        if (assistantMessage.loading) {
+          assistantMessage.loading = false;
+          assistantMessage.content = assistantMessage.content || "未收到回复，请重试。";
+          renderMessageContent(assistantMessage);
+        }
         state.streaming = false;
         state.abortController = null;
         updateStreamingControls();
@@ -1056,7 +1070,7 @@
     return [content].concat(attachmentNames).filter(Boolean).join("\n");
   }
 
-  function appendMessage(role, content) {
+  function appendMessage(role, content, loading) {
     var entry = getActiveEntry();
     var wrapper = document.createElement("div");
     var bubble = document.createElement("div");
@@ -1064,6 +1078,7 @@
     var message = {
       role: role,
       content: content,
+      loading: Boolean(loading),
       bubble: bubble,
       toolEvents: [],
       toolEventsEl: toolEventsEl,
@@ -1143,20 +1158,41 @@
    */
   function renderMessageContent(message) {
     var bubble = message.bubble;
-    var content = message.content || " ";
+    var content = message.content || "";
 
     if (!bubble) {
       return;
     }
 
     bubble.innerHTML = "";
+    bubble.classList.remove("mia-agent-bubble-typing");
+    bubble.removeAttribute("aria-busy");
+    bubble.removeAttribute("aria-label");
     if (message.role === "user") {
       bubble.textContent = content;
       return;
     }
 
+    if (message.loading && !content) {
+      bubble.classList.remove("mia-agent-markdown");
+      bubble.classList.add("mia-agent-bubble-typing");
+      bubble.setAttribute("role", "status");
+      bubble.setAttribute("aria-live", "polite");
+      bubble.setAttribute("aria-busy", "true");
+      bubble.setAttribute("aria-label", "Agent 正在回复");
+      for (var index = 0; index < 3; index += 1) {
+        var dot = document.createElement("span");
+        dot.className = "mia-agent-typing-dot";
+        dot.setAttribute("aria-hidden", "true");
+        bubble.appendChild(dot);
+      }
+      return;
+    }
+
+    bubble.removeAttribute("role");
+    bubble.removeAttribute("aria-live");
     bubble.classList.add("mia-agent-markdown");
-    renderMarkdownBlocks(bubble, content);
+    renderMarkdownBlocks(bubble, content || " ");
   }
 
   function renderMarkdownBlocks(container, markdown) {
