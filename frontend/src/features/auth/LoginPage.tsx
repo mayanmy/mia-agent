@@ -22,7 +22,7 @@ export function LoginPage() {
   const [guestModalOpen, setGuestModalOpen] = useState(false);
 
   if (status === "authenticated") {
-    return <Navigate replace to="/agents" />;
+    return <Navigate replace to="/home" />;
   }
 
   /**
@@ -37,7 +37,7 @@ export function LoginPage() {
       const response = await login(values.email, values.password);
       completeLogin(response);
       const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-      navigate(from || "/agents", { replace: true });
+      navigate(from || "/home", { replace: true });
     } catch (error) {
       message.error(error instanceof Error ? error.message : "登录失败");
     } finally {
