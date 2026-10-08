@@ -35,6 +35,8 @@ services:
       - "${MIA_API_BIND_ADDRESS:-127.0.0.1}:${MIA_API_PORT:-8000}:8000"
     environment:
       NODE_ENV: production
+      MIA_APP_VERSION: 1.0.0
+      MIA_APP_NAME: Mia
       MIA_ENVIRONMENT: production
       PORT: 8000
       DATABASE_URL: postgresql://${POSTGRES_USER:-mia}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mia}
