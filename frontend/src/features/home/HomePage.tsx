@@ -72,6 +72,8 @@ export function HomePage() {
   }, [currentWorkspace?.role]);
 
   const displayName = currentUser?.displayName?.trim() || "伙伴";
+  // 后端健康信息属于平台运维范围，空间所有者和项目管理员也不应看到。
+  const canViewHealthStatus = currentUser?.role === "ADMIN";
 
   return (
     <section className="homeWorkspace">
@@ -88,9 +90,16 @@ export function HomePage() {
             </Button>
           </Link>
         </div>
-        <div className="homeRuntimeRail" aria-label="工作空间资源概览">
-          <span className="homeRuntimePulse" aria-hidden="true" />
-          <strong>工作空间就绪</strong>
+        <div
+          className={`homeRuntimeRail${canViewHealthStatus ? "" : " resourcesOnly"}`}
+          aria-label="工作空间资源概览"
+        >
+          {canViewHealthStatus ? (
+            <>
+              <span className="homeRuntimePulse" aria-hidden="true" />
+              <strong>工作空间就绪</strong>
+            </>
+          ) : null}
           <div>
             <b>{summary.agentTotal}</b>
             <small>Agent</small>
@@ -103,9 +112,11 @@ export function HomePage() {
             <b>{summary.workflowTotal}</b>
             <small>Workflow</small>
           </div>
-          <Link to="/operations">
-            查看运行状态 <ArrowRightOutlined />
-          </Link>
+          {canViewHealthStatus ? (
+            <Link to="/operations">
+              查看运行状态 <ArrowRightOutlined />
+            </Link>
+          ) : null}
         </div>
       </header>
 

@@ -211,7 +211,7 @@ export function App() {
                 element={
                   <>
                     <ProvidersPage />
-                    <HealthPage compact />
+                    <PlatformAdminHealth />
                   </>
                 }
               />
@@ -300,6 +300,12 @@ function RequirePlatformAdmin() {
   }
 
   return <Outlet />;
+}
+
+/** 后端版本、环境等运行信息仅向平台管理员展示，空间角色不参与授权。 */
+function PlatformAdminHealth() {
+  const { currentUser } = useAuth();
+  return currentUser?.role === "ADMIN" ? <HealthPage compact /> : null;
 }
 
 /** 所有已登录成员都可使用 Agent，成员管理仍通过独立管理员路由保护。 */
