@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { ModelProvider, ModelProviderType } from "@prisma/client";
+import { ModelProvider, ModelProviderType, ModelThinkingMode } from "@prisma/client";
 
 import { decryptSecret } from "../../core/crypto";
 import { getWorkspaceId } from "../../core/auth/workspace-context";
@@ -24,6 +24,7 @@ type ModelConfigWithProvider = {
   modelName: string;
   timeoutSeconds: number;
   maxTokens: number | null;
+  thinkingMode: ModelThinkingMode;
   provider: ModelProvider;
 };
 
@@ -127,7 +128,8 @@ export class ModelProvidersGateway {
           : "",
         modelName: modelConfig.modelName,
         timeoutSeconds,
-        maxTokens: modelConfig.maxTokens
+        maxTokens: modelConfig.maxTokens,
+        thinkingMode: modelConfig.thinkingMode
       },
       messages: this.requireMessages(request.messages),
       timeoutMs: timeoutSeconds * 1000
@@ -152,7 +154,8 @@ export class ModelProvidersGateway {
           : "",
         modelName: modelConfig.modelName,
         timeoutSeconds,
-        maxTokens: modelConfig.maxTokens
+        maxTokens: modelConfig.maxTokens,
+        thinkingMode: modelConfig.thinkingMode
       },
       input: this.requireEmbeddingInput(request.input),
       timeoutMs: timeoutSeconds * 1000
@@ -177,6 +180,7 @@ export class ModelProvidersGateway {
         modelName: true,
         timeoutSeconds: true,
         maxTokens: true,
+        thinkingMode: true,
         provider: true
       }
     });

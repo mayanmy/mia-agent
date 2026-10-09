@@ -1,4 +1,4 @@
-import { ModelProviderType } from "@prisma/client";
+import { ModelProviderType, ModelThinkingMode } from "@prisma/client";
 
 /** Provider Gateway 支持的标准对话角色。 */
 export type ChatRole = "system" | "user" | "assistant" | "tool";
@@ -155,6 +155,8 @@ export type ProviderRuntimeConfig = {
   timeoutSeconds: number;
   /** 默认生成上限；null 表示不覆盖供应商默认值。 */
   maxTokens: number | null;
+  /** 模型级思考模式，由具体 Provider Client 转换成供应商协议参数。 */
+  thinkingMode: ModelThinkingMode;
 };
 
 /** Gateway 传给具体 Provider Client 的 Chat 请求。 */

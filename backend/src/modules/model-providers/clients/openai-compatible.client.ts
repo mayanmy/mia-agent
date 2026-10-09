@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
+import { ModelThinkingMode } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../../core/errors";
 import {
@@ -277,6 +278,9 @@ export class OpenAICompatibleClient implements ProviderClient {
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
       // 仅正整数才下发；null/undefined 表示沿用供应商默认值。
       ...(request.maxTokens ? { max_tokens: request.maxTokens } : {}),
+      ...(config.thinkingMode === ModelThinkingMode.AUTO
+        ? {}
+        : { enable_thinking: config.thinkingMode === ModelThinkingMode.ENABLED }),
       ...(request.tools && request.tools.length > 0
         ? {
             tools: request.tools.map((tool) => ({

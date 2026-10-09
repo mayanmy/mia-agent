@@ -191,6 +191,7 @@ export const modelDefaults: ModelFormValues = {
   embeddingDimension: null,
   timeoutSeconds: 120,
   maxTokens: null,
+  thinkingMode: "AUTO",
   enabled: true
 };
 
@@ -219,6 +220,7 @@ export function toModelConfigPayload(values: ModelFormValues): ModelConfigPayloa
     embeddingDimension: values.modelType === "EMBEDDING" ? values.embeddingDimension : null,
     timeoutSeconds: values.timeoutSeconds,
     maxTokens: values.maxTokens ?? null,
+    thinkingMode: values.thinkingMode,
     enabled: values.enabled
   };
 }

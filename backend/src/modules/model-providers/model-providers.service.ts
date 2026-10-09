@@ -1,5 +1,11 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { ModelConfigType, ModelProvider, ModelProviderType, Prisma } from "@prisma/client";
+import {
+  ModelConfigType,
+  ModelProvider,
+  ModelProviderType,
+  ModelThinkingMode,
+  Prisma
+} from "@prisma/client";
 
 import { decryptSecret, encryptSecret } from "../../core/crypto";
 import { getWorkspaceId, requireWorkspaceId } from "../../core/auth/workspace-context";
@@ -534,7 +540,8 @@ export class ModelProvidersService {
       ),
       enabled: payload.enabled ?? true,
       timeoutSeconds: this.normalizeTimeout(payload.timeoutSeconds),
-      maxTokens: this.normalizeMaxTokens(payload.maxTokens)
+      maxTokens: this.normalizeMaxTokens(payload.maxTokens),
+      thinkingMode: this.requireThinkingMode(payload.thinkingMode ?? ModelThinkingMode.AUTO)
     };
   }
 
@@ -573,6 +580,9 @@ export class ModelProvidersService {
         : {}),
       ...(payload.maxTokens !== undefined
         ? { maxTokens: this.normalizeMaxTokens(payload.maxTokens) }
+        : {}),
+      ...(payload.thinkingMode !== undefined
+        ? { thinkingMode: this.requireThinkingMode(payload.thinkingMode) }
         : {})
     };
   }
@@ -634,6 +644,18 @@ export class ModelProvidersService {
     }
 
     throw new AppError(ErrorCodes.common.badRequest, "modelType is invalid");
+  }
+
+  private requireThinkingMode(value: unknown): ModelThinkingMode {
+    if (
+      value === ModelThinkingMode.AUTO ||
+      value === ModelThinkingMode.ENABLED ||
+      value === ModelThinkingMode.DISABLED
+    ) {
+      return value;
+    }
+
+    throw new AppError(ErrorCodes.common.badRequest, "thinkingMode is invalid");
   }
 
   private normalizeTimeout(value: unknown): number {
@@ -1379,6 +1401,7 @@ export class ModelProvidersService {
       enabled: config.enabled,
       timeoutSeconds: config.timeoutSeconds,
       maxTokens: config.maxTokens,
+      thinkingMode: config.thinkingMode,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt
     };

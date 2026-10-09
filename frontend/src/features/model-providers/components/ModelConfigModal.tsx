@@ -230,6 +230,21 @@ function OpenModelConfigModal({
             <InputNumber min={1} precision={0} style={{ width: "100%" }} />
           </Form.Item>
         </div>
+        {selectedModelType === "CHAT" && (
+          <Form.Item
+            extra="自动表示沿用供应商默认行为；只有兼容 enable_thinking 参数的 OpenAI-compatible 服务支持显式开启或关闭。"
+            label="思考模式"
+            name="thinkingMode"
+          >
+            <Select
+              options={[
+                { label: "自动（供应商默认）", value: "AUTO" },
+                { label: "开启", value: "ENABLED" },
+                { label: "关闭", value: "DISABLED" }
+              ]}
+            />
+          </Form.Item>
+        )}
         <Form.Item label="启用" name="enabled" valuePropName="checked">
           <Switch />
         </Form.Item>

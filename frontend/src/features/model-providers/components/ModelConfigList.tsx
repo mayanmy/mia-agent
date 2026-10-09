@@ -2,6 +2,12 @@ import { Button, Tag, Popconfirm } from "antd";
 import { ModelConfigListItem } from "../api";
 import { modelTypeLabels } from "../utils";
 
+const thinkingModeLabels = {
+  AUTO: "思考：自动",
+  ENABLED: "思考：开启",
+  DISABLED: "思考：关闭"
+} as const;
+
 type ModelConfigListProps = {
   models: ModelConfigListItem[];
   onEditModel: (model: ModelConfigListItem) => void;
@@ -17,6 +23,7 @@ export function ModelConfigList({ models, onEditModel, onDeleteModel }: ModelCon
           <span className={model.enabled ? "modelDot enabled" : "modelDot"} />
           <span>{model.modelName}</span>
           <Tag>{modelTypeLabels[model.modelType]}</Tag>
+          {model.modelType === "CHAT" && <Tag>{thinkingModeLabels[model.thinkingMode]}</Tag>}
           <Button size="small" type="text" onClick={() => onEditModel(model)}>
             配置
           </Button>

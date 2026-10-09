@@ -1,4 +1,4 @@
-import { ModelConfigType, ModelProviderType } from "@prisma/client";
+import { ModelConfigType, ModelProviderType, ModelThinkingMode } from "@prisma/client";
 
 /** 模型供应商管理列表的安全摘要，不返回原始 API Key。 */
 export type ProviderListItem = {
@@ -97,6 +97,8 @@ export type ModelConfigListItem = {
   timeoutSeconds: number;
   /** Chat 最大生成 token；null 表示沿用供应商默认值。 */
   maxTokens: number | null;
+  /** Chat 模型思考模式；AUTO 表示沿用供应商默认行为。 */
+  thinkingMode: ModelThinkingMode;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -128,6 +130,7 @@ export type ModelConfigCreateDto = {
   enabled?: boolean;
   timeoutSeconds?: number;
   maxTokens?: number | null;
+  thinkingMode?: ModelThinkingMode;
 };
 
 /** 更新模型配置的输入；未提供字段保持原值。 */
@@ -141,6 +144,7 @@ export type ModelConfigUpdateDto = {
   enabled?: boolean;
   timeoutSeconds?: number;
   maxTokens?: number | null;
+  thinkingMode?: ModelThinkingMode;
 };
 
 /** 发起模型能力检查的输入。 */

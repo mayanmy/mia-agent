@@ -4,6 +4,7 @@ import { request, type PageResult } from "../../shared/api/client";
 export type ModelProviderType = "OPENAI_COMPATIBLE" | "OLLAMA" | "ANTHROPIC" | "GEMINI";
 /** 当前可创建的模型用途类型。 */
 export type ModelConfigType = "CHAT" | "EMBEDDING";
+export type ModelThinkingMode = "AUTO" | "ENABLED" | "DISABLED";
 
 /** 供应商列表接口返回的安全摘要。 */
 export type ProviderListItem = {
@@ -57,6 +58,7 @@ export type ModelConfigListItem = {
   timeoutSeconds: number;
   /** null 表示沿用供应商默认生成上限。 */
   maxTokens: number | null;
+  thinkingMode: ModelThinkingMode;
   createdAt: string;
   updatedAt: string;
 };
@@ -77,6 +79,7 @@ export type ModelConfigPayload = {
   enabled: boolean;
   timeoutSeconds: number;
   maxTokens: number | null;
+  thinkingMode: ModelThinkingMode;
 };
 
 /** 模型能力分类。 */

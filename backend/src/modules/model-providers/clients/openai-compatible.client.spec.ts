@@ -1,5 +1,5 @@
 import * as assert from "node:assert/strict";
-import { ModelProviderType } from "@prisma/client";
+import { ModelProviderType, ModelThinkingMode } from "@prisma/client";
 
 import { ProviderRuntimeConfig } from "../dto/llm.dto";
 import { OpenAICompatibleClient } from "./openai-compatible.client";
@@ -11,7 +11,8 @@ const runtimeConfig: ProviderRuntimeConfig = {
   apiKey: "secret",
   modelName: "qwen3.7-flash",
   timeoutSeconds: 60,
-  maxTokens: null
+  maxTokens: null,
+  thinkingMode: ModelThinkingMode.AUTO
 };
 
 function streamResponse(events: unknown[]): Response {
@@ -23,6 +24,59 @@ function streamResponse(events: unknown[]): Response {
 }
 
 export const tests = [
+  {
+    name: "OpenAICompatibleClient omits thinking parameters in automatic mode",
+    async run(): Promise<void> {
+      const originalFetch = globalThis.fetch;
+      let requestBody: Record<string, unknown> | undefined;
+      globalThis.fetch = async (_input, init) => {
+        requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({ model: "qwen3.7-flash", choices: [{ message: { content: "完成" } }] }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      };
+
+      try {
+        await new OpenAICompatibleClient().createChatCompletion(runtimeConfig, {
+          messages: [{ role: "user", content: "优化文本" }],
+          signal: new AbortController().signal
+        });
+
+        assert.equal("enable_thinking" in (requestBody ?? {}), false);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
+  },
+  {
+    name: "OpenAICompatibleClient sends an explicit disabled thinking mode",
+    async run(): Promise<void> {
+      const originalFetch = globalThis.fetch;
+      let requestBody: Record<string, unknown> | undefined;
+      globalThis.fetch = async (_input, init) => {
+        requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({ model: "qwen3.7-flash", choices: [{ message: { content: "完成" } }] }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      };
+
+      try {
+        await new OpenAICompatibleClient().createChatCompletion(
+          { ...runtimeConfig, thinkingMode: ModelThinkingMode.DISABLED },
+          {
+            messages: [{ role: "user", content: "优化文本" }],
+            signal: new AbortController().signal
+          }
+        );
+
+        assert.equal(requestBody?.enable_thinking, false);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
+  },
   {
     name: "OpenAICompatibleClient separates reasoning_content from visible tokens",
     async run(): Promise<void> {

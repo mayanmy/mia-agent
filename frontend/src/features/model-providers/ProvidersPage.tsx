@@ -202,6 +202,7 @@ export function ProvidersPage() {
       embeddingDimension: config.embeddingDimension,
       timeoutSeconds: config.timeoutSeconds,
       maxTokens: config.maxTokens,
+      thinkingMode: config.thinkingMode,
       enabled: config.enabled
     });
     setModelDialogOpen(true);

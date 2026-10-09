@@ -1,4 +1,4 @@
-import { ModelConfigType, ModelProviderType } from "./api";
+import { ModelConfigType, ModelProviderType, ModelThinkingMode } from "./api";
 
 /** 模型供应商表单字段；API Key 为只写字段。 */
 export type ProviderFormValues = {
@@ -25,6 +25,7 @@ export type ModelFormValues = {
   timeoutSeconds: number;
   /** null 表示沿用供应商默认生成上限。 */
   maxTokens?: number | null;
+  thinkingMode: ModelThinkingMode;
   enabled: boolean;
 };
 

@@ -23,6 +23,15 @@ enum ModelConfigType {
   @@map("model_config_type")
 }
 
+/// Chat 模型的思考模式；AUTO 不向供应商发送覆盖参数，保持原有兼容行为。
+enum ModelThinkingMode {
+  AUTO     @map("auto")
+  ENABLED  @map("enabled")
+  DISABLED @map("disabled")
+
+  @@map("model_thinking_mode")
+}
+
 enum UserRole {
   ADMIN
   USER
@@ -367,6 +376,7 @@ model ModelConfig {
   enabled                  Boolean                  @default(true)
   timeoutSeconds           Int                      @default(120) @map("timeout_seconds")
   maxTokens                Int?                     @map("max_tokens")
+  thinkingMode             ModelThinkingMode        @default(AUTO) @map("thinking_mode")
   createdAt                DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                DateTime?                @map("deleted_at") @db.Timestamptz(6)
