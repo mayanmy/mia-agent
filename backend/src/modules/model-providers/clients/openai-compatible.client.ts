@@ -38,10 +38,12 @@ type OpenAIStreamToolCallDelta = {
 type OpenAIChatChoice = {
   message?: {
     content?: string;
+    reasoning_content?: string;
     tool_calls?: OpenAIToolCall[];
   };
   delta?: {
     content?: string;
+    reasoning_content?: string;
     tool_calls?: OpenAIStreamToolCallDelta[];
   };
   finish_reason?: string | null;
@@ -90,10 +92,12 @@ export class OpenAICompatibleClient implements ProviderClient {
     const data = (await response.json()) as OpenAIChatResponse;
     const message = data.choices?.[0]?.message;
     const content = message?.content ?? "";
+    const reasoningContent = message?.reasoning_content ?? "";
     const toolCalls = this.parseToolCalls(message?.tool_calls);
 
     return {
       content,
+      ...(reasoningContent ? { reasoningContent } : {}),
       model: data.model ?? config.modelName,
       providerId: config.providerId,
       providerType: config.providerType,
@@ -215,6 +219,10 @@ export class OpenAICompatibleClient implements ProviderClient {
           continue;
         }
 
+        if (streamEvent.reasoningContent) {
+          yield { type: "reasoning_token", content: streamEvent.reasoningContent };
+        }
+
         if (streamEvent.content) {
           yield { type: "token", content: streamEvent.content };
         }
@@ -325,6 +333,7 @@ export class OpenAICompatibleClient implements ProviderClient {
 
   private parseStreamEvent(event: string): {
     content: string;
+    reasoningContent: string;
     toolCallDeltas: OpenAIStreamToolCallDelta[];
     finishReason: string | null;
   } | null {
@@ -334,6 +343,7 @@ export class OpenAICompatibleClient implements ProviderClient {
 
       return {
         content: choice?.delta?.content ?? "",
+        reasoningContent: choice?.delta?.reasoning_content ?? "",
         toolCallDeltas: choice?.delta?.tool_calls ?? [],
         finishReason: choice?.finish_reason ?? null
       };

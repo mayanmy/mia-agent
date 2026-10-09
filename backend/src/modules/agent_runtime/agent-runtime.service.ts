@@ -240,6 +240,11 @@ export class AgentRuntimeService {
         let source = "model_native";
         let assistantContent = "";
         const bufferedTokens: string[] = [];
+        const modelCallStartedAt = Date.now();
+        let firstUpstreamEventMs: number | undefined;
+        let firstReasoningTokenMs: number | undefined;
+        let firstContentTokenMs: number | undefined;
+        let reasoningCharacterCount = 0;
         const modelStep = await this.startStep(trace, AgentRunStepType.MODEL, "chat_stream", {
           round,
           modelConfigId: agent.modelConfigId,
@@ -258,11 +263,19 @@ export class AgentRuntimeService {
             timeoutSeconds: agent.timeoutSeconds,
             signal: request.signal
           })) {
+            if (chunk.type !== "done" && firstUpstreamEventMs === undefined) {
+              firstUpstreamEventMs = Date.now() - modelCallStartedAt;
+            }
             if (chunk.type === "token" && chunk.content) {
+              firstContentTokenMs ??= Date.now() - modelCallStartedAt;
               assistantContent += chunk.content;
               await this.markFirstToken(trace);
               if (llmTools.length > 0) bufferedTokens.push(chunk.content);
               else yield { type: "token", data: { content: chunk.content } };
+            } else if (chunk.type === "reasoning_token" && chunk.content) {
+              // 只记录推理存在性和延迟，不保存或向用户输出完整思维链。
+              firstReasoningTokenMs ??= Date.now() - modelCallStartedAt;
+              reasoningCharacterCount += chunk.content.length;
             } else if (chunk.type === "tool_call") {
               toolCalls.push(chunk.toolCall);
             } else if (chunk.type === "error") {
@@ -286,7 +299,14 @@ export class AgentRuntimeService {
 
         await this.completeStep(modelStep, {
           contentPreview: assistantContent,
-          toolCalls: toolCalls.map((call) => ({ id: call.id, name: call.name }))
+          toolCalls: toolCalls.map((call) => ({ id: call.id, name: call.name })),
+          telemetry: {
+            firstUpstreamEventMs: firstUpstreamEventMs ?? null,
+            firstReasoningTokenMs: firstReasoningTokenMs ?? null,
+            firstContentTokenMs: firstContentTokenMs ?? null,
+            reasoningObserved: reasoningCharacterCount > 0,
+            reasoningCharacterCount
+          }
         });
         if (toolCalls.length === 0) {
           toolCalls = this.parseTextToolCalls(assistantContent, llmTools);

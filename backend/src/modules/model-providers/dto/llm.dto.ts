@@ -98,6 +98,8 @@ export type EmbeddingResponse = {
 export type ChatCompletionResponse = {
   /** 模型生成的文本内容。 */
   content: string;
+  /** 供应商返回的推理文本；仅供受控调用方使用，不应默认展示或持久化。 */
+  reasoningContent?: string;
   /** 供应商实际返回的模型名。 */
   model: string;
   /** 实际调用的供应商 ID。 */
@@ -118,6 +120,11 @@ export type ChatCompletionResponse = {
 export type ChatStreamChunk =
   | {
       type: "token";
+      content: string;
+    }
+  | {
+      /** 推理增量仅用于延迟观测，业务层不得默认展示或持久化原文。 */
+      type: "reasoning_token";
       content: string;
     }
   | {

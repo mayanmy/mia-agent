@@ -13,6 +13,7 @@ import { tests as chatSessionTests } from "../modules/chat/chat-sessions.service
 import { tests as chatStreamTests } from "../modules/chat/chat-streams.service.spec";
 import { tests as externalAccessTests } from "../modules/external_access/external-access.service.spec";
 import { tests as knowledgeTests } from "../modules/knowledge/knowledge.service.spec";
+import { tests as openAICompatibleClientTests } from "../modules/model-providers/clients/openai-compatible.client.spec";
 import { tests as mcpProtocolClientTests } from "../modules/mcp/clients/mcp-protocol.client.spec";
 import { tests as mcpClientCredentialsTests } from "../modules/mcp/clients/mcp-client-credentials.provider.spec";
 import { tests as mcpOAuthTests } from "../modules/mcp/clients/mcp-oauth.manager.spec";
@@ -69,6 +70,7 @@ const tests: TestCase[] = [
   ...workflowToolRunTests,
   ...workflowCapabilityTests,
   ...knowledgeTests,
+  ...openAICompatibleClientTests,
   ...retrievalTests,
   ...chatSessionTests,
   ...chatStreamTests,

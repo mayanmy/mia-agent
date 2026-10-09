@@ -82,6 +82,9 @@ export class LlmNodeExecutor implements WorkflowNodeExecutor {
             );
           }
           yield { type: "token", data: { content: chunk.content } };
+        } else if (chunk.type === "reasoning_token") {
+          // Workflow 只消费最终正文，不展示或保存供应商返回的完整思维链。
+          continue;
         } else if (chunk.type === "tool_call") {
           throw this.invalid(request.node.id, "Workflow LLM 节点不允许返回 Tool Call");
         } else if (chunk.type === "error") {
