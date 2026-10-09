@@ -192,6 +192,7 @@ export const modelDefaults: ModelFormValues = {
   timeoutSeconds: 120,
   maxTokens: null,
   thinkingMode: "AUTO",
+  thinkingSupported: false,
   enabled: true
 };
 
@@ -221,6 +222,7 @@ export function toModelConfigPayload(values: ModelFormValues): ModelConfigPayloa
     timeoutSeconds: values.timeoutSeconds,
     maxTokens: values.maxTokens ?? null,
     thinkingMode: values.thinkingMode,
+    thinkingSupported: values.thinkingSupported,
     enabled: values.enabled
   };
 }

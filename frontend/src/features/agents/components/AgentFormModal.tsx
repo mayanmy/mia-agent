@@ -2,6 +2,7 @@ import { Alert, Form, Input, InputNumber, Modal, Select, Slider, Switch, Tabs } 
 import type { FormInstance } from "antd";
 
 import type { KnowledgeBaseListItem } from "../../knowledge/api";
+import type { ModelConfigOption } from "../../model-providers/api";
 import type { ToolListItem } from "../../tools/api";
 import type { AgentFormValues } from "../types";
 import { defaultAgentFormValues } from "../utils/agent-form";
@@ -37,6 +38,7 @@ type AgentFormModalProps = {
   saving: boolean;
   /** 按供应商分组的可选模型。 */
   modelOptions: AgentModelOptionGroup[];
+  modelConfigs: ModelConfigOption[];
   /** 可绑定工具列表。 */
   tools: ToolListItem[];
   /** 可绑定知识库列表。 */
@@ -54,6 +56,7 @@ export function AgentFormModal({
   editing,
   saving,
   modelOptions,
+  modelConfigs,
   tools,
   knowledgeBases,
   onCancel,
@@ -67,6 +70,8 @@ export function AgentFormModal({
   );
   const selectedKnowledgeBaseIds =
     Form.useWatch("knowledgeBaseIds", { form, preserve: true }) ?? [];
+  const selectedModelConfigId = Form.useWatch("modelConfigId", { form, preserve: true });
+  const selectedModel = modelConfigs.find((model) => model.id === selectedModelConfigId);
 
   return (
     <Modal
@@ -116,7 +121,31 @@ export function AgentFormModal({
                     name="modelConfigId"
                     rules={[{ required: true, message: "请选择模型" }]}
                   >
-                    <Select options={modelOptions} />
+                    <Select
+                      options={modelOptions}
+                      onChange={(modelConfigId) => {
+                        const model = modelConfigs.find((item) => item.id === modelConfigId);
+                        if (!model?.thinkingSupported) form.setFieldValue("thinkingMode", "AUTO");
+                      }}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label="思考模式"
+                    name="thinkingMode"
+                    extra={
+                      selectedModel?.thinkingSupported
+                        ? "可按当前 Agent 场景覆盖模型默认设置。"
+                        : "当前模型未声明支持思考覆盖，将保持供应商默认行为。"
+                    }
+                  >
+                    <Select
+                      disabled={!selectedModel?.thinkingSupported}
+                      options={[
+                        { label: "跟随模型默认", value: "AUTO" },
+                        { label: "开启思考", value: "ENABLED" },
+                        { label: "关闭思考", value: "DISABLED" }
+                      ]}
+                    />
                   </Form.Item>
                   <Form.Item className="agentFormFull" label="描述" name="description">
                     <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />

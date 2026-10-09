@@ -3,6 +3,7 @@ import {
   AgentChatSessionMode,
   AgentExecutionMode,
   ModelConfigType,
+  ModelThinkingMode,
   Prisma,
   WorkspaceRole
 } from "@prisma/client";
@@ -125,6 +126,7 @@ type AgentCreateData = {
   chatSessionMode: AgentChatSessionMode;
   /** 模型扩展生成参数。 */
   generationParams: AgentGenerationParams | null;
+  thinkingMode: ModelThinkingMode;
   /** Agent 启用状态。 */
   enabled: boolean;
 };
@@ -226,6 +228,7 @@ export class AgentsService {
         historyTurns: data.historyTurns,
         chatSessionMode: data.chatSessionMode,
         generationParams: this.toPrismaJson(data.generationParams),
+        thinkingMode: data.thinkingMode,
         enabled: data.enabled
       },
       include: {
@@ -287,6 +290,7 @@ export class AgentsService {
         ...(data.generationParams !== undefined
           ? { generationParams: this.toPrismaJson(data.generationParams) }
           : {}),
+        ...(data.thinkingMode !== undefined ? { thinkingMode: data.thinkingMode } : {}),
         ...(data.enabled !== undefined ? { enabled: data.enabled } : {})
       },
       include: {
@@ -572,6 +576,11 @@ export class AgentsService {
           }
         : null,
       generationParams: this.toGenerationParams(agent.generationParams),
+      thinkingMode: this.resolveThinkingMode(
+        agent.thinkingMode,
+        agent.modelConfig.thinkingSupported,
+        agent.modelConfig.thinkingMode
+      ),
       knowledgeBaseIds: agent.agentKnowledgeBases
         .filter((knowledgeBase) => this.isActiveAgentKnowledgeBase(knowledgeBase))
         .map((knowledgeBase) => knowledgeBase.knowledgeBaseId),
@@ -765,6 +774,7 @@ export class AgentsService {
       historyTurns: this.normalizeHistoryTurns(payload.historyTurns),
       chatSessionMode: this.normalizeChatSessionMode(payload.chatSessionMode),
       generationParams: this.normalizeGenerationParams(payload.generationParams),
+      thinkingMode: this.normalizeThinkingMode(payload.thinkingMode),
       enabled: payload.enabled ?? true
     };
   }
@@ -802,6 +812,9 @@ export class AgentsService {
       ...(payload.generationParams !== undefined
         ? { generationParams: this.normalizeGenerationParams(payload.generationParams) }
         : {}),
+      ...(payload.thinkingMode !== undefined
+        ? { thinkingMode: this.normalizeThinkingMode(payload.thinkingMode) }
+        : {}),
       ...(payload.enabled !== undefined ? { enabled: Boolean(payload.enabled) } : {})
     };
   }
@@ -820,6 +833,28 @@ export class AgentsService {
     }
 
     return this.requireNonEmptyString(value, "modelConfigId");
+  }
+
+  private normalizeThinkingMode(value: unknown): ModelThinkingMode {
+    if (value === undefined || value === null) return ModelThinkingMode.AUTO;
+    if (
+      value === ModelThinkingMode.AUTO ||
+      value === ModelThinkingMode.ENABLED ||
+      value === ModelThinkingMode.DISABLED
+    ) {
+      return value;
+    }
+    throw new AppError(ErrorCodes.common.badRequest, "thinkingMode is invalid");
+  }
+
+  /** 不支持思考覆盖的模型始终保持供应商默认；可选模型才接受 Agent 覆盖。 */
+  private resolveThinkingMode(
+    agentMode: ModelThinkingMode,
+    thinkingSupported: boolean,
+    modelMode: ModelThinkingMode
+  ): ModelThinkingMode {
+    if (!thinkingSupported) return ModelThinkingMode.AUTO;
+    return agentMode === ModelThinkingMode.AUTO ? modelMode : agentMode;
   }
 
   private normalizeDescription(value: unknown): string {
@@ -1228,6 +1263,7 @@ export class AgentsService {
       historyTurns: agent.historyTurns,
       chatSessionMode: agent.chatSessionMode,
       generationParams: this.toGenerationParams(agent.generationParams),
+      thinkingMode: agent.thinkingMode,
       toolIds: agent.agentTools.map((tool) => tool.toolId),
       knowledgeBaseIds: agent.agentKnowledgeBases.map(
         (knowledgeBase) => knowledgeBase.knowledgeBaseId

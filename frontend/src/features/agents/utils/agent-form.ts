@@ -10,6 +10,7 @@ export const defaultAgentFormValues: AgentFormValues = {
   maxTokens: null,
   historyTurns: 6,
   chatSessionMode: "EPHEMERAL",
+  thinkingMode: "AUTO",
   enabled: true,
   toolIds: [],
   knowledgeBaseIds: []
@@ -26,6 +27,7 @@ export function toAgentPayload(values: AgentFormValues): AgentPayload {
     maxTokens: values.maxTokens ?? null,
     historyTurns: values.historyTurns,
     chatSessionMode: values.chatSessionMode,
+    thinkingMode: values.thinkingMode,
     enabled: values.enabled
   };
 }
@@ -41,6 +43,7 @@ export function toAgentFormValues(agent: AgentDetail): AgentFormValues {
     maxTokens: agent.maxTokens,
     historyTurns: agent.historyTurns,
     chatSessionMode: agent.chatSessionMode,
+    thinkingMode: agent.thinkingMode,
     enabled: agent.enabled,
     toolIds: agent.toolIds,
     knowledgeBaseIds: agent.knowledgeBaseIds

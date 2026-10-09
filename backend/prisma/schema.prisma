@@ -377,6 +377,8 @@ model ModelConfig {
   timeoutSeconds           Int                      @default(120) @map("timeout_seconds")
   maxTokens                Int?                     @map("max_tokens")
   thinkingMode             ModelThinkingMode        @default(AUTO) @map("thinking_mode")
+  /// 是否支持由调用方显式开启/关闭思考；不支持时 Agent 不得覆盖模型默认行为。
+  thinkingSupported        Boolean                  @default(false) @map("thinking_supported")
   createdAt                DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                DateTime?                @map("deleted_at") @db.Timestamptz(6)
@@ -426,6 +428,8 @@ model Agent {
   chatSessionMode       AgentChatSessionMode   @default(EPHEMERAL) @map("chat_session_mode")
   executionMode         AgentExecutionMode     @default(AGENT_LOOP) @map("execution_mode")
   generationParams      Json?                  @map("generation_params") @db.JsonB
+  /// Agent 对模型默认思考模式的覆盖；AUTO 表示跟随模型配置。
+  thinkingMode          ModelThinkingMode      @default(AUTO) @map("thinking_mode")
   enabled               Boolean                @default(true)
   published             Boolean                @default(false)
   publishedAt           DateTime?              @map("published_at") @db.Timestamptz(6)

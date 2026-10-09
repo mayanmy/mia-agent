@@ -25,6 +25,7 @@ type ModelConfigWithProvider = {
   timeoutSeconds: number;
   maxTokens: number | null;
   thinkingMode: ModelThinkingMode;
+  thinkingSupported: boolean;
   provider: ModelProvider;
 };
 
@@ -129,7 +130,9 @@ export class ModelProvidersGateway {
         modelName: modelConfig.modelName,
         timeoutSeconds,
         maxTokens: modelConfig.maxTokens,
-        thinkingMode: modelConfig.thinkingMode
+        thinkingMode: modelConfig.thinkingSupported
+          ? (request.thinkingMode ?? modelConfig.thinkingMode)
+          : ModelThinkingMode.AUTO
       },
       messages: this.requireMessages(request.messages),
       timeoutMs: timeoutSeconds * 1000
@@ -181,6 +184,7 @@ export class ModelProvidersGateway {
         timeoutSeconds: true,
         maxTokens: true,
         thinkingMode: true,
+        thinkingSupported: true,
         provider: true
       }
     });

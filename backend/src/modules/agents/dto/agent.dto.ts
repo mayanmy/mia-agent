@@ -2,6 +2,7 @@ import {
   AgentChatSessionMode,
   AgentExecutionMode,
   ModelConfigType,
+  ModelThinkingMode,
   ModelProviderType
 } from "@prisma/client";
 
@@ -37,6 +38,8 @@ export type AgentCreateDto = {
   chatSessionMode?: AgentChatSessionMode;
   /** 模型供应商特有的附加生成参数。 */
   generationParams?: AgentGenerationParams | null;
+  /** Agent 对模型默认思考模式的覆盖；AUTO 表示跟随模型。 */
+  thinkingMode?: ModelThinkingMode;
   /** 是否允许普通成员使用该 Agent。 */
   enabled?: boolean;
 };
@@ -135,6 +138,7 @@ export type AgentDetail = AgentListItem & {
   chatSessionMode: AgentChatSessionMode;
   /** 模型扩展生成参数。 */
   generationParams: AgentGenerationParams | null;
+  thinkingMode: ModelThinkingMode;
   /** 已绑定工具 ID 列表。 */
   toolIds: string[];
   /** 已绑定知识库 ID 列表。 */
@@ -287,6 +291,8 @@ export type AgentRuntimeConfig = {
   workflow: AgentWorkflowBinding | null;
   /** 模型扩展生成参数。 */
   generationParams: AgentGenerationParams | null;
+  /** 已结合模型能力与默认值计算出的实际思考模式。 */
+  thinkingMode: ModelThinkingMode;
   /** 检索模块需要查询的知识库 ID。 */
   knowledgeBaseIds: string[];
   /** Runtime 允许调用的工具 ID。 */

@@ -54,6 +54,7 @@ function OpenModelConfigModal({
   const [form] = Form.useForm<ModelFormValues>();
   const selectedProviderId = Form.useWatch("providerId", form);
   const selectedModelType = Form.useWatch("modelType", form);
+  const thinkingSupported = Form.useWatch("thinkingSupported", form);
   const modelProvider = providers.find((provider) => provider.id === selectedProviderId);
 
   useEffect(() => {
@@ -231,19 +232,34 @@ function OpenModelConfigModal({
           </Form.Item>
         </div>
         {selectedModelType === "CHAT" && (
-          <Form.Item
-            extra="自动表示沿用供应商默认行为；只有兼容 enable_thinking 参数的 OpenAI-compatible 服务支持显式开启或关闭。"
-            label="思考模式"
-            name="thinkingMode"
-          >
-            <Select
-              options={[
-                { label: "自动（供应商默认）", value: "AUTO" },
-                { label: "开启", value: "ENABLED" },
-                { label: "关闭", value: "DISABLED" }
-              ]}
-            />
-          </Form.Item>
+          <>
+            <Form.Item
+              extra="开启后，绑定该模型的 Agent 才能单独选择开启或关闭思考。"
+              label="支持思考模式"
+              name="thinkingSupported"
+              valuePropName="checked"
+            >
+              <Switch
+                onChange={(checked) => {
+                  if (!checked) form.setFieldValue("thinkingMode", "AUTO");
+                }}
+              />
+            </Form.Item>
+            <Form.Item
+              extra="Agent 选择“跟随模型默认”时使用此设置。"
+              label="默认思考模式"
+              name="thinkingMode"
+            >
+              <Select
+                disabled={!thinkingSupported}
+                options={[
+                  { label: "自动（供应商默认）", value: "AUTO" },
+                  { label: "默认开启", value: "ENABLED" },
+                  { label: "默认关闭", value: "DISABLED" }
+                ]}
+              />
+            </Form.Item>
+          </>
         )}
         <Form.Item label="启用" name="enabled" valuePropName="checked">
           <Switch />

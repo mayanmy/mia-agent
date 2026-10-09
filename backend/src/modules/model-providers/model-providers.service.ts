@@ -256,6 +256,8 @@ export class ModelProvidersService {
       providerId: config.providerId,
       providerName: config.provider.name,
       providerType: config.provider.providerType,
+      thinkingMode: config.thinkingMode,
+      thinkingSupported: config.thinkingSupported,
       isDefault: settings?.chatModelConfigId === config.id
     }));
   }
@@ -541,7 +543,10 @@ export class ModelProvidersService {
       enabled: payload.enabled ?? true,
       timeoutSeconds: this.normalizeTimeout(payload.timeoutSeconds),
       maxTokens: this.normalizeMaxTokens(payload.maxTokens),
-      thinkingMode: this.requireThinkingMode(payload.thinkingMode ?? ModelThinkingMode.AUTO)
+      thinkingMode: payload.thinkingSupported
+        ? this.requireThinkingMode(payload.thinkingMode ?? ModelThinkingMode.AUTO)
+        : ModelThinkingMode.AUTO,
+      thinkingSupported: Boolean(payload.thinkingSupported)
     };
   }
 
@@ -581,8 +586,13 @@ export class ModelProvidersService {
       ...(payload.maxTokens !== undefined
         ? { maxTokens: this.normalizeMaxTokens(payload.maxTokens) }
         : {}),
-      ...(payload.thinkingMode !== undefined
-        ? { thinkingMode: this.requireThinkingMode(payload.thinkingMode) }
+      ...(payload.thinkingSupported === false
+        ? { thinkingMode: ModelThinkingMode.AUTO }
+        : payload.thinkingMode !== undefined
+          ? { thinkingMode: this.requireThinkingMode(payload.thinkingMode) }
+          : {}),
+      ...(payload.thinkingSupported !== undefined
+        ? { thinkingSupported: Boolean(payload.thinkingSupported) }
         : {})
     };
   }
@@ -1402,6 +1412,7 @@ export class ModelProvidersService {
       timeoutSeconds: config.timeoutSeconds,
       maxTokens: config.maxTokens,
       thinkingMode: config.thinkingMode,
+      thinkingSupported: config.thinkingSupported,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt
     };

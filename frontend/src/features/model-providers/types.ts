@@ -26,6 +26,7 @@ export type ModelFormValues = {
   /** null 表示沿用供应商默认生成上限。 */
   maxTokens?: number | null;
   thinkingMode: ModelThinkingMode;
+  thinkingSupported: boolean;
   enabled: boolean;
 };
 

@@ -99,6 +99,8 @@ export type ModelConfigListItem = {
   maxTokens: number | null;
   /** Chat 模型思考模式；AUTO 表示沿用供应商默认行为。 */
   thinkingMode: ModelThinkingMode;
+  /** 是否允许 Agent 显式覆盖思考模式。 */
+  thinkingSupported: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -111,6 +113,8 @@ export type ModelConfigOption = {
   providerId: string;
   providerName: string;
   providerType: ModelProviderType;
+  thinkingMode: ModelThinkingMode;
+  thinkingSupported: boolean;
   isDefault: boolean;
 };
 
@@ -131,6 +135,7 @@ export type ModelConfigCreateDto = {
   timeoutSeconds?: number;
   maxTokens?: number | null;
   thinkingMode?: ModelThinkingMode;
+  thinkingSupported?: boolean;
 };
 
 /** 更新模型配置的输入；未提供字段保持原值。 */
@@ -145,6 +150,7 @@ export type ModelConfigUpdateDto = {
   timeoutSeconds?: number;
   maxTokens?: number | null;
   thinkingMode?: ModelThinkingMode;
+  thinkingSupported?: boolean;
 };
 
 /** 发起模型能力检查的输入。 */

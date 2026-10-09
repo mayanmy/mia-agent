@@ -59,6 +59,8 @@ export type ChatCompletionRequest = {
   temperature?: number;
   maxTokens?: number | null;
   timeoutSeconds?: number;
+  /** Agent 等上层业务对模型默认思考模式的单次覆盖。 */
+  thinkingMode?: ModelThinkingMode;
   tools?: LLMToolDefinition[];
   toolChoice?: "auto" | "none";
   /** 用户取消或 SSE 断开时传递给上游请求。 */

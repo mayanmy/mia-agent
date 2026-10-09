@@ -23,7 +23,13 @@ export function ModelConfigList({ models, onEditModel, onDeleteModel }: ModelCon
           <span className={model.enabled ? "modelDot enabled" : "modelDot"} />
           <span>{model.modelName}</span>
           <Tag>{modelTypeLabels[model.modelType]}</Tag>
-          {model.modelType === "CHAT" && <Tag>{thinkingModeLabels[model.thinkingMode]}</Tag>}
+          {model.modelType === "CHAT" && (
+            <Tag>
+              {model.thinkingSupported
+                ? thinkingModeLabels[model.thinkingMode]
+                : "不支持思考覆盖"}
+            </Tag>
+          )}
           <Button size="small" type="text" onClick={() => onEditModel(model)}>
             配置
           </Button>

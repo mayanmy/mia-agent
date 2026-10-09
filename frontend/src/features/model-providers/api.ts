@@ -59,6 +59,7 @@ export type ModelConfigListItem = {
   /** null 表示沿用供应商默认生成上限。 */
   maxTokens: number | null;
   thinkingMode: ModelThinkingMode;
+  thinkingSupported: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -80,6 +81,7 @@ export type ModelConfigPayload = {
   timeoutSeconds: number;
   maxTokens: number | null;
   thinkingMode: ModelThinkingMode;
+  thinkingSupported: boolean;
 };
 
 /** 模型能力分类。 */
@@ -121,6 +123,8 @@ export type ModelConfigOption = {
   providerId: string;
   providerName: string;
   providerType: ModelProviderType;
+  thinkingMode: ModelThinkingMode;
+  thinkingSupported: boolean;
   isDefault: boolean;
 };
 

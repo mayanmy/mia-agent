@@ -426,6 +426,7 @@ export function AgentsPage() {
       <AgentFormModal
         editing={Boolean(editingId)}
         form={form}
+        modelConfigs={modelConfigs}
         modelOptions={modelOptions}
         knowledgeBases={knowledgeBases}
         open={dialogOpen}

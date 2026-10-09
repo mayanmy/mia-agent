@@ -5,6 +5,7 @@ import type { ModelProviderType } from "../model-providers/api";
 export type AgentGenerationParams = Record<string, string | number | boolean | null>;
 /** Agent 对话历史的保存模式。 */
 export type AgentChatSessionMode = "EPHEMERAL" | "PERSISTENT";
+export type AgentThinkingMode = "AUTO" | "ENABLED" | "DISABLED";
 
 /** Agent 列表接口返回的摘要。 */
 export type AgentListItem = {
@@ -80,6 +81,7 @@ export type AgentDetail = AgentListItem & {
   chatSessionMode: AgentChatSessionMode;
   /** 模型扩展生成参数。 */
   generationParams: AgentGenerationParams | null;
+  thinkingMode: AgentThinkingMode;
   /** 已绑定工具 ID。 */
   toolIds: string[];
   /** 已绑定知识库 ID。 */
@@ -108,6 +110,7 @@ export type AgentPayload = {
   chatSessionMode: AgentChatSessionMode;
   /** 是否启用。 */
   enabled: boolean;
+  thinkingMode: AgentThinkingMode;
 };
 
 /** 分页读取 Agent 列表。 */

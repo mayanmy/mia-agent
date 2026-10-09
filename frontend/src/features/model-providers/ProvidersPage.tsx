@@ -203,6 +203,7 @@ export function ProvidersPage() {
       timeoutSeconds: config.timeoutSeconds,
       maxTokens: config.maxTokens,
       thinkingMode: config.thinkingMode,
+      thinkingSupported: config.thinkingSupported,
       enabled: config.enabled
     });
     setModelDialogOpen(true);

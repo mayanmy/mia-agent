@@ -261,6 +261,7 @@ export class AgentRuntimeService {
             temperature: agent.temperature,
             maxTokens: agent.maxTokens,
             timeoutSeconds: agent.timeoutSeconds,
+            thinkingMode: agent.thinkingMode,
             signal: request.signal
           })) {
             if (chunk.type !== "done" && firstUpstreamEventMs === undefined) {
