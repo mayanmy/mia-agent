@@ -2,7 +2,7 @@
 
 ## 1. 文档信息
 
-- 文档状态：待实施
+- 文档状态：核心能力已实施，后续增强持续迭代
 - 方案版本：V1.0
 - 编写日期：2026-08-11
 - 适用范围：Mia 作为 MCP Host/Client，连接并调用外部 MCP Server
@@ -10,7 +10,9 @@
 
 ## 2. 背景
 
-Mia 已具备 Builtin Tool、预配置 HTTP Tool、Agent Runtime、Workflow Runtime、动态鉴权和 Run Trace。当前工具接入仍以单个 HTTP API 为中心，缺少标准化的能力发现、Schema 同步、连接健康状态和跨系统复用机制。
+Mia 已具备 Builtin Tool、HTTP Tool、Agent Runtime、Workflow Runtime、动态鉴权和 Run Trace，并已实现 MCP Streamable HTTP 连接、能力发现与统一执行。本文保留最初设计过程，当前实施状态以本节和代码为准。
+
+当前已实现：MCP Server 管理、固定凭据与 OAuth/Client Credentials、连接测试、Tools/Resources/Prompts 发现与同步、Agent/Workflow 工具调用、Tool Search、审批与 Run Trace。仍未实现：任意 stdio、MCP Registry、Mia 作为 MCP Server、跨 Workspace 共享和按终端用户独立 OAuth 授权。
 
 MCP 解决的是“Host 如何以统一协议发现并调用外部能力”。对 Mia 来说，近期最有价值的定位是 MCP Host/Client：管理员连接团队认可的 MCP Server，将发现到的 Tool 纳入 Mia 统一工具目录，再授权给 Agent 或 Workflow 使用。
 
@@ -575,7 +577,7 @@ ToolCallLog 补充的 `source` 使用 `mcp`，`toolId` 保存稳定 Runtime ID�
 - Tool P95 超过配置超时的 80%。
 - Schema 变化导致已绑定 Tool 不可用。
 
-对 20-50 人本地部署，首期指标可先落结构化日志与管理页统计，不强制引入新的监控基础设施。
+对本地单实例的初始部署，首期指标可先落结构化日志与管理页统计，不强制引入新的监控基础设施；规模扩大或采用多节点部署时再接入集中监控。
 
 ## 18. Tool 数量与上下文控制
 

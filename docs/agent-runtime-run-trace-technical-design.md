@@ -1,5 +1,7 @@
 # Agent Runtime 与 Run Trace 技术方案
 
+> 实施状态：已完成核心 Runtime 与 Run Trace。本文中的“当前实现与问题”描述的是改造前基线；当前工作台 Chat、公开入口、Service API 和 Workflow 已接入统一运行记录，页面产品名为“运行链路”。
+
 ## 1. 文档目标
 
 本文定义 Mia 建立统一 Agent Runtime 和 Run Trace 的详细技术方案，并作为后续开发、评审和验收基线。
@@ -13,9 +15,9 @@
 5. 贯通 `request_id`、`run_id`、`session_id` 和工具调用 ID。
 6. 在不改变现有 SSE 协议和用户行为的前提下分阶段迁移。
 
-本文只建设 Agent Runtime 和 Run Trace，不在本阶段实现 MCP、Skills、AgentVersion、Memory、Subagents 或开放 Hooks。但方案需要为这些能力预留稳定扩展点。
+本文原阶段只建设 Agent Runtime 和 Run Trace。此后 MCP Client 已接入 Runtime；Skills 的管理与导入已实现，但 Agent 绑定和 Runtime 注入仍未完成；AgentVersion、Memory、Subagents 和开放 Hooks 仍属后续能力。
 
-## 2. 当前实现与问题
+## 2. 改造前基线与问题（历史）
 
 ### 2.1 当前调用链
 

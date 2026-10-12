@@ -44,7 +44,7 @@ cd /www/wwwroot/mia
 
 - `deploy-backend.sh`：部署 PostgreSQL、数据库迁移和 API。
 - `deploy-frontend.sh`：部署 React 前端和容器内 Nginx。
-- `deploy.sh`：在同一台服务器上依次部署后端和前端。
+- `deploy.sh`：当前只部署后端，等价于调用 `deploy-backend.sh`；不会部署前端。
 
 ## 3. 配置生产环境变量
 
@@ -110,10 +110,16 @@ cd /www/wwwroot/mia
 ./deploy-frontend.sh
 ```
 
-也可以统一重新构建并启动：
+也可以通过统一入口重新构建并启动后端（当前不会更新前端）：
 
 ```bash
 ./deploy.sh
+```
+
+如代码同时包含前端变更，随后必须单独执行：
+
+```bash
+./deploy-frontend.sh
 ```
 
 检查状态：
@@ -277,12 +283,14 @@ docker compose -p mia-backend --env-file .env.docker -f docker-compose.backend.y
 docker compose -p mia-frontend --env-file .env.docker -f docker-compose.frontend.yml logs -f web
 ```
 
-重新部署：
+重新部署后端：
 
 ```bash
 cd /www/wwwroot/mia
 ./deploy.sh
 ```
+
+如果本次也修改了前端，再执行 `./deploy-frontend.sh`。
 
 如果只修改了 `.env.docker` 或只需要重启已有镜像，可以跳过镜像构建：
 

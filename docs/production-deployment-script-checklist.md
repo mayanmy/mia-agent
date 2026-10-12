@@ -6,7 +6,7 @@
 
 | 脚本 | 使用场景 | 主要行为 | 数据影响 |
 | --- | --- | --- | --- |
-| `deploy.sh` | 前后端位于同一服务器时统一发布 | 先执行后端部署，再执行前端部署 | 保留数据库和知识库命名卷 |
+| `deploy.sh` | 当前后端发布统一入口 | 仅调用 `deploy-backend.sh`：构建后端、启动数据库、执行迁移并更新 API | 保留数据库和知识库命名卷 |
 | `deploy-backend.sh` | 只更新后端、数据库迁移或后端配置 | 构建后端镜像，启动 PostgreSQL，执行 Prisma migration，重建 API 容器 | 复用 `mia-backend_mia_postgres_data` 和 `mia-backend_mia_knowledge_data` |
 | `deploy-frontend.sh` | 只更新 React 页面、Nginx 配置或前端代理地址 | 构建前端镜像，重建 Web/Nginx 容器 | 不访问 PostgreSQL |
 | `scripts/init-docker-env.sh` | 被上述部署脚本自动调用 | 首次创建 `.env.docker` 并生成随机密钥 | 已存在的 `.env.docker` 不会被覆盖 |
@@ -53,12 +53,18 @@ MIA_API_UPSTREAM=http://host.docker.internal:8000
 
 ## 3. 日常发布
 
-同机完整发布：
+发布后端（`deploy.sh` 当前只部署后端）：
 
 ```bash
 cd /www/wwwroot/mia
 git pull
 ./deploy.sh
+```
+
+如本次同时包含前端变更，后端成功后还必须显式执行：
+
+```bash
+./deploy-frontend.sh
 ```
 
 仅发布后端：
@@ -126,7 +132,10 @@ docker compose -p mia-backend --env-file .env.docker -f docker-compose.backend.y
 
 ```bash
 ./deploy.sh
+./deploy-frontend.sh
 ```
+
+第一条恢复后端，第二条恢复前端；`deploy.sh` 不会自动启动或更新前端。
 
 `down` 不会删除命名卷。生产环境禁止追加 `--volumes` 或 `-v`。
 

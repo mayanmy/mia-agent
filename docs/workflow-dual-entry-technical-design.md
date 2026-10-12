@@ -99,8 +99,8 @@ Agent Runtime 收到 `workflow:` 前缀后：
 
 ## 6. 权限与版本约束
 
-- Workflow 编辑、校验、发布仍仅限 Admin。
-- 已登录 Admin/User 均可读取和独立运行已发布 Workflow 应用。
+- Workflow 编辑、校验、发布限空间 Owner/Manager。
+- 当前空间内有权使用资源的成员可以读取和独立运行已发布 Workflow 应用。
 - Agent 新建绑定时只能选择当前发布版本；绑定后继续运行该历史不可变版本，直到管理员主动升级绑定。
 - Workflow 归档后不可新运行，已有绑定在调用时明确失败。
 - 第一版不开放匿名运行和 Workflow API Key，后续通过 external_access 模块扩展。
@@ -115,7 +115,7 @@ Agent Runtime 收到 `workflow:` 前缀后：
 
 ### Workflow 应用
 
-- Admin/User 都能从主导航进入独立应用列表。
+- 当前空间成员都能从主导航进入独立应用列表。
 - 列表只展示当前已发布版本，不暴露草稿 Graph 和编译计划。
 - 提交时携带页面读取到的版本 ID；若管理员已发布新版本，服务端拒绝旧表单并提示刷新。
 

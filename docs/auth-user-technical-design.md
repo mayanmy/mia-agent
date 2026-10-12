@@ -1,5 +1,7 @@
 # Auth / User 登录权限技术方案
 
+> 文档状态：认证基础已实施。JWT、Refresh Session 与撤销机制仍是当前方案；业务资源鉴权已经迁移到 Workspace `OWNER / MANAGER / MEMBER`，全局 Admin/User 不再作为空间资源的最终授权依据。
+
 ## 1. 设计决策
 
 Mia v1 采用以下组合：
@@ -16,7 +18,7 @@ Mia v1 采用以下组合：
 - JWT 适合现有 REST 和 SSE 接口，Guard 校验不需要每次查会话表。
 - Refresh Session 保存在数据库，禁用用户、重置密码和退出全部设备可以即时撤销后续续期能力。
 - 长期凭证不进入 JavaScript 可读存储，显著降低 XSS 后被长期盗用的风险。
-- 单体、20-50 人本地部署不需要 Redis、OAuth Server 或分布式 Session。
+- 本地部署的模块化单体在初始容量下不需要 Redis、OAuth Server 或分布式 Session；规模扩大后应根据会话量、节点数和可用性目标重新评估。
 
 不采用“仅将长期 JWT 放 localStorage”的原因：无法可靠撤销、XSS 风险高，且不能支持设备级退出。
 

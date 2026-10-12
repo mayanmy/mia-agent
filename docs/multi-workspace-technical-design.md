@@ -1,5 +1,7 @@
 # Mia 多团队 Workspace 技术方案
 
+> 实施状态：核心隔离已完成。空间角色最终采用 `OWNER / MANAGER / MEMBER`；本文中早期 `ADMIN` 设计均应理解为当前 `MANAGER`，平台 `UserRole.ADMIN` 仅负责账号治理。
+
 ## 1. 设计结论
 
 Mia 多团队采用共享数据库、行级 Workspace 隔离的模块化单体方案：
@@ -20,7 +22,7 @@ User（全局身份）
 ```prisma
 enum WorkspaceRole {
   OWNER
-  ADMIN
+  MANAGER
   MEMBER
 }
 
@@ -85,7 +87,7 @@ JWT Guard 在验证 User 之后，必须根据当前 Workspace 解析有效成�
 ```ts
 type CurrentWorkspace = {
   id: string;
-  role: "OWNER" | "ADMIN" | "MEMBER";
+  role: "OWNER" | "MANAGER" | "MEMBER";
 };
 ```
 
@@ -176,7 +178,7 @@ workspace_<workspaceId>__kb_<knowledgeBaseId>
 
 1. 备份 PostgreSQL 数据库与 `volumes/app/storage`。
 2. 创建 `workspaces`、`workspace_members`，生成一个“默认团队”。
-3. 将现有 ADMIN 建为默认团队 OWNER，其余 User 建为 MEMBER。
+3. 将最早的有效平台 ADMIN 建为默认团队 OWNER，其余平台账号按迁移规则建立为 MANAGER 或 MEMBER。
 4. 向现有资源表添加可空 `workspace_id`，并批量回填默认团队 ID。
 5. 校验无空值后改为 `NOT NULL`，创建外键、组合索引和新唯一约束。
 6. 将默认模型设置从全局行迁移为默认团队行。

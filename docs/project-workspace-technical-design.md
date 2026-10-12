@@ -2,7 +2,7 @@
 
 ## 1. 方案状态
 
-- 状态：实施基线。
+- 状态：已实施，本文按当前代码维护。
 - 适用版本：Mia 从单团队共享数据升级为多项目空间隔离。
 - 产品术语：界面统一使用“项目空间”；代码、数据库和 API 使用 `Workspace`。
 - 核心目标：不同项目空间可以邀请不同用户加入，同一用户可以加入多个项目空间；所有业务数据默认只在所属项目空间内可见和可操作。
@@ -21,7 +21,7 @@ User（全局登录身份，邮箱全局唯一）
 必须遵守以下约束：
 
 1. `User` 只表示全局账号，项目权限不再由 `User.role` 决定。
-2. 角色属于 `WorkspaceMember`，固定为 `OWNER / ADMIN / MEMBER`。
+2. 角色属于 `WorkspaceMember`，固定为 `OWNER / MANAGER / MEMBER`。
 3. 一个用户可以加入多个项目空间，但每个业务请求只能作用于一个明确的当前项目空间。
 4. 前端可以提交 `X-Workspace-ID`，服务端必须验证当前用户是该空间的有效成员后才能使用，不能直接信任 Header。
 5. Controller 获取可信的 `CurrentWorkspace`，Service 显式接收 `workspaceId`；不得依赖全局变量、页面状态或仅凭资源 ID 推断空间。
@@ -33,22 +33,22 @@ User（全局登录身份，邮箱全局唯一）
 ```prisma
 enum WorkspaceRole {
   OWNER
-  ADMIN
+  MANAGER
   MEMBER
 }
 ```
 
-| 能力                                 | OWNER | ADMIN | MEMBER |
+| 能力                                 | OWNER | MANAGER | MEMBER |
 | ------------------------------------ | ----- | ----- | ------ |
 | 查看和使用空间内已启用资源           | 是    | 是    | 是     |
 | 创建、编辑 Agent、知识库             | 是    | 是    | 否     |
 | 管理模型、工具、MCP、Skill、Workflow | 是    | 是    | 否     |
 | 查看全空间日志和 Run Trace           | 是    | 是    | 否     |
 | 邀请成员、调整 MEMBER                | 是    | 是    | 否     |
-| 任命或移除 ADMIN                     | 是    | 否    | 否     |
+| 任命或移除 MANAGER                   | 是    | 否    | 否     |
 | 转让所有权、删除项目空间             | 是    | 否    | 否     |
 
-`OWNER` 每个项目空间必须且只能有一个有效成员。`ADMIN` 不能降级、移除或替换 `OWNER`。成员被移除后，下一次请求必须立即失去该空间访问权限。
+`OWNER` 每个项目空间必须且只能有一个有效成员。`MANAGER` 不能降级、移除或替换 `OWNER`。成员被移除后，下一次请求必须立即失去该空间访问权限。
 
 迁移期间保留 `User.role` 仅用于兼容旧数据和平台启动，不再作为业务 Controller 的最终授权依据；全部空间内接口迁移完成后再删除该字段。
 
@@ -165,7 +165,7 @@ workspaces.deleted_at IS NULL
 type CurrentWorkspace = {
   id: string;
   name: string;
-  role: "OWNER" | "ADMIN" | "MEMBER";
+  role: "OWNER" | "MANAGER" | "MEMBER";
 };
 ```
 
@@ -299,7 +299,7 @@ POST   /api/v1/workspaces/:workspaceId/transfer-ownership
 
 邀请规则：
 
-1. 邀请指定目标 Workspace 和角色，只允许 `ADMIN / MEMBER`；OWNER 必须通过显式转让产生。
+1. 邀请指定目标 Workspace 和角色，只允许 `MANAGER / MEMBER`；OWNER 必须通过显式转让产生。
 2. 已有 User 接受邀请时只新增或恢复 `WorkspaceMember`。
 3. 新 User 接受邀请时设置密码并创建账号，再新增成员关系。
 4. 同一用户加入不同项目空间互不影响。
@@ -363,7 +363,7 @@ POST   /api/v1/workspaces/:workspaceId/transfer-ownership
 - 同一用户切换空间后列表、缓存、SSE、对话和日志立即切换。
 - 移除成员后其下一次请求立即收到 403，旧 Access Token 不能继续使用。
 - 邀请已存在和不存在的邮箱都能正确加入目标空间。
-- ADMIN 不能处理 OWNER；OWNER 转让后权限立即生效。
+- MANAGER 不能处理 OWNER；OWNER 转让后权限立即生效。
 - 外部 Agent 只能调用所属空间的模型、知识库和工具。
 - 文档索引和向量检索不会写入或命中其他空间。
 - 旧数据迁移后数量、关联、文件读取、向量检索和公开链接保持完整。

@@ -10,7 +10,7 @@
 
 本方案已经接入 Agent Runtime、Chat SSE、Workflow Retrieval 节点和 Run Trace，不是独立的演示接口。
 
-实现状态：已完成，后端全量测试 `165/165` 通过。
+实现状态：已完成。本文记录的测试数量是实施当时快照，不代表当前全量用例数。
 
 ## 2. 背景与问题
 
@@ -384,7 +384,7 @@ retrieval_fused_candidate_count
 
 ## 13. 性能与容量预期
 
-Mia 当前目标规模为 20-50 人、SSE 并发 30-50。混合检索的主要成本为：
+Mia 不限定固定用户规模；当前默认部署基线按 SSE 并发 30-50 进行容量验证。混合检索的主要成本为：
 
 1. Query Embedding 外部调用。
 2. pgvector ANN/距离排序。
@@ -495,7 +495,7 @@ npm --prefix backend test
 ```text
 TypeScript typecheck: passed
 ESLint: passed
-Backend tests: 165/165 passed
+Backend tests at implementation time: 165/165 passed
 ```
 
 生产验收建议准备四类查询：

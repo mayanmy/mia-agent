@@ -1,8 +1,10 @@
 # Agent 模块技术开发文档
 
+> 文档状态：历史基础设计 + 当前扩展说明（2026-09-01）。本文原始表结构用于解释 Agent CRUD 起点，不能替代当前 `backend/prisma/schema.prisma`。
+
 ## 1. 模块目标
 
-Agent 模块负责管理 AI 助手配置。v0.1 只实现 Agent CRUD，不执行模型调用，不做 RAG，不绑定工具。
+Agent 模块负责管理 AI 助手配置，不直接执行模型调用。当前已维护模型、知识库、工具、Workflow、发布方式与思考模式等绑定；实际 RAG、模型和工具执行统一由 Agent Runtime 编排。
 
 后端模块路径：
 
@@ -16,7 +18,9 @@ backend/src/modules/agents/
 frontend/src/features/agents/
 ```
 
-## 2. 数据表设计
+## 2. 数据表设计（历史基础版）
+
+当前权威数据结构以 Prisma Schema 为准；除基础字段外，现已包含 `workspaceId`、思考模式配置以及知识库、工具、Workflow 等关联关系。
 
 ### 2.1 agents
 
@@ -91,7 +95,7 @@ model Agent {
 model_configs 1 -- N agents
 ```
 
-后续扩展：
+当前扩展关系：
 
 ```text
 agents N -- N knowledge_bases via agent_knowledge_bases
@@ -100,9 +104,9 @@ agents 1 -- N chat_sessions
 agents 1 -- N llm_call_logs
 ```
 
-## 3. 暂不建的表
+## 3. 关联表状态
 
-以下表先不建，等对应模块存在后再落真实外键：
+以下关联已经落地，具体字段与约束以 Prisma Schema 为准：
 
 ```text
 agent_knowledge_bases

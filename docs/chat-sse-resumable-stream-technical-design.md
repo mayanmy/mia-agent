@@ -494,7 +494,7 @@ terminal_status
 当前验证结果：
 
 ```text
-backend: 162/162 tests passed
+backend at implementation time: 162/162 tests passed（历史快照，不代表当前全量用例数）
 frontend: TypeScript + Vite production build passed
 ```
 
@@ -516,7 +516,7 @@ frontend: TypeScript + Vite production build passed
 - 事件数组在终态 TTL 前保留完整流事件，没有独立内存上限。
 - 多实例部署需要粘性路由，否则无法找到原实例 runtime。
 
-以 Mia 当前 20-50 人、单实例、本地部署的容量目标，内存方案优先保证实现简单和故障边界清晰。
+以 Mia 单实例、本地部署的初始容量目标，内存方案优先保证实现简单和故障边界清晰；达到单实例资源或可用性边界后，应切换共享状态存储并进行水平扩展。
 
 ### 14.2 多实例演进方案
 
@@ -570,4 +570,3 @@ frontend/src/features/chat/hooks/useTokenBuffer.ts
 - `docs/chat-session-history-technical-design.md`
 - `docs/chat-context-minimal-transport-technical-design.md`
 - `docs/baota-nginx-deployment.md`
-

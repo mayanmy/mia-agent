@@ -50,7 +50,9 @@ env PATH=/Users/yanma/.nvm/versions/node/v22.12.0/bin:/usr/bin:/bin \
   /Users/yanma/.nvm/versions/node/v22.12.0/bin/npm test
 ```
 
-验证结果：后端类型检查通过，`118/118` 测试通过。
+> 本文是 M0 当时的验证快照，不代表当前全量测试数量。
+
+验证结果（M0 当时）：后端类型检查通过，`118/118` 测试通过。
 
 真实 HTTP 集成测试需要监听 `127.0.0.1` 随机端口；受限沙箱环境需要授予本地监听权限。
 

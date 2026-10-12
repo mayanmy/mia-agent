@@ -1,5 +1,7 @@
 # Mia 成熟 Agent 平台技术路线
 
+> 文档状态：滚动路线图（2026-09-01 更新）。早期“当前能力基线”和阶段安排保留设计背景；Runtime、Run Trace、Workflow、Workspace 和 MCP Client 核心闭环现已落地。
+
 ## 1. 文档目标
 
 本文定义 Mia 从当前内部 Agent + RAG 工作台演进为成熟 Agent 平台的技术路线，目标能力范围为：
@@ -16,7 +18,7 @@ Agent + Knowledge + Builtin Tools + MCP + Skills
 4. 新模块、数据模型和调用边界如何设计。
 5. 每个版本以什么标准判断完成。
 
-本文不是开放插件平台或可视化 Workflow 的设计。Mia 仍按单团队、20-50 人、本地部署、单人维护的约束进行取舍。
+本文不是开放插件市场设计。Mia 仍按本地部署、单人可维护的原则取舍，但不限定固定用户规模；当前已经支持多个项目空间及可视化 Workflow。
 
 ## 2. 当前能力基线
 
@@ -30,7 +32,12 @@ Mia 当前已经具备以下核心骨架：
 - HTTP 请求、计算器、当前时间等 Builtin Tools。
 - 模型原生 Tool Call、文本 Tool Call 兼容和多轮工具调用。
 - 工具调用日志、请求 ID、错误日志和基础使用记录。
-- Admin/User 权限、公开分享、Service API 和嵌入组件。
+- 平台账号权限、项目空间角色、公开分享、Service API 和嵌入组件。
+- `OWNER / MANAGER / MEMBER` 项目空间隔离。
+- 可视化 Workflow、Workflow 应用和多结束节点。
+- 独立 Agent Runtime、运行链路和请求日志。
+- MCP Client 的 Tools、Resources、Prompts、鉴权、审批和统一工具执行。
+- 模型思考能力声明与 Agent 级启用开关。
 
 当前 Agent 运行配置已经可以表达：
 
@@ -43,7 +50,7 @@ AgentRuntimeConfig
   - toolIds
 ```
 
-当前主要问题不是缺少一次模型调用，而是缺少一个独立、可观测、可版本化的 Agent Runtime。继续直接向 `chat.service` 叠加 MCP 和 Skills，会使运行编排、错误定位和权限控制快速复杂化。
+当前主要缺口已经转为：Skill 尚未绑定并注入 Runtime；模型多模态能力路由尚待实施；MCP 的生产治理与对外发布尚未完成；AgentVersion、Memory、评测和高级治理仍待后续阶段。
 
 ## 3. 建设原则
 
@@ -698,7 +705,7 @@ on_cancel
 
 ### 10.1 资源权限
 
-在 Admin/User 角色之上增加轻量资源权限：
+在项目空间 `OWNER / MANAGER / MEMBER` 角色之上逐步增加轻量资源权限：
 
 ```text
 范围：private | workspace | public

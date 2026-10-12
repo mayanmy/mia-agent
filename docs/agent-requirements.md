@@ -1,5 +1,7 @@
 # Agent 模块需求文档
 
+> 文档状态：已按当前能力校正。早期 v0.1 的 CRUD 范围保留为历史基线；当前 Agent 已支持知识库、工具、Workflow、发布、运行测试、思考模式等配置。
+
 ## 1. 背景
 
 Mia 是一个本地部署的内部 AI Agent 平台。Agent 是平台里的核心业务对象，代表一个可复用、可管理的 AI 助手配置。
@@ -12,7 +14,7 @@ Agent 不是模型本身，也不是对话执行器。它负责定义一个 AI �
 
 > Agent 是团队创建的 AI 助手配置，它把模型、System Prompt、运行参数、知识库和工具能力组合成一个可复用的业务 AI 应用入口。
 
-Mia v0.1 中，Agent 先聚焦于：
+当前 Agent 覆盖：
 
 - 基础信息配置。
 - System Prompt 配置。
@@ -20,6 +22,9 @@ Mia v0.1 中，Agent 先聚焦于：
 - 基础生成参数配置。
 - 启用 / 停用。
 - Agent CRUD 管理。
+- 知识库、Builtin/HTTP/MCP 工具与 Workflow 绑定。
+- 工作台对话、公开分享、Service API 和 Widget 运行入口。
+- 模型思考模式、运行链路和请求日志。
 
 ## 3. Agent 边界
 
@@ -44,7 +49,7 @@ Mia v0.1 中，Agent 先聚焦于：
 - 不实现工具。
 - 不存储 chat session / message。
 - 不记录 LLM 调用日志。
-- 不做 Workflow 编排。
+- 不负责实现 Workflow 编排引擎，但可以绑定并调用已发布 Workflow。
 
 ## 4. v0.1 功能范围
 
@@ -60,17 +65,23 @@ Mia v0.1 中，Agent 先聚焦于：
 - Agent 配置 System Prompt。
 - Agent 配置基础生成参数。
 
-### 4.2 暂不做
+### 4.2 当前已扩展
 
 - Agent 绑定知识库。
-- Agent 绑定工具。
-- Agent 权限控制。
-- Agent 发布审批。
+- Agent 绑定 Builtin、HTTP 和 MCP 工具。
+- Agent 绑定 Workflow。
+- Agent 发布与外部访问配置。
+- Agent 运行测试与运行链路。
+- Agent 级思考模式开关（受模型能力声明约束）。
+
+### 4.3 仍未完成或后置
+
+- Skill 绑定与 Runtime 注入。
+- 完整 Prompt 版本管理与发布审批流。
+- Agent 级复杂 ACL；当前采用项目空间角色边界。
 - Prompt 版本管理。
-- Agent 使用统计。
 - Agent 复制 / 导入 / 导出。
 - Agent 头像上传。
-- Agent 运行测试。
 
 ## 5. 用户操作流程
 
