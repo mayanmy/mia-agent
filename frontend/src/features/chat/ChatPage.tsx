@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { App as AntdApp, Input } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
+import { AgentRunDetailDrawer } from "../agent-runs/components/AgentRunDetailDrawer";
 import {
   archiveChatSession,
   cancelChatStream,
@@ -57,6 +58,7 @@ export function ChatPage() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [sending, setSending] = useState(false);
+  const [traceRunId, setTraceRunId] = useState<string | null>(null);
   const {
     appendAssistantToken,
     replaceAssistantContent,
@@ -932,9 +934,7 @@ export function ChatPage() {
               showScrollBottom={showScrollBottom}
               onCopyMessage={(content) => void copyMessageContent(content)}
               onRetryMessage={handleRetryMessage}
-              onOpenTrace={(runId) =>
-                navigate(`/operations/traces?runId=${encodeURIComponent(runId)}`)
-              }
+              onOpenTrace={setTraceRunId}
               onFeedback={(messageId, rating) => void handleMessageFeedback(messageId, rating)}
               onUsePrompt={setInput}
               onLoadMoreHistory={() => void loadOlderMessages()}
@@ -961,6 +961,15 @@ export function ChatPage() {
           </div>
         </div>
       ) : null}
+      <AgentRunDetailDrawer
+        runId={traceRunId}
+        onClose={() => setTraceRunId(null)}
+        onOpenLogs={(detail) =>
+          navigate(
+            `/operations/logs?requestId=${encodeURIComponent(detail.requestId)}&runId=${encodeURIComponent(detail.id)}`
+          )
+        }
+      />
     </section>
   );
 }

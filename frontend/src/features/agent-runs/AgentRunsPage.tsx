@@ -5,25 +5,21 @@ import {
   App as AntdApp,
   Button,
   DatePicker,
-  Drawer,
   Input,
   Select,
   Space,
-  Spin,
   Table,
   Tag,
-  Timeline,
   Typography
 } from "antd";
 import type { Dayjs } from "dayjs";
 import type { TableProps } from "antd";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { AgentRunDetailDrawer } from "./components/AgentRunDetailDrawer";
 
 import {
-  getAgentRunDetail,
   listAgentRuns,
-  type AgentRunDetail,
   type AgentRunListItem,
   type AgentRunQuery
 } from "./api";
@@ -60,12 +56,9 @@ export function AgentRunsPage() {
   const [filters, setFilters] = useState<Filters>({});
   const [paging, setPaging] = useState({ page: 1, pageSize: 20, total: 0 });
   const [loading, setLoading] = useState(false);
-  const [detail, setDetail] = useState<AgentRunDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     void refresh(1, 20, {});
-    if (linkedRunId) void openDetail(linkedRunId);
   }, [linkedRunId]);
 
   /** 请求服务端分页数据，避免把大量 Trace 一次载入浏览器。 */
@@ -82,18 +75,6 @@ export function AgentRunsPage() {
     }
   }
 
-  /** 详情按需加载，列表接口只返回排查所需摘要。 */
-  async function openDetail(runId: string) {
-    setDetailLoading(true);
-    try {
-      setDetail(await getAgentRunDetail(runId));
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : "加载 Run 详情失败");
-    } finally {
-      setDetailLoading(false);
-    }
-  }
-
   function openLinkedDetail(runId: string) {
     const next = new URLSearchParams(searchParams);
     next.set("runId", runId);
@@ -101,7 +82,6 @@ export function AgentRunsPage() {
   }
 
   function closeDetail() {
-    setDetail(null);
     const next = new URLSearchParams(searchParams);
     next.delete("runId");
     setSearchParams(next, { replace: true });
@@ -247,100 +227,15 @@ export function AgentRunsPage() {
           onChange={(next) => void refresh(next.current || 1, next.pageSize || 20)}
         />
       </section>
-      <Drawer
-        destroyOnClose
-        extra={
-          detail?.requestId ? (
-            <Button
-              onClick={() =>
-                navigate(
-                  `/operations/logs?requestId=${encodeURIComponent(detail.requestId)}&runId=${encodeURIComponent(detail.id)}`
-                )
-              }
-            >
-              查看请求日志
-            </Button>
-          ) : null
-        }
-        width={760}
-        title="Run Trace 详情"
-        open={detailLoading || Boolean(detail)}
+      <AgentRunDetailDrawer
+        runId={linkedRunId ?? null}
         onClose={closeDetail}
-      >
-        {detailLoading && !detail ? <Spin /> : detail ? <RunDetail detail={detail} /> : null}
-      </Drawer>
-    </section>
-  );
-}
-
-/** 将 Run 和 Step 组织为可扫描的摘要与时间线。 */
-function RunDetail({ detail }: { detail: AgentRunDetail }) {
-  return (
-    <div className="runDetail">
-      <div className="runSummary">
-        {[
-          ["Run ID", detail.id],
-          ["Request ID", detail.requestId],
-          ["状态", detail.status],
-          ["来源", detail.source],
-          ["Agent ID", detail.agentId],
-          ["模型配置", detail.modelConfigId],
-          ["Workflow ID", detail.workflowId],
-          ["Workflow Version", detail.workflowVersionId],
-          ["Workflow 模式", detail.workflowRunMode],
-          ["总耗时", formatDuration(detail.startedAt, detail.finishedAt)],
-          ["首 Token", formatDuration(detail.startedAt, detail.firstTokenAt)],
-          ["Token", `${detail.inputTokens ?? "-"} / ${detail.outputTokens ?? "-"}`],
-          ["错误", detail.errorType ? `${detail.errorType}: ${detail.errorMessage ?? ""}` : "-"]
-        ].map(([label, value]) => (
-          <div key={label}>
-            <span>{label}</span>
-            <strong>{value || "-"}</strong>
-          </div>
-        ))}
-      </div>
-      <TraceBlock title="输入" value={detail.inputPreview} />
-      <TraceBlock title="输出" value={detail.outputPreview} />
-      <h2>Timeline</h2>
-      <Timeline
-        items={detail.steps.map((step) => ({
-          color: statusColor(step.status),
-          children: (
-            <article className="runStep">
-              <header>
-                <strong>
-                  #{step.sequence} {step.type} · {step.name}
-                </strong>
-                <Tag color={statusColor(step.status)}>{step.status}</Tag>
-                <span>{step.elapsedMs === null ? "-" : `${step.elapsedMs}ms`}</span>
-              </header>
-              {step.nodeId ? (
-                <Typography.Text type="secondary" copyable className="runMono">
-                  Node {step.nodeId} · Attempt {step.attempt}
-                </Typography.Text>
-              ) : null}
-              {step.errorType ? (
-                <p className="runError">
-                  {step.errorType}: {step.errorMessage}
-                </p>
-              ) : null}
-              <TraceBlock title="Input" value={step.input} />
-              <TraceBlock title="Output" value={step.output} />
-            </article>
+        onOpenLogs={(detail) =>
+          navigate(
+            `/operations/logs?requestId=${encodeURIComponent(detail.requestId)}&runId=${encodeURIComponent(detail.id)}`
           )
-        }))}
+        }
       />
-    </div>
-  );
-}
-
-/** JSON 值使用预格式化文本展示，避免对象被隐式转成不可读字符串。 */
-function TraceBlock({ title, value }: { title: string; value: unknown }) {
-  if (value == null || value === "") return null;
-  return (
-    <section className="traceBlock">
-      <h3>{title}</h3>
-      <pre>{typeof value === "string" ? value : JSON.stringify(value, null, 2)}</pre>
     </section>
   );
 }
