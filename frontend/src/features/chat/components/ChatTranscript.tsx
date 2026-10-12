@@ -29,8 +29,8 @@ type ChatTranscriptProps = {
   onCopyMessage: (content: string) => void;
   /** 重新生成某条 assistant 回答。 */
   onRetryMessage: (messageId: string) => void;
-  /** 按 request_id 打开日志页。 */
-  onOpenLogs: (requestId: string) => void;
+  /** 按 run_id 直接打开对应运行链路。 */
+  onOpenTrace: (runId: string) => void;
   onFeedback: (messageId: string, rating: "UP" | "DOWN") => void;
   /** 将推荐问题填入输入框，便于用户继续编辑后发送。 */
   onUsePrompt: (prompt: string) => void;
@@ -49,7 +49,7 @@ export function ChatTranscript({
   onScrollBottom,
   onCopyMessage,
   onRetryMessage,
-  onOpenLogs,
+  onOpenTrace,
   onFeedback,
   onUsePrompt
 }: ChatTranscriptProps) {
@@ -98,7 +98,7 @@ export function ChatTranscript({
               key={item.id}
               onCopy={onCopyMessage}
               onRetry={item.role === "assistant" ? () => onRetryMessage(item.id) : undefined}
-              onOpenLogs={onOpenLogs}
+              onOpenTrace={onOpenTrace}
               onFeedback={(rating) => onFeedback(item.id, rating)}
             />
           ))

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   App as AntdApp,
   Button,
@@ -37,8 +37,10 @@ type LogFilters = Omit<ToolCallLogQuery, "page" | "pageSize" | "createdFrom" | "
 
 export function LogsPage() {
   const { message } = AntdApp.useApp();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialRequestId = searchParams.get("requestId")?.trim() || undefined;
+  const linkedRunId = searchParams.get("runId")?.trim() || undefined;
   const [toolCallLogs, setToolCallLogs] = useState<ToolCallLogListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<LogFilters>(
@@ -218,13 +220,24 @@ export function LogsPage() {
     <section className="workspace logsWorkspace">
       <WorkspacePageHeader
         actions={
-          <Button
-            icon={<ReloadOutlined />}
-            loading={loading}
-            onClick={() => void refresh(pagination.page, pagination.pageSize)}
-          >
-            刷新
-          </Button>
+          <Space>
+            {linkedRunId ? (
+              <Button
+                onClick={() =>
+                  navigate(`/operations/traces?runId=${encodeURIComponent(linkedRunId)}`)
+                }
+              >
+                查看运行链路
+              </Button>
+            ) : null}
+            <Button
+              icon={<ReloadOutlined />}
+              loading={loading}
+              onClick={() => void refresh(pagination.page, pagination.pageSize)}
+            >
+              刷新
+            </Button>
+          </Space>
         }
         description="查看工具选择、执行结果和失败原因。"
         title="工具调用日志"

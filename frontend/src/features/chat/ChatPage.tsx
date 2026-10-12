@@ -932,8 +932,8 @@ export function ChatPage() {
               showScrollBottom={showScrollBottom}
               onCopyMessage={(content) => void copyMessageContent(content)}
               onRetryMessage={handleRetryMessage}
-              onOpenLogs={(requestId) =>
-                navigate(`/operations/logs?requestId=${encodeURIComponent(requestId)}`)
+              onOpenTrace={(runId) =>
+                navigate(`/operations/traces?runId=${encodeURIComponent(runId)}`)
               }
               onFeedback={(messageId, rating) => void handleMessageFeedback(messageId, rating)}
               onUsePrompt={setInput}

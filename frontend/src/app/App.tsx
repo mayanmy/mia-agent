@@ -241,7 +241,7 @@ export function App() {
 
             <Route element={<RequireRole roles={["OWNER", "MANAGER"]} />}>
               <Route path="/operations" element={<OperationSectionTabs />}>
-                <Route index element={<Navigate replace to="logs" />} />
+                <Route index element={<Navigate replace to="traces" />} />
                 <Route path="logs" element={<LogsPage />} />
                 <Route path="traces" element={<AgentRunsPage />} />
               </Route>
@@ -355,8 +355,8 @@ function OperationSectionTabs() {
   return (
     <WorkspaceSectionTabs
       tabs={[
-        { label: "请求日志", path: "/operations/logs" },
-        { label: "运行链路", path: "/operations/traces" }
+        { label: "运行链路", path: "/operations/traces" },
+        { label: "请求日志", path: "/operations/logs" }
       ]}
     />
   );

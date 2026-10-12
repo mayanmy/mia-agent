@@ -20,8 +20,8 @@ type ChatMessageItemProps = {
   onCopy: (content: string) => void;
   /** 重新提交该回答对应的上一条用户消息。 */
   onRetry?: () => void;
-  /** 使用 request_id 打开对应日志。 */
-  onOpenLogs?: (requestId: string) => void;
+  /** 使用 run_id 直接打开对应 Run Trace。 */
+  onOpenTrace?: (runId: string) => void;
   onFeedback?: (rating: "UP" | "DOWN") => void;
 };
 
@@ -31,7 +31,7 @@ export function ChatMessageItem({
   generating,
   onCopy,
   onRetry,
-  onOpenLogs,
+  onOpenTrace,
   onFeedback
 }: ChatMessageItemProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -96,7 +96,7 @@ export function ChatMessageItem({
         ) : null}
         {citationSources.length > 0 ? <CitationSourceList sources={citationSources} /> : null}
         {detailsOpen && item.runtimeMetadata ? (
-          <RuntimeDetails metadata={item.runtimeMetadata} onCopy={onCopy} onOpenLogs={onOpenLogs} />
+          <RuntimeDetails metadata={item.runtimeMetadata} onCopy={onCopy} />
         ) : null}
       </div>
       <div className="chatMessageMeta">
@@ -118,10 +118,20 @@ export function ChatMessageItem({
         {item.role === "assistant" && item.runtimeMetadata ? (
           <Button
             className="chatMessageMetaButton chatMessageDetailsButton"
-            icon={<InfoCircleOutlined />}
             size="small"
             type="text"
             onClick={() => setDetailsOpen((current) => !current)}
+          >
+            性能数据
+          </Button>
+        ) : null}
+        {item.role === "assistant" && item.runtimeMetadata?.runId && onOpenTrace ? (
+          <Button
+            className="chatMessageMetaButton chatMessageDetailsButton"
+            icon={<InfoCircleOutlined />}
+            size="small"
+            type="text"
+            onClick={() => onOpenTrace(item.runtimeMetadata!.runId!)}
           >
             运行详情
           </Button>
@@ -153,12 +163,10 @@ export function ChatMessageItem({
 
 function RuntimeDetails({
   metadata,
-  onCopy,
-  onOpenLogs
+  onCopy
 }: {
   metadata: NonNullable<ChatUiMessage["runtimeMetadata"]>;
   onCopy: (content: string) => void;
-  onOpenLogs?: (requestId: string) => void;
 }) {
   const rows = [
     ["模型", [metadata.providerName, metadata.modelName].filter(Boolean).join(" / ")],
@@ -187,11 +195,6 @@ function RuntimeDetails({
             <Button size="small" type="link" onClick={() => onCopy(metadata.requestId!)}>
               复制
             </Button>
-            {onOpenLogs ? (
-              <Button size="small" type="link" onClick={() => onOpenLogs(metadata.requestId!)}>
-                查看日志
-              </Button>
-            ) : null}
           </span>
         </div>
       ) : null}

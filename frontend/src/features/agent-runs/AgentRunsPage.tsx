@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ReloadOutlined } from "@ant-design/icons";
 import {
   App as AntdApp,
@@ -52,6 +53,9 @@ const sourceOptions = [
 
 export function AgentRunsPage() {
   const { message } = AntdApp.useApp();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedRunId = searchParams.get("runId")?.trim() || undefined;
   const [runs, setRuns] = useState<AgentRunListItem[]>([]);
   const [filters, setFilters] = useState<Filters>({});
   const [paging, setPaging] = useState({ page: 1, pageSize: 20, total: 0 });
@@ -61,7 +65,8 @@ export function AgentRunsPage() {
 
   useEffect(() => {
     void refresh(1, 20, {});
-  }, []);
+    if (linkedRunId) void openDetail(linkedRunId);
+  }, [linkedRunId]);
 
   /** 请求服务端分页数据，避免把大量 Trace 一次载入浏览器。 */
   async function refresh(page = paging.page, pageSize = paging.pageSize, nextFilters = filters) {
@@ -87,6 +92,19 @@ export function AgentRunsPage() {
     } finally {
       setDetailLoading(false);
     }
+  }
+
+  function openLinkedDetail(runId: string) {
+    const next = new URLSearchParams(searchParams);
+    next.set("runId", runId);
+    setSearchParams(next);
+  }
+
+  function closeDetail() {
+    setDetail(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("runId");
+    setSearchParams(next, { replace: true });
   }
 
   const columns: TableProps<AgentRunListItem>["columns"] = [
@@ -145,7 +163,7 @@ export function AgentRunsPage() {
       fixed: "right",
       width: 90,
       render: (_, run) => (
-        <Button type="link" size="small" onClick={() => void openDetail(run.id)}>
+        <Button type="link" size="small" onClick={() => openLinkedDetail(run.id)}>
           详情
         </Button>
       )
@@ -231,10 +249,23 @@ export function AgentRunsPage() {
       </section>
       <Drawer
         destroyOnClose
+        extra={
+          detail?.requestId ? (
+            <Button
+              onClick={() =>
+                navigate(
+                  `/operations/logs?requestId=${encodeURIComponent(detail.requestId)}&runId=${encodeURIComponent(detail.id)}`
+                )
+              }
+            >
+              查看请求日志
+            </Button>
+          ) : null
+        }
         width={760}
         title="Run Trace 详情"
         open={detailLoading || Boolean(detail)}
-        onClose={() => setDetail(null)}
+        onClose={closeDetail}
       >
         {detailLoading && !detail ? <Spin /> : detail ? <RunDetail detail={detail} /> : null}
       </Drawer>
