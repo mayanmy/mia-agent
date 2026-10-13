@@ -11,4 +11,5 @@ backend/coverage
 backend/storage
 *.tsbuildinfo
 docs/demo
+docs/*.pdf
 local-architecture-diagrams/

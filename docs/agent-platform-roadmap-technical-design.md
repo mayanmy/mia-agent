@@ -52,6 +52,8 @@ AgentRuntimeConfig
 
 当前主要缺口已经转为：Skill 尚未绑定并注入 Runtime；模型多模态能力路由尚待实施；MCP 的生产治理与对外发布尚未完成；AgentVersion、Memory、评测和高级治理仍待后续阶段。
 
+取消固定用户规模限制后的容量治理，按 [Mia P0 容量、模型并发与可观测性技术方案](./p0-capacity-concurrency-observability-technical-design.md) 实施。该 P0 优先建立可配置容量、两级 LLM 并发队列和基础指标，不提前引入多实例或微服务。
+
 ## 3. 建设原则
 
 ### 3.1 Runtime 优先于能力数量
