@@ -194,6 +194,9 @@ export const modelDefaults: ModelFormValues = {
   thinkingMode: "AUTO",
   thinkingSupported: false,
   visionInput: false,
+  visionMaxImages: 4,
+  visionMaxImageMb: 5,
+  visionMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   enabled: true
 };
 

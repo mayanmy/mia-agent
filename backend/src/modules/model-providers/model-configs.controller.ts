@@ -72,6 +72,11 @@ export class ModelConfigsController {
     return this.modelProvidersService.updateModelCapabilities(id, payload);
   }
 
+  @Post(":id/capabilities/verify")
+  async verifyCapabilities(@Param("id") id: string): Promise<ModelCapabilitiesResponse> {
+    return this.modelProvidersService.verifyModelCapabilities(id);
+  }
+
   @Put(":id")
   async updateModelConfig(
     @Param("id") id: string,

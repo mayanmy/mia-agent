@@ -135,6 +135,12 @@ export class AgentRuntimeService {
                   fallbackUsed: false
                 };
           selectedModelConfigId = decision.selectedModelConfigId;
+          if (
+            request.message.images?.length &&
+            typeof modelProviders.validateVisionInput === "function"
+          ) {
+            await modelProviders.validateVisionInput(selectedModelConfigId, request.message.images);
+          }
           if (selectedModelConfigId !== agent.modelConfigId) {
             const selected =
               await this.requireModelProvidersService().getModelConfig(selectedModelConfigId);
@@ -1116,8 +1122,9 @@ export class AgentRuntimeService {
       content: [
         { type: "text", text },
         ...images.map((image) => ({
-          type: "image_url" as const,
-          image_url: { url: image.dataUrl }
+          type: "image" as const,
+          mimeType: image.mimeType,
+          dataUrl: image.dataUrl
         }))
       ]
     };

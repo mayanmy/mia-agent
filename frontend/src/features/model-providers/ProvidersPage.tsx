@@ -9,6 +9,7 @@ import {
   deleteModelConfig,
   deleteProvider,
   getDefaultModelSettings,
+  getModelCapabilities,
   listProviderModels,
   listModelConfigs,
   listProviders,
@@ -17,6 +18,7 @@ import {
   updateModelConfig,
   updateModelCapabilities,
   updateProvider,
+  verifyModelCapabilities,
   type ModelConfigListItem,
   type ProviderRemoteModel,
   type ProviderListItem
@@ -54,6 +56,7 @@ export function ProvidersPage() {
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [defaultModelDialogOpen, setDefaultModelDialogOpen] = useState(false);
   const [syncingModels, setSyncingModels] = useState(false);
+  const [verifyingCapabilities, setVerifyingCapabilities] = useState(false);
   const [remoteModels, setRemoteModels] = useState<ProviderRemoteModel[]>([]);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [editingProviderApiKeyMasked, setEditingProviderApiKeyMasked] = useState("");
@@ -198,27 +201,49 @@ export function ProvidersPage() {
     void syncProviderModels(providerId);
   }
 
-  function openEditModel(config: ModelConfigListItem) {
-    const provider = providers.find((item) => item.id === config.providerId);
-    setEditingModelId(config.id);
-    setRemoteModels([]);
-    setModelInitialValues({
-      providerId: config.providerId,
-      modelName: config.modelName,
-      modelType: config.modelType,
-      credentialName: config.credentialName,
-      baseUrl: provider?.baseUrl ?? "",
-      apiKey: "",
-      contextLength: config.contextLength,
-      embeddingDimension: config.embeddingDimension,
-      timeoutSeconds: config.timeoutSeconds,
-      maxTokens: config.maxTokens,
-      thinkingMode: config.thinkingMode,
-      thinkingSupported: config.thinkingSupported,
-      visionInput: config.capabilities?.includes("VISION_INPUT") ?? false,
-      enabled: config.enabled
-    });
-    setModelDialogOpen(true);
+  async function openEditModel(config: ModelConfigListItem) {
+    setLoading(true);
+    try {
+      const provider = providers.find((item) => item.id === config.providerId);
+      const capabilityResponse = await getModelCapabilities(config.id);
+      const visionCapability = capabilityResponse.capabilities.find(
+        (item) => item.type === "VISION_INPUT" && item.enabled
+      );
+      const visionOptions = visionCapability?.options ?? {};
+      setEditingModelId(config.id);
+      setRemoteModels([]);
+      setModelInitialValues({
+        providerId: config.providerId,
+        modelName: config.modelName,
+        modelType: config.modelType,
+        credentialName: config.credentialName,
+        baseUrl: provider?.baseUrl ?? "",
+        apiKey: "",
+        contextLength: config.contextLength,
+        embeddingDimension: config.embeddingDimension,
+        timeoutSeconds: config.timeoutSeconds,
+        maxTokens: config.maxTokens,
+        thinkingMode: config.thinkingMode,
+        thinkingSupported: config.thinkingSupported,
+        visionInput: config.capabilities?.includes("VISION_INPUT") ?? false,
+        visionMaxImages: typeof visionOptions.maxImages === "number" ? visionOptions.maxImages : 4,
+        visionMaxImageMb:
+          typeof visionOptions.maxImageBytes === "number"
+            ? Math.max(1, Math.round(visionOptions.maxImageBytes / 1024 / 1024))
+            : 5,
+        visionMimeTypes: Array.isArray(visionOptions.supportedMimeTypes)
+          ? visionOptions.supportedMimeTypes.filter(
+              (value): value is string => typeof value === "string"
+            )
+          : ["image/jpeg", "image/png", "image/webp"],
+        enabled: config.enabled
+      });
+      setModelDialogOpen(true);
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "加载模型能力失败");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function openDefaultModelDialog() {
@@ -341,6 +366,23 @@ export function ProvidersPage() {
       messageApi.error(error instanceof Error ? error.message : "保存默认模型设置失败");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleVerifyCapabilities() {
+    if (!editingModelId) return;
+    setVerifyingCapabilities(true);
+    try {
+      const result = await verifyModelCapabilities(editingModelId);
+      const verified = result.capabilities
+        .filter((item) => item.verified)
+        .map((item) => item.type)
+        .join("、");
+      messageApi.success(`模型能力验证成功：${verified || "文本对话"}`);
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "模型能力验证失败");
+    } finally {
+      setVerifyingCapabilities(false);
     }
   }
 
@@ -505,10 +547,12 @@ export function ProvidersPage() {
         remoteModels={remoteModels}
         remoteModelOptions={remoteModelOptions}
         syncingModels={syncingModels}
+        verifyingCapabilities={verifyingCapabilities}
         onCancel={() => setModelDialogOpen(false)}
         onModelProviderChange={handleModelProviderChange}
         onSubmit={(values) => void submitModel(values)}
         onSyncProviderModels={(providerId) => void syncProviderModels(providerId)}
+        onVerifyCapabilities={() => void handleVerifyCapabilities()}
       />
     </section>
   );
@@ -520,6 +564,18 @@ function buildDeclaredCapabilities(values: ModelFormValues) {
   }
   return [
     { type: "TEXT_CHAT" as const, enabled: true },
-    ...(values.visionInput ? [{ type: "VISION_INPUT" as const, enabled: true }] : [])
+    ...(values.visionInput
+      ? [
+          {
+            type: "VISION_INPUT" as const,
+            enabled: true,
+            options: {
+              maxImages: values.visionMaxImages,
+              maxImageBytes: values.visionMaxImageMb * 1024 * 1024,
+              supportedMimeTypes: values.visionMimeTypes
+            }
+          }
+        ]
+      : [])
   ];
 }

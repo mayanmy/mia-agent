@@ -28,6 +28,9 @@ export type ModelFormValues = {
   thinkingMode: ModelThinkingMode;
   thinkingSupported: boolean;
   visionInput: boolean;
+  visionMaxImages: number;
+  visionMaxImageMb: number;
+  visionMimeTypes: string[];
   enabled: boolean;
 };
 

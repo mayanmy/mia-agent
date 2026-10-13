@@ -23,10 +23,12 @@ type ModelConfigModalProps = {
   remoteModels: ProviderRemoteModel[];
   remoteModelOptions: { label: string; value: string }[];
   syncingModels: boolean;
+  verifyingCapabilities: boolean;
   onCancel: () => void;
   onSubmit: (values: ModelFormValues) => void;
   onModelProviderChange: (providerId: string) => void;
   onSyncProviderModels: (providerId?: string) => void;
+  onVerifyCapabilities: () => void;
 };
 
 export function ModelConfigModal(props: ModelConfigModalProps) {
@@ -46,15 +48,18 @@ function OpenModelConfigModal({
   remoteModels,
   remoteModelOptions,
   syncingModels,
+  verifyingCapabilities,
   onCancel,
   onSubmit,
   onModelProviderChange,
-  onSyncProviderModels
+  onSyncProviderModels,
+  onVerifyCapabilities
 }: ModelConfigModalProps) {
   const [form] = Form.useForm<ModelFormValues>();
   const selectedProviderId = Form.useWatch("providerId", form);
   const selectedModelType = Form.useWatch("modelType", form);
   const thinkingSupported = Form.useWatch("thinkingSupported", form);
+  const visionInput = Form.useWatch("visionInput", form);
   const modelProvider = providers.find((provider) => provider.id === selectedProviderId);
 
   useEffect(() => {
@@ -241,6 +246,31 @@ function OpenModelConfigModal({
             >
               <Switch />
             </Form.Item>
+            {visionInput && (
+              <div className="providerModalGrid">
+                <Form.Item label="单次最大图片数" name="visionMaxImages">
+                  <InputNumber min={1} max={100} precision={0} style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item label="单张上限（MB）" name="visionMaxImageMb">
+                  <InputNumber min={1} max={100} precision={0} style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item className="agentFormFull" label="支持格式" name="visionMimeTypes">
+                  <Select
+                    mode="tags"
+                    options={["image/jpeg", "image/png", "image/webp", "image/gif"].map(
+                      (value) => ({ label: value, value })
+                    )}
+                  />
+                </Form.Item>
+              </div>
+            )}
+            {editingModelId && (
+              <Form.Item extra="将发送一张 1×1 测试图片；验证成功后能力会标记为已验证。">
+                <Button loading={verifyingCapabilities} onClick={onVerifyCapabilities}>
+                  验证已保存能力
+                </Button>
+              </Form.Item>
+            )}
             <Form.Item
               extra="开启后，绑定该模型的 Agent 才能单独选择开启或关闭思考。"
               label="支持思考模式"

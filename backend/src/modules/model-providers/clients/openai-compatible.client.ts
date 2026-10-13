@@ -309,7 +309,11 @@ export class OpenAICompatibleClient implements ProviderClient {
 
     return {
       role: message.role,
-      content: message.content,
+      content: Array.isArray(message.content)
+        ? message.content.map((part) =>
+            part.type === "image" ? { type: "image_url", image_url: { url: part.dataUrl } } : part
+          )
+        : message.content,
       ...(message.toolCalls && message.toolCalls.length > 0
         ? {
             tool_calls: message.toolCalls.map((toolCall) => ({

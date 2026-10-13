@@ -61,7 +61,10 @@ export const ErrorCodes = {
     primaryModelNoVision: 8011,
     defaultVisionModelNotConfigured: 8012,
     visionModelDisabled: 8013,
-    modelCapabilityMismatch: 8014
+    modelCapabilityMismatch: 8014,
+    unsupportedImageType: 8015,
+    imageTooLarge: 8016,
+    tooManyImages: 8017
   },
   workflow: {
     notFound: 7001,

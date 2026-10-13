@@ -314,7 +314,10 @@ export class ModelProvidersService {
       return {
         type: item.type,
         enabled: item.enabled ?? true,
-        options: item.options ?? null
+        options:
+          item.type === ModelCapabilityType.VISION_INPUT
+            ? this.normalizeVisionCapabilityOptions(item.options)
+            : (item.options ?? null)
       };
     });
     if (
@@ -336,6 +339,69 @@ export class ModelProvidersService {
           }))
         });
       }
+    });
+    return this.getModelCapabilities(id);
+  }
+
+  /** 管理员显式触发真实模型请求后才写入 verified，绝不按模型名称自动认定视觉能力。 */
+  async verifyModelCapabilities(id: string): Promise<ModelCapabilitiesResponse> {
+    const config = await this.findModelConfigDetail(id);
+    const declared = await this.prisma.modelCapability.findMany({
+      where: { modelConfigId: id, enabled: true }
+    });
+    const verifiable = declared
+      .map((item) => item.capability)
+      .filter(
+        (capability) =>
+          capability === ModelCapabilityType.TEXT_CHAT ||
+          capability === ModelCapabilityType.VISION_INPUT
+      );
+    if (config.modelType !== ModelConfigType.CHAT || verifiable.length === 0) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "当前仅支持验证 Chat 模型的文本与图片输入能力"
+      );
+    }
+    const hasVision = verifiable.includes(ModelCapabilityType.VISION_INPUT);
+    await this.prisma.modelCapability.updateMany({
+      where: { modelConfigId: id, capability: { in: verifiable }, enabled: true },
+      data: { verified: false, verifiedAt: null }
+    });
+    try {
+      await this.createChatCompletion({
+        modelConfigId: id,
+        messages: [
+          {
+            role: "user",
+            content: hasVision
+              ? [
+                  { type: "text", text: "请简短确认你可以读取这张测试图片。" },
+                  {
+                    type: "image",
+                    mimeType: "image/png",
+                    // 1x1 透明 PNG，仅用于显式能力探测，避免发送管理员业务数据。
+                    dataUrl:
+                      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                  }
+                ]
+              : "请回复 OK，用于验证文本对话能力。"
+          }
+        ],
+        temperature: 0,
+        maxTokens: 16,
+        timeoutSeconds: Math.min(config.timeoutSeconds, 30)
+      });
+    } catch (error) {
+      throw new AppError(
+        ErrorCodes.chat.modelCapabilityMismatch,
+        `模型能力验证失败：${error instanceof Error ? error.message : "供应商调用失败"}`,
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+    const verifiedAt = new Date();
+    await this.prisma.modelCapability.updateMany({
+      where: { modelConfigId: id, capability: { in: verifiable }, enabled: true },
+      data: { verified: true, verifiedAt }
     });
     return this.getModelCapabilities(id);
   }
@@ -557,6 +623,54 @@ export class ModelProvidersService {
       ModelCapabilityType.TEXT_CHAT,
       ModelCapabilityType.VISION_INPUT
     ]);
+  }
+
+  /** 使用最终选中模型的视觉能力选项校验输入，避免 fallback 绕过模型自身限制。 */
+  async validateVisionInput(
+    modelConfigId: string,
+    images: Array<{ mimeType: string; dataUrl: string }>
+  ): Promise<void> {
+    if (images.length === 0) return;
+    const model = await this.findRoutableChatModel(modelConfigId);
+    const capability = model.capabilities.find(
+      (item) => item.capability === ModelCapabilityType.VISION_INPUT && item.enabled
+    );
+    if (!capability) {
+      throw new AppError(
+        ErrorCodes.chat.modelCapabilityMismatch,
+        "模型未声明图片输入能力",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const options = this.jsonObject(capability.options);
+    const maxImages = this.positiveIntegerOption(options.maxImages);
+    if (maxImages !== null && images.length > maxImages) {
+      throw new AppError(
+        ErrorCodes.chat.tooManyImages,
+        `图片数量超过模型限制（最多 ${maxImages} 张）`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const supportedMimeTypes = Array.isArray(options.supportedMimeTypes)
+      ? options.supportedMimeTypes.filter((value): value is string => typeof value === "string")
+      : [];
+    const maxImageBytes = this.positiveIntegerOption(options.maxImageBytes);
+    for (const image of images) {
+      if (supportedMimeTypes.length > 0 && !supportedMimeTypes.includes(image.mimeType)) {
+        throw new AppError(
+          ErrorCodes.chat.unsupportedImageType,
+          `模型不支持图片格式 ${image.mimeType}`,
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      if (maxImageBytes !== null && this.dataUrlByteLength(image.dataUrl) > maxImageBytes) {
+        throw new AppError(
+          ErrorCodes.chat.imageTooLarge,
+          `图片超过模型单张大小限制（${maxImageBytes} bytes）`,
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
   }
 
   async getEmbeddingModelDimension(id: string): Promise<number> {
@@ -1408,6 +1522,72 @@ export class ModelProvidersService {
         HttpStatus.BAD_REQUEST
       );
     }
+  }
+
+  private jsonObject(value: Prisma.JsonValue | null): Record<string, Prisma.JsonValue> {
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, Prisma.JsonValue>)
+      : {};
+  }
+
+  private positiveIntegerOption(value: Prisma.JsonValue | undefined): number | null {
+    return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+  }
+
+  private dataUrlByteLength(dataUrl: string): number {
+    const payload = dataUrl.slice(dataUrl.indexOf(",") + 1).replace(/\s/gu, "");
+    const padding = payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0;
+    return Math.max(0, Math.floor((payload.length * 3) / 4) - padding);
+  }
+
+  private normalizeVisionCapabilityOptions(
+    value: Record<string, unknown> | null | undefined
+  ): Record<string, unknown> | null {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new AppError(ErrorCodes.common.badRequest, "VISION_INPUT options must be an object");
+    }
+    const maxImages = value.maxImages;
+    const maxImageBytes = value.maxImageBytes;
+    const supportedMimeTypes = value.supportedMimeTypes;
+    if (
+      maxImages !== undefined &&
+      (!Number.isInteger(maxImages) || (maxImages as number) < 1 || (maxImages as number) > 100)
+    ) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "maxImages must be an integer from 1 to 100"
+      );
+    }
+    if (
+      maxImageBytes !== undefined &&
+      (!Number.isInteger(maxImageBytes) ||
+        (maxImageBytes as number) < 1 ||
+        (maxImageBytes as number) > 100 * 1024 * 1024)
+    ) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "maxImageBytes must be a positive integer no larger than 104857600"
+      );
+    }
+    if (
+      supportedMimeTypes !== undefined &&
+      (!Array.isArray(supportedMimeTypes) ||
+        supportedMimeTypes.length === 0 ||
+        supportedMimeTypes.some(
+          (mimeType) => typeof mimeType !== "string" || !/^image\/[a-z0-9.+-]+$/iu.test(mimeType)
+        ))
+    ) {
+      throw new AppError(ErrorCodes.common.badRequest, "supportedMimeTypes is invalid");
+    }
+    return {
+      ...(maxImages !== undefined ? { maxImages } : {}),
+      ...(maxImageBytes !== undefined ? { maxImageBytes } : {}),
+      ...(supportedMimeTypes !== undefined
+        ? { supportedMimeTypes: [...new Set(supportedMimeTypes as string[])] }
+        : {}),
+      imageTransport: "data_url"
+    };
   }
 
   private async ensureDefaultModelConfig(id: string, modelType: ModelConfigType): Promise<void> {

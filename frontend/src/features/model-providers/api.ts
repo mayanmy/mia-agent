@@ -99,6 +99,14 @@ export type ModelCapabilityType =
   | "EMBEDDING"
   | "RERANK";
 
+export type ModelCapabilityItem = {
+  type: ModelCapabilityType;
+  enabled: boolean;
+  options: Record<string, unknown> | null;
+  verified: boolean;
+  verifiedAt: string | null;
+};
+
 /** 指定模型能力探测结果。 */
 export type ModelCapabilityCheckResult = {
   modelName: string;
@@ -236,6 +244,20 @@ export function updateModelCapabilities(
     method: "PUT",
     body: JSON.stringify({ capabilities })
   });
+}
+
+export function getModelCapabilities(id: string): Promise<{
+  modelConfigId: string;
+  capabilities: ModelCapabilityItem[];
+}> {
+  return request(`/api/v1/model-configs/${id}/capabilities`);
+}
+
+export function verifyModelCapabilities(id: string): Promise<{
+  modelConfigId: string;
+  capabilities: Array<{ type: ModelCapabilityType; verified: boolean }>;
+}> {
+  return request(`/api/v1/model-configs/${id}/capabilities/verify`, { method: "POST" });
 }
 
 export function checkModelCapability(

@@ -131,5 +131,48 @@ export const tests = [
         globalThis.fetch = originalFetch;
       }
     }
+  },
+  {
+    name: "OpenAICompatibleClient converts provider-neutral images to image_url parts",
+    async run(): Promise<void> {
+      const originalFetch = globalThis.fetch;
+      let requestBody: Record<string, unknown> | undefined;
+      globalThis.fetch = async (_input, init) => {
+        requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({ model: "vision", choices: [{ message: { content: "看到了" } }] }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      };
+      try {
+        await new OpenAICompatibleClient().createChatCompletion(runtimeConfig, {
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "描述图片" },
+                {
+                  type: "image",
+                  mimeType: "image/png",
+                  dataUrl: "data:image/png;base64,AQID"
+                }
+              ]
+            }
+          ],
+          signal: new AbortController().signal
+        });
+        assert.deepEqual(requestBody?.messages, [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "描述图片" },
+              { type: "image_url", image_url: { url: "data:image/png;base64,AQID" } }
+            ]
+          }
+        ]);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
   }
 ];

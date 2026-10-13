@@ -303,16 +303,15 @@ export class ModelProvidersGateway {
         return "text" in part && typeof part.text === "string" && part.text.trim().length > 0;
       }
 
-      if ("type" in part && part.type === "image_url") {
-        const imageUrl = "image_url" in part ? part.image_url : null;
-
+      if ("type" in part && part.type === "image") {
         return (
-          !!imageUrl &&
-          typeof imageUrl === "object" &&
-          "url" in imageUrl &&
-          typeof imageUrl.url === "string" &&
-          // 当前只接受客户端已内联的图片，禁止模型网关代取任意 URL 形成 SSRF 通道。
-          imageUrl.url.startsWith("data:image/")
+          "mimeType" in part &&
+          typeof part.mimeType === "string" &&
+          part.mimeType.startsWith("image/") &&
+          "dataUrl" in part &&
+          typeof part.dataUrl === "string" &&
+          // 只接受业务层已经校验的内联图片，禁止模型网关代取任意 URL 形成 SSRF 通道。
+          part.dataUrl.startsWith(`data:${part.mimeType};base64,`)
         );
       }
 

@@ -341,9 +341,7 @@ export class ChatService {
       }
 
       if (event.type === "retrieval_started") {
-        activeRetrievalKnowledgeBaseIds = this.readStringArray(
-          event.data.knowledgeBaseIds
-        );
+        activeRetrievalKnowledgeBaseIds = this.readStringArray(event.data.knowledgeBaseIds);
       }
 
       if (event.type === "retrieval_completed") {
@@ -414,7 +412,9 @@ export class ChatService {
   }
 
   private readStringArray(value: unknown): string[] {
-    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : [];
   }
 
   private readRecordArray(value: unknown): Array<Record<string, unknown>> {
@@ -727,10 +727,9 @@ export class ChatService {
           text: textContent
         },
         ...images.map((image) => ({
-          type: "image_url" as const,
-          image_url: {
-            url: image.dataUrl
-          }
+          type: "image" as const,
+          mimeType: image.mimeType,
+          dataUrl: image.dataUrl
         }))
       ]
     };

@@ -10,10 +10,11 @@ export type ChatContentPart =
       text: string;
     }
   | {
-      type: "image_url";
-      image_url: {
-        url: string;
-      };
+      type: "image";
+      mimeType: string;
+      /** P0 使用受控 Data URL；后续存储附件可只传 storageId 并由网关加载。 */
+      dataUrl: string;
+      storageId?: string;
     };
 
 /** 业务模块传给模型网关的标准消息，不暴露供应商 SDK 类型。 */
