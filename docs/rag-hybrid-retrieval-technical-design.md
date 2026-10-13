@@ -8,8 +8,7 @@
 2. 关键词检索：召回错误码、产品名、路径、版本号和中文连续文本等精确信息。
 3. 加权 RRF 融合：按排名融合两路候选，统一去重、阈值过滤和 Top K 截断。
 
-本方案已经接入 Agent Runtime、Chat SSE、Workflow Retrieval 节点和 Run Trace，不是独立的演示接口。
-
+本方案已经接入 Agent Runtime、Chat SSE、Workflow Retrieval 节点和 Run Trace，不是独立的演示接口。  
 实现状态：已完成。本文记录的测试数量是实施当时快照，不代表当前全量用例数。
 
 ## 2. 背景与问题
@@ -53,20 +52,16 @@
 ## 4. 总体架构
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["Agent Runtime / Workflow"] --> B["RetrievalService"]
-    B --> C["读取 KnowledgeBaseRetrievalConfig"]
-    C --> D["向量通道"]
-    C --> E["关键词通道"]
-    D --> F["Embedding API"]
-    F --> G["pgvector 相似度查询"]
-    E --> H["PostgreSQL FTS + pg_trgm"]
-    G --> I["候选集去重"]
-    H --> I
-    I --> J["加权 RRF 融合"]
-    J --> K["0-1 分数校准"]
-    K --> L["阈值过滤 + 全局 Top K"]
-    L --> M["Prompt / SSE / Workflow / Run Trace"]
+    B --> C["读取检索配置"]
+    C --> D["向量召回<br/>Embedding + pgvector"]
+    C --> E["关键词召回<br/>FTS + pg_trgm"]
+    D --> F["候选集去重"]
+    E --> F
+    F --> G["加权 RRF 融合"]
+    G --> H["分数校准<br/>阈值 + Top K"]
+    H --> I["Prompt / SSE<br/>Workflow / Run Trace"]
 ```
 
 模块调用方向：

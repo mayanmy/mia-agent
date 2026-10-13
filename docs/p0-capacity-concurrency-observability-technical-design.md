@@ -7,6 +7,7 @@
 - 方案版本：V1.0
 - 更新日期：2026-09-01
 - 适用范围：Mia API、Agent Runtime、Model Providers、Chat SSE、Workflow Runtime 与基础运维
+- 单服务器落地方案：[Mia 单机保护版 P0 技术方案](./p0-single-node-protection-technical-design.md)
 
 ## 2. 背景
 
