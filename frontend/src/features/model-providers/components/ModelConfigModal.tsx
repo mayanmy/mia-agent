@@ -234,6 +234,14 @@ function OpenModelConfigModal({
         {selectedModelType === "CHAT" && (
           <>
             <Form.Item
+              extra="启用后，Runtime 才会将图片输入路由到此模型；该声明默认标记为未验证。"
+              label="支持图片理解"
+              name="visionInput"
+              valuePropName="checked"
+            >
+              <Switch />
+            </Form.Item>
+            <Form.Item
               extra="开启后，绑定该模型的 Agent 才能单独选择开启或关闭思考。"
               label="支持思考模式"
               name="thinkingSupported"

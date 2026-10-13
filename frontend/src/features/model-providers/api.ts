@@ -60,6 +60,7 @@ export type ModelConfigListItem = {
   maxTokens: number | null;
   thinkingMode: ModelThinkingMode;
   thinkingSupported: boolean;
+  capabilities?: ModelCapabilityType[];
   createdAt: string;
   updatedAt: string;
 };
@@ -86,6 +87,17 @@ export type ModelConfigPayload = {
 
 /** 模型能力分类。 */
 export type ModelCapability = "chat" | "embedding" | "rerank";
+export type ModelCapabilityType =
+  | "TEXT_CHAT"
+  | "VISION_INPUT"
+  | "TOOL_CALLING"
+  | "REASONING"
+  | "STRUCTURED_OUTPUT"
+  | "AUDIO_INPUT"
+  | "AUDIO_OUTPUT"
+  | "IMAGE_GENERATION"
+  | "EMBEDDING"
+  | "RERANK";
 
 /** 指定模型能力探测结果。 */
 export type ModelCapabilityCheckResult = {
@@ -110,8 +122,10 @@ export type ProviderRemoteModel = {
 export type DefaultModelSettings = {
   chatModelConfigId: string | null;
   embeddingModelConfigId: string | null;
+  visionModelConfigId: string | null;
   chatModelConfig: ModelConfigListItem | null;
   embeddingModelConfig: ModelConfigListItem | null;
+  visionModelConfig: ModelConfigListItem | null;
   updatedAt: string | null;
 };
 
@@ -126,12 +140,14 @@ export type ModelConfigOption = {
   thinkingMode: ModelThinkingMode;
   thinkingSupported: boolean;
   isDefault: boolean;
+  capabilities: ModelCapabilityType[];
 };
 
 /** 更新系统默认模型的请求；null 表示显式清除。 */
 export type DefaultModelSettingsPayload = {
   chatModelConfigId: string | null;
   embeddingModelConfigId: string | null;
+  visionModelConfigId: string | null;
 };
 
 export function listProviders(page = 1, pageSize = 20): Promise<PageResult<ProviderListItem>> {
@@ -205,6 +221,20 @@ export function updateModelConfig(
   return request<ModelConfigDetail>(`/api/v1/model-configs/${id}`, {
     method: "PUT",
     body: JSON.stringify(payload)
+  });
+}
+
+export function updateModelCapabilities(
+  id: string,
+  capabilities: Array<{
+    type: ModelCapabilityType;
+    enabled: boolean;
+    options?: Record<string, unknown> | null;
+  }>
+): Promise<{ modelConfigId: string }> {
+  return request<{ modelConfigId: string }>(`/api/v1/model-configs/${id}/capabilities`, {
+    method: "PUT",
+    body: JSON.stringify({ capabilities })
   });
 }
 

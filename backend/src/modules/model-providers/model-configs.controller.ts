@@ -8,6 +8,8 @@ import { ChatCompletionResponse, TestChatCompletionDto } from "./dto/llm.dto";
 import {
   ModelCapabilityCheckDto,
   ModelCapabilityCheckResult,
+  ModelCapabilitiesResponse,
+  ModelCapabilitiesUpdateDto,
   ModelConfigCreateDto,
   ModelConfigDetail,
   ModelConfigListItem,
@@ -55,6 +57,19 @@ export class ModelConfigsController {
   @Get(":id")
   async getModelConfig(@Param("id") id: string): Promise<ModelConfigDetail> {
     return this.modelProvidersService.getModelConfig(id);
+  }
+
+  @Get(":id/capabilities")
+  async getCapabilities(@Param("id") id: string): Promise<ModelCapabilitiesResponse> {
+    return this.modelProvidersService.getModelCapabilities(id);
+  }
+
+  @Put(":id/capabilities")
+  async updateCapabilities(
+    @Param("id") id: string,
+    @Body() payload: ModelCapabilitiesUpdateDto
+  ): Promise<ModelCapabilitiesResponse> {
+    return this.modelProvidersService.updateModelCapabilities(id, payload);
   }
 
   @Put(":id")

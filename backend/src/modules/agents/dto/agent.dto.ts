@@ -1,6 +1,7 @@
 import {
   AgentChatSessionMode,
   AgentExecutionMode,
+  AgentVisionMode,
   ModelConfigType,
   ModelThinkingMode,
   ModelProviderType
@@ -26,6 +27,10 @@ export type AgentCreateDto = {
   systemPrompt?: string;
   /** 绑定的 Chat 类型模型配置 ID。 */
   modelConfigId?: string;
+  /** 图片输入的模型路由策略。 */
+  visionMode?: AgentVisionMode;
+  /** DEDICATED 模式使用的专用视觉模型。 */
+  visionModelConfigId?: string | null;
   /** 模型采样温度。 */
   temperature?: number;
   /** 单次生成 token 上限；null 表示沿用模型配置。 */
@@ -139,6 +144,8 @@ export type AgentDetail = AgentListItem & {
   /** 模型扩展生成参数。 */
   generationParams: AgentGenerationParams | null;
   thinkingMode: ModelThinkingMode;
+  visionMode: AgentVisionMode;
+  visionModelConfigId: string | null;
   /** 已绑定工具 ID 列表。 */
   toolIds: string[];
   /** 已绑定知识库 ID 列表。 */
@@ -267,6 +274,10 @@ export type AgentRuntimeConfig = {
   systemPrompt: string;
   /** 模型配置 ID。 */
   modelConfigId: string;
+  vision: {
+    mode: AgentVisionMode;
+    visionModelConfigId: string | null;
+  };
   /** 供应商侧模型名称。 */
   modelName: string;
   /** 模型供应商 ID。 */

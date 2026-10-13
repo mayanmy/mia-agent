@@ -15,6 +15,7 @@ import {
   testProviderConnection,
   updateDefaultModelSettings,
   updateModelConfig,
+  updateModelCapabilities,
   updateProvider,
   type ModelConfigListItem,
   type ProviderRemoteModel,
@@ -76,6 +77,16 @@ export function ProvidersPage() {
 
   const embeddingModelOptions = useMemo(
     () => buildModelSelectOptions(modelConfigs, providers, "EMBEDDING"),
+    [modelConfigs, providers]
+  );
+
+  const visionModelOptions = useMemo(
+    () =>
+      buildModelSelectOptions(
+        modelConfigs.filter((model) => model.capabilities?.includes("VISION_INPUT")),
+        providers,
+        "CHAT"
+      ),
     [modelConfigs, providers]
   );
 
@@ -204,6 +215,7 @@ export function ProvidersPage() {
       maxTokens: config.maxTokens,
       thinkingMode: config.thinkingMode,
       thinkingSupported: config.thinkingSupported,
+      visionInput: config.capabilities?.includes("VISION_INPUT") ?? false,
       enabled: config.enabled
     });
     setModelDialogOpen(true);
@@ -216,7 +228,8 @@ export function ProvidersPage() {
       const settings = await getDefaultModelSettings();
       setDefaultModelInitialValues({
         chatModelConfigId: settings.chatModelConfigId,
-        embeddingModelConfigId: settings.embeddingModelConfigId
+        embeddingModelConfigId: settings.embeddingModelConfigId,
+        visionModelConfigId: settings.visionModelConfigId
       });
       setDefaultModelDialogOpen(true);
     } catch (error) {
@@ -297,9 +310,11 @@ export function ProvidersPage() {
 
       if (editingModelId) {
         await updateModelConfig(editingModelId, payload);
+        await updateModelCapabilities(editingModelId, buildDeclaredCapabilities(values));
         messageApi.success("模型已更新");
       } else {
-        await createModelConfig(payload);
+        const created = await createModelConfig(payload);
+        await updateModelCapabilities(created.id, buildDeclaredCapabilities(values));
         messageApi.success("模型已添加");
       }
       setModelDialogOpen(false);
@@ -317,7 +332,8 @@ export function ProvidersPage() {
     try {
       await updateDefaultModelSettings({
         chatModelConfigId: values.chatModelConfigId ?? null,
-        embeddingModelConfigId: values.embeddingModelConfigId ?? null
+        embeddingModelConfigId: values.embeddingModelConfigId ?? null,
+        visionModelConfigId: values.visionModelConfigId ?? null
       });
       messageApi.success("默认模型设置已保存");
       setDefaultModelDialogOpen(false);
@@ -461,6 +477,7 @@ export function ProvidersPage() {
         open={defaultModelDialogOpen}
         chatModelOptions={chatModelOptions}
         embeddingModelOptions={embeddingModelOptions}
+        visionModelOptions={visionModelOptions}
         onCancel={() => setDefaultModelDialogOpen(false)}
         onSubmit={(values) => void submitDefaultModelSettings(values)}
       />
@@ -495,4 +512,14 @@ export function ProvidersPage() {
       />
     </section>
   );
+}
+
+function buildDeclaredCapabilities(values: ModelFormValues) {
+  if (values.modelType === "EMBEDDING") {
+    return [{ type: "EMBEDDING" as const, enabled: true }];
+  }
+  return [
+    { type: "TEXT_CHAT" as const, enabled: true },
+    ...(values.visionInput ? [{ type: "VISION_INPUT" as const, enabled: true }] : [])
+  ];
 }

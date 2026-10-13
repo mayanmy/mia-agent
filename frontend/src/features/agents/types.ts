@@ -1,4 +1,9 @@
-import type { AgentChatSessionMode, AgentListItem, AgentThinkingMode } from "./api";
+import type {
+  AgentChatSessionMode,
+  AgentListItem,
+  AgentThinkingMode,
+  AgentVisionMode
+} from "./api";
 
 /** Agent 新建/编辑表单的完整值结构。 */
 export type AgentFormValues = {
@@ -19,6 +24,8 @@ export type AgentFormValues = {
   /** 临时或持久会话模式。 */
   chatSessionMode: AgentChatSessionMode;
   thinkingMode: AgentThinkingMode;
+  visionMode: AgentVisionMode;
+  visionModelConfigId?: string | null;
   /** 是否允许成员使用。 */
   enabled: boolean;
   /** 表单中选择的工具 ID。 */

@@ -27,6 +27,7 @@ export type ModelFormValues = {
   maxTokens?: number | null;
   thinkingMode: ModelThinkingMode;
   thinkingSupported: boolean;
+  visionInput: boolean;
   enabled: boolean;
 };
 
@@ -36,6 +37,8 @@ export type DefaultModelFormValues = {
   chatModelConfigId?: string | null;
   /** null 表示显式清除默认 Embedding 模型。 */
   embeddingModelConfigId?: string | null;
+  /** null 表示显式清除默认视觉模型。 */
+  visionModelConfigId?: string | null;
 };
 
 /** 前端内置供应商模板，仅用于预填表单而非运行时配置。 */

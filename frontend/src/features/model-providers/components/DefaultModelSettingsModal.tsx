@@ -9,6 +9,7 @@ type DefaultModelSettingsModalProps = {
   open: boolean;
   chatModelOptions: { label: string; options: { label: string; value: string }[] }[];
   embeddingModelOptions: { label: string; options: { label: string; value: string }[] }[];
+  visionModelOptions: { label: string; options: { label: string; value: string }[] }[];
   onCancel: () => void;
   onSubmit: (values: DefaultModelFormValues) => void;
 };
@@ -26,6 +27,7 @@ function OpenDefaultModelSettingsModal({
   saving,
   chatModelOptions,
   embeddingModelOptions,
+  visionModelOptions,
   onCancel,
   onSubmit
 }: DefaultModelSettingsModalProps) {
@@ -60,6 +62,13 @@ function OpenDefaultModelSettingsModal({
             options={embeddingModelOptions}
             placeholder="请选择默认 Embedding 模型"
           />
+        </Form.Item>
+        <Form.Item
+          extra="仅展示已启用并声明图片理解能力的 Chat 模型。"
+          label="默认视觉模型"
+          name="visionModelConfigId"
+        >
+          <Select allowClear options={visionModelOptions} placeholder="请选择默认视觉模型" />
         </Form.Item>
       </Form>
     </Modal>

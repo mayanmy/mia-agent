@@ -72,6 +72,13 @@ export function AgentFormModal({
     Form.useWatch("knowledgeBaseIds", { form, preserve: true }) ?? [];
   const selectedModelConfigId = Form.useWatch("modelConfigId", { form, preserve: true });
   const selectedModel = modelConfigs.find((model) => model.id === selectedModelConfigId);
+  const visionMode = Form.useWatch("visionMode", { form, preserve: true });
+  const visionModelOptions = modelConfigs
+    .filter((model) => model.capabilities.includes("VISION_INPUT"))
+    .map((model) => ({
+      label: `${model.providerName} · ${model.modelName}`,
+      value: model.id
+    }));
 
   return (
     <Modal
@@ -147,6 +154,28 @@ export function AgentFormModal({
                       ]}
                     />
                   </Form.Item>
+                  <Form.Item label="图片处理" name="visionMode">
+                    <Select
+                      options={[
+                        { label: "自动选择", value: "AUTO" },
+                        { label: "指定视觉模型", value: "DEDICATED" },
+                        { label: "禁止图片", value: "DISABLED" },
+                        { label: "仅使用主模型", value: "PRIMARY_ONLY" }
+                      ]}
+                    />
+                  </Form.Item>
+                  {visionMode === "DEDICATED" && (
+                    <Form.Item
+                      label="专用视觉模型"
+                      name="visionModelConfigId"
+                      rules={[{ required: true, message: "请选择视觉模型" }]}
+                    >
+                      <Select
+                        options={visionModelOptions}
+                        placeholder="请选择已声明图片理解能力的模型"
+                      />
+                    </Form.Item>
+                  )}
                   <Form.Item className="agentFormFull" label="描述" name="description">
                     <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
                   </Form.Item>

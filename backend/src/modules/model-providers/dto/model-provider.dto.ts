@@ -1,4 +1,10 @@
-import { ModelConfigType, ModelProviderType, ModelThinkingMode } from "@prisma/client";
+import {
+  AgentVisionMode,
+  ModelCapabilityType,
+  ModelConfigType,
+  ModelProviderType,
+  ModelThinkingMode
+} from "@prisma/client";
 
 /** 模型供应商管理列表的安全摘要，不返回原始 API Key。 */
 export type ProviderListItem = {
@@ -101,6 +107,7 @@ export type ModelConfigListItem = {
   thinkingMode: ModelThinkingMode;
   /** 是否允许 Agent 显式覆盖思考模式。 */
   thinkingSupported: boolean;
+  capabilities?: ModelCapabilityType[];
   createdAt: Date;
   updatedAt: Date;
 };
@@ -116,6 +123,46 @@ export type ModelConfigOption = {
   thinkingMode: ModelThinkingMode;
   thinkingSupported: boolean;
   isDefault: boolean;
+  capabilities: ModelCapabilityType[];
+};
+
+export type ModelCapabilityItem = {
+  type: ModelCapabilityType;
+  enabled: boolean;
+  options: Record<string, unknown> | null;
+  verified: boolean;
+  verifiedAt: Date | null;
+};
+
+export type ModelCapabilitiesResponse = {
+  modelConfigId: string;
+  capabilities: ModelCapabilityItem[];
+};
+
+export type ModelCapabilitiesUpdateDto = {
+  capabilities?: Array<{
+    type?: ModelCapabilityType;
+    enabled?: boolean;
+    options?: Record<string, unknown> | null;
+  }>;
+};
+
+export type ResolveChatModelRequest = {
+  primaryModelConfigId: string;
+  requiredCapabilities: ModelCapabilityType[];
+  policy: {
+    visionMode: AgentVisionMode;
+    visionModelConfigId: string | null;
+  };
+  requestId: string;
+};
+
+export type ModelRouteDecision = {
+  selectedModelConfigId: string;
+  selectedRole: "PRIMARY" | "SYSTEM_VISION" | "AGENT_VISION";
+  requiredCapabilities: ModelCapabilityType[];
+  reason: "PRIMARY_SUPPORTS_ALL" | "AGENT_VISION_SELECTED" | "SYSTEM_VISION_FALLBACK";
+  fallbackUsed: boolean;
 };
 
 /** 模型配置详情及所属供应商安全摘要。 */
@@ -166,8 +213,10 @@ export type DefaultModelSettings = {
   chatModelConfigId: string | null;
   /** 默认 Embedding 模型配置 ID；尚未设置时为空。 */
   embeddingModelConfigId: string | null;
+  visionModelConfigId: string | null;
   chatModelConfig: ModelConfigListItem | null;
   embeddingModelConfig: ModelConfigListItem | null;
+  visionModelConfig: ModelConfigListItem | null;
   updatedAt: Date | null;
 };
 
@@ -175,6 +224,7 @@ export type DefaultModelSettings = {
 export type DefaultModelSettingsUpdateDto = {
   chatModelConfigId?: string | null;
   embeddingModelConfigId?: string | null;
+  visionModelConfigId?: string | null;
 };
 
 /** 供应商列表分页参数。 */

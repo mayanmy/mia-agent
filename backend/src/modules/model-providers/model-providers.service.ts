@@ -1,5 +1,7 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import {
+  AgentVisionMode,
+  ModelCapabilityType,
   ModelConfigType,
   ModelProvider,
   ModelProviderType,
@@ -25,19 +27,23 @@ import {
   DefaultModelSettingsUpdateDto,
   ModelCapability,
   ModelCapabilityCheckResult,
+  ModelCapabilitiesResponse,
+  ModelCapabilitiesUpdateDto,
   ModelConfigCreateDto,
   ModelConfigDetail,
   ModelConfigListItem,
   ModelConfigOption,
   ModelConfigQueryDto,
   ModelConfigUpdateDto,
+  ModelRouteDecision,
   ProviderCreateDto,
   ProviderDetail,
   ProviderListItem,
   ProviderRemoteModel,
   ProviderQueryDto,
   ProviderTestConnectionResult,
-  ProviderUpdateDto
+  ProviderUpdateDto,
+  ResolveChatModelRequest
 } from "./dto/model-provider.dto";
 import { ModelProvidersGateway } from "./gateway";
 
@@ -216,6 +222,7 @@ export class ModelProvidersService {
     const [list, total] = await this.prisma.$transaction([
       this.prisma.modelConfig.findMany({
         where,
+        include: { capabilities: true },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         skip: page.skip,
         take: page.take
@@ -243,7 +250,7 @@ export class ModelProvidersService {
           deletedAt: null,
           provider: { enabled: true, deletedAt: null }
         },
-        include: { provider: true },
+        include: { provider: true, capabilities: true },
         orderBy: [{ provider: { name: "asc" } }, { modelName: "asc" }]
       }),
       this.prisma.defaultModelSetting.findUnique({ where: { workspaceId } })
@@ -258,8 +265,130 @@ export class ModelProvidersService {
       providerType: config.provider.providerType,
       thinkingMode: config.thinkingMode,
       thinkingSupported: config.thinkingSupported,
-      isDefault: settings?.chatModelConfigId === config.id
+      isDefault: settings?.chatModelConfigId === config.id,
+      capabilities: config.capabilities
+        .filter((item) => item.enabled)
+        .map((item) => item.capability)
     }));
+  }
+
+  async getModelCapabilities(id: string): Promise<ModelCapabilitiesResponse> {
+    await this.findModelConfigDetail(id);
+    const capabilities = await this.prisma.modelCapability.findMany({
+      where: { modelConfigId: id },
+      orderBy: { capability: "asc" }
+    });
+    return {
+      modelConfigId: id,
+      capabilities: capabilities.map((item) => ({
+        type: item.capability,
+        enabled: item.enabled,
+        options: item.options as Record<string, unknown> | null,
+        verified: item.verified,
+        verifiedAt: item.verifiedAt
+      }))
+    };
+  }
+
+  async updateModelCapabilities(
+    id: string,
+    payload: ModelCapabilitiesUpdateDto
+  ): Promise<ModelCapabilitiesResponse> {
+    const config = await this.findModelConfigDetail(id);
+    if (!Array.isArray(payload.capabilities)) {
+      throw new AppError(ErrorCodes.common.badRequest, "capabilities must be an array");
+    }
+    const seen = new Set<ModelCapabilityType>();
+    const rows = payload.capabilities.map((item) => {
+      if (
+        !item.type ||
+        !Object.values(ModelCapabilityType).includes(item.type) ||
+        seen.has(item.type)
+      ) {
+        throw new AppError(
+          ErrorCodes.common.badRequest,
+          "capability type is invalid or duplicated"
+        );
+      }
+      seen.add(item.type);
+      return {
+        type: item.type,
+        enabled: item.enabled ?? true,
+        options: item.options ?? null
+      };
+    });
+    if (
+      config.modelType === ModelConfigType.CHAT &&
+      !rows.some((item) => item.type === ModelCapabilityType.TEXT_CHAT && item.enabled)
+    ) {
+      throw new AppError(ErrorCodes.common.badRequest, "chat model must keep TEXT_CHAT enabled");
+    }
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.modelCapability.deleteMany({ where: { modelConfigId: id } });
+      if (rows.length > 0) {
+        await transaction.modelCapability.createMany({
+          data: rows.map((item) => ({
+            modelConfigId: id,
+            capability: item.type,
+            enabled: item.enabled,
+            options: item.options as Prisma.InputJsonValue,
+            verified: false
+          }))
+        });
+      }
+    });
+    return this.getModelCapabilities(id);
+  }
+
+  /** 根据已声明能力和 Agent 策略选择实际 Chat 模型，不依赖模型名称猜测。 */
+  async resolveChatModel(request: ResolveChatModelRequest): Promise<ModelRouteDecision> {
+    const requiresVision = request.requiredCapabilities.includes(ModelCapabilityType.VISION_INPUT);
+    const primary = await this.findRoutableChatModel(request.primaryModelConfigId);
+    if (!requiresVision || this.supportsAll(primary, request.requiredCapabilities)) {
+      return {
+        selectedModelConfigId: primary.id,
+        selectedRole: "PRIMARY",
+        requiredCapabilities: request.requiredCapabilities,
+        reason: "PRIMARY_SUPPORTS_ALL",
+        fallbackUsed: false
+      };
+    }
+    if (request.policy.visionMode === AgentVisionMode.DISABLED) {
+      throw new AppError(ErrorCodes.chat.agentVisionDisabled, "当前 Agent 未启用图片处理");
+    }
+    if (request.policy.visionMode === AgentVisionMode.PRIMARY_ONLY) {
+      throw new AppError(ErrorCodes.chat.primaryModelNoVision, "当前主模型不支持图片输入");
+    }
+    if (request.policy.visionMode === AgentVisionMode.DEDICATED) {
+      if (!request.policy.visionModelConfigId) {
+        throw new AppError(ErrorCodes.chat.visionModelDisabled, "Agent 尚未配置专用视觉模型");
+      }
+      const selected = await this.findRoutableChatModel(request.policy.visionModelConfigId);
+      this.requireCapabilities(selected, request.requiredCapabilities);
+      return {
+        selectedModelConfigId: selected.id,
+        selectedRole: "AGENT_VISION",
+        requiredCapabilities: request.requiredCapabilities,
+        reason: "AGENT_VISION_SELECTED",
+        fallbackUsed: selected.id !== primary.id
+      };
+    }
+    const defaults = await this.findDefaultModelSettings();
+    if (!defaults?.visionModelConfigId) {
+      throw new AppError(
+        ErrorCodes.chat.defaultVisionModelNotConfigured,
+        "系统尚未配置默认视觉模型"
+      );
+    }
+    const selected = await this.findRoutableChatModel(defaults.visionModelConfigId);
+    this.requireCapabilities(selected, request.requiredCapabilities);
+    return {
+      selectedModelConfigId: selected.id,
+      selectedRole: "SYSTEM_VISION",
+      requiredCapabilities: request.requiredCapabilities,
+      reason: "SYSTEM_VISION_FALLBACK",
+      fallbackUsed: selected.id !== primary.id
+    };
   }
 
   async createModelConfig(payload: ModelConfigCreateDto): Promise<ModelConfigDetail> {
@@ -269,7 +398,20 @@ export class ModelProvidersService {
     await this.ensureModelCapability(provider, data.modelName, data.modelType);
 
     const config = await this.prisma.modelConfig.create({
-      data: { ...data, workspaceId: requireWorkspaceId() },
+      data: {
+        ...data,
+        workspaceId: requireWorkspaceId(),
+        capabilities: {
+          create: {
+            capability:
+              data.modelType === ModelConfigType.CHAT
+                ? ModelCapabilityType.TEXT_CHAT
+                : ModelCapabilityType.EMBEDDING,
+            enabled: true,
+            verified: false
+          }
+        }
+      },
       include: { provider: true }
     });
 
@@ -332,6 +474,10 @@ export class ModelProvidersService {
       this.prisma.defaultModelSetting.updateMany({
         where: { workspaceId: requireWorkspaceId(), embeddingModelConfigId: id },
         data: { embeddingModelConfigId: null }
+      }),
+      this.prisma.defaultModelSetting.updateMany({
+        where: { workspaceId: requireWorkspaceId(), visionModelConfigId: id },
+        data: { visionModelConfigId: null }
       }),
       this.prisma.modelConfig.update({
         where: { id, workspaceId: requireWorkspaceId() },
@@ -405,6 +551,14 @@ export class ModelProvidersService {
     }
   }
 
+  async ensureVisionModelConfig(id: string): Promise<void> {
+    const model = await this.findRoutableChatModel(id);
+    this.requireCapabilities(model, [
+      ModelCapabilityType.TEXT_CHAT,
+      ModelCapabilityType.VISION_INPUT
+    ]);
+  }
+
   async getEmbeddingModelDimension(id: string): Promise<number> {
     const config = await this.prisma.modelConfig.findFirst({
       where: {
@@ -468,8 +622,13 @@ export class ModelProvidersService {
   async updateDefaultModelSettings(
     payload: DefaultModelSettingsUpdateDto
   ): Promise<DefaultModelSettings> {
+    const existingSettings = await this.findDefaultModelSettings();
     const chatModelConfigId = this.normalizeNullableId(payload.chatModelConfigId);
     const embeddingModelConfigId = this.normalizeNullableId(payload.embeddingModelConfigId);
+    const visionModelConfigId =
+      payload.visionModelConfigId === undefined
+        ? (existingSettings?.visionModelConfigId ?? null)
+        : this.normalizeNullableId(payload.visionModelConfigId);
 
     if (chatModelConfigId) {
       await this.ensureDefaultModelConfig(chatModelConfigId, ModelConfigType.CHAT);
@@ -479,6 +638,14 @@ export class ModelProvidersService {
       await this.ensureDefaultModelConfig(embeddingModelConfigId, ModelConfigType.EMBEDDING);
     }
 
+    if (visionModelConfigId) {
+      const visionModel = await this.findRoutableChatModel(visionModelConfigId);
+      this.requireCapabilities(visionModel, [
+        ModelCapabilityType.TEXT_CHAT,
+        ModelCapabilityType.VISION_INPUT
+      ]);
+    }
+
     const workspaceId = requireWorkspaceId();
     const settings = await this.prisma.defaultModelSetting.upsert({
       where: { workspaceId },
@@ -486,15 +653,18 @@ export class ModelProvidersService {
         id: workspaceId,
         workspaceId,
         chatModelConfigId,
-        embeddingModelConfigId
+        embeddingModelConfigId,
+        visionModelConfigId
       },
       update: {
         chatModelConfigId,
-        embeddingModelConfigId
+        embeddingModelConfigId,
+        visionModelConfigId
       },
       include: {
         chatModelConfig: true,
-        embeddingModelConfig: true
+        embeddingModelConfig: true,
+        visionModelConfig: true
       }
     });
 
@@ -1189,9 +1359,55 @@ export class ModelProvidersService {
       where: { workspaceId: requireWorkspaceId() },
       include: {
         chatModelConfig: true,
-        embeddingModelConfig: true
+        embeddingModelConfig: true,
+        visionModelConfig: true
       }
     });
+  }
+
+  private async findRoutableChatModel(id: string) {
+    const config = await this.prisma.modelConfig.findFirst({
+      where: {
+        id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
+        modelType: ModelConfigType.CHAT,
+        enabled: true,
+        deletedAt: null,
+        provider: { enabled: true, deletedAt: null }
+      },
+      include: { capabilities: true }
+    });
+    if (!config) {
+      throw new AppError(
+        ErrorCodes.chat.visionModelDisabled,
+        "配置的视觉模型已停用或不可用",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return config;
+  }
+
+  private supportsAll(
+    model: { capabilities: Array<{ capability: ModelCapabilityType; enabled: boolean }> },
+    required: ModelCapabilityType[]
+  ): boolean {
+    const enabled = new Set(
+      model.capabilities.filter((item) => item.enabled).map((item) => item.capability)
+    );
+    return required.every((capability) => enabled.has(capability));
+  }
+
+  private requireCapabilities(
+    model: { capabilities: Array<{ capability: ModelCapabilityType; enabled: boolean }> },
+    required: ModelCapabilityType[]
+  ): void {
+    if (!this.supportsAll(model, required)) {
+      throw new AppError(
+        ErrorCodes.chat.modelCapabilityMismatch,
+        "模型声明能力与本次输入要求不匹配",
+        HttpStatus.BAD_REQUEST
+      );
+    }
   }
 
   private async ensureDefaultModelConfig(id: string, modelType: ModelConfigType): Promise<void> {
@@ -1219,7 +1435,7 @@ export class ModelProvidersService {
   }
 
   private async ensureModelConfigNotInUse(id: string): Promise<void> {
-    const [agent, knowledgeBase] = await Promise.all([
+    const [agent, visionAgent, knowledgeBase] = await Promise.all([
       this.prisma.agent.findFirst({
         where: {
           workspaceId: requireWorkspaceId(),
@@ -1229,6 +1445,14 @@ export class ModelProvidersService {
         select: {
           name: true
         }
+      }),
+      this.prisma.agent.findFirst({
+        where: {
+          workspaceId: requireWorkspaceId(),
+          visionModelConfigId: id,
+          deletedAt: null
+        },
+        select: { name: true }
       }),
       this.prisma.knowledgeBase.findFirst({
         where: {
@@ -1246,6 +1470,14 @@ export class ModelProvidersService {
       throw new AppError(
         ErrorCodes.provider.inUse,
         `模型正在被 Agent「${agent.name}」使用，请先切换或删除该 Agent。`,
+        HttpStatus.CONFLICT
+      );
+    }
+
+    if (visionAgent) {
+      throw new AppError(
+        ErrorCodes.provider.inUse,
+        `model config is used as the vision model by agent ${visionAgent.name}`,
         HttpStatus.CONFLICT
       );
     }
@@ -1399,7 +1631,13 @@ export class ModelProvidersService {
     };
   }
 
-  private toModelConfigListItem(config: ModelConfigListItem): ModelConfigListItem {
+  private toModelConfigListItem(
+    config: Omit<ModelConfigListItem, "capabilities"> & {
+      capabilities?: Array<
+        ModelCapabilityType | { capability: ModelCapabilityType; enabled: boolean }
+      >;
+    }
+  ): ModelConfigListItem {
     return {
       id: config.id,
       providerId: config.providerId,
@@ -1413,6 +1651,13 @@ export class ModelProvidersService {
       maxTokens: config.maxTokens,
       thinkingMode: config.thinkingMode,
       thinkingSupported: config.thinkingSupported,
+      ...(config.capabilities
+        ? {
+            capabilities: config.capabilities.flatMap((item) =>
+              typeof item === "string" ? [item] : item.enabled ? [item.capability] : []
+            )
+          }
+        : {}),
       createdAt: config.createdAt,
       updatedAt: config.updatedAt
     };
@@ -1433,11 +1678,15 @@ export class ModelProvidersService {
     return {
       chatModelConfigId: settings?.chatModelConfigId ?? null,
       embeddingModelConfigId: settings?.embeddingModelConfigId ?? null,
+      visionModelConfigId: settings?.visionModelConfigId ?? null,
       chatModelConfig: settings?.chatModelConfig
         ? this.toModelConfigListItem(settings.chatModelConfig)
         : null,
       embeddingModelConfig: settings?.embeddingModelConfig
         ? this.toModelConfigListItem(settings.embeddingModelConfig)
+        : null,
+      visionModelConfig: settings?.visionModelConfig
+        ? this.toModelConfigListItem(settings.visionModelConfig)
         : null,
       updatedAt: settings?.updatedAt ?? null
     };

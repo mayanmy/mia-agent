@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import {
   AgentChatSessionMode,
   AgentExecutionMode,
+  AgentVisionMode,
   ModelConfigType,
   ModelThinkingMode,
   Prisma,
@@ -114,6 +115,8 @@ type AgentCreateData = {
   systemPrompt: string;
   /** 模型配置 ID；创建校验前允许暂存 null。 */
   modelConfigId: string | null;
+  visionMode: AgentVisionMode;
+  visionModelConfigId: string | null;
   /** 模型采样温度。 */
   temperature: number;
   /** 生成 token 上限。 */
@@ -213,6 +216,7 @@ export class AgentsService {
     const data = this.validateAgentCreate(payload);
     const modelConfigId = await this.resolveCreateModelConfigId(data.modelConfigId);
     await this.ensureChatModelConfig(modelConfigId);
+    await this.ensureVisionPolicy(data.visionMode, data.visionModelConfigId);
 
     const agent = await this.prisma.agent.create({
       data: {
@@ -222,6 +226,8 @@ export class AgentsService {
         description: data.description,
         systemPrompt: data.systemPrompt,
         modelConfigId,
+        visionMode: data.visionMode,
+        visionModelConfigId: data.visionModelConfigId,
         temperature: data.temperature,
         maxTokens: data.maxTokens,
         timeoutSeconds: data.timeoutSeconds,
@@ -268,6 +274,13 @@ export class AgentsService {
     if (data.modelConfigId) {
       await this.ensureChatModelConfig(data.modelConfigId);
     }
+    const existing = await this.findAgentDetail(id);
+    await this.ensureVisionPolicy(
+      data.visionMode ?? existing.visionMode,
+      data.visionModelConfigId !== undefined
+        ? data.visionModelConfigId
+        : existing.visionModelConfigId
+    );
 
     const agent = await this.prisma.agent.update({
       where: { id, workspaceId: requireWorkspaceId() },
@@ -280,6 +293,14 @@ export class AgentsService {
               modelConfig: {
                 connect: { id: data.modelConfigId }
               }
+            }
+          : {}),
+        ...(data.visionMode !== undefined ? { visionMode: data.visionMode } : {}),
+        ...(data.visionModelConfigId !== undefined
+          ? {
+              visionModelConfig: data.visionModelConfigId
+                ? { connect: { id: data.visionModelConfigId } }
+                : { disconnect: true }
             }
           : {}),
         ...(data.temperature !== undefined ? { temperature: data.temperature } : {}),
@@ -559,6 +580,10 @@ export class AgentsService {
       name: agent.name,
       systemPrompt: agent.systemPrompt,
       modelConfigId: agent.modelConfigId,
+      vision: {
+        mode: agent.visionMode,
+        visionModelConfigId: agent.visionModelConfigId
+      },
       modelName: agent.modelConfig.modelName,
       providerId: agent.modelConfig.providerId,
       providerType: agent.modelConfig.provider.providerType,
@@ -768,6 +793,8 @@ export class AgentsService {
       description: this.normalizeDescription(payload.description),
       systemPrompt: this.requireNonEmptyString(payload.systemPrompt, "systemPrompt"),
       modelConfigId: this.normalizeOptionalId(payload.modelConfigId),
+      visionMode: this.normalizeVisionMode(payload.visionMode),
+      visionModelConfigId: this.normalizeOptionalId(payload.visionModelConfigId),
       temperature: this.normalizeTemperature(payload.temperature),
       maxTokens: this.normalizeMaxTokens(payload.maxTokens),
       timeoutSeconds: this.normalizeTimeout(payload.timeoutSeconds),
@@ -793,6 +820,12 @@ export class AgentsService {
         : {}),
       ...(payload.modelConfigId !== undefined
         ? { modelConfigId: this.requireNonEmptyString(payload.modelConfigId, "modelConfigId") }
+        : {}),
+      ...(payload.visionMode !== undefined
+        ? { visionMode: this.normalizeVisionMode(payload.visionMode) }
+        : {}),
+      ...(payload.visionModelConfigId !== undefined
+        ? { visionModelConfigId: this.normalizeOptionalId(payload.visionModelConfigId) }
         : {}),
       ...(payload.temperature !== undefined
         ? { temperature: this.normalizeTemperature(payload.temperature) }
@@ -845,6 +878,29 @@ export class AgentsService {
       return value;
     }
     throw new AppError(ErrorCodes.common.badRequest, "thinkingMode is invalid");
+  }
+
+  private normalizeVisionMode(value: unknown): AgentVisionMode {
+    if (value === undefined || value === null) return AgentVisionMode.AUTO;
+    if (Object.values(AgentVisionMode).includes(value as AgentVisionMode)) {
+      return value as AgentVisionMode;
+    }
+    throw new AppError(ErrorCodes.common.badRequest, "visionMode is invalid");
+  }
+
+  private async ensureVisionPolicy(
+    mode: AgentVisionMode,
+    visionModelConfigId: string | null
+  ): Promise<void> {
+    if (mode === AgentVisionMode.DEDICATED) {
+      if (!visionModelConfigId) {
+        throw new AppError(
+          ErrorCodes.agent.invalidModelConfig,
+          "DEDICATED visionMode requires visionModelConfigId"
+        );
+      }
+      await this.modelProvidersService.ensureVisionModelConfig(visionModelConfigId);
+    }
   }
 
   /** 不支持思考覆盖的模型始终保持供应商默认；可选模型才接受 Agent 覆盖。 */
@@ -1264,6 +1320,8 @@ export class AgentsService {
       chatSessionMode: agent.chatSessionMode,
       generationParams: this.toGenerationParams(agent.generationParams),
       thinkingMode: agent.thinkingMode,
+      visionMode: agent.visionMode,
+      visionModelConfigId: agent.visionModelConfigId,
       toolIds: agent.agentTools.map((tool) => tool.toolId),
       knowledgeBaseIds: agent.agentKnowledgeBases.map(
         (knowledgeBase) => knowledgeBase.knowledgeBaseId

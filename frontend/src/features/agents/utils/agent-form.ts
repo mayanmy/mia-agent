@@ -11,6 +11,8 @@ export const defaultAgentFormValues: AgentFormValues = {
   historyTurns: 6,
   chatSessionMode: "EPHEMERAL",
   thinkingMode: "AUTO",
+  visionMode: "AUTO",
+  visionModelConfigId: null,
   enabled: true,
   toolIds: [],
   knowledgeBaseIds: []
@@ -28,6 +30,9 @@ export function toAgentPayload(values: AgentFormValues): AgentPayload {
     historyTurns: values.historyTurns,
     chatSessionMode: values.chatSessionMode,
     thinkingMode: values.thinkingMode,
+    visionMode: values.visionMode,
+    visionModelConfigId:
+      values.visionMode === "DEDICATED" ? (values.visionModelConfigId ?? null) : null,
     enabled: values.enabled
   };
 }
@@ -44,6 +49,8 @@ export function toAgentFormValues(agent: AgentDetail): AgentFormValues {
     historyTurns: agent.historyTurns,
     chatSessionMode: agent.chatSessionMode,
     thinkingMode: agent.thinkingMode,
+    visionMode: agent.visionMode,
+    visionModelConfigId: agent.visionModelConfigId,
     enabled: agent.enabled,
     toolIds: agent.toolIds,
     knowledgeBaseIds: agent.knowledgeBaseIds

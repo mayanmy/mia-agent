@@ -56,7 +56,12 @@ export const ErrorCodes = {
     historyInvalid: 8001,
     historyMessageTooLarge: 8002,
     historyPayloadTooLarge: 8003,
-    historyPolicyViolation: 8004
+    historyPolicyViolation: 8004,
+    agentVisionDisabled: 8010,
+    primaryModelNoVision: 8011,
+    defaultVisionModelNotConfigured: 8012,
+    visionModelDisabled: 8013,
+    modelCapabilityMismatch: 8014
   },
   workflow: {
     notFound: 7001,

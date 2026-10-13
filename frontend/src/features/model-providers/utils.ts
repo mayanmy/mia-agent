@@ -193,6 +193,7 @@ export const modelDefaults: ModelFormValues = {
   maxTokens: null,
   thinkingMode: "AUTO",
   thinkingSupported: false,
+  visionInput: false,
   enabled: true
 };
 

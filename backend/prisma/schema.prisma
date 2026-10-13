@@ -32,6 +32,30 @@ enum ModelThinkingMode {
   @@map("model_thinking_mode")
 }
 
+enum ModelCapabilityType {
+  TEXT_CHAT
+  VISION_INPUT
+  TOOL_CALLING
+  REASONING
+  STRUCTURED_OUTPUT
+  AUDIO_INPUT
+  AUDIO_OUTPUT
+  IMAGE_GENERATION
+  EMBEDDING
+  RERANK
+
+  @@map("model_capability_type")
+}
+
+enum AgentVisionMode {
+  AUTO
+  PRIMARY_ONLY
+  DEDICATED
+  DISABLED
+
+  @@map("agent_vision_mode")
+}
+
 enum UserRole {
   ADMIN
   USER
@@ -138,6 +162,7 @@ enum AgentRunStatus {
 
 /// Step 类型覆盖当前检索、模型和工具调用，并为后续 Hook、Subagent 保留稳定值。
 enum AgentRunStepType {
+  ROUTER
   TOOL_SEARCH
   RETRIEVAL
   MODEL
@@ -391,6 +416,9 @@ model ModelConfig {
   knowledgeEmbeddings3072  KnowledgeEmbedding3072[]
   defaultChatSettings      DefaultModelSetting[]    @relation("DefaultChatModel")
   defaultEmbeddingSettings DefaultModelSetting[]    @relation("DefaultEmbeddingModel")
+  defaultVisionSettings    DefaultModelSetting[]    @relation("DefaultVisionModel")
+  capabilities             ModelCapability[]
+  visionAgents             Agent[]                  @relation("AgentVisionModel")
 
   @@index([providerId], map: "idx_model_configs_provider_id")
   @@index([modelType, enabled], map: "idx_model_configs_type_enabled")
@@ -398,18 +426,38 @@ model ModelConfig {
   @@map("model_configs")
 }
 
+model ModelCapability {
+  id            String              @id @default(uuid()) @db.Uuid
+  modelConfigId String              @map("model_config_id") @db.Uuid
+  capability    ModelCapabilityType
+  enabled       Boolean             @default(true)
+  options       Json?               @db.JsonB
+  verified      Boolean             @default(false)
+  verifiedAt    DateTime?           @map("verified_at") @db.Timestamptz(6)
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  modelConfig   ModelConfig          @relation(fields: [modelConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([modelConfigId, capability])
+  @@index([capability, enabled])
+  @@map("model_capabilities")
+}
+
 model DefaultModelSetting {
   id                     String       @id
   workspaceId            String       @unique(map: "uq_default_model_settings_workspace_id") @map("workspace_id") @db.Uuid
   chatModelConfigId      String?      @map("chat_model_config_id") @db.Uuid
   embeddingModelConfigId String?      @map("embedding_model_config_id") @db.Uuid
+  visionModelConfigId    String?      @map("vision_model_config_id") @db.Uuid
   createdAt              DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
   chatModelConfig        ModelConfig? @relation("DefaultChatModel", fields: [chatModelConfigId], references: [id], onDelete: SetNull)
   embeddingModelConfig   ModelConfig? @relation("DefaultEmbeddingModel", fields: [embeddingModelConfigId], references: [id], onDelete: SetNull)
+  visionModelConfig      ModelConfig? @relation("DefaultVisionModel", fields: [visionModelConfigId], references: [id], onDelete: SetNull)
 
   @@index([chatModelConfigId], map: "idx_default_model_settings_chat_model_config_id")
   @@index([embeddingModelConfigId], map: "idx_default_model_settings_embedding_model_config_id")
+  @@index([visionModelConfigId], map: "idx_default_model_settings_vision_model_config_id")
   @@map("default_model_settings")
 }
 
@@ -421,6 +469,8 @@ model Agent {
   description           String                 @default("")
   systemPrompt          String                 @map("system_prompt") @db.Text
   modelConfigId         String                 @map("model_config_id") @db.Uuid
+  visionMode            AgentVisionMode        @default(AUTO) @map("vision_mode")
+  visionModelConfigId   String?                @map("vision_model_config_id") @db.Uuid
   temperature           Decimal                @default(0.70) @db.Decimal(3, 2)
   maxTokens             Int?                   @map("max_tokens")
   timeoutSeconds        Int                    @default(120) @map("timeout_seconds")
@@ -441,6 +491,7 @@ model Agent {
   updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt             DateTime?              @map("deleted_at") @db.Timestamptz(6)
   modelConfig           ModelConfig            @relation(fields: [modelConfigId], references: [id])
+  visionModelConfig     ModelConfig?           @relation("AgentVisionModel", fields: [visionModelConfigId], references: [id], onDelete: SetNull)
   createdBy             User                   @relation("AgentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   agentTools            AgentTool[]
   agentKnowledgeBases   AgentKnowledgeBase[]
@@ -453,6 +504,7 @@ model Agent {
 
   @@index([createdAt(sort: Desc)], map: "idx_agents_created_at")
   @@index([modelConfigId], map: "idx_agents_model_config_id")
+  @@index([visionModelConfigId], map: "idx_agents_vision_model_config_id")
   @@index([enabled, createdAt(sort: Desc)], map: "idx_agents_enabled_created_at")
   @@index([published, publishedAt(sort: Desc)], map: "idx_agents_published_published_at")
   @@index([workspaceId, createdByUserId, deletedAt, createdAt(sort: Desc)], map: "idx_agents_workspace_creator_deleted_created")

@@ -6,6 +6,7 @@ export type AgentGenerationParams = Record<string, string | number | boolean | n
 /** Agent 对话历史的保存模式。 */
 export type AgentChatSessionMode = "EPHEMERAL" | "PERSISTENT";
 export type AgentThinkingMode = "AUTO" | "ENABLED" | "DISABLED";
+export type AgentVisionMode = "AUTO" | "PRIMARY_ONLY" | "DEDICATED" | "DISABLED";
 
 /** Agent 列表接口返回的摘要。 */
 export type AgentListItem = {
@@ -82,6 +83,8 @@ export type AgentDetail = AgentListItem & {
   /** 模型扩展生成参数。 */
   generationParams: AgentGenerationParams | null;
   thinkingMode: AgentThinkingMode;
+  visionMode: AgentVisionMode;
+  visionModelConfigId: string | null;
   /** 已绑定工具 ID。 */
   toolIds: string[];
   /** 已绑定知识库 ID。 */
@@ -111,6 +114,8 @@ export type AgentPayload = {
   /** 是否启用。 */
   enabled: boolean;
   thinkingMode: AgentThinkingMode;
+  visionMode: AgentVisionMode;
+  visionModelConfigId: string | null;
 };
 
 /** 分页读取 Agent 列表。 */

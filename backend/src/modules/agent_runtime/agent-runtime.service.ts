@@ -3,6 +3,7 @@ import {
   AgentExecutionMode,
   AgentRunSource,
   AgentRunStepType,
+  ModelCapabilityType,
   WorkflowRunMode
 } from "@prisma/client";
 import { randomUUID } from "node:crypto";
@@ -78,9 +79,6 @@ export class AgentRuntimeService {
         );
       }
 
-      if (agent.executionMode !== AgentExecutionMode.WORKFLOW) {
-        this.ensureImageInputSupported(agent.modelName, request.message.images ?? []);
-      }
       trace = await this.createTrace({
         requestId: request.requestId,
         source: request.source,
@@ -98,14 +96,65 @@ export class AgentRuntimeService {
             ? WorkflowRunMode.PUBLISHED
             : undefined
       });
+      let selectedModelConfigId = agent.modelConfigId;
+      let selectedModelName = agent.modelName;
+      let selectedProviderName = agent.providerType;
+      const visionPolicy = agent.vision ?? {
+        mode: "AUTO" as const,
+        visionModelConfigId: null
+      };
+      if (agent.executionMode !== AgentExecutionMode.WORKFLOW) {
+        const requiredCapabilities = [
+          ModelCapabilityType.TEXT_CHAT,
+          ...((request.message.images?.length ?? 0) > 0 ? [ModelCapabilityType.VISION_INPUT] : [])
+        ];
+        const routeStep = await this.startStep(trace, AgentRunStepType.ROUTER, "model_route", {
+          primaryModelConfigId: agent.modelConfigId,
+          requiredCapabilities,
+          visionMode: visionPolicy.mode,
+          attachmentCount: request.message.images?.length ?? 0
+        });
+        try {
+          const modelProviders = this.requireModelProvidersService();
+          const decision =
+            typeof modelProviders.resolveChatModel === "function"
+              ? await modelProviders.resolveChatModel({
+                  primaryModelConfigId: agent.modelConfigId,
+                  requiredCapabilities,
+                  policy: {
+                    visionMode: visionPolicy.mode,
+                    visionModelConfigId: visionPolicy.visionModelConfigId
+                  },
+                  requestId: request.requestId
+                })
+              : {
+                  selectedModelConfigId: agent.modelConfigId,
+                  selectedRole: "PRIMARY" as const,
+                  requiredCapabilities,
+                  reason: "PRIMARY_SUPPORTS_ALL" as const,
+                  fallbackUsed: false
+                };
+          selectedModelConfigId = decision.selectedModelConfigId;
+          if (selectedModelConfigId !== agent.modelConfigId) {
+            const selected =
+              await this.requireModelProvidersService().getModelConfig(selectedModelConfigId);
+            selectedModelName = selected.modelName;
+            selectedProviderName = selected.provider.providerType;
+          }
+          await this.completeStep(routeStep, decision);
+        } catch (error) {
+          await this.failStep(routeStep, this.normalizeError(error, "model_route_failed"));
+          throw error;
+        }
+      }
       yield {
         type: "run_started",
         data: {
           runId: trace?.runId,
           agentId: agent.agentId,
-          modelConfigId: agent.modelConfigId,
-          modelName: agent.modelName,
-          providerName: agent.providerType,
+          modelConfigId: selectedModelConfigId,
+          modelName: selectedModelName,
+          providerName: selectedProviderName,
           sessionId: request.sessionId ?? null,
           executionMode: agent.executionMode,
           workflowId: agent.workflow?.workflowId,
@@ -247,14 +296,14 @@ export class AgentRuntimeService {
         let reasoningCharacterCount = 0;
         const modelStep = await this.startStep(trace, AgentRunStepType.MODEL, "chat_stream", {
           round,
-          modelConfigId: agent.modelConfigId,
+          modelConfigId: selectedModelConfigId,
           messageCount: messages.length,
           toolCount: llmTools.length
         });
 
         try {
           for await (const chunk of this.requireModelProvidersService().streamChatCompletion({
-            modelConfigId: agent.modelConfigId,
+            modelConfigId: selectedModelConfigId,
             messages,
             tools: llmTools,
             toolChoice: llmTools.length > 0 ? "auto" : undefined,
@@ -317,7 +366,7 @@ export class AgentRuntimeService {
           const routedToolCall = await this.routeToolCall({
             message: request.message.text,
             systemPrompt: agent.systemPrompt,
-            modelConfigId: agent.modelConfigId,
+            modelConfigId: selectedModelConfigId,
             timeoutSeconds: agent.timeoutSeconds,
             tools: llmTools,
             signal: request.signal,
@@ -355,9 +404,9 @@ export class AgentRuntimeService {
             data: {
               runId: trace?.runId,
               agentId: agent.agentId,
-              modelConfigId: agent.modelConfigId,
-              modelName: agent.modelName,
-              providerName: agent.providerType,
+              modelConfigId: selectedModelConfigId,
+              modelName: selectedModelName,
+              providerName: selectedProviderName,
               sessionId: request.sessionId ?? null,
               content
             }
@@ -1548,14 +1597,6 @@ export class AgentRuntimeService {
   /** Prompt Builder 是无状态组件，测试未注入时使用本地实例。 */
   private requirePromptBuilder(): AgentPromptBuilder {
     return this.promptBuilder ?? new AgentPromptBuilder();
-  }
-
-  /** 在发送请求前阻止明显不支持视觉输入的模型接收图片。 */
-  private ensureImageInputSupported(modelName: string, images: unknown[]): void {
-    if (images.length === 0) return;
-    if (!/(gpt-4o|gpt-4\.1|gpt-5|vision|claude-3|claude-sonnet-4|gemini)/iu.test(modelName)) {
-      throw new Error(`model ${modelName} does not support image input`);
-    }
   }
 
   /** Trace 写入失败统一进入运维日志，避免每个调用点重复处理。 */
