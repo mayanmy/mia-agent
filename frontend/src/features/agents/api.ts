@@ -30,6 +30,8 @@ export type AgentListItem = {
   toolCount: number;
   /** 已绑定知识库数量。 */
   knowledgeBaseCount: number;
+  /** 已绑定 Skill 数量。 */
+  skillCount: number;
   /** 模型采样温度。 */
   temperature: number;
   /** 模型上下文保留的历史轮数。 */
@@ -89,6 +91,8 @@ export type AgentDetail = AgentListItem & {
   toolIds: string[];
   /** 已绑定知识库 ID。 */
   knowledgeBaseIds: string[];
+  /** 按 Prompt 注入顺序排列的 Skill ID。 */
+  skillIds: string[];
   /** 当前模型配置摘要。 */
   modelConfig: AgentModelConfigSummary;
 };
@@ -321,6 +325,25 @@ export function updateAgentTools(id: string, toolIds: string[]): Promise<AgentTo
   return request<AgentToolBindingResult>(`/api/v1/agents/${id}/tools`, {
     method: "PUT",
     body: JSON.stringify({ toolIds })
+  });
+}
+
+export type AgentSkillBindingResult = {
+  agentId: string;
+  skills: Array<{ skillId: string; position: number; enabled: boolean }>;
+};
+
+export function getAgentSkills(id: string): Promise<AgentSkillBindingResult> {
+  return request<AgentSkillBindingResult>(`/api/v1/agents/${id}/skills`);
+}
+
+export function updateAgentSkills(
+  id: string,
+  skillIds: string[]
+): Promise<AgentSkillBindingResult> {
+  return request<AgentSkillBindingResult>(`/api/v1/agents/${id}/skills`, {
+    method: "PUT",
+    body: JSON.stringify({ skills: skillIds.map((skillId) => ({ skillId })) })
   });
 }
 

@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from "@nestjs/common";
+import { HttpStatus, Injectable, Optional } from "@nestjs/common";
 import {
   AgentChatSessionMode,
   AgentExecutionMode,
@@ -21,6 +21,7 @@ import { PageResult } from "../../core/result";
 import { KnowledgeService } from "../knowledge/knowledge.service";
 import { ModelProvidersService } from "../model-providers/model-providers.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { SkillsService } from "../skills/skills.service";
 import { ToolsService } from "../tools/tools.service";
 import { CurrentUserDto } from "../users/dto/user.dto";
 import { CurrentWorkspaceDto } from "../workspaces/dto/workspace.dto";
@@ -38,6 +39,8 @@ import {
   AgentPublishResult,
   AgentQueryDto,
   AgentRuntimeConfig,
+  AgentSkillBindingDto,
+  AgentSkillBindingResult,
   AgentToolBindingDto,
   AgentToolBindingResult,
   AgentUpdateDto,
@@ -49,6 +52,7 @@ import {
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_TIMEOUT_SECONDS = 120;
 const DEFAULT_HISTORY_TURNS = 6;
+const MAX_AGENT_SKILLS = 10;
 
 /**
  * Agent 查询的完整 Prisma 投影。
@@ -67,6 +71,8 @@ type AgentWithModelConfig = Prisma.AgentGetPayload<{
     };
     /** Agent 工具绑定记录。 */
     agentTools: true;
+    /** Agent Skill 有序绑定记录。 */
+    agentSkills: true;
     /** 资源创建者用于成员级修改授权和列表展示。 */
     createdBy: {
       select: {
@@ -98,6 +104,7 @@ type AgentWithModelConfig = Prisma.AgentGetPayload<{
       select: {
         /** 工具绑定数量。 */
         agentTools: true;
+        agentSkills: true;
         /** 知识库绑定数量。 */
         agentKnowledgeBases: true;
       };
@@ -147,7 +154,8 @@ export class AgentsService {
     private readonly modelProvidersService: ModelProvidersService,
     private readonly toolsService: ToolsService,
     private readonly knowledgeService: KnowledgeService,
-    private readonly workflowsService: WorkflowsService
+    private readonly workflowsService: WorkflowsService,
+    @Optional() private readonly skillsService?: SkillsService
   ) {}
 
   /**
@@ -186,11 +194,13 @@ export class AgentsService {
           },
           createdBy: { select: { id: true, displayName: true } },
           agentTools: true,
+          agentSkills: true,
           agentWorkflow: true,
           agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
           _count: {
             select: {
               agentTools: true,
+              agentSkills: true,
               agentKnowledgeBases: true
             }
           }
@@ -245,11 +255,13 @@ export class AgentsService {
         },
         createdBy: { select: { id: true, displayName: true } },
         agentTools: true,
+        agentSkills: true,
         agentWorkflow: true,
         agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
         _count: {
           select: {
             agentTools: true,
+            agentSkills: true,
             agentKnowledgeBases: true
           }
         }
@@ -322,11 +334,13 @@ export class AgentsService {
         },
         createdBy: { select: { id: true, displayName: true } },
         agentTools: true,
+        agentSkills: true,
         agentWorkflow: true,
         agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
         _count: {
           select: {
             agentTools: true,
+            agentSkills: true,
             agentKnowledgeBases: true
           }
         }
@@ -575,6 +589,22 @@ export class AgentsService {
       throw new AppError(ErrorCodes.agent.notFound, "agent not found", HttpStatus.NOT_FOUND);
     }
 
+    const orderedSkillBindings = [...(agent.agentSkills ?? [])].sort(
+      (left, right) =>
+        left.position - right.position ||
+        left.createdAt.getTime() - right.createdAt.getTime() ||
+        left.skillId.localeCompare(right.skillId)
+    );
+    const enabledSkillBindings = orderedSkillBindings.filter((binding) => binding.enabled);
+    const runtimeSkills = this.skillsService
+      ? await this.skillsService.getRuntimeSkills(
+          enabledSkillBindings.map((binding) => binding.skillId)
+        )
+      : { active: [], unavailableSkillIds: [] };
+    const positionBySkillId = new Map(
+      enabledSkillBindings.map((binding) => [binding.skillId, binding.position])
+    );
+
     return {
       agentId: agent.id,
       name: agent.name,
@@ -609,7 +639,23 @@ export class AgentsService {
       knowledgeBaseIds: agent.agentKnowledgeBases
         .filter((knowledgeBase) => this.isActiveAgentKnowledgeBase(knowledgeBase))
         .map((knowledgeBase) => knowledgeBase.knowledgeBaseId),
-      toolIds: agent.agentTools.map((tool) => tool.toolId)
+      toolIds: agent.agentTools.map((tool) => tool.toolId),
+      skills: runtimeSkills.active.map((skill) => ({
+        ...skill,
+        position: positionBySkillId.get(skill.id) ?? 0
+      })),
+      unavailableSkillBindings: [
+        ...orderedSkillBindings
+          .filter((binding) => !binding.enabled)
+          .map((binding) => ({
+            skillId: binding.skillId,
+            reason: "DISABLED_OR_ARCHIVED" as const
+          })),
+        ...runtimeSkills.unavailableSkillIds.map((skillId) => ({
+          skillId,
+          reason: "DISABLED_OR_ARCHIVED" as const
+        }))
+      ]
     };
   }
 
@@ -731,6 +777,45 @@ export class AgentsService {
       agentId: id,
       toolIds
     };
+  }
+
+  /** 读取 Agent Skill 绑定，始终按 position 返回。 */
+  async getAgentSkills(id: string): Promise<AgentSkillBindingResult> {
+    await this.ensureCanManageAgent(id);
+    const skills = await this.prisma.agentSkill.findMany({
+      where: { agentId: id },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }, { skillId: "asc" }]
+    });
+    return {
+      agentId: id,
+      skills: skills.map((binding) => ({
+        skillId: binding.skillId,
+        position: binding.position,
+        enabled: binding.enabled
+      }))
+    };
+  }
+
+  /** 原子替换有序 Skill 绑定；Skill 内容与状态仍由 skills 模块校验。 */
+  async updateAgentSkills(
+    id: string,
+    payload: AgentSkillBindingDto
+  ): Promise<AgentSkillBindingResult> {
+    await this.ensureCanManageAgent(id);
+    const skills = this.normalizeSkillBindings(payload.skills);
+    if (!this.skillsService) throw new Error("AgentsService 缺少 SkillsService");
+    await this.skillsService.ensureBindableSkillIds(skills.map((binding) => binding.skillId));
+    await this.prisma.$transaction([
+      this.prisma.agentSkill.deleteMany({ where: { agentId: id } }),
+      ...(skills.length > 0
+        ? [
+            this.prisma.agentSkill.createMany({
+              data: skills.map((binding) => ({ agentId: id, ...binding }))
+            })
+          ]
+        : [])
+    ]);
+    return { agentId: id, skills };
   }
 
   /** 读取 Agent 已绑定的知识库 ID。 */
@@ -1059,6 +1144,36 @@ export class AgentsService {
     return [...new Set(toolIds)];
   }
 
+  private normalizeSkillBindings(
+    value: AgentSkillBindingDto["skills"]
+  ): AgentSkillBindingResult["skills"] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) {
+      throw new AppError(ErrorCodes.agent.invalidSkills, "skills must be an array");
+    }
+    if (value.length > MAX_AGENT_SKILLS) {
+      throw new AppError(
+        ErrorCodes.agent.tooManySkills,
+        `Agent 最多绑定 ${MAX_AGENT_SKILLS} 个 Skill`
+      );
+    }
+    const seen = new Set<string>();
+    return value.map((item, index) => {
+      const skillId = this.requireNonEmptyString(item?.skillId, "skillId");
+      if (seen.has(skillId)) {
+        throw new AppError(ErrorCodes.agent.invalidSkills, "skillId cannot be duplicated");
+      }
+      if (item.position !== undefined && item.position !== index) {
+        throw new AppError(
+          ErrorCodes.agent.invalidSkills,
+          "Skill position must match its array index"
+        );
+      }
+      seen.add(skillId);
+      return { skillId, position: index, enabled: item.enabled ?? true };
+    });
+  }
+
   /** 规范化知识库 ID、去重并拒绝非字符串成员。 */
   private normalizeKnowledgeBaseIds(value: unknown): string[] {
     if (value === undefined || value === null) {
@@ -1251,11 +1366,13 @@ export class AgentsService {
         },
         createdBy: { select: { id: true, displayName: true } },
         agentTools: true,
+        agentSkills: true,
         agentWorkflow: true,
         agentKnowledgeBases: this.getAgentKnowledgeBaseInclude(),
         _count: {
           select: {
             agentTools: true,
+            agentSkills: true,
             agentKnowledgeBases: true
           }
         }
@@ -1284,6 +1401,7 @@ export class AgentsService {
       modelName: agent.modelConfig.modelName,
       providerName: agent.modelConfig.provider.name,
       toolCount: agent._count.agentTools,
+      skillCount: agent._count.agentSkills ?? 0,
       knowledgeBaseCount: agent.agentKnowledgeBases.filter((knowledgeBase) =>
         this.isActiveAgentKnowledgeBase(knowledgeBase)
       ).length,
@@ -1326,6 +1444,9 @@ export class AgentsService {
       knowledgeBaseIds: agent.agentKnowledgeBases.map(
         (knowledgeBase) => knowledgeBase.knowledgeBaseId
       ),
+      skillIds: [...(agent.agentSkills ?? [])]
+        .sort((left, right) => left.position - right.position)
+        .map((binding) => binding.skillId),
       modelConfig: this.toModelConfigSummary(agent),
       workflow: agent.agentWorkflow
         ? {

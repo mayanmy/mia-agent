@@ -60,6 +60,26 @@ export type SkillDetail = {
   updatedAt: string;
 };
 
+/** Agent 编辑器使用的轻量 Skill 选项。 */
+export type SkillOption = Pick<SkillDetail, "id" | "name" | "description" | "revision">;
+
+/** Agent Runtime 注入 Prompt 所需的稳定 Skill 快照。 */
+export type SkillRuntimeConfig = {
+  id: string;
+  name: string;
+  revision: number;
+  instructions: string;
+  usageConditions: string;
+  inputGuidance: string;
+  outputGuidance: string;
+  limitations: string;
+};
+
+export type RuntimeSkillsResult = {
+  active: SkillRuntimeConfig[];
+  unavailableSkillIds: string[];
+};
+
 /** 外部来源导入后交给 Skill Service 校验保存的草稿。 */
 export type ImportedSkillDraftDto = {
   /** 建议的 Skill 名称。 */

@@ -51,5 +51,34 @@ export const tests = [
       assert.equal(preview.length, 503);
       assert.ok(preview.endsWith("..."));
     }
+  },
+  {
+    name: "AgentPromptBuilder keeps Agent, Skill, Tool and RAG sections in stable order",
+    async run(): Promise<void> {
+      const prompt = new AgentPromptBuilder().buildSystemPrompt({
+        systemPrompt: "Agent rules",
+        query: "question",
+        skillPrompt: "Skill rules",
+        tools: [{ name: "lookup", description: "Lookup", parameters: {} }],
+        retrievalContext: {
+          query: "question",
+          elapsedMs: 1,
+          sources: [
+            {
+              knowledgeBaseId: "kb",
+              documentId: "doc",
+              documentName: "doc.md",
+              chunkId: "chunk",
+              chunkIndex: 0,
+              score: 1,
+              content: "RAG context"
+            }
+          ]
+        }
+      });
+      assert.ok(prompt.indexOf("Agent rules") < prompt.indexOf("Skill rules"));
+      assert.ok(prompt.indexOf("Skill rules") < prompt.indexOf("工具调用规则"));
+      assert.ok(prompt.indexOf("工具调用规则") < prompt.indexOf("知识库检索结果"));
+    }
   }
 ];

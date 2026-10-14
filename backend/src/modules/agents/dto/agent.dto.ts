@@ -6,6 +6,7 @@ import {
   ModelThinkingMode,
   ModelProviderType
 } from "@prisma/client";
+import type { SkillRuntimeConfig } from "../../skills/dto/skill.dto";
 
 /** JSON 中允许直接序列化的基础值。 */
 export type JsonPrimitive = string | number | boolean | null;
@@ -107,6 +108,8 @@ export type AgentListItem = {
   toolCount: number;
   /** 已绑定知识库数量。 */
   knowledgeBaseCount: number;
+  /** 已绑定 Skill 数量。 */
+  skillCount: number;
   /** 当前采样温度。 */
   temperature: number;
   /** 模型上下文保留的历史轮数，供客户端提前最小化临时会话传输。 */
@@ -150,6 +153,8 @@ export type AgentDetail = AgentListItem & {
   toolIds: string[];
   /** 已绑定知识库 ID 列表。 */
   knowledgeBaseIds: string[];
+  /** 按注入顺序排列的 Skill ID。 */
+  skillIds: string[];
   /** 模型及供应商安全摘要。 */
   modelConfig: AgentModelConfigSummary;
   /** 工作流绑定；直接对话模式下为 null。 */
@@ -210,6 +215,21 @@ export type AgentKnowledgeBaseBindingResult = {
   agentId: string;
   /** 实际保存的知识库 ID 列表。 */
   knowledgeBaseIds: string[];
+};
+
+export type AgentSkillBindingItemDto = {
+  skillId?: string;
+  position?: number;
+  enabled?: boolean;
+};
+
+export type AgentSkillBindingDto = {
+  skills?: AgentSkillBindingItemDto[];
+};
+
+export type AgentSkillBindingResult = {
+  agentId: string;
+  skills: Array<{ skillId: string; position: number; enabled: boolean }>;
 };
 
 /** 发布、取消发布或轮换公开令牌后的状态。 */
@@ -308,4 +328,11 @@ export type AgentRuntimeConfig = {
   knowledgeBaseIds: string[];
   /** Runtime 允许调用的工具 ID。 */
   toolIds: string[];
+  /** 已按 Agent 绑定顺序解析的可用 Skill。 */
+  skills: Array<SkillRuntimeConfig & { position: number }>;
+  /** 保留绑定但当前不可用的 Skill，不进入 Prompt。 */
+  unavailableSkillBindings: Array<{
+    skillId: string;
+    reason: "DISABLED_OR_ARCHIVED";
+  }>;
 };

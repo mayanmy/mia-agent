@@ -20,6 +20,8 @@ import {
   SharedAgentDetail,
   AgentToolBindingDto,
   AgentToolBindingResult,
+  AgentSkillBindingDto,
+  AgentSkillBindingResult,
   AgentUpdateDto,
   AgentWorkflowBindingDto,
   AgentWorkflowBindingResult
@@ -119,6 +121,25 @@ export class AgentsController {
     @Body() payload: AgentToolBindingDto
   ): Promise<AgentToolBindingResult> {
     return this.agentsService.updateAgentTools(id, payload);
+  }
+
+  /** 获取 Agent 的有序 Skill 绑定。 */
+  @Get(":id/skills")
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
+  async getAgentSkills(@Param("id") id: string): Promise<AgentSkillBindingResult> {
+    return this.agentsService.getAgentSkills(id);
+  }
+
+  /** 原子替换 Agent 的有序 Skill 绑定。 */
+  @Put(":id/skills")
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
+  async updateAgentSkills(
+    @Param("id") id: string,
+    @Body() payload: AgentSkillBindingDto
+  ): Promise<AgentSkillBindingResult> {
+    return this.agentsService.updateAgentSkills(id, payload);
   }
 
   /** 获取 Agent 知识库绑定。 */

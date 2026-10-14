@@ -5,6 +5,7 @@ import { tests as workspaceContextTests } from "../core/auth/workspace-context.i
 import { tests as agentTests } from "../modules/agents/agents.service.spec";
 import { tests as agentRunTests } from "../modules/agent_runs/agent-runs.service.spec";
 import { tests as agentPromptBuilderTests } from "../modules/agent_runtime/prompt-builder.spec";
+import { tests as skillRendererTests } from "../modules/agent_runtime/skill-renderer.spec";
 import { tests as historyPolicyTests } from "../modules/agent_runtime/history-policy.spec";
 import { tests as agentRuntimeTests } from "../modules/agent_runtime/agent-runtime.service.spec";
 import { tests as authTests } from "../modules/auth/auth.service.spec";
@@ -60,6 +61,7 @@ const tests: TestCase[] = [
   ...mcpToolExecutorTests,
   ...agentRunTests,
   ...agentPromptBuilderTests,
+  ...skillRendererTests,
   ...historyPolicyTests,
   ...agentRuntimeTests,
   ...agentTests,

@@ -10,6 +10,7 @@ import type {
   SkillCreateDto,
   SkillDetail,
   SkillQueryDto,
+  SkillOption,
   SkillStatusDto,
   SkillUpdateDto
 } from "./dto/skill.dto";
@@ -32,6 +33,12 @@ export class SkillsController {
     @CurrentUser() user: CurrentUserDto
   ): Promise<SkillDetail> {
     return this.skillsService.createSkill(payload, user.id);
+  }
+
+  @Get("options")
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
+  options(): Promise<SkillOption[]> {
+    return this.skillsService.listSkillOptions();
   }
 
   @Get(":id")

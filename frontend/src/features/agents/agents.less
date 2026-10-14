@@ -458,6 +458,51 @@
   line-height: 1.6;
 }
 
+.agentSkillSelector {
+  display: grid;
+  gap: 16px;
+}
+
+.agentSkillSelector > .ant-select {
+  max-width: 520px;
+  width: 100%;
+}
+
+.agentSkillList {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agentSkillList li {
+  align-items: center;
+  background: #fafcff;
+  border: 1px solid #dbe5f0;
+  border-radius: 10px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.agentSkillList li > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.agentSkillList small {
+  color: #64748b;
+}
+
+.agentSkillList li > span {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
 @media (max-width: 760px) {
   .sharedAgentWorkspace {
     padding: 0;

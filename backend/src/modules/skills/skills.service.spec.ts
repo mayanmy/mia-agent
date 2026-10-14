@@ -39,5 +39,46 @@ export const tests = [
       assert.match(String(created?.sourceHash), /^[a-f0-9]{64}$/);
       assert.equal(result.enabled, false);
     }
+  },
+  {
+    name: "SkillsService returns runtime DTOs in requested binding order",
+    run: async () => {
+      const prisma = {
+        skill: {
+          findMany: async () => [
+            {
+              id: "skill-a",
+              name: "A",
+              revision: 1,
+              instructions: "A instructions",
+              usageConditions: "",
+              inputGuidance: "",
+              outputGuidance: "",
+              limitations: ""
+            },
+            {
+              id: "skill-b",
+              name: "B",
+              revision: 2,
+              instructions: "B instructions",
+              usageConditions: "",
+              inputGuidance: "",
+              outputGuidance: "",
+              limitations: ""
+            }
+          ]
+        }
+      };
+      const result = await new SkillsService(prisma as never).getRuntimeSkills([
+        "skill-b",
+        "missing",
+        "skill-a"
+      ]);
+      assert.deepEqual(
+        result.active.map((skill) => skill.id),
+        ["skill-b", "skill-a"]
+      );
+      assert.deepEqual(result.unavailableSkillIds, ["missing"]);
+    }
   }
 ];

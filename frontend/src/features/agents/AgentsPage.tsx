@@ -7,6 +7,7 @@ import { AgentsGuide } from "../../shared/components/menu-guides";
 
 import { listKnowledgeBases, type KnowledgeBaseListItem } from "../knowledge/api";
 import { listModelConfigOptions, type ModelConfigOption } from "../model-providers/api";
+import { listSkillOptions, type SkillOption } from "../skills/api";
 import { listTools, type ToolListItem } from "../tools/api";
 import { listPublishedWorkflowApps, workflowToolId } from "../workflows/api";
 import {
@@ -14,12 +15,14 @@ import {
   deleteAgent,
   getAgent,
   getAgentKnowledgeBases,
+  getAgentSkills,
   getAgentTools,
   listAgents,
   publishAgent,
   unpublishAgent,
   updateAgent,
   updateAgentKnowledgeBases,
+  updateAgentSkills,
   updateAgentTools
 } from "./api";
 import { AgentApiKeysModal } from "./components/AgentApiKeysModal";
@@ -41,6 +44,7 @@ export function AgentsPage() {
   const [modelConfigs, setModelConfigs] = useState<ModelConfigOption[]>([]);
   const [tools, setTools] = useState<ToolListItem[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseListItem[]>([]);
+  const [skills, setSkills] = useState<SkillOption[]>([]);
   const [defaultChatModelConfigId, setDefaultChatModelConfigId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -52,6 +56,7 @@ export function AgentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loadedToolIds, setLoadedToolIds] = useState<string[]>([]);
   const [loadedKnowledgeBaseIds, setLoadedKnowledgeBaseIds] = useState<string[]>([]);
+  const [loadedSkillIds, setLoadedSkillIds] = useState<string[]>([]);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
 
   const modelOptions = useMemo(() => {
@@ -91,10 +96,11 @@ export function AgentsPage() {
     setLoading(true);
 
     try {
-      const [agentPage, modelConfigOptions, knowledgeBasePage] = await Promise.all([
+      const [agentPage, modelConfigOptions, knowledgeBasePage, skillOptions] = await Promise.all([
         listAgents(nextPage, nextPageSize),
         listModelConfigOptions(),
-        listKnowledgeBases(1, 100)
+        listKnowledgeBases(1, 100),
+        listSkillOptions()
       ]);
       const [toolList, workflowApps] = await Promise.all([
         listTools(),
@@ -105,6 +111,7 @@ export function AgentsPage() {
         setAgents(agentPage.list);
         setModelConfigs(modelConfigOptions);
         setKnowledgeBases(knowledgeBasePage.list);
+        setSkills(skillOptions);
         setTools([
           ...toolList.map((tool) => ({ ...tool, source: "standard" as const })),
           ...workflowApps.map((app) => ({
@@ -140,6 +147,7 @@ export function AgentsPage() {
     setEditingId(null);
     setLoadedToolIds([]);
     setLoadedKnowledgeBaseIds([]);
+    setLoadedSkillIds([]);
     form.setFieldsValue({
       ...defaultAgentFormValues,
       modelConfigId: resolveDefaultChatModelConfigId()
@@ -164,18 +172,22 @@ export function AgentsPage() {
     setLoading(true);
 
     try {
-      const [agent, toolBindings, knowledgeBaseBindings] = await Promise.all([
+      const [agent, toolBindings, knowledgeBaseBindings, skillBindings] = await Promise.all([
         getAgent(id),
         getAgentTools(id),
-        getAgentKnowledgeBases(id)
+        getAgentKnowledgeBases(id),
+        getAgentSkills(id)
       ]);
       setEditingId(agent.id);
       setLoadedToolIds(toolBindings.toolIds);
       setLoadedKnowledgeBaseIds(knowledgeBaseBindings.knowledgeBaseIds);
+      const skillIds = skillBindings.skills.map((binding) => binding.skillId);
+      setLoadedSkillIds(skillIds);
       form.setFieldsValue({
         ...toAgentFormValues(agent),
         toolIds: toolBindings.toolIds,
-        knowledgeBaseIds: knowledgeBaseBindings.knowledgeBaseIds
+        knowledgeBaseIds: knowledgeBaseBindings.knowledgeBaseIds,
+        skillIds
       });
       setDialogOpen(true);
     } catch (error) {
@@ -212,7 +224,8 @@ export function AgentsPage() {
           updateAgentKnowledgeBases(
             agentId,
             resolveSubmittedKnowledgeBaseIds(values.knowledgeBaseIds)
-          )
+          ),
+          updateAgentSkills(agentId, resolveSubmittedSkillIds(values.skillIds))
         ]);
       }
 
@@ -220,6 +233,7 @@ export function AgentsPage() {
       setEditingId(null);
       setLoadedToolIds([]);
       setLoadedKnowledgeBaseIds([]);
+      setLoadedSkillIds([]);
       form.resetFields();
       await refresh();
     } catch (error) {
@@ -364,6 +378,7 @@ export function AgentsPage() {
     setEditingId(null);
     setLoadedToolIds([]);
     setLoadedKnowledgeBaseIds([]);
+    setLoadedSkillIds([]);
     form.resetFields();
   }
 
@@ -387,6 +402,11 @@ export function AgentsPage() {
     }
 
     return editingId ? loadedKnowledgeBaseIds : [];
+  }
+
+  function resolveSubmittedSkillIds(value: AgentFormValues["skillIds"] | undefined): string[] {
+    const fieldValue = value ?? form.getFieldValue("skillIds");
+    return Array.isArray(fieldValue) ? fieldValue : editingId ? loadedSkillIds : [];
   }
 
   return (
@@ -429,6 +449,7 @@ export function AgentsPage() {
         modelConfigs={modelConfigs}
         modelOptions={modelOptions}
         knowledgeBases={knowledgeBases}
+        skills={skills}
         open={dialogOpen}
         saving={saving}
         tools={tools}

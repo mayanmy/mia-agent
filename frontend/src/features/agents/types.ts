@@ -32,6 +32,8 @@ export type AgentFormValues = {
   toolIds: string[];
   /** 表单中选择的知识库 ID。 */
   knowledgeBaseIds: string[];
+  /** 按 Prompt 注入顺序排列的 Skill ID。 */
+  skillIds: string[];
 };
 
 /** Agent 表格行模型，保留显式工具数量供列渲染使用。 */

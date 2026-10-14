@@ -124,7 +124,14 @@ export const tests = [
       assert.equal(events.at(-1)?.type, "message_end");
       assert.equal(events.at(-1)?.data.runId, "run-1");
       assert.equal(events.at(-1)?.data.content, "hello world");
-      assert.equal(traceCalls.filter((call) => call.method === "startStep").length, 1);
+      const stepTypes = traceCalls
+        .filter((call) => call.method === "startStep")
+        .map((call) => (call.payload as { type: AgentRunStepType }).type);
+      assert.deepEqual(stepTypes, [
+        AgentRunStepType.ROUTER,
+        AgentRunStepType.TRANSFORM,
+        AgentRunStepType.MODEL
+      ]);
       assert.equal(traceCalls.filter((call) => call.method === "markFirstToken").length, 1);
       assert.equal(traceCalls.filter((call) => call.method === "completeRun").length, 1);
     }
@@ -174,6 +181,7 @@ export const tests = [
           sequence: 1,
           startedAt: new Date()
         }),
+        completeStep: async () => undefined,
         failStep: async () => undefined,
         cancelRun: async (runId: string) => {
           canceledRuns.push(runId);

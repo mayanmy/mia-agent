@@ -17,6 +17,7 @@ export class AgentPromptBuilder {
   buildSystemPrompt(request: {
     systemPrompt: string;
     query: string;
+    skillPrompt?: string;
     tools: LLMToolDefinition[];
     retrievalContext: RetrievalContext | null;
   }): string {
@@ -28,6 +29,34 @@ export class AgentPromptBuilder {
       sections.push("", "当前用户问题：", request.query);
     }
 
+    if (request.skillPrompt?.trim()) {
+      sections.push("", request.skillPrompt.trim());
+    }
+
+    if (request.tools.length > 0) {
+      const toolDescriptions = request.tools
+        .map(
+          (tool) =>
+            `- ${tool.name}: ${tool.description}; parameters=${JSON.stringify(tool.parameters)}`
+        )
+        .join("\n");
+
+      sections.push(
+        "",
+        "工具调用规则：",
+        "当用户问题需要实时信息、精确计算、当前日期时间或外部查询时，必须使用可用工具，不要猜测。",
+        `如果需要获取当前时间且用户未指定时区，使用 ${DEFAULT_TIMEZONE}。`,
+        "如果模型接口不支持原生工具调用，则只输出下面 JSON，不要输出解释文字：",
+        "```json",
+        '{"name":"tool_id","arguments":{}}',
+        "```",
+        "可用工具：",
+        toolDescriptions,
+        "拿到工具结果后，再基于工具结果用自然语言回答用户。",
+        "如果工具结果包含 errorType 或 errorMessage，只能说明工具或 Workflow 执行失败；不得把错误文案推断为被查询业务对象的真实状态。"
+      );
+    }
+
     if (request.retrievalContext && request.retrievalContext.sources.length > 0) {
       // 检索正文只进入模型上下文，不写入用户消息，避免污染会话原始输入。
       sections.push(
@@ -37,32 +66,6 @@ export class AgentPromptBuilder {
         "回答时优先基于知识库检索结果；如果资料不足，明确说明缺少依据。"
       );
     }
-
-    if (request.tools.length === 0) {
-      return sections.join("\n");
-    }
-
-    const toolDescriptions = request.tools
-      .map(
-        (tool) =>
-          `- ${tool.name}: ${tool.description}; parameters=${JSON.stringify(tool.parameters)}`
-      )
-      .join("\n");
-
-    sections.push(
-      "",
-      "工具调用规则：",
-      "当用户问题需要实时信息、精确计算、当前日期时间或外部查询时，必须使用可用工具，不要猜测。",
-      `如果需要获取当前时间且用户未指定时区，使用 ${DEFAULT_TIMEZONE}。`,
-      "如果模型接口不支持原生工具调用，则只输出下面 JSON，不要输出解释文字：",
-      "```json",
-      '{"name":"tool_id","arguments":{}}',
-      "```",
-      "可用工具：",
-      toolDescriptions,
-      "拿到工具结果后，再基于工具结果用自然语言回答用户。",
-      "如果工具结果包含 errorType 或 errorMessage，只能说明工具或 Workflow 执行失败；不得把错误文案推断为被查询业务对象的真实状态。"
-    );
 
     return sections.join("\n");
   }

@@ -3,12 +3,14 @@ import type { FormInstance } from "antd";
 
 import type { KnowledgeBaseListItem } from "../../knowledge/api";
 import type { ModelConfigOption } from "../../model-providers/api";
+import type { SkillOption } from "../../skills/api";
 import type { ToolListItem } from "../../tools/api";
 import type { AgentFormValues } from "../types";
 import { defaultAgentFormValues } from "../utils/agent-form";
 import { AgentKnowledgeBaseSelector } from "./AgentKnowledgeBaseSelector";
 import { AgentFormSummary } from "./AgentFormSummary";
 import { AgentToolSelector } from "./AgentToolSelector";
+import { AgentSkillSelector } from "./AgentSkillSelector";
 
 /** 分组模型下拉框中的单个选项。 */
 type AgentModelOption = {
@@ -43,6 +45,8 @@ type AgentFormModalProps = {
   tools: ToolListItem[];
   /** 可绑定知识库列表。 */
   knowledgeBases: KnowledgeBaseListItem[];
+  /** 当前 Workspace 可绑定的 Skill。 */
+  skills: SkillOption[];
   /** 取消编辑回调。 */
   onCancel: () => void;
   /** 表单校验通过后的提交回调。 */
@@ -59,6 +63,7 @@ export function AgentFormModal({
   modelConfigs,
   tools,
   knowledgeBases,
+  skills,
   onCancel,
   onSubmit
 }: AgentFormModalProps) {
@@ -70,6 +75,7 @@ export function AgentFormModal({
   );
   const selectedKnowledgeBaseIds =
     Form.useWatch("knowledgeBaseIds", { form, preserve: true }) ?? [];
+  const selectedSkillIds = Form.useWatch("skillIds", { form, preserve: true }) ?? [];
   const selectedModelConfigId = Form.useWatch("modelConfigId", { form, preserve: true });
   const selectedModel = modelConfigs.find((model) => model.id === selectedModelConfigId);
   const visionMode = Form.useWatch("visionMode", { form, preserve: true });
@@ -102,11 +108,15 @@ export function AgentFormModal({
         <Form.Item name="toolIds" noStyle>
           <BindingField />
         </Form.Item>
+        <Form.Item name="skillIds" noStyle>
+          <BindingField />
+        </Form.Item>
         <AgentFormSummary
           editing={editing}
           knowledgeCount={selectedKnowledgeBaseIds.length}
           toolCount={selectedStandardToolIds.length}
           workflowCount={selectedWorkflowIds.length}
+          skillCount={selectedSkillIds.length}
         />
         <Tabs
           className="agentStudioTabs"
@@ -240,6 +250,17 @@ export function AgentFormModal({
                   tools={tools}
                   value={selectedToolIds}
                   onChange={(toolIds) => form.setFieldValue("toolIds", toolIds)}
+                />
+              )
+            },
+            {
+              key: "skills",
+              label: `Skill (${selectedSkillIds.length})`,
+              children: (
+                <AgentSkillSelector
+                  skills={skills}
+                  value={selectedSkillIds}
+                  onChange={(skillIds) => form.setFieldValue("skillIds", skillIds)}
                 />
               )
             },

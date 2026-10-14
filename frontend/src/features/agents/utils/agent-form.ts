@@ -15,7 +15,8 @@ export const defaultAgentFormValues: AgentFormValues = {
   visionModelConfigId: null,
   enabled: true,
   toolIds: [],
-  knowledgeBaseIds: []
+  knowledgeBaseIds: [],
+  skillIds: []
 };
 
 /** 将表单值转换为后端基础配置载荷，绑定关系由独立接口保存。 */
@@ -53,6 +54,7 @@ export function toAgentFormValues(agent: AgentDetail): AgentFormValues {
     visionModelConfigId: agent.visionModelConfigId,
     enabled: agent.enabled,
     toolIds: agent.toolIds,
-    knowledgeBaseIds: agent.knowledgeBaseIds
+    knowledgeBaseIds: agent.knowledgeBaseIds,
+    skillIds: agent.skillIds
   };
 }

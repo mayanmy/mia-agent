@@ -8,6 +8,7 @@ import { ToolsModule } from "../tools/tools.module";
 import { WorkflowRuntimeModule } from "../workflow_runtime/workflow-runtime.module";
 import { AgentRuntimeService } from "./agent-runtime.service";
 import { AgentPromptBuilder } from "./prompt-builder";
+import { SkillPromptRenderer } from "./skill-renderer";
 
 /**
  * Agent Runtime 的组合边界。
@@ -24,7 +25,7 @@ import { AgentPromptBuilder } from "./prompt-builder";
     ToolsModule,
     WorkflowRuntimeModule
   ],
-  providers: [AgentRuntimeService, AgentPromptBuilder],
+  providers: [AgentRuntimeService, AgentPromptBuilder, SkillPromptRenderer],
   exports: [AgentRuntimeService, AgentPromptBuilder]
 })
 export class AgentRuntimeModule {}

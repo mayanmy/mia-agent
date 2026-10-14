@@ -494,6 +494,7 @@ model Agent {
   visionModelConfig     ModelConfig?           @relation("AgentVisionModel", fields: [visionModelConfigId], references: [id], onDelete: SetNull)
   createdBy             User                   @relation("AgentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   agentTools            AgentTool[]
+  agentSkills           AgentSkill[]
   agentKnowledgeBases   AgentKnowledgeBase[]
   chatSessions          ChatSession[]
   apiKeys               AgentApiKey[]
@@ -584,6 +585,7 @@ model Skill {
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+  agentSkills     AgentSkill[]
 
   @@index([enabled, updatedAt(sort: Desc)], map: "idx_skills_enabled_updated_at")
   @@index([createdByUserId], map: "idx_skills_created_by_user_id")
@@ -674,6 +676,24 @@ model AgentTool {
   @@id([agentId, toolId])
   @@index([toolId], map: "idx_agent_tools_tool_id")
   @@map("agent_tools")
+}
+
+/// Agent 对 Skill 的有序绑定归 agents 模块管理；Skill 内容仍由 skills 模块拥有。
+model AgentSkill {
+  id        String   @id @default(uuid()) @db.Uuid
+  agentId   String   @map("agent_id") @db.Uuid
+  skillId   String   @map("skill_id") @db.Uuid
+  position  Int
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, skillId], map: "uq_agent_skills_agent_skill")
+  @@unique([agentId, position], map: "uq_agent_skills_agent_position")
+  @@index([skillId], map: "idx_agent_skills_skill_id")
+  @@map("agent_skills")
 }
 
 /// 管理员预配置的 HTTP API 工具。运行时 ID 使用 `http_{id}`，继续兼容 AgentTool 的字符串绑定。

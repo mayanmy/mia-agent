@@ -32,6 +32,12 @@ export type SkillDetail = {
   updatedAt: string;
 };
 
+export type SkillOption = Pick<SkillDetail, "id" | "name" | "description" | "revision">;
+
+export function listSkillOptions(): Promise<SkillOption[]> {
+  return request("/api/v1/skills/options");
+}
+
 /** Skill 创建/编辑表单允许修改的字段。 */
 export type SkillFormValues = Pick<
   SkillDetail,

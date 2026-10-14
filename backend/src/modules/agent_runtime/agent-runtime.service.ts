@@ -26,6 +26,7 @@ import { WorkflowToolRunsService } from "../workflow_runtime/workflow-tool-runs.
 import { AgentRunRequest } from "./dto/agent-run.dto";
 import { AgentRuntimeEvent } from "./dto/runtime-event.dto";
 import { AgentPromptBuilder } from "./prompt-builder";
+import { SkillPromptRenderer } from "./skill-renderer";
 import { MAX_MODEL_HISTORY_BYTES, sanitizeHistory } from "./history-policy";
 
 const MAX_TOOL_ROUNDS = 3;
@@ -55,7 +56,8 @@ export class AgentRuntimeService {
     @Optional() private readonly retrievalService?: RetrievalService,
     @Optional() private readonly promptBuilder?: AgentPromptBuilder,
     @Optional() private readonly workflowRuntimeService?: WorkflowRuntimeService,
-    @Optional() private readonly workflowToolRunsService?: WorkflowToolRunsService
+    @Optional() private readonly workflowToolRunsService?: WorkflowToolRunsService,
+    @Optional() private readonly skillPromptRenderer?: SkillPromptRenderer
   ) {}
 
   /**
@@ -260,12 +262,35 @@ export class AgentRuntimeService {
         };
       }
 
+      const skillPromptStep = await this.startStep(
+        trace,
+        AgentRunStepType.TRANSFORM,
+        "skill_prompt",
+        {
+          bindings: (agent.skills ?? []).map((skill) => ({
+            skillId: skill.id,
+            position: skill.position
+          }))
+        }
+      );
+      const renderedSkills = this.requireSkillPromptRenderer().render(
+        agent.skills ?? [],
+        agent.unavailableSkillBindings ?? []
+      );
+      await this.completeStep(skillPromptStep, {
+        applied: renderedSkills.applied,
+        skipped: renderedSkills.skipped,
+        totalRenderedChars: renderedSkills.totalRenderedChars,
+        promptHash: renderedSkills.promptHash
+      });
+
       const messages: ChatMessage[] = [
         {
           role: "system",
           content: this.requirePromptBuilder().buildSystemPrompt({
             systemPrompt: agent.systemPrompt,
             query: request.message.text,
+            skillPrompt: renderedSkills.prompt,
             tools: llmTools,
             retrievalContext
           })
@@ -1604,6 +1629,10 @@ export class AgentRuntimeService {
   /** Prompt Builder 是无状态组件，测试未注入时使用本地实例。 */
   private requirePromptBuilder(): AgentPromptBuilder {
     return this.promptBuilder ?? new AgentPromptBuilder();
+  }
+
+  private requireSkillPromptRenderer(): SkillPromptRenderer {
+    return this.skillPromptRenderer ?? new SkillPromptRenderer();
   }
 
   /** Trace 写入失败统一进入运维日志，避免每个调用点重复处理。 */

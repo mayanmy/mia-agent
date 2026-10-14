@@ -13,6 +13,9 @@ import type {
   SkillCreateDto,
   SkillDetail,
   SkillQueryDto,
+  SkillOption,
+  SkillRuntimeConfig,
+  RuntimeSkillsResult,
   SkillStatusDto,
   SkillUpdateDto
 } from "./dto/skill.dto";
@@ -59,6 +62,67 @@ export class SkillsService {
 
   async getSkill(id: string): Promise<SkillDetail> {
     return this.toDetail(await this.requireSkill(id));
+  }
+
+  async listSkillOptions(): Promise<SkillOption[]> {
+    const skills = await this.prisma.skill.findMany({
+      where: { workspaceId: requireWorkspaceId(), enabled: true, deletedAt: null },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      select: { id: true, name: true, description: true, revision: true }
+    });
+    return skills;
+  }
+
+  /** 绑定写入前统一验证 Skill 可用性，不向调用方泄露跨 Workspace 资源是否存在。 */
+  async ensureBindableSkillIds(skillIds: string[]): Promise<void> {
+    if (skillIds.length === 0) return;
+    const skills = await this.prisma.skill.findMany({
+      where: {
+        workspaceId: requireWorkspaceId(),
+        id: { in: skillIds },
+        enabled: true,
+        deletedAt: null
+      },
+      select: { id: true }
+    });
+    if (skills.length !== skillIds.length) {
+      throw new AppError(ErrorCodes.skill.notFound, "所选 Skill 已停用、归档或不可访问");
+    }
+  }
+
+  /** 按调用方给定顺序返回 Runtime DTO；失效绑定只返回不可用 ID，不阻断整个 Agent。 */
+  async getRuntimeSkills(skillIds: string[]): Promise<RuntimeSkillsResult> {
+    if (skillIds.length === 0) return { active: [], unavailableSkillIds: [] };
+    const skills = await this.prisma.skill.findMany({
+      where: {
+        workspaceId: requireWorkspaceId(),
+        id: { in: skillIds },
+        enabled: true,
+        deletedAt: null
+      }
+    });
+    const byId = new Map(skills.map((skill) => [skill.id, skill]));
+    const active = skillIds.flatMap((skillId): SkillRuntimeConfig[] => {
+      const skill = byId.get(skillId);
+      return skill
+        ? [
+            {
+              id: skill.id,
+              name: skill.name,
+              revision: skill.revision,
+              instructions: skill.instructions,
+              usageConditions: skill.usageConditions,
+              inputGuidance: skill.inputGuidance,
+              outputGuidance: skill.outputGuidance,
+              limitations: skill.limitations
+            }
+          ]
+        : [];
+    });
+    return {
+      active,
+      unavailableSkillIds: skillIds.filter((skillId) => !byId.has(skillId))
+    };
   }
 
   async createSkill(payload: SkillCreateDto, userId: string): Promise<SkillDetail> {

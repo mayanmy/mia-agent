@@ -205,5 +205,42 @@ export const tests = [
         }
       );
     }
+  },
+  {
+    name: "AgentsService atomically replaces ordered Skill bindings",
+    run: async () => {
+      const writes: string[] = [];
+      const prisma = {
+        agent: { findFirst: async () => ({ id: "agent-id", createdByUserId: "owner" }) },
+        agentSkill: {
+          deleteMany: async () => {
+            writes.push("delete");
+          },
+          createMany: async ({ data }: { data: Array<{ skillId: string; position: number }> }) => {
+            writes.push(
+              `create:${data.map((item) => `${item.skillId}@${item.position}`).join(",")}`
+            );
+          }
+        },
+        $transaction: async (operations: Promise<unknown>[]) => Promise.all(operations)
+      };
+      const skills = { ensureBindableSkillIds: async () => undefined };
+      const service = new AgentsService(
+        prisma as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        skills as never
+      );
+      const result = await service.updateAgentSkills("agent-id", {
+        skills: [{ skillId: "skill-b" }, { skillId: "skill-a" }]
+      });
+      assert.deepEqual(writes, ["delete", "create:skill-b@0,skill-a@1"]);
+      assert.deepEqual(
+        result.skills.map((item) => item.skillId),
+        ["skill-b", "skill-a"]
+      );
+    }
   }
 ];

@@ -2,6 +2,7 @@ import {
   ApartmentOutlined,
   DatabaseOutlined,
   RobotOutlined,
+  ReadOutlined,
   ToolOutlined
 } from "@ant-design/icons";
 
@@ -10,6 +11,7 @@ type AgentFormSummaryProps = {
   knowledgeCount: number;
   toolCount: number;
   workflowCount: number;
+  skillCount: number;
 };
 
 /** Agent 配置工作室的上下文摘要，让用户始终知道当前配置对象和已连接能力。 */
@@ -17,7 +19,8 @@ export function AgentFormSummary({
   editing,
   knowledgeCount,
   toolCount,
-  workflowCount
+  workflowCount,
+  skillCount
 }: AgentFormSummaryProps) {
   return (
     <header className="agentFormSummary">
@@ -37,6 +40,9 @@ export function AgentFormSummary({
         </span>
         <span title="Workflow">
           <ApartmentOutlined /> {workflowCount}
+        </span>
+        <span title="Skill">
+          <ReadOutlined /> {skillCount}
         </span>
       </div>
     </header>
