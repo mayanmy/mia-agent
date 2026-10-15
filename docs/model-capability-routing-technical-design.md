@@ -2,11 +2,13 @@
 
 ## 1. 文档信息
 
-- 文档状态：待实施
-- 方案版本：V1.0
-- 编写日期：2026-09-01
+- 文档状态：P0 已实施，输出能力扩展待实施
+- 方案版本：V1.1
+- 编写日期：2026-09-02
 - 适用范围：Mia 模型配置、Agent 配置、Chat/Agent Runtime 与 Run Trace
-- 首期范围：文本对话与图片理解模型路由
+- 当前基线：文本对话与图片理解模型路由
+- 扩展范围：工具调用、结构化输出、图片生成与 Agent 多类型输出协同
+- 关联方案：[Mia Agent 多类型输出技术方案](./mia-agent-multitype-output-design.md)
 
 ## 2. 背景
 
@@ -24,25 +26,28 @@ Provider Client 负责供应商协议转换
 Run Trace 负责记录路由依据与实际模型
 ```
 
+截至 V1.1，`TEXT_CHAT + VISION_INPUT` 的能力表、Agent 图片策略、默认视觉模型、确定性路由和 Run Trace 已实现。后续扩展的重点是：让 `TOOL_CALLING`、`STRUCTURED_OUTPUT` 和 `IMAGE_GENERATION` 参与模型选择，同时与 Agent 的 `text/image/file/json` 内容块协议保持职责分离。
+
 ## 3. 目标与非目标
 
 ### 3.1 目标
 
-1. 模型配置可以声明文本、图片、工具调用、思考等能力。
+1. 模型配置可以声明文本对话、图片输入、工具调用、结构化输出、思考和图片生成等原生能力。
 2. Agent 可以设置图片处理策略，但不需要默认绑定第二个模型。
 3. 纯文本始终优先使用 Agent 主模型。
 4. 图片输入优先使用支持视觉的主模型，否则按 Agent 和系统策略选择视觉模型。
 5. 模型选择过程确定、可解释、可审计。
 6. Run Trace 可以显示模型路由原因、候选模型和实际执行模型。
 7. Provider 差异只在模型模块内部处理，不污染 Chat 和 Agent Runtime。
-8. 为音频、图片生成、推理模型和成本路由预留扩展边界。
+8. 区分模型原生生成能力与 Mia 平台内容展示/文件存储能力。
+9. 为音频、图片生成、推理模型和成本路由预留扩展边界。
 
 ### 3.2 P0 非目标
 
 - 不建设通用智能模型网关。
 - 不按成本和负载在多个同能力模型间动态竞价。
 - 不让模型自主选择第一次调用的底层模型。
-- 不实现音频、视频和图片生成路由。
+- 当前版本不实现音频、视频和模型原生图片生成路由；图片输出首期通过工具或 Workflow 实现。
 - 不实现复杂历史图片语义引用。
 - 不自动信任通过模型名称猜测出的能力。
 
@@ -67,6 +72,25 @@ Agent 禁止图片、视觉模型停用或系统未配置默认视觉模型时�
 ### 4.5 路由只选择模型，不编排业务
 
 模型路由不负责 OCR、RAG、Tool Loop 或 Workflow。OCR 等垂直能力应作为工具或独立 Workflow 实现。
+
+### 4.6 模型能力与 Agent 输出类型分离
+
+模型能力描述“这个模型原生能做什么”；Agent 内容块描述“Mia 最终向用户交付什么”。二者不能一一等同：
+
+| Agent 最终输出 | 是否必然要求模型能力 | 说明 |
+| --- | --- | --- |
+| `text` | 要求 `TEXT_CHAT` | 当前 Chat 主路径的基础能力 |
+| `json` | 不一定 | Workflow、工具可以直接返回 JSON；只有要求 Chat 模型原生 Schema 约束时才要求 `STRUCTURED_OUTPUT` |
+| `image` | 不一定 | 工具可以生成图片；只有直接调用图片生成模型时才要求 `IMAGE_GENERATION` |
+| `file` | 否 | 文件是 Mia Storage 和工具产物能力，不应声明为模型能力 |
+
+因此不得增加 `FILE_OUTPUT` 这类模型能力，也不得因为最终消息包含图片就错误要求 Chat 模型具备 `IMAGE_GENERATION`。图片输入和图片输出是两个不同方向：
+
+```text
+VISION_INPUT      = 模型读取用户图片
+IMAGE_GENERATION  = 模型原生生成图片
+image 内容块      = Mia 向用户展示已持久化图片
+```
 
 ## 5. 目标架构
 
@@ -96,10 +120,11 @@ ChatController / ExternalAccessController
 模块边界：
 
 - `agents`：保存 Agent 主模型与视觉策略，返回稳定运行时 DTO。
-- `model_providers`：拥有模型能力、默认模型、路由规则和供应商 Client。
+- `model_providers`：拥有模型原生能力、默认模型、路由规则和供应商 Client。
 - `agent_runtime`：分析本次输入需要的能力，调用模型路由并记录 Step。
 - `chat`：拥有附件、历史消息、会话和 SSE 映射，不查询模型能力表。
 - `agent_runs`：保存路由决策和实际模型调用信息。
+- `storage`：保存 Agent 输出的图片和文件；不参与 Chat 模型能力判断。
 
 ## 6. 数据模型
 
@@ -120,7 +145,20 @@ enum ModelCapabilityType {
 }
 ```
 
-P0 只启用 `TEXT_CHAT` 和 `VISION_INPUT`，其他枚举为后续阶段预留。
+当前运行时路由已启用 `TEXT_CHAT` 和 `VISION_INPUT`。`TOOL_CALLING`、`STRUCTURED_OUTPUT`、`IMAGE_GENERATION` 等枚举已经预留，但在对应调用链完成前不得仅凭声明参与生产路由。
+
+能力语义：
+
+| 能力 | 方向 | 路由使用条件 |
+| --- | --- | --- |
+| `TEXT_CHAT` | 输入/输出 | Chat 模型基础要求 |
+| `VISION_INPUT` | 输入 | 当前请求包含服务端确认的图片附件 |
+| `TOOL_CALLING` | 输出控制 | 本次 Agent Loop 向模型注入工具定义并允许模型调用工具 |
+| `STRUCTURED_OUTPUT` | 输出控制 | 本次调用要求供应商原生 JSON Schema/JSON Mode 保证 |
+| `REASONING` | 模型行为 | Agent 或模型配置要求显式思考能力时 |
+| `IMAGE_GENERATION` | 输出 | 直接调用图片生成模型时；不用于工具生成图片 |
+| `AUDIO_INPUT/AUDIO_OUTPUT` | 输入/输出 | 后续音频调用链启用时 |
+| `EMBEDDING/RERANK` | 专用用途 | Retrieval 专用模型，不进入 Chat 路由 |
 
 ### 6.2 模型能力表
 
@@ -155,6 +193,14 @@ model ModelCapability {
 ```
 
 `verified=false` 表示管理员手动声明但尚未经过供应商接口验证。Mia 不应仅凭模型名称自动认定能力。
+
+能力验证分为三种状态语义：
+
+- `verified=true`：供应商探测或真实最小调用已验证。
+- `verified=false`：管理员声明但未验证。
+- 不存在或 `enabled=false`：路由时视为不支持。
+
+对于供应商无法通过模型列表接口准确声明的能力，应使用受控最小调用验证；验证失败不得自动删除管理员配置，只更新验证结果并返回明确原因。
 
 ### 6.3 系统默认模型
 
@@ -211,12 +257,17 @@ type AgentRuntimeConfig = {
 };
 ```
 
-### 7.2 路由请求
+### 7.2 路由请求（V1.1 目标）
 
 ```ts
 type ResolveChatModelRequest = {
   primaryModelConfigId: string;
   requiredCapabilities: ModelCapabilityType[];
+  invocation: {
+    hasImages: boolean;
+    toolsEnabled: boolean;
+    nativeStructuredOutputRequired: boolean;
+  };
   policy: {
     visionMode: AgentVisionMode;
     visionModelConfigId: string | null;
@@ -225,7 +276,7 @@ type ResolveChatModelRequest = {
 };
 ```
 
-### 7.3 路由结果
+### 7.3 路由结果（V1.1 目标）
 
 ```ts
 type ModelRouteDecision = {
@@ -237,10 +288,16 @@ type ModelRouteDecision = {
     | "AGENT_VISION_SELECTED"
     | "SYSTEM_VISION_FALLBACK";
   fallbackUsed: boolean;
+  capabilityEvidence: Array<{
+    capability: ModelCapabilityType;
+    source: "DECLARED" | "VERIFIED";
+  }>;
 };
 ```
 
 DTO 不返回 Prisma Model、供应商密钥或 Provider Client。
+
+`invocation` 是路由解释信息，`requiredCapabilities` 仍是最终权威约束。增加新能力时由 Agent Runtime 根据本次真实调用方式计算，不允许前端直接提交并提升能力要求。
 
 ## 8. 路由规则
 
@@ -254,6 +311,29 @@ P0 使用确定性识别：
 ```
 
 附件类型必须根据服务端验证后的 MIME 判断，不信任文件名后缀或客户端传入类型。
+
+V1.1 扩展后按本次真实调用方式继续追加能力：
+
+```text
+向模型注入 tools 且 toolChoice != none
+  -> + TOOL_CALLING
+
+要求供应商原生 JSON Schema / JSON Mode
+  -> + STRUCTURED_OUTPUT
+
+Agent 或模型配置要求原生思考能力
+  -> + REASONING
+
+直接调用图片生成模型
+  -> IMAGE_GENERATION（进入独立生成路由，不进入 resolveChatModel）
+```
+
+以下情况不得追加模型能力：
+
+- 工具自身返回 JSON：不要求 Chat 模型具备 `STRUCTURED_OUTPUT`。
+- Workflow End 返回 JSON：不要求 Chat 模型具备 `STRUCTURED_OUTPUT`。
+- 工具生成图片并返回 `image` 内容块：不要求 Chat 模型具备 `IMAGE_GENERATION`。
+- 工具返回普通文件：不增加任何模型能力。
 
 ### 8.2 路由算法
 
@@ -291,15 +371,45 @@ async function resolveChatModel(input, agent, primary, defaults) {
    └─ 无可用模型：明确失败
 ```
 
-### 8.3 Fallback 约束
+### 8.3 多能力路由扩展
+
+当前视觉路由仍按既有策略选择主模型、Agent 专用视觉模型或系统默认视觉模型。启用 `TOOL_CALLING`、`STRUCTURED_OUTPUT` 后，所有候选模型还必须满足本次请求的完整能力集合：
+
+```ts
+const requiredCapabilities = [ModelCapabilityType.TEXT_CHAT];
+
+if (input.hasImages) {
+  requiredCapabilities.push(ModelCapabilityType.VISION_INPUT);
+}
+if (invocation.toolsEnabled) {
+  requiredCapabilities.push(ModelCapabilityType.TOOL_CALLING);
+}
+if (invocation.nativeStructuredOutputRequired) {
+  requiredCapabilities.push(ModelCapabilityType.STRUCTURED_OUTPUT);
+}
+```
+
+不能先按视觉能力选择模型，再忽略工具调用或结构化输出能力。候选模型必须一次性通过 `supportsAll(requiredCapabilities)`。
+
+当主模型不满足非视觉能力时，V1.1 不自动使用默认视觉模型兜底，因为默认视觉模型只表达视觉偏好。处理策略为：
+
+1. Agent 明确指定了兼容候选模型时选择该模型。
+2. 没有明确策略时返回 `MODEL_CAPABILITY_MISMATCH`。
+3. P2 引入通用候选模型池后，再按健康、成本和延迟选择。
+
+### 8.4 Fallback 约束
 
 - 只允许在首 Token 前切换候选模型。
 - 首 Token 后失败不得自动换模型续写。
 - `PRIMARY_ONLY` 和 `DISABLED` 不得被系统默认视觉模型绕过。
 - 内容安全拦截、图片格式错误和图片超限不得自动降级。
 - 所有 Fallback 必须写入 Run Trace。
+- 不允许为了获得 JSON 而静默移除 Schema 约束，也不允许为了保留主模型而静默禁用工具。
+- 工具生成图片或文件不是模型 Fallback，不记录为 `model_route` 切换。
 
 ## 9. 多模态消息标准化
+
+本节描述发送给模型的输入消息，不能与 Agent 最终输出的 `AgentContentPart` 混用。
 
 业务模块使用供应商无关结构：
 
@@ -322,6 +432,46 @@ Provider Client 分别转换为供应商协议：
 - Ollama：对应模型支持的 `images` 格式。
 
 Chat 和 Agent Runtime 禁止直接构造 `image_url`，否则会与 OpenAI-compatible 协议耦合。
+
+### 9.1 输入协议与输出协议的边界
+
+```text
+ChatContentPart
+  -> 发给模型
+  -> text / image input
+
+AgentContentPart
+  -> 返回给最终用户
+  -> text / json / image / file output
+```
+
+两套 DTO 可以共享文件 ID、MIME 等基础字段，但不能使用同一个联合类型：
+
+- 输入图片可能是短生命周期 Data URL 或从 Storage 加载的数据。
+- 输出图片必须已经持久化，只能通过 `fileId` 引用。
+- 输入协议由 `model_providers` Client 转换成供应商格式。
+- 输出协议由 `agent_runtime`、`chat` 和 `storage` 共同完成交付。
+
+### 9.2 图片生成路由
+
+Agent 输出图片首期优先采用工具或 Workflow：
+
+```text
+Chat 模型（TEXT_CHAT + TOOL_CALLING）
+  -> 调用图片生成工具
+  -> 工具调用专用图片模型或外部服务
+  -> Storage 保存图片
+  -> Agent 返回 image 内容块
+```
+
+这种模式下 Chat 模型不需要 `IMAGE_GENERATION`。只有未来由 `model_providers` 直接调用图片生成模型时，才新增独立接口和路由：
+
+```ts
+resolveImageGenerationModel(...)
+generateImage(...)
+```
+
+不得把图片生成模型强行塞进 `resolveChatModel`，也不得假设图片生成供应商支持 Chat Completion。
 
 ## 10. 上下文与附件策略
 
