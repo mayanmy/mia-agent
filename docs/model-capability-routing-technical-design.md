@@ -26,7 +26,7 @@ Provider Client 负责供应商协议转换
 Run Trace 负责记录路由依据与实际模型
 ```
 
-截至 V1.1，`TEXT_CHAT + VISION_INPUT` 的能力表、Agent 图片策略、默认视觉模型、确定性路由和 Run Trace 已实现。后续扩展的重点是：让 `TOOL_CALLING`、`STRUCTURED_OUTPUT` 和 `IMAGE_GENERATION` 参与模型选择，同时与 Agent 的 `text/image/file/json` 内容块协议保持职责分离。
+截至本文更新，`TEXT_CHAT + VISION_INPUT` 的能力表、Agent 图片策略、默认视觉模型、确定性路由和 Run Trace 已实现。V1.1 后续扩展的重点是：让 `TOOL_CALLING`、`STRUCTURED_OUTPUT` 和 `IMAGE_GENERATION` 按各自调用链参与模型选择，同时与 Agent 的 `text/image/file/json` 内容块协议保持职责分离。
 
 ## 3. 目标与非目标
 
@@ -509,10 +509,31 @@ POST /api/v1/model-configs/:id/capabilities/verify
         "maxImageBytes": 10485760,
         "supportedMimeTypes": ["image/jpeg", "image/png", "image/webp"]
       }
+    },
+    {
+      "type": "TOOL_CALLING",
+      "enabled": true,
+      "options": {
+        "parallelToolCalls": false
+      }
+    },
+    {
+      "type": "STRUCTURED_OUTPUT",
+      "enabled": true,
+      "options": {
+        "modes": ["json_object", "json_schema"]
+      }
     }
   ]
 }
 ```
+
+`options` 必须按能力类型分别校验，不能只验证为普通对象：
+
+- `VISION_INPUT`：格式、数量和单张大小。
+- `TOOL_CALLING`：是否支持并行调用、工具数量或 Schema 限制。
+- `STRUCTURED_OUTPUT`：支持 `json_object`、`json_schema` 中的哪些模式。
+- `IMAGE_GENERATION`：输出格式、尺寸、数量等；在独立图片生成调用链启用后实施。
 
 ### 11.2 默认视觉模型
 
@@ -555,7 +576,9 @@ Service 必须验证 `DEDICATED` 模式下模型存在、启用且包含 `VISION
   "primaryModelConfigId": "...",
   "requiredCapabilities": ["TEXT_CHAT", "VISION_INPUT"],
   "visionMode": "AUTO",
-  "attachmentCount": 1
+  "attachmentCount": 1,
+  "toolsEnabled": true,
+  "nativeStructuredOutputRequired": false
 }
 ```
 
@@ -566,7 +589,12 @@ Service 必须验证 `DEDICATED` 模式下模型存在、启用且包含 `VISION
   "selectedModelConfigId": "...",
   "selectedRole": "SYSTEM_VISION",
   "reason": "SYSTEM_VISION_FALLBACK",
-  "fallbackUsed": true
+  "fallbackUsed": true,
+  "capabilityEvidence": [
+    { "capability": "TEXT_CHAT", "source": "DECLARED" },
+    { "capability": "VISION_INPUT", "source": "VERIFIED" },
+    { "capability": "TOOL_CALLING", "source": "DECLARED" }
+  ]
 }
 ```
 
@@ -585,9 +613,10 @@ Service 必须验证 `DEDICATED` 模式下模型存在、启用且包含 `VISION
 ☑ 工具调用
 ☑ 结构化输出
 ☑ 可选思考
+☐ 图片生成
 ```
 
-图片理解高级配置包括支持格式、单张上限和单次最大数量，并标识“已验证/未验证”。
+不同能力展开各自高级配置，并标识“已验证/未验证”。图片生成能力需要明确提示“仅供原生图片生成调用链使用；工具生成图片不依赖此声明”。
 
 ### 13.2 系统默认模型
 
@@ -620,6 +649,9 @@ Service 必须验证 `DEDICATED` 模式下模型存在、启用且包含 `VISION
 | `IMAGE_TOO_LARGE` | 图片超过模型允许的大小 |
 | `TOO_MANY_IMAGES` | 图片数量超过模型限制 |
 | `MODEL_CAPABILITY_MISMATCH` | 模型声明能力与供应商实际能力不一致 |
+| `MODEL_TOOL_CALLING_UNSUPPORTED` | 当前模型不支持 Agent 所需的工具调用 |
+| `MODEL_STRUCTURED_OUTPUT_UNSUPPORTED` | 当前模型不支持要求的原生结构化输出模式 |
+| `IMAGE_GENERATION_MODEL_NOT_CONFIGURED` | 尚未配置可用的图片生成模型 |
 
 禁止统一转换为“模型调用失败”。
 
@@ -650,10 +682,12 @@ Service 必须验证 `DEDICATED` 模式下模型存在、启用且包含 `VISION
 - 旧前端不提交视觉字段时仍可创建和更新 Agent。
 - 现有文本 Chat、Workflow LLM 节点和公开 Widget 的纯文本行为保持不变。
 - Workflow LLM 节点的多模态路由不纳入 P0，后续复用同一 `resolveChatModel` 能力。
+- 新增 `content_part` 和最终消息 `parts` 不改变模型路由 API；模型路由只消费 Runtime 计算出的原生能力要求。
+- 旧客户端只读取 `content` 时仍可工作；`file/image/json` 的展示兼容由多类型输出方案负责。
 
 ## 17. 实施计划
 
-### P0：图片自动路由闭环
+### P0：图片自动路由闭环（已完成）
 
 1. 新增模型能力枚举、表和迁移。
 2. 增加模型能力管理 API 与前端配置。
@@ -665,9 +699,15 @@ Service 必须验证 `DEDICATED` 模式下模型存在、启用且包含 `VISION
 8. 增加图片格式、大小、数量和权限校验。
 9. 覆盖主模型直用、系统回退、Agent 指定和禁止图片测试。
 
-### P1：能力完善
+当前代码已经完成模型能力表、默认视觉模型、Agent 图片策略、`resolveChatModel`、视觉输入校验和 `model_route` Step。后续修改必须保持现有测试和行为兼容。
 
-- 工具调用与结构化输出能力声明。
+### P1：能力完善与多类型输出协同
+
+- 让 `TOOL_CALLING` 参与 Agent Loop 路由；只有真实注入工具时才要求该能力。
+- 让 `STRUCTURED_OUTPUT` 参与原生 JSON Schema/JSON Mode 路由。
+- 工具和 Workflow 返回 JSON 时不错误要求 `STRUCTURED_OUTPUT`。
+- 工具生成图片或文件时不错误要求 Chat 模型具备输出能力。
+- 接入 `AgentContentPart`，但保持模型输入 DTO 与最终输出 DTO 分离。
 - 将现有思考模式逐步统一到模型能力体系。
 - Provider 能力探测与验证状态。
 - 历史图片引用与重新附带策略。
@@ -675,7 +715,8 @@ Service 必须验证 `DEDICATED` 模式下模型存在、启用且包含 `VISION
 
 ### P2：高级路由
 
-- 推理模型、音频和图片生成能力。
+- 建立独立图片生成接口和 `resolveImageGenerationModel`，不复用 `resolveChatModel`。
+- 推理模型和音频能力路由。
 - 按模型健康状态、成本与延迟选择候选模型。
 - 管理员可配置的路由策略模板。
 
@@ -691,6 +732,12 @@ Service 必须验证 `DEDICATED` 模式下模型存在、启用且包含 `VISION
 - `DISABLED` 拒绝图片输入。
 - 模型或供应商停用时返回明确错误。
 - 模型能力与图片格式、数量、大小校验正确。
+- 注入工具时，缺少 `TOOL_CALLING` 的候选模型不可被选择。
+- 未注入工具时，不因为 Agent 绑定了工具就强制要求 `TOOL_CALLING`。
+- 原生 JSON Schema 模式要求 `STRUCTURED_OUTPUT`。
+- Workflow/工具直接返回 JSON 时不要求 `STRUCTURED_OUTPUT`。
+- 工具生成图片时不要求 Chat 模型具备 `IMAGE_GENERATION`。
+- 普通文件输出不产生任何模型能力要求。
 
 ### 18.2 Provider Client 测试
 
@@ -707,6 +754,7 @@ Service 必须验证 `DEDICATED` 模式下模型存在、启用且包含 `VISION
 4. Agent 可以指定专用视觉模型或禁止图片。
 5. Run Trace 可以看到 `model_route` 和实际 `chat_stream` 模型。
 6. 无可用视觉模型时用户获得可操作的配置提示。
+7. Agent 返回 `json/image/file` 内容块时，路由记录只包含真实参与本次模型调用的原生能力。
 
 ## 19. P0 最终调用链
 
@@ -723,4 +771,4 @@ Chat 接收消息
   -> 流式返回并记录实际模型、首 Token、用量和路由原因
 ```
 
-该方案先解决图片理解的最小自动路由闭环，不提前引入微服务或复杂模型网关；后续新增音频、图片生成和推理模型时继续扩展统一能力声明与路由 DTO。
+当前方案已经完成图片理解的最小自动路由闭环。下一阶段在不引入微服务或复杂模型网关的前提下，将工具调用和原生结构化输出纳入同一确定性能力判断；图片和文件交付则由 Agent 多类型输出协议与 Storage Service 负责。后续新增音频、图片生成和推理模型时继续扩展统一能力声明，但保持“模型能力、业务编排、最终内容类型”三者边界清晰。
