@@ -13,9 +13,10 @@ import { ExternalAccessService } from "./external-access.service";
 import { ExternalRateLimiterService } from "./external-rate-limiter.service";
 import { AgentApiKeyGuard } from "./guards/agent-api-key.guard";
 import { PublicAccessService } from "./public-access.service";
+import { StorageModule } from "../storage/storage.module";
 
 @Module({
-  imports: [AgentsModule, AuthModule, ChatModule],
+  imports: [AgentsModule, AuthModule, ChatModule, StorageModule],
   controllers: [AgentApiKeysController, PublicAgentsController, ServiceApiController],
   providers: [
     AgentApiKeysService,

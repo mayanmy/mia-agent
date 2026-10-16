@@ -250,7 +250,8 @@ export class ChatService {
       modelConfigId: completion.modelConfigId,
       modelName: completion.modelName,
       providerName: completion.providerName,
-      content: completion.content
+      content: completion.content,
+      contentParts: completion.contentParts
     };
   }
 
@@ -397,7 +398,8 @@ export class ChatService {
           sessionId,
           ChatSessionMessageRole.ASSISTANT,
           event.data.content,
-          metadata
+          metadata,
+          event.data.contentParts
         );
         if (persistedMessageId) {
           event.data.messageId = persistedMessageId;
@@ -451,6 +453,8 @@ export class ChatService {
         return { type: "retrieval_result", data: event.data };
       case "token":
         return { type: "token", data: event.data };
+      case "content_part":
+        return { type: "content_part", data: event.data };
       case "tool_started":
         return { type: "tool_call", data: event.data };
       case "tool_approval_required":
@@ -466,6 +470,7 @@ export class ChatService {
             runId: event.data.runId,
             messageId: event.data.messageId,
             content: event.data.content,
+            contentParts: event.data.contentParts,
             usage: event.data.usage,
             modelConfigId: event.data.modelConfigId,
             modelName: event.data.modelName,

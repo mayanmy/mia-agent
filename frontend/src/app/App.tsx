@@ -516,27 +516,29 @@ function WorkspaceLayout() {
             const startsGroup = index === 0 || availableNavItems[index - 1]?.group !== item.group;
             const groupLabel = getNavGroupLabel(item.group);
             return (
-            <div
-              className={startsGroup && index > 0 ? "navGroupStart" : undefined}
-              key={item.path}
-            >
-              {startsGroup && groupLabel && !sidebarCollapsed ? (
-                <span className="navGroupLabel">{groupLabel}</span>
-              ) : null}
-              <Tooltip placement="right" title={sidebarCollapsed ? item.label : undefined}>
-                <NavLink
-                  aria-label={item.label}
-                  className={({ isActive }) => `navItem${isActive ? " active" : ""}`}
-                  end={
-                    !["/workflows", "/capabilities", "/operations", "/settings"].includes(item.path)
-                  }
-                  to={item.path}
-                >
-                  <span className="navItemIcon">{item.icon}</span>
-                  <span className="navItemLabel">{item.label}</span>
-                </NavLink>
-              </Tooltip>
-            </div>
+              <div
+                className={startsGroup && index > 0 ? "navGroupStart" : undefined}
+                key={item.path}
+              >
+                {startsGroup && groupLabel && !sidebarCollapsed ? (
+                  <span className="navGroupLabel">{groupLabel}</span>
+                ) : null}
+                <Tooltip placement="right" title={sidebarCollapsed ? item.label : undefined}>
+                  <NavLink
+                    aria-label={item.label}
+                    className={({ isActive }) => `navItem${isActive ? " active" : ""}`}
+                    end={
+                      !["/workflows", "/capabilities", "/operations", "/settings"].includes(
+                        item.path
+                      )
+                    }
+                    to={item.path}
+                  >
+                    <span className="navItemIcon">{item.icon}</span>
+                    <span className="navItemLabel">{item.label}</span>
+                  </NavLink>
+                </Tooltip>
+              </div>
             );
           })}
         </nav>

@@ -1,3 +1,5 @@
+import { AgentContentPart } from "../../agent_runtime/dto/content-part.dto";
+
 /** 一轮对话中可进入模型上下文的标准消息。 */
 export type ChatMessageDto = {
   /** 消息发送方；当前上下文不接受 system/tool 角色由客户端直接注入。 */
@@ -56,6 +58,7 @@ export type ChatSessionMessageDto = {
   role: "user" | "assistant";
   /** 消息正文。 */
   content: string;
+  contentParts?: AgentContentPart[];
   /** 消息创建时间。 */
   createdAt: Date;
 };
@@ -82,6 +85,7 @@ export type ChatCompletionResult = {
   providerName: string;
   /** 模型生成的最终正文。 */
   content: string;
+  contentParts: AgentContentPart[];
 };
 
 /** Chat SSE 对外公开的固定事件集合。 */
@@ -92,6 +96,7 @@ export type ChatStreamEventType =
   | "retrieval_start"
   | "retrieval_result"
   | "token"
+  | "content_part"
   | "tool_call"
   | "tool_approval_required"
   | "tool_approval_resolved"

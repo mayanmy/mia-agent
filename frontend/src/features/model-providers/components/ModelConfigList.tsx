@@ -25,9 +25,7 @@ export function ModelConfigList({ models, onEditModel, onDeleteModel }: ModelCon
           <Tag>{modelTypeLabels[model.modelType]}</Tag>
           {model.modelType === "CHAT" && (
             <Tag>
-              {model.thinkingSupported
-                ? thinkingModeLabels[model.thinkingMode]
-                : "不支持思考覆盖"}
+              {model.thinkingSupported ? thinkingModeLabels[model.thinkingMode] : "不支持思考覆盖"}
             </Tag>
           )}
           <Button size="small" type="text" onClick={() => onEditModel(model)}>

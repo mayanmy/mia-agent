@@ -138,7 +138,8 @@ export function ChatSessionList({
             const isEditing = editingSessionId === session.id;
             const isActive = activeSessionId === session.id;
             const group = getSessionTimeGroup(session);
-            const previousGroup = index > 0 ? getSessionTimeGroup(filteredSessions[index - 1]!) : null;
+            const previousGroup =
+              index > 0 ? getSessionTimeGroup(filteredSessions[index - 1]!) : null;
 
             return (
               <div className="chatSessionGroup" key={session.id}>
@@ -146,97 +147,97 @@ export function ChatSessionList({
                   <div className="chatSessionGroupLabel">{group}</div>
                 ) : null}
                 <div className={`chatSessionItem${isActive ? " active" : ""}`}>
-                {isEditing ? (
-                  <Input
-                    autoFocus
-                    maxLength={80}
-                    size="small"
-                    value={title}
-                    onBlur={submitRename}
-                    onChange={(event) => setTitle(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        submitRename();
-                      }
+                  {isEditing ? (
+                    <Input
+                      autoFocus
+                      maxLength={80}
+                      size="small"
+                      value={title}
+                      onBlur={submitRename}
+                      onChange={(event) => setTitle(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          submitRename();
+                        }
 
-                      if (event.key === "Escape") {
-                        setEditingSessionId(null);
-                      }
-                    }}
-                  />
-                ) : (
-                  <button
-                    className="chatSessionTitle"
-                    disabled={disabled}
-                    type="button"
-                    onClick={() => onSelect(session.id)}
-                  >
-                    {session.title || "新对话"}
-                  </button>
-                )}
-                {showingArchived ? (
-                  <div className="chatSessionActions">
-                    <Tooltip title="恢复">
-                      <Button
-                        aria-label="恢复会话"
-                        disabled={disabled}
-                        icon={<RollbackOutlined />}
-                        size="small"
-                        type="text"
-                        onClick={() => onRestore(session.id)}
-                      />
-                    </Tooltip>
-                    <Tooltip title="删除">
-                      <Popconfirm
-                        cancelText="取消"
-                        description="会话及其所有消息将永久删除，无法恢复。"
-                        okButtonProps={{ danger: true }}
-                        okText="永久删除"
-                        title="删除归档会话"
-                        onConfirm={() => onDelete(session.id)}
-                      >
+                        if (event.key === "Escape") {
+                          setEditingSessionId(null);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <button
+                      className="chatSessionTitle"
+                      disabled={disabled}
+                      type="button"
+                      onClick={() => onSelect(session.id)}
+                    >
+                      {session.title || "新对话"}
+                    </button>
+                  )}
+                  {showingArchived ? (
+                    <div className="chatSessionActions">
+                      <Tooltip title="恢复">
                         <Button
-                          danger
-                          aria-label="删除归档会话"
+                          aria-label="恢复会话"
                           disabled={disabled}
-                          icon={<DeleteOutlined />}
+                          icon={<RollbackOutlined />}
                           size="small"
                           type="text"
+                          onClick={() => onRestore(session.id)}
                         />
-                      </Popconfirm>
-                    </Tooltip>
-                  </div>
-                ) : isActive && !isEditing ? (
-                  <div className="chatSessionActions">
-                    <Tooltip title="重命名">
-                      <Button
-                        aria-label="重命名会话"
-                        disabled={disabled}
-                        icon={<EditOutlined />}
-                        size="small"
-                        type="text"
-                        onClick={() => startRename(session)}
-                      />
-                    </Tooltip>
-                    <Tooltip title="归档">
-                      <Popconfirm
-                        title="归档会话"
-                        description="确认归档会话？"
-                        okText="确认"
-                        cancelText="取消"
-                        onConfirm={() => onArchive(session.id)}
-                      >
+                      </Tooltip>
+                      <Tooltip title="删除">
+                        <Popconfirm
+                          cancelText="取消"
+                          description="会话及其所有消息将永久删除，无法恢复。"
+                          okButtonProps={{ danger: true }}
+                          okText="永久删除"
+                          title="删除归档会话"
+                          onConfirm={() => onDelete(session.id)}
+                        >
+                          <Button
+                            danger
+                            aria-label="删除归档会话"
+                            disabled={disabled}
+                            icon={<DeleteOutlined />}
+                            size="small"
+                            type="text"
+                          />
+                        </Popconfirm>
+                      </Tooltip>
+                    </div>
+                  ) : isActive && !isEditing ? (
+                    <div className="chatSessionActions">
+                      <Tooltip title="重命名">
                         <Button
-                          aria-label="归档会话"
+                          aria-label="重命名会话"
                           disabled={disabled}
-                          icon={<InboxOutlined />}
+                          icon={<EditOutlined />}
                           size="small"
                           type="text"
+                          onClick={() => startRename(session)}
                         />
-                      </Popconfirm>
-                    </Tooltip>
-                  </div>
-                ) : null}
+                      </Tooltip>
+                      <Tooltip title="归档">
+                        <Popconfirm
+                          title="归档会话"
+                          description="确认归档会话？"
+                          okText="确认"
+                          cancelText="取消"
+                          onConfirm={() => onArchive(session.id)}
+                        >
+                          <Button
+                            aria-label="归档会话"
+                            disabled={disabled}
+                            icon={<InboxOutlined />}
+                            size="small"
+                            type="text"
+                          />
+                        </Popconfirm>
+                      </Tooltip>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );

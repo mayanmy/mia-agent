@@ -132,7 +132,9 @@ export function McpToolsDrawer({
         columns={columns}
         dataSource={tools}
         loading={loading}
-        locale={{ emptyText: <Empty description="尚未同步工具" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+        locale={{
+          emptyText: <Empty description="尚未同步工具" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        }}
         pagination={false}
         rowKey="id"
         scroll={{ x: 1080 }}

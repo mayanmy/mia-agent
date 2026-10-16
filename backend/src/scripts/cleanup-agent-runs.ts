@@ -14,10 +14,12 @@ async function cleanupAgentRuns(): Promise<void> {
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ["error", "warn"] });
 
   try {
-    const result = await app.get(AgentRunsService).cleanupExpiredRuns(
-      readRetentionDays("AGENT_RUN_COMPLETED_RETENTION_DAYS", 90),
-      readRetentionDays("AGENT_RUN_FAILED_RETENTION_DAYS", 180)
-    );
+    const result = await app
+      .get(AgentRunsService)
+      .cleanupExpiredRuns(
+        readRetentionDays("AGENT_RUN_COMPLETED_RETENTION_DAYS", 90),
+        readRetentionDays("AGENT_RUN_FAILED_RETENTION_DAYS", 180)
+      );
     console.log(JSON.stringify(result));
   } finally {
     await app.close();

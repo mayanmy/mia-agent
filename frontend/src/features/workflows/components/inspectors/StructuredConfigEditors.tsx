@@ -48,7 +48,8 @@ export function StartInputsEditor({ value, onChange }: StartInputsEditorProps) {
       <div className="workflowConfigList">
         {inputs.map((input, index) => {
           const invalidName = input.name !== "" && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(input.name);
-          const duplicated = input.name !== "" && names.filter((name) => name === input.name).length > 1;
+          const duplicated =
+            input.name !== "" && names.filter((name) => name === input.name).length > 1;
           return (
             <div className="workflowConfigCard" key={index}>
               <div className="workflowConfigCardHeader">
@@ -77,7 +78,11 @@ export function StartInputsEditor({ value, onChange }: StartInputsEditorProps) {
                   />
                 </InspectorField>
               </div>
-              {invalidName ? <small className="workflowFieldError">变量名只能包含字母、数字和下划线，且不能以数字开头</small> : null}
+              {invalidName ? (
+                <small className="workflowFieldError">
+                  变量名只能包含字母、数字和下划线，且不能以数字开头
+                </small>
+              ) : null}
               {duplicated ? <small className="workflowFieldError">变量名不能重复</small> : null}
               <InspectorField label="说明">
                 <Input
@@ -98,7 +103,10 @@ export function StartInputsEditor({ value, onChange }: StartInputsEditorProps) {
       </div>
       <AddRowButton
         onClick={() =>
-          onChange([...inputs, { name: `input_${inputs.length + 1}`, type: "string", required: false }])
+          onChange([
+            ...inputs,
+            { name: `input_${inputs.length + 1}`, type: "string", required: false }
+          ])
         }
       >
         添加输入变量
@@ -130,17 +138,27 @@ export type ConditionBranchesEditorProps = {
 };
 
 const OPERATOR_OPTIONS = [
-  { value: "eq", label: "等于" }, { value: "neq", label: "不等于" },
-  { value: "contains", label: "包含" }, { value: "exists", label: "存在" },
-  { value: "gt", label: "大于" }, { value: "gte", label: "大于等于" },
-  { value: "lt", label: "小于" }, { value: "lte", label: "小于等于" }
+  { value: "eq", label: "等于" },
+  { value: "neq", label: "不等于" },
+  { value: "contains", label: "包含" },
+  { value: "exists", label: "存在" },
+  { value: "gt", label: "大于" },
+  { value: "gte", label: "大于等于" },
+  { value: "lt", label: "小于" },
+  { value: "lte", label: "小于等于" }
 ];
 
 /** Condition 使用显式规则卡片，避免用户直接维护 Handle JSON。 */
-export function ConditionBranchesEditor({ value, variables, onChange }: ConditionBranchesEditorProps) {
+export function ConditionBranchesEditor({
+  value,
+  variables,
+  onChange
+}: ConditionBranchesEditorProps) {
   const branches = readConditionBranches(value);
   const update = (index: number, patch: Partial<ConditionBranch>) =>
-    onChange(branches.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+    onChange(
+      branches.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
+    );
   return (
     <InspectorSection title="分支规则" description="按顺序匹配，命中首条规则后停止">
       <div className="workflowConfigList">
@@ -148,26 +166,64 @@ export function ConditionBranchesEditor({ value, variables, onChange }: Conditio
           <div className="workflowConfigCard" key={index}>
             <div className="workflowConfigCardHeader">
               <strong>分支 {index + 1}</strong>
-              <Button danger disabled={branches.length === 1} icon={<DeleteOutlined />} size="small" type="text" onClick={() => onChange(branches.filter((_, i) => i !== index))} />
+              <Button
+                danger
+                disabled={branches.length === 1}
+                icon={<DeleteOutlined />}
+                size="small"
+                type="text"
+                onClick={() => onChange(branches.filter((_, i) => i !== index))}
+              />
             </div>
             <InspectorField label="出口 Handle" hint="修改后，已有连线可能需要重新连接">
-              <Input value={branch.handle} onChange={(event) => update(index, { handle: event.target.value })} />
+              <Input
+                value={branch.handle}
+                onChange={(event) => update(index, { handle: event.target.value })}
+              />
             </InspectorField>
             <InspectorField label="比较左值">
-              <VariableTextArea autoSize={{ minRows: 2, maxRows: 5 }} value={branch.left} variables={variables} onChange={(left) => update(index, { left })} />
+              <VariableTextArea
+                autoSize={{ minRows: 2, maxRows: 5 }}
+                value={branch.left}
+                variables={variables}
+                onChange={(left) => update(index, { left })}
+              />
             </InspectorField>
             <InspectorField label="操作符">
-              <Select options={OPERATOR_OPTIONS} value={branch.operator} onChange={(operator) => update(index, { operator, ...(operator === "exists" ? { right: undefined } : {}) })} />
+              <Select
+                options={OPERATOR_OPTIONS}
+                value={branch.operator}
+                onChange={(operator) =>
+                  update(index, {
+                    operator,
+                    ...(operator === "exists" ? { right: undefined } : {})
+                  })
+                }
+              />
             </InspectorField>
             {branch.operator !== "exists" ? (
               <InspectorField label="比较右值">
-                <VariableTextArea autoSize={{ minRows: 2, maxRows: 5 }} value={branch.right ?? ""} variables={variables} onChange={(right) => update(index, { right })} />
+                <VariableTextArea
+                  autoSize={{ minRows: 2, maxRows: 5 }}
+                  value={branch.right ?? ""}
+                  variables={variables}
+                  onChange={(right) => update(index, { right })}
+                />
               </InspectorField>
             ) : null}
           </div>
         ))}
       </div>
-      <AddRowButton onClick={() => onChange([...branches, { handle: `branch_${branches.length + 1}`, left: "", operator: "eq", right: "" }])}>添加分支</AddRowButton>
+      <AddRowButton
+        onClick={() =>
+          onChange([
+            ...branches,
+            { handle: `branch_${branches.length + 1}`, left: "", operator: "eq", right: "" }
+          ])
+        }
+      >
+        添加分支
+      </AddRowButton>
     </InspectorSection>
   );
 }
@@ -187,22 +243,52 @@ export type KeyValueEditorProps = {
 };
 
 /** 用键值行替代常用对象 JSON；复杂旧值会序列化显示，编辑后按字符串保存。 */
-export function KeyValueEditor({ title, description, value, variables, onChange }: KeyValueEditorProps) {
+export function KeyValueEditor({
+  title,
+  description,
+  value,
+  variables,
+  onChange
+}: KeyValueEditorProps) {
   const record = readRecord(value);
   const entries = Object.entries(record);
-  const commit = (next: Array<[string, unknown]>) => onChange(Object.fromEntries(next.filter(([key]) => key.trim())));
+  const commit = (next: Array<[string, unknown]>) =>
+    onChange(Object.fromEntries(next.filter(([key]) => key.trim())));
   return (
     <InspectorSection title={title} description={description}>
       <div className="workflowConfigList">
         {entries.map(([key, rawValue], index) => (
           <div className="workflowKeyValueRow" key={index}>
-            <Input aria-label="字段名" placeholder="字段名" value={key} onChange={(event) => commit(entries.map((entry, i) => i === index ? [event.target.value, entry[1]] : entry))} />
-            <VariableTextArea autoSize={{ minRows: 1, maxRows: 4 }} value={displayValue(rawValue)} variables={variables} onChange={(nextValue) => commit(entries.map((entry, i) => i === index ? [entry[0], nextValue] : entry))} />
-            <Button danger icon={<DeleteOutlined />} type="text" onClick={() => commit(entries.filter((_, i) => i !== index))} />
+            <Input
+              aria-label="字段名"
+              placeholder="字段名"
+              value={key}
+              onChange={(event) =>
+                commit(
+                  entries.map((entry, i) => (i === index ? [event.target.value, entry[1]] : entry))
+                )
+              }
+            />
+            <VariableTextArea
+              autoSize={{ minRows: 1, maxRows: 4 }}
+              value={displayValue(rawValue)}
+              variables={variables}
+              onChange={(nextValue) =>
+                commit(entries.map((entry, i) => (i === index ? [entry[0], nextValue] : entry)))
+              }
+            />
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              type="text"
+              onClick={() => commit(entries.filter((_, i) => i !== index))}
+            />
           </div>
         ))}
       </div>
-      <AddRowButton onClick={() => commit([...entries, [`field_${entries.length + 1}`, ""]])}>添加字段</AddRowButton>
+      <AddRowButton onClick={() => commit([...entries, [`field_${entries.length + 1}`, ""]])}>
+        添加字段
+      </AddRowButton>
     </InspectorSection>
   );
 }

@@ -1,79 +1,356 @@
-.homeWorkspace { display: grid; gap: 22px; margin: 0 auto; max-width: 1320px; width: 100%; }
+.homeWorkspace {
+  display: grid;
+  gap: 22px;
+  margin: 0 auto;
+  max-width: 1320px;
+  width: 100%;
+}
 
 // 深色控制台是首页唯一的强视觉锚点；点阵来自 Workflow 画布，而不是无业务含义的装饰渐变。
-.homeHero { align-items: start; background: #17202b; border: 1px solid #263342; border-radius: 12px; color: #fff; display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 230px; overflow: hidden; padding: 34px 36px 0; position: relative; }
-.homeHero::after { background-image: radial-gradient(rgb(255 255 255 / 13%) 1px, transparent 1px); background-size: 18px 18px; content: ""; inset: 0 0 58px 52%; mask-image: linear-gradient(90deg, transparent, #000); pointer-events: none; position: absolute; }
-.homeHeroIntro, .homeHeroAction, .homeRuntimeRail { position: relative; z-index: 1; }
-.homeHero h1 { color: #fff; font-size: 34px; font-weight: 650; letter-spacing: -0.045em; margin: 8px 0 10px; }
-.homeHero p { color: #aab5c2; font-size: 15px; margin: 0; }
-.homeEyebrow { color: #71d2bf; font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.09em; }
-.homeHero .ant-btn-primary { background: #fff; border-color: #fff; border-radius: 7px; box-shadow: none; color: #17202b; font-weight: 650; }
+.homeHero {
+  align-items: start;
+  background: #17202b;
+  border: 1px solid #263342;
+  border-radius: 12px;
+  color: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 230px;
+  overflow: hidden;
+  padding: 34px 36px 0;
+  position: relative;
+}
+.homeHero::after {
+  background-image: radial-gradient(rgb(255 255 255 / 13%) 1px, transparent 1px);
+  background-size: 18px 18px;
+  content: "";
+  inset: 0 0 58px 52%;
+  mask-image: linear-gradient(90deg, transparent, #000);
+  pointer-events: none;
+  position: absolute;
+}
+.homeHeroIntro,
+.homeHeroAction,
+.homeRuntimeRail {
+  position: relative;
+  z-index: 1;
+}
+.homeHero h1 {
+  color: #fff;
+  font-size: 34px;
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  margin: 8px 0 10px;
+}
+.homeHero p {
+  color: #aab5c2;
+  font-size: 15px;
+  margin: 0;
+}
+.homeEyebrow {
+  color: #71d2bf;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+}
+.homeHero .ant-btn-primary {
+  background: #fff;
+  border-color: #fff;
+  border-radius: 7px;
+  box-shadow: none;
+  color: #17202b;
+  font-weight: 650;
+}
 
 // 运行脉络同时承担资源概览和系统入口，成为 Mia 跨首页、Chat、Workflow 的状态语言。
-.homeRuntimeRail { align-items: center; align-self: end; border-top: 1px solid #334150; display: grid; gap: 12px; grid-column: 1 / -1; grid-template-columns: auto minmax(130px, 1fr) repeat(3, minmax(86px, auto)) auto; min-height: 62px; }
-.homeRuntimeRail.resourcesOnly { grid-template-columns: repeat(3, minmax(86px, 1fr)); }
-.homeRuntimeRail.resourcesOnly > div:first-child { border-left: 0; padding-left: 0; }
-.homeRuntimePulse { background: #43c5aa; border-radius: 50%; box-shadow: 0 0 0 5px rgb(67 197 170 / 12%); height: 7px; width: 7px; }
-.homeRuntimeRail > strong { color: #d9e1e9; font-size: 12px; }
-.homeRuntimeRail > div { align-items: baseline; border-left: 1px solid #334150; display: flex; gap: 7px; padding-left: 18px; }
-.homeRuntimeRail b { font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace; font-size: 16px; }
-.homeRuntimeRail small { color: #8290a0; font-size: 11px; }
-.homeRuntimeRail > a { color: #c7d2df; font-size: 12px; }
+.homeRuntimeRail {
+  align-items: center;
+  align-self: end;
+  border-top: 1px solid #334150;
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(130px, 1fr) repeat(3, minmax(86px, auto)) auto;
+  min-height: 62px;
+}
+.homeRuntimeRail.resourcesOnly {
+  grid-template-columns: repeat(3, minmax(86px, 1fr));
+}
+.homeRuntimeRail.resourcesOnly > div:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+.homeRuntimePulse {
+  background: #43c5aa;
+  border-radius: 50%;
+  box-shadow: 0 0 0 5px rgb(67 197 170 / 12%);
+  height: 7px;
+  width: 7px;
+}
+.homeRuntimeRail > strong {
+  color: #d9e1e9;
+  font-size: 12px;
+}
+.homeRuntimeRail > div {
+  align-items: baseline;
+  border-left: 1px solid #334150;
+  display: flex;
+  gap: 7px;
+  padding-left: 18px;
+}
+.homeRuntimeRail b {
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 16px;
+}
+.homeRuntimeRail small {
+  color: #8290a0;
+  font-size: 11px;
+}
+.homeRuntimeRail > a {
+  color: #c7d2df;
+  font-size: 12px;
+}
 
-.homeQuickGrid { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.homeQuickCard { align-items: center; background: #fff; border: 1px solid var(--mia-border); border-radius: 9px; display: grid; gap: 13px; grid-template-columns: 40px minmax(0, 1fr) auto; padding: 15px; transition: border-color 160ms ease, background-color 160ms ease; }
-.homeQuickCard:hover { background: #f9fbfd; border-color: #9db4d7; }
-.homeQuickCard:focus-visible { outline: 2px solid rgb(45 99 226 / 35%); outline-offset: 2px; }
-.homeQuickCard > span { align-items: center; border-radius: 7px; display: flex; font-size: 18px; height: 40px; justify-content: center; width: 40px; }
-.homeQuickCard.primary > span, .homeQuickCard.blue > span { background: #e8f0fe; color: #2d63e2; }
-.homeQuickCard.green > span { background: #e5f5f1; color: #0b8f78; }
-.homeQuickCard.orange > span { background: #fff0df; color: #b86716; }
-.homeQuickCard strong, .homeQuickCard small { display: block; }
-.homeQuickCard small { color: var(--mia-text-muted); margin-top: 3px; }
-.homeQuickCard > .anticon { color: #9ba5b2; font-size: 12px; }
+.homeQuickGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.homeQuickCard {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--mia-border);
+  border-radius: 9px;
+  display: grid;
+  gap: 13px;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  padding: 15px;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+.homeQuickCard:hover {
+  background: #f9fbfd;
+  border-color: #9db4d7;
+}
+.homeQuickCard:focus-visible {
+  outline: 2px solid rgb(45 99 226 / 35%);
+  outline-offset: 2px;
+}
+.homeQuickCard > span {
+  align-items: center;
+  border-radius: 7px;
+  display: flex;
+  font-size: 18px;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+.homeQuickCard.primary > span,
+.homeQuickCard.blue > span {
+  background: #e8f0fe;
+  color: #2d63e2;
+}
+.homeQuickCard.green > span {
+  background: #e5f5f1;
+  color: #0b8f78;
+}
+.homeQuickCard.orange > span {
+  background: #fff0df;
+  color: #b86716;
+}
+.homeQuickCard strong,
+.homeQuickCard small {
+  display: block;
+}
+.homeQuickCard small {
+  color: var(--mia-text-muted);
+  margin-top: 3px;
+}
+.homeQuickCard > .anticon {
+  color: #9ba5b2;
+  font-size: 12px;
+}
 
-.homeOverviewGrid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 260px; }
-.homeResourceSection { background: #fff; border: 1px solid var(--mia-border); border-radius: 10px; padding: 20px; }
-.homeSectionHeader { align-items: center; display: flex; justify-content: space-between; margin-bottom: 14px; }
-.homeSectionHeader h2 { font-size: 17px; margin-bottom: 4px; }
-.homeSectionHeader span { color: var(--mia-text-muted); font-size: 12px; }
-.homeSectionHeader > a { color: var(--mia-brand); font-size: 13px; }
-.homeRecentList { display: grid; gap: 4px; }
-.homeRecentItem { align-items: center; border-radius: 7px; display: grid; gap: 12px; grid-template-columns: 38px minmax(0, 1fr) auto; padding: 10px; }
-.homeRecentItem:hover { background: #edf2f6; box-shadow: inset 2px 0 0 #9aafbe; }
-.homeRecentItem:hover strong { color: #17202b; }
-.homeRecentItem:hover > .anticon { color: #6f8190; }
-.homeRecentItem strong, .homeRecentItem small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.homeRecentItem small { color: var(--mia-text-muted); margin-top: 3px; }
-.homeRecentItem > .anticon { color: #a5afbb; font-size: 11px; }
-.homeRecentIcon { align-items: center; border-radius: 7px; display: flex; height: 38px; justify-content: center; }
-.homeRecentIcon.agent { background: #e8f0fe; color: #2d63e2; }
-.homeRecentIcon.knowledge { background: #e5f5f1; color: #0b8f78; }
-.homeEmpty { align-items: center; background: #f5f7f9; border-radius: 7px; color: var(--mia-text-muted); display: flex; justify-content: space-between; padding: 18px; }
+.homeOverviewGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 260px;
+}
+.homeResourceSection {
+  background: #fff;
+  border: 1px solid var(--mia-border);
+  border-radius: 10px;
+  padding: 20px;
+}
+.homeSectionHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.homeSectionHeader h2 {
+  font-size: 17px;
+  margin-bottom: 4px;
+}
+.homeSectionHeader span {
+  color: var(--mia-text-muted);
+  font-size: 12px;
+}
+.homeSectionHeader > a {
+  color: var(--mia-brand);
+  font-size: 13px;
+}
+.homeRecentList {
+  display: grid;
+  gap: 4px;
+}
+.homeRecentItem {
+  align-items: center;
+  border-radius: 7px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  padding: 10px;
+}
+.homeRecentItem:hover {
+  background: #edf2f6;
+  box-shadow: inset 2px 0 0 #9aafbe;
+}
+.homeRecentItem:hover strong {
+  color: #17202b;
+}
+.homeRecentItem:hover > .anticon {
+  color: #6f8190;
+}
+.homeRecentItem strong,
+.homeRecentItem small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.homeRecentItem small {
+  color: var(--mia-text-muted);
+  margin-top: 3px;
+}
+.homeRecentItem > .anticon {
+  color: #a5afbb;
+  font-size: 11px;
+}
+.homeRecentIcon {
+  align-items: center;
+  border-radius: 7px;
+  display: flex;
+  height: 38px;
+  justify-content: center;
+}
+.homeRecentIcon.agent {
+  background: #e8f0fe;
+  color: #2d63e2;
+}
+.homeRecentIcon.knowledge {
+  background: #e5f5f1;
+  color: #0b8f78;
+}
+.homeEmpty {
+  align-items: center;
+  background: #f5f7f9;
+  border-radius: 7px;
+  color: var(--mia-text-muted);
+  display: flex;
+  justify-content: space-between;
+  padding: 18px;
+}
 
-.homeCapabilityBanner { align-items: center; background: #edf3f7; border: 1px solid #cdd8e2; border-radius: 9px; display: grid; gap: 14px; grid-template-columns: 42px minmax(0, 1fr) auto; padding: 17px 20px; }
-.homeCapabilityBanner > span { align-items: center; background: #fff; border-radius: 7px; color: #2d63e2; display: flex; height: 42px; justify-content: center; }
-.homeCapabilityBanner strong, .homeCapabilityBanner small { display: block; }
-.homeCapabilityBanner small { color: #5b6f79; margin-top: 3px; }
-.homeCapabilityBanner a { color: #244f9e; font-weight: 600; }
+.homeCapabilityBanner {
+  align-items: center;
+  background: #edf3f7;
+  border: 1px solid #cdd8e2;
+  border-radius: 9px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  padding: 17px 20px;
+}
+.homeCapabilityBanner > span {
+  align-items: center;
+  background: #fff;
+  border-radius: 7px;
+  color: #2d63e2;
+  display: flex;
+  height: 42px;
+  justify-content: center;
+}
+.homeCapabilityBanner strong,
+.homeCapabilityBanner small {
+  display: block;
+}
+.homeCapabilityBanner small {
+  color: #5b6f79;
+  margin-top: 3px;
+}
+.homeCapabilityBanner a {
+  color: #244f9e;
+  font-weight: 600;
+}
 
 @media (max-width: 980px) {
-  .homeQuickGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .homeOverviewGrid { grid-template-columns: 1fr; }
-  .homeRuntimeRail { grid-template-columns: auto minmax(110px, 1fr) repeat(3, auto); }
-  .homeRuntimeRail.resourcesOnly { grid-template-columns: repeat(3, minmax(86px, 1fr)); }
-  .homeRuntimeRail > a { display: none; }
+  .homeQuickGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .homeOverviewGrid {
+    grid-template-columns: 1fr;
+  }
+  .homeRuntimeRail {
+    grid-template-columns: auto minmax(110px, 1fr) repeat(3, auto);
+  }
+  .homeRuntimeRail.resourcesOnly {
+    grid-template-columns: repeat(3, minmax(86px, 1fr));
+  }
+  .homeRuntimeRail > a {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
-  .homeHero { gap: 24px; grid-template-columns: 1fr; padding: 28px 24px 0; }
-  .homeRuntimeRail { grid-column: 1; grid-template-columns: auto 1fr; padding: 14px 0; }
-  .homeRuntimeRail > div, .homeRuntimeRail > a { display: flex; grid-column: 2; }
-  .homeRuntimeRail.resourcesOnly { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .homeRuntimeRail.resourcesOnly > div { grid-column: auto; padding-left: 10px; }
-  .homeQuickGrid { grid-template-columns: 1fr; }
-  .homeCapabilityBanner { grid-template-columns: 42px minmax(0, 1fr); }
-  .homeCapabilityBanner a { grid-column: 2; }
+  .homeHero {
+    gap: 24px;
+    grid-template-columns: 1fr;
+    padding: 28px 24px 0;
+  }
+  .homeRuntimeRail {
+    grid-column: 1;
+    grid-template-columns: auto 1fr;
+    padding: 14px 0;
+  }
+  .homeRuntimeRail > div,
+  .homeRuntimeRail > a {
+    display: flex;
+    grid-column: 2;
+  }
+  .homeRuntimeRail.resourcesOnly {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .homeRuntimeRail.resourcesOnly > div {
+    grid-column: auto;
+    padding-left: 10px;
+  }
+  .homeQuickGrid {
+    grid-template-columns: 1fr;
+  }
+  .homeCapabilityBanner {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+  .homeCapabilityBanner a {
+    grid-column: 2;
+  }
 }
 
-@media (prefers-reduced-motion: reduce) { .homeQuickCard { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .homeQuickCard {
+    transition: none;
+  }
+}

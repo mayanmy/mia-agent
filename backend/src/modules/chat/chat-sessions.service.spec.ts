@@ -32,8 +32,22 @@ export const tests = [
                 feedbacks: [],
                 createdAt: newest
               },
-              { id: "message-2", role: "USER", content: "中间", metadata: null, feedbacks: [], createdAt: middle },
-              { id: "message-1", role: "ASSISTANT", content: "最早", metadata: null, feedbacks: [], createdAt: oldest }
+              {
+                id: "message-2",
+                role: "USER",
+                content: "中间",
+                metadata: null,
+                feedbacks: [],
+                createdAt: middle
+              },
+              {
+                id: "message-1",
+                role: "ASSISTANT",
+                content: "最早",
+                metadata: null,
+                feedbacks: [],
+                createdAt: oldest
+              }
             ];
           }
         }
@@ -129,11 +143,10 @@ export const tests = [
       };
       const service = new ChatSessionsService(prisma as never);
 
-      const feedback = await service.upsertMessageFeedback(
-        "assistant-message",
-        "user-id",
-        { rating: "DOWN", reason: " 引用不准确 " }
-      );
+      const feedback = await service.upsertMessageFeedback("assistant-message", "user-id", {
+        rating: "DOWN",
+        reason: " 引用不准确 "
+      });
 
       assert.deepEqual(feedback, {
         messageId: "assistant-message",

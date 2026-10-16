@@ -38,10 +38,7 @@ type AgentApiKeysModalProps = {
 };
 
 /** 管理 Agent API Key 生命周期，完整密钥仅在创建或轮换后短暂展示。 */
-export function AgentApiKeysModal({
-  agent,
-  onCancel
-}: AgentApiKeysModalProps) {
+export function AgentApiKeysModal({ agent, onCancel }: AgentApiKeysModalProps) {
   const { message } = AntdApp.useApp();
   const [form] = Form.useForm<AgentApiKeyFormValues>();
   const [keys, setKeys] = useState<AgentApiKeyListItem[]>([]);
@@ -163,8 +160,7 @@ export function AgentApiKeysModal({
     {
       title: "状态",
       key: "status",
-      render: (_, record) =>
-        record.revokedAt ? <Tag>已撤销</Tag> : <Tag color="green">可用</Tag>
+      render: (_, record) => (record.revokedAt ? <Tag>已撤销</Tag> : <Tag color="green">可用</Tag>)
     },
     {
       title: "最近使用",
@@ -205,7 +201,13 @@ export function AgentApiKeysModal({
   ];
 
   return (
-    <Modal footer={null} open={Boolean(agent)} title={`${agent?.name ?? ""} · 服务端 API Key`} width={860} onCancel={onCancel}>
+    <Modal
+      footer={null}
+      open={Boolean(agent)}
+      title={`${agent?.name ?? ""} · 服务端 API Key`}
+      width={860}
+      onCancel={onCancel}
+    >
       <Alert
         showIcon
         type="warning"
@@ -219,7 +221,12 @@ export function AgentApiKeysModal({
           </Button>
         </div>
       ) : null}
-      <Form className="agentApiKeyCreateForm" form={form} layout="inline" onFinish={() => void handleCreate()}>
+      <Form
+        className="agentApiKeyCreateForm"
+        form={form}
+        layout="inline"
+        onFinish={() => void handleCreate()}
+      >
         <Form.Item name="name" rules={[{ required: true, message: "请输入部署名称" }]}>
           <Input maxLength={80} placeholder="例如：衣间录生产环境" />
         </Form.Item>

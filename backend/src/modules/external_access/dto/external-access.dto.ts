@@ -1,4 +1,5 @@
 import { ChatFileAttachmentDto, ChatImageAttachmentDto } from "../../chat/dto/chat.dto";
+import { AgentContentPart } from "../../agent_runtime/dto/content-part.dto";
 
 /** 创建 Agent API Key 时的可选名称。 */
 export type CreateAgentApiKeyDto = {
@@ -107,5 +108,6 @@ export type ExternalMessageListItem = {
   id: string;
   role: string;
   content: string;
+  contentParts: AgentContentPart[];
   createdAt: Date;
 };

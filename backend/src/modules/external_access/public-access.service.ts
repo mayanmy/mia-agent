@@ -9,10 +9,7 @@ import {
   SharedAgentDetail
 } from "../agents/dto/agent.dto";
 import { PasswordService } from "../auth/password.service";
-import {
-  PublicAccessConfigResponse,
-  UpdatePublicAccessConfigDto
-} from "./dto/external-access.dto";
+import { PublicAccessConfigResponse, UpdatePublicAccessConfigDto } from "./dto/external-access.dto";
 
 const MAX_ALLOWED_ORIGINS = 20;
 
@@ -43,7 +40,11 @@ export class PublicAccessService {
   }
 
   /** 验证访问密码而不持久化浏览器状态，密码仅由 Widget 临时保存在内存。 */
-  async verifyAccess(agentToken: string, origin: string | undefined, password?: string): Promise<void> {
+  async verifyAccess(
+    agentToken: string,
+    origin: string | undefined,
+    password?: string
+  ): Promise<void> {
     const agent = await this.resolveRuntime(agentToken, origin);
     await this.assertPassword(agent, password);
   }
@@ -147,7 +148,11 @@ export class PublicAccessService {
 
     const expiresAt = new Date(value);
     if (Number.isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
-      throw new AppError(ErrorCodes.common.badRequest, "公开链接到期时间必须晚于当前时间", HttpStatus.BAD_REQUEST);
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "公开链接到期时间必须晚于当前时间",
+        HttpStatus.BAD_REQUEST
+      );
     }
 
     return expiresAt;
@@ -186,7 +191,9 @@ export class PublicAccessService {
   }
 
   /** undefined 保留密码，null 清除密码，非空字符串按统一账户密码策略哈希。 */
-  private async resolvePasswordHash(value: string | null | undefined): Promise<string | null | undefined> {
+  private async resolvePasswordHash(
+    value: string | null | undefined
+  ): Promise<string | null | undefined> {
     if (value === undefined) {
       return undefined;
     }

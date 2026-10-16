@@ -10,6 +10,8 @@ export type AppConfig = {
   corsOrigins: string[];
   databaseUrl: string | undefined;
   knowledgeStorageDir: string;
+  storageDir: string;
+  storageMaxFileBytes: number;
   toolsHttpAllowedHosts: string[];
   toolsHttpAllowLocalhost: boolean;
   authJwtSecret: string;
@@ -185,6 +187,8 @@ export function getConfig(): AppConfig {
       process.cwd(),
       process.env.MIA_KNOWLEDGE_STORAGE_DIR ?? "storage/knowledge"
     ),
+    storageDir: resolve(process.cwd(), process.env.MIA_STORAGE_DIR ?? "storage/files"),
+    storageMaxFileBytes: readPositiveIntegerEnv("MIA_STORAGE_MAX_FILE_BYTES", 20 * 1024 * 1024),
     toolsHttpAllowedHosts: readToolsHttpAllowedHosts(),
     toolsHttpAllowLocalhost: readBooleanEnv(
       "TOOLS_HTTP_ALLOW_LOCALHOST",

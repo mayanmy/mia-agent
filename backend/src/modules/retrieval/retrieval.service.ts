@@ -309,7 +309,8 @@ export class RetrievalService {
     for (const candidate of candidates) {
       const existing = byChunkId.get(candidate.chunkId);
       // 相同 chunk 多次出现时保留最高通道置信度，避免低分副本覆盖高分命中。
-      if (!existing || candidate.score > existing.score) byChunkId.set(candidate.chunkId, candidate);
+      if (!existing || candidate.score > existing.score)
+        byChunkId.set(candidate.chunkId, candidate);
     }
 
     return [...byChunkId.values()].sort(

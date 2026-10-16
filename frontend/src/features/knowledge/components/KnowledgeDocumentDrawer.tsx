@@ -230,7 +230,10 @@ function getReadableErrorMessage(message: string): string {
     return "向量化结果数量异常，请重试索引";
   }
 
-  if (message.includes("Embedding 向量维度不匹配") || message.includes("expected 1536 dimensions")) {
+  if (
+    message.includes("Embedding 向量维度不匹配") ||
+    message.includes("expected 1536 dimensions")
+  ) {
     return message.includes("Embedding 向量维度不匹配")
       ? message
       : "Embedding 向量维度不匹配：当前数据库需要 1536 维，但模型返回了其他维度。请更换匹配维度的 Embedding 模型。";

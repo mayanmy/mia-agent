@@ -93,7 +93,9 @@ function RunDetail({ detail }: { detail: AgentRunDetail }) {
           children: (
             <article className="runStep">
               <header>
-                <strong>#{step.sequence} {step.type} · {step.name}</strong>
+                <strong>
+                  #{step.sequence} {step.type} · {step.name}
+                </strong>
                 <Tag color={statusColor(step.status)}>{step.status}</Tag>
                 <span>{step.elapsedMs === null ? "-" : `${step.elapsedMs}ms`}</span>
               </header>
@@ -102,7 +104,11 @@ function RunDetail({ detail }: { detail: AgentRunDetail }) {
                   Node {step.nodeId} · Attempt {step.attempt}
                 </Typography.Text>
               ) : null}
-              {step.errorType ? <p className="runError">{step.errorType}: {step.errorMessage}</p> : null}
+              {step.errorType ? (
+                <p className="runError">
+                  {step.errorType}: {step.errorMessage}
+                </p>
+              ) : null}
               <TraceBlock title="Input" value={step.input} />
               <TraceBlock title="Output" value={step.output} />
             </article>

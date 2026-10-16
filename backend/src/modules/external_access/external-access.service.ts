@@ -1,11 +1,13 @@
-import { HttpStatus, Injectable } from "@nestjs/common";
+import { HttpStatus, Injectable, Optional } from "@nestjs/common";
 import { AgentRunSource, ExternalUserSource } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
 import { AgentsService } from "../agents/agents.service";
 import { ChatRequestContext, ChatService } from "../chat/chat.service";
 import { ChatCompletionDto, ChatStreamEvent } from "../chat/dto/chat.dto";
+import { AgentContentPart } from "../agent_runtime/dto/content-part.dto";
 import { PrismaService } from "../prisma/prisma.service";
+import { StorageService } from "../storage/storage.service";
 import {
   ExternalConversationListItem,
   ExternalMessageListItem,
@@ -27,7 +29,8 @@ export class ExternalAccessService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly agentsService: AgentsService,
-    private readonly chatService: ChatService
+    private readonly chatService: ChatService,
+    @Optional() private readonly storage?: StorageService
   ) {}
 
   /** 公开资料只返回 Widget 需要展示的字段，不泄露模型配置、Prompt 或绑定资源。 */
@@ -68,6 +71,7 @@ export class ExternalAccessService {
     await this.touchConversation(conversation.id);
 
     let assistantContent = "";
+    let assistantContentParts: AgentContentPart[] = [];
     let completed = false;
     const chatContext: ChatRequestContext = {
       requestId,
@@ -110,20 +114,32 @@ export class ExternalAccessService {
         if (typeof event.data.content === "string") {
           assistantContent = event.data.content;
         }
+        if (Array.isArray(event.data.contentParts)) {
+          assistantContentParts = event.data.contentParts as AgentContentPart[];
+        }
       }
 
       yield event;
     }
 
     // 只有收到 message_end 才写入助手消息；用户取消或模型出错时不把半截输出伪装成完整回答。
-    if (completed && assistantContent.trim()) {
-      await this.prisma.externalMessage.create({
+    if (completed && (assistantContent.trim() || assistantContentParts.length > 0)) {
+      const assistantMessage = await this.prisma.externalMessage.create({
         data: {
           conversationId: conversation.id,
           role: "assistant",
-          content: assistantContent
+          content: assistantContent,
+          contentParts: assistantContentParts as never
         }
       });
+      const attachments = assistantContentParts.flatMap((part, position) =>
+        part.type === "image" || part.type === "file"
+          ? [{ messageId: assistantMessage.id, fileId: part.fileId, position, kind: part.type }]
+          : []
+      );
+      if (attachments.length) {
+        await this.prisma.externalMessageAttachment.createMany({ data: attachments });
+      }
       await this.touchConversation(conversation.id);
     }
   }
@@ -196,6 +212,10 @@ export class ExternalAccessService {
       id: message.id,
       role: message.role,
       content: message.content,
+      contentParts:
+        this.storage?.refreshContentParts(
+          Array.isArray(message.contentParts) ? (message.contentParts as AgentContentPart[]) : []
+        ) ?? [],
       createdAt: message.createdAt
     }));
   }

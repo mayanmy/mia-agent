@@ -619,6 +619,13 @@ export function ChatPage() {
               // Workflow End answer 是最终权威内容，可能没有 token，也可能转换过中间模型输出。
               clearBufferedTokens();
               replaceAssistantContent(assistantMessageId, event.data.content);
+              setMessages((current) =>
+                updateAssistantContentPartsInList(
+                  current,
+                  assistantMessageId,
+                  event.data.contentParts
+                )
+              );
               updateAssistantGeneration(assistantMessageId, "completed");
               updateAssistantRuntimeMetadata(assistantMessageId, {
                 runId: event.data.runId,
@@ -982,6 +989,7 @@ type PersistedChatMessage = {
   role: "user" | "assistant";
   /** 消息正文。 */
   content: string;
+  contentParts: import("./api").AgentContentPart[];
   /** assistant 运行快照；兼容旧消息为空。 */
   metadata: import("./api").ChatMessageMetadata | null;
   /** 当前用户已提交的评价。 */
@@ -996,6 +1004,7 @@ function toChatUiMessage(message: PersistedChatMessage): ChatUiMessage {
     id: message.id,
     role: message.role,
     content: message.content,
+    contentParts: message.contentParts,
     createdAt: new Date(message.createdAt).getTime(),
     generationStatus: message.role === "assistant" ? "completed" : undefined,
     retrievalEvents: message.metadata?.retrievalEvents?.map((event) => ({
@@ -1022,6 +1031,17 @@ function toChatUiMessage(message: PersistedChatMessage): ChatUiMessage {
     feedback: message.feedback,
     persistedMessageId: message.role === "assistant" ? message.id : undefined
   };
+}
+
+function updateAssistantContentPartsInList(
+  messages: ChatUiMessage[],
+  messageId: string,
+  contentParts: import("./api").AgentContentPart[] | undefined
+): ChatUiMessage[] {
+  if (!contentParts) return messages;
+  return messages.map((message) =>
+    message.id === messageId ? { ...message, contentParts } : message
+  );
 }
 
 /** 使用首条用户消息生成乐观会话标题，服务端持久化后会返回最终值。 */

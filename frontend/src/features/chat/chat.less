@@ -420,6 +420,47 @@
   overflow-wrap: anywhere;
 }
 
+.chatContentParts {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.chatJsonPart {
+  overflow: hidden;
+  border: 1px solid var(--mia-border-color, #e5e7eb);
+  border-radius: 10px;
+}
+.chatJsonPart > strong {
+  display: block;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.035);
+}
+.chatJsonPart pre {
+  overflow: auto;
+  max-height: 360px;
+  margin: 0;
+  padding: 12px;
+  font-size: 13px;
+}
+.chatOutputImage {
+  display: block;
+  max-width: min(100%, 720px);
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 10px;
+}
+.chatOutputFile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--mia-border-color, #e5e7eb);
+  border-radius: 10px;
+}
+.chatOutputFile small {
+  color: var(--mia-text-secondary, #6b7280);
+}
+
 /* Markdown 本身控制段落和换行，不能再对气泡整体使用 white-space: pre-wrap。 */
 .chatMarkdown {
   overflow-wrap: anywhere;

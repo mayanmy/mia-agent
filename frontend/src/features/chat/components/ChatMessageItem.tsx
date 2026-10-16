@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type { ChatRetrievalSource } from "../api";
+import type { AgentContentPart } from "../api";
 import type { ChatUiMessage } from "../types";
 import { formatMessageTime } from "../utils";
 import { RetrievalEventCard } from "./RetrievalEventCard";
@@ -76,7 +77,7 @@ export function ChatMessageItem({
             ))}
           </div>
         ) : null}
-        <MarkdownMessageContent content={item.content} />
+        <MessageContentParts content={item.content} parts={item.contentParts} />
         {generating ? <GeneratingIndicator /> : null}
         {item.generationStatus === "error" ? (
           <div className="chatGenerationNotice error" role="alert">
@@ -159,6 +160,62 @@ export function ChatMessageItem({
       </div>
     </div>
   );
+}
+
+function MessageContentParts({ content, parts }: { content: string; parts?: AgentContentPart[] }) {
+  const resolved = parts?.length
+    ? parts
+    : content
+      ? [{ type: "text" as const, text: content }]
+      : [];
+  return (
+    <div className="chatContentParts">
+      {resolved.map((part, index) => {
+        if (part.type === "text") return <MarkdownMessageContent key={index} content={part.text} />;
+        if (part.type === "json") {
+          return (
+            <section className="chatJsonPart" key={index} aria-label={part.title ?? "JSON 输出"}>
+              {part.title ? <strong>{part.title}</strong> : null}
+              <pre>
+                <code>{JSON.stringify(part.value, null, 2)}</code>
+              </pre>
+            </section>
+          );
+        }
+        if (part.type === "image") {
+          return (
+            <img
+              alt={part.alt || part.name}
+              className="chatOutputImage"
+              key={part.fileId}
+              loading="lazy"
+              src={part.url}
+            />
+          );
+        }
+        return (
+          <a
+            className="chatOutputFile"
+            href={part.url}
+            key={part.fileId}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <span>{part.name}</span>
+            <small>
+              {formatFileSize(part.size)} · {part.mimeType}
+            </small>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatFileSize(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function RuntimeDetails({

@@ -17,11 +17,7 @@ import { ResultInterceptor } from "./core/result.interceptor";
  * 因此这里只让浏览器通过公共路由预检；真正请求仍由 PublicAccessService 按
  * publicAllowedOrigins 校验，管理端等其他 API 继续使用全局 CORS 白名单。
  */
-function publicWidgetCorsMiddleware(
-  req: Request,
-  res: Response,
-  next: () => void
-): void {
+function publicWidgetCorsMiddleware(req: Request, res: Response, next: () => void): void {
   const apiPrefix = getConfig().apiPrefix.replace(/\/+$/u, "");
   const pathname = req.url?.split("?", 1)[0] ?? "";
   const origin = req.headers.origin;

@@ -65,6 +65,8 @@ export type ToolExecutionResult = {
   toolId: string;
   ok: boolean;
   output?: ToolJsonValue;
+  /** 工具通过保留字段 contentParts 声明的用户可见产物。 */
+  contentParts?: AgentContentPart[];
   errorType?: string;
   errorMessage?: string;
   elapsedMs: number;
@@ -91,3 +93,4 @@ export type ToolCallLogRecord = {
   errorMessage?: string;
   elapsedMs?: number;
 };
+import { AgentContentPart } from "../../agent_runtime/dto/content-part.dto";

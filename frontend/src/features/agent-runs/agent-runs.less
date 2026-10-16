@@ -1,29 +1,128 @@
-.runWorkspace { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.runFilters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; align-items: center; min-width: 0; padding: 12px; }
+.runWorkspace {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.runFilters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px;
+}
 .runFilters > .ant-input,
 .runFilters > .ant-select,
-.runFilters > .ant-picker { width: 100%; min-width: 0; }
+.runFilters > .ant-picker {
+  width: 100%;
+  min-width: 0;
+}
 .runFilters > .ant-input,
 .runFilters > .ant-select,
 .runFilters > .ant-picker,
 .runFilters .ant-select-selector,
-.runFilters .ant-btn { height: 40px !important; }
-.runFilters > .ant-input { line-height: 40px; padding-top: 0; padding-bottom: 0; }
-.runFilters .ant-select-selector { display: flex; align-items: center; }
-.runFilterRange { grid-column: span 2; }
-.runFilterActions { grid-column: span 2; justify-self: end; }
-.runTable { min-width: 0; overflow: hidden; }
-.runMono { max-width: 190px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-.runDetail { display: flex; flex-direction: column; gap: 16px; }
-.runSummary { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #e5e7eb; }
-.runSummary > div { display: grid; grid-template-columns: 100px 1fr; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; min-width: 0; }
-.runSummary span { color: #64748b; }
-.runSummary strong { overflow-wrap: anywhere; font-weight: 500; }
-.runStep { padding-bottom: 8px; }
-.runStep header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.runStep header > span:last-child { color: #64748b; }
-.runError { color: #b42318; }
-.traceBlock h3 { margin: 0 0 6px; font-size: 13px; }
-.traceBlock pre { max-height: 260px; overflow: auto; margin: 0; padding: 10px; border: 1px solid #e5e7eb; background: #f8fafc; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
-@media (max-width: 1200px) { .runFilters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 760px) { .runFilters, .runSummary { grid-template-columns: 1fr; } .runFilterRange, .runFilterActions { grid-column: auto; } .runFilterActions { justify-self: stretch; } .runSummary > div { grid-template-columns: 90px 1fr; } }
+.runFilters .ant-btn {
+  height: 40px !important;
+}
+.runFilters > .ant-input {
+  line-height: 40px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.runFilters .ant-select-selector {
+  display: flex;
+  align-items: center;
+}
+.runFilterRange {
+  grid-column: span 2;
+}
+.runFilterActions {
+  grid-column: span 2;
+  justify-self: end;
+}
+.runTable {
+  min-width: 0;
+  overflow: hidden;
+}
+.runMono {
+  max-width: 190px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.runDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.runSummary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid #e5e7eb;
+}
+.runSummary > div {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  min-width: 0;
+}
+.runSummary span {
+  color: #64748b;
+}
+.runSummary strong {
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+.runStep {
+  padding-bottom: 8px;
+}
+.runStep header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.runStep header > span:last-child {
+  color: #64748b;
+}
+.runError {
+  color: #b42318;
+}
+.traceBlock h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.traceBlock pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+@media (max-width: 1200px) {
+  .runFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .runFilters,
+  .runSummary {
+    grid-template-columns: 1fr;
+  }
+  .runFilterRange,
+  .runFilterActions {
+    grid-column: auto;
+  }
+  .runFilterActions {
+    justify-self: stretch;
+  }
+  .runSummary > div {
+    grid-template-columns: 90px 1fr;
+  }
+}

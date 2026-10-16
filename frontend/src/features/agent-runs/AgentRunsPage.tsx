@@ -18,11 +18,7 @@ import type { TableProps } from "antd";
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
 import { AgentRunDetailDrawer } from "./components/AgentRunDetailDrawer";
 
-import {
-  listAgentRuns,
-  type AgentRunListItem,
-  type AgentRunQuery
-} from "./api";
+import { listAgentRuns, type AgentRunListItem, type AgentRunQuery } from "./api";
 import "./agent-runs.less";
 
 const { RangePicker } = DatePicker;

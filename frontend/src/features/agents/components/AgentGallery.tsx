@@ -74,15 +74,15 @@ export function AgentGallery(props: AgentGalleryProps) {
               onClick={() =>
                 agent.permissions.canEdit ? props.onEdit(agent.id) : props.onTest(agent.id)
               }
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    if (agent.permissions.canEdit) {
-                      props.onEdit(agent.id);
-                    } else {
-                      props.onTest(agent.id);
-                    }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  if (agent.permissions.canEdit) {
+                    props.onEdit(agent.id);
+                  } else {
+                    props.onTest(agent.id);
                   }
-                }}
+                }
+              }}
             >
               <header className="agentCardHeader">
                 <span className={`agentCardAvatar tone-${index % 5}`}>

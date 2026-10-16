@@ -11,10 +11,13 @@ export const tests = [
     run: () => {
       assert.equal(isTextDocument("README.md"), true);
       assert.equal(isTextDocument("manual.pdf"), false);
-      assert.equal(parseTextDocument("data.json", Buffer.from('{"name":"Mia","enabled":true}')), `{
+      assert.equal(
+        parseTextDocument("data.json", Buffer.from('{"name":"Mia","enabled":true}')),
+        `{
   "name": "Mia",
   "enabled": true
-}`);
+}`
+      );
     }
   },
   {
@@ -61,10 +64,7 @@ export const tests = [
         (error) => {
           assert.ok(error instanceof AppError);
           assert.equal(error.code, ErrorCodes.knowledge.invalidDocument);
-          assert.equal(
-            error.message,
-            "only txt, md, pdf, docx, csv, and json files are supported"
-          );
+          assert.equal(error.message, "only txt, md, pdf, docx, csv, and json files are supported");
           return true;
         }
       );
@@ -75,14 +75,12 @@ export const tests = [
     run: () => {
       const service = new KnowledgeService({} as never, {} as never, {} as never);
       const privateService = service as unknown as {
-        validateUploadedDocument: (
-          file: {
-            originalname: string;
-            mimetype: string;
-            size: number;
-            buffer: Buffer;
-          }
-        ) => {
+        validateUploadedDocument: (file: {
+          originalname: string;
+          mimetype: string;
+          size: number;
+          buffer: Buffer;
+        }) => {
           originalname: string;
         };
       };

@@ -24,6 +24,7 @@ import { WorkflowRuntimeEvent } from "../workflow_runtime/dto/workflow-run.dto";
 import { WorkflowRuntimeService } from "../workflow_runtime/workflow-runtime.service";
 import { WorkflowToolRunsService } from "../workflow_runtime/workflow-tool-runs.service";
 import { AgentRunRequest } from "./dto/agent-run.dto";
+import { AgentContentPart, ContentJsonValue, textContentParts } from "./dto/content-part.dto";
 import { AgentRuntimeEvent } from "./dto/runtime-event.dto";
 import { AgentPromptBuilder } from "./prompt-builder";
 import { SkillPromptRenderer } from "./skill-renderer";
@@ -298,6 +299,7 @@ export class AgentRuntimeService {
         ...historyResult.messages,
         this.buildUserMessage(request.message)
       ];
+      const collectedContentParts: AgentContentPart[] = [];
       const promptRuleCall = this.inferPromptRuleToolCall(
         request.message.text,
         agent.systemPrompt,
@@ -311,7 +313,9 @@ export class AgentRuntimeService {
           request,
           agent.agentId,
           trace,
-          promptRuleCall ? "prompt_rule" : "inferred"
+          promptRuleCall ? "prompt_rule" : "inferred",
+          "",
+          collectedContentParts
         );
       }
 
@@ -439,7 +443,8 @@ export class AgentRuntimeService {
               modelName: selectedModelName,
               providerName: selectedProviderName,
               sessionId: request.sessionId ?? null,
-              content
+              content,
+              contentParts: [...textContentParts(content), ...collectedContentParts]
             }
           };
           return;
@@ -460,7 +465,8 @@ export class AgentRuntimeService {
           agent.agentId,
           trace,
           source,
-          assistantContent
+          assistantContent,
+          collectedContentParts
         );
       }
     } catch (error) {
@@ -551,7 +557,15 @@ export class AgentRuntimeService {
 
       if (event.type === "workflow_completed") {
         const content = this.eventString(event, "answer");
-        if (!content) {
+        const output = (event.data as Record<string, unknown>).output;
+        const contentParts: AgentContentPart[] = content
+          ? textContentParts(content)
+          : output !== undefined
+            ? [{ type: "json", value: this.toContentJsonValue(output), title: "Workflow 输出" }]
+            : [];
+        const compatibleContent =
+          content || (output === undefined ? "" : JSON.stringify(output, null, 2));
+        if (contentParts.length === 0) {
           const error = {
             type: "workflow_answer_missing",
             message: "Workflow End 节点必须返回非空 answer"
@@ -563,7 +577,7 @@ export class AgentRuntimeService {
           };
           return;
         }
-        await this.completeTrace(trace, content);
+        await this.completeTrace(trace, compatibleContent);
         yield {
           type: "run_completed",
           data: {
@@ -573,7 +587,8 @@ export class AgentRuntimeService {
             modelName: agent.modelName,
             providerName: agent.providerType,
             sessionId: request.sessionId ?? null,
-            content,
+            content: compatibleContent,
+            contentParts,
             executionMode: AgentExecutionMode.WORKFLOW,
             workflowId: binding.workflowId,
             workflowVersionId: binding.workflowVersionId
@@ -632,6 +647,11 @@ export class AgentRuntimeService {
   private eventString(event: WorkflowRuntimeEvent, field: string): string {
     const value = (event.data as Record<string, unknown>)[field];
     return typeof value === "string" ? value : "";
+  }
+
+  /** Workflow 输出跨运行时边界前降为纯 JSON，避免把类实例或句柄暴露到 SSE。 */
+  private toContentJsonValue(value: unknown): ContentJsonValue {
+    return JSON.parse(JSON.stringify(value ?? null)) as ContentJsonValue;
   }
 
   /** attempt 只接受正整数，历史或扩展事件缺失时由调用方回退为 1。 */
@@ -1362,7 +1382,8 @@ export class AgentRuntimeService {
     agentId: string,
     trace: AgentRuntimeTrace | undefined,
     source: string,
-    assistantContent = ""
+    assistantContent = "",
+    collectedContentParts: AgentContentPart[] = []
   ): AsyncIterable<AgentRuntimeEvent> {
     messages.push({ role: "assistant", content: assistantContent, toolCalls });
     for (const toolCall of toolCalls) {
@@ -1513,6 +1534,10 @@ export class AgentRuntimeService {
           message: result.errorMessage || "工具调用失败"
         });
       yield { type: "tool_completed", data: result };
+      for (const part of result.contentParts ?? []) {
+        collectedContentParts.push(part);
+        yield { type: "content_part", data: { part } };
+      }
       messages.push({
         role: "tool",
         toolCallId: toolCall.id,

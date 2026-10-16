@@ -12,11 +12,7 @@ export class PasswordService {
    * 登录时绝不把策略细节暴露给匿名调用方。
    */
   validatePasswordStrength(password: string): void {
-    if (
-      password.length < 8 ||
-      !/[a-zA-Z]/u.test(password) ||
-      !/[0-9]/u.test(password)
-    ) {
+    if (password.length < 8 || !/[a-zA-Z]/u.test(password) || !/[0-9]/u.test(password)) {
       throw new AppError(
         ErrorCodes.auth.invalidPassword,
         "密码至少需要 8 位，并同时包含字母和数字",

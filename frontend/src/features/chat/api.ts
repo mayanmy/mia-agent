@@ -3,6 +3,22 @@ import { fetchWithAuth, request } from "../../shared/api/client";
 /** Chat 当前支持的消息角色。 */
 export type ChatRole = "user" | "assistant";
 
+export type AgentContentPart =
+  | { type: "text"; text: string }
+  | { type: "json"; value: unknown; title?: string }
+  | {
+      type: "image";
+      fileId: string;
+      name: string;
+      mimeType: string;
+      size: number;
+      url: string;
+      alt?: string;
+      width?: number;
+      height?: number;
+    }
+  | { type: "file"; fileId: string; name: string; mimeType: string; size: number; url: string };
+
 /** 浏览器侧图片附件；id 仅用于本地列表稳定渲染。 */
 export type ChatImageAttachment = {
   /** 浏览器侧列表渲染 ID。 */
@@ -35,6 +51,7 @@ export type ChatMessage = {
   role: ChatRole;
   /** 消息文本正文。 */
   content: string;
+  contentParts?: AgentContentPart[];
   /** 可选图片附件。 */
   images?: ChatImageAttachment[];
   /** 可选文本附件。 */
@@ -65,6 +82,7 @@ export type ChatSessionMessage = {
   role: ChatRole;
   /** 消息正文。 */
   content: string;
+  contentParts: AgentContentPart[];
   /** assistant 回答的运行快照；旧消息和用户消息为 null。 */
   metadata: ChatMessageMetadata | null;
   feedback: ChatMessageFeedback | null;
@@ -175,6 +193,7 @@ export type ChatCompletionResult = {
   providerName: string;
   /** 最终生成正文。 */
   content: string;
+  contentParts: AgentContentPart[];
 };
 
 /** RAG 检索命中的可展示来源。 */
@@ -203,6 +222,7 @@ export type ChatStreamEventType =
   | "retrieval_start"
   | "retrieval_result"
   | "token"
+  | "content_part"
   | "tool_call"
   | "tool_approval_required"
   | "tool_approval_resolved"
@@ -253,6 +273,9 @@ export type ChatStreamEventData = {
   elapsedMs?: number;
   /** token 增量或最终消息正文。 */
   content?: string;
+  /** message_end 的权威有序内容块，或 content_part 的单块增量。 */
+  contentParts?: AgentContentPart[];
+  part?: AgentContentPart;
   /** 面向用户的错误消息。 */
   message?: string;
   /** 实际运行的 Agent ID。 */

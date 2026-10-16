@@ -19,6 +19,7 @@ import { UsersModule } from "./modules/users/users.module";
 import { WorkflowsModule } from "./modules/workflows/workflows.module";
 import { WorkflowRuntimeModule } from "./modules/workflow_runtime/workflow-runtime.module";
 import { WorkspacesModule } from "./modules/workspaces/workspaces.module";
+import { StorageModule } from "./modules/storage/storage.module";
 import { JwtAuthGuard } from "./core/auth/jwt-auth.guard";
 import { RolesGuard } from "./core/auth/roles.guard";
 import { WorkspaceGuard, WorkspaceRolesGuard } from "./core/auth/workspace.guard";
@@ -43,7 +44,8 @@ import { WorkspaceContextInterceptor } from "./core/auth/workspace-context.inter
     LogsModule,
     KnowledgeModule,
     RetrievalModule,
-    SkillsModule
+    SkillsModule,
+    StorageModule
   ],
   providers: [
     // 默认拒绝所有内部接口，新增 Controller 时必须显式标记 @Public() 才能匿名访问。

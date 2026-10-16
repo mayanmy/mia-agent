@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from "@nestjs/common";
+import { HttpStatus, Injectable, Optional } from "@nestjs/common";
 import {
   ChatMessageFeedbackRating,
   ChatSessionMessageRole,
@@ -7,8 +7,10 @@ import {
 } from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
+import { AgentContentPart, textContentParts } from "../agent_runtime/dto/content-part.dto";
 import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { PrismaService } from "../prisma/prisma.service";
+import { StorageService } from "../storage/storage.service";
 import {
   ChatMessageQueryDto,
   ChatMessageMetadata,
@@ -79,7 +81,10 @@ type SessionListRecord = {
 
 @Injectable()
 export class ChatSessionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly storage?: StorageService
+  ) {}
 
   /**
    * 创建一条全新的保留会话。
@@ -183,6 +188,7 @@ export class ChatSessionsService {
         id: item.id,
         role: item.role === ChatSessionMessageRole.USER ? "user" : "assistant",
         content: item.content,
+        contentParts: this.toContentParts(item.contentParts, item.content),
         metadata: this.toMessageMetadata(item.metadata),
         feedback: item.feedbacks[0]
           ? {
@@ -325,9 +331,10 @@ export class ChatSessionsService {
     sessionId: string,
     role: ChatSessionMessageRole,
     content: string,
-    metadata?: ChatMessageMetadata
+    metadata?: ChatMessageMetadata,
+    contentParts: AgentContentPart[] = textContentParts(content)
   ): Promise<string | null> {
-    if (!content.trim()) {
+    if (!content.trim() && contentParts.length === 0) {
       return null;
     }
 
@@ -339,9 +346,18 @@ export class ChatSessionsService {
           sessionId,
           role,
           content,
+          contentParts: contentParts as Prisma.InputJsonValue,
           metadata: metadata ? (metadata as Prisma.InputJsonValue) : undefined
         }
       });
+      const attachments = contentParts.flatMap((part, position) =>
+        part.type === "image" || part.type === "file"
+          ? [{ messageId: message.id, fileId: part.fileId, position, kind: part.type }]
+          : []
+      );
+      if (attachments.length) {
+        await transaction.chatMessageAttachment.createMany({ data: attachments });
+      }
       await transaction.chatSession.update({
         where: { id: sessionId },
         data: {
@@ -406,6 +422,11 @@ export class ChatSessionsService {
     }
 
     return value as ChatMessageMetadata;
+  }
+
+  private toContentParts(value: Prisma.JsonValue | null, content: string): AgentContentPart[] {
+    const parts = Array.isArray(value) ? (value as AgentContentPart[]) : textContentParts(content);
+    return this.storage?.refreshContentParts(parts) ?? parts;
   }
 
   /** 按复合归属读取会话，避免只凭可猜测 ID 越权访问。 */

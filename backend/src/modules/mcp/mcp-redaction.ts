@@ -93,7 +93,10 @@ export class McpRedactor {
         .filter(Boolean)
         .map((item) => item.replace(/~1/gu, "/").replace(/~0/gu, "~"));
     }
-    return path.split(".").map((item) => item.trim()).filter(Boolean);
+    return path
+      .split(".")
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
 
   private redactPath(value: ToolJsonValue, segments: string[]): void {

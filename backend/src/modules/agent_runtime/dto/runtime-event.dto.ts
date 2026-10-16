@@ -1,4 +1,5 @@
 import { RuntimeError } from "./runtime-error.dto";
+import { AgentContentPart } from "./content-part.dto";
 
 /** Runtime 汇总的模型 token 与估算成本。 */
 export type RuntimeUsage = {
@@ -29,6 +30,8 @@ export type RuntimeCompletion = {
   providerName: string;
   sessionId: string | null;
   content: string;
+  /** 有序多类型内容；content 保留为纯文本兼容字段。 */
+  contentParts: AgentContentPart[];
   executionMode?: "AGENT_LOOP" | "WORKFLOW";
   workflowId?: string;
   workflowVersionId?: string;
@@ -52,6 +55,7 @@ export type AgentRuntimeEvent =
   | { type: "retrieval_started"; data: Record<string, unknown> }
   | { type: "retrieval_completed"; data: Record<string, unknown> }
   | { type: "token"; data: { content: string } }
+  | { type: "content_part"; data: { part: AgentContentPart } }
   | { type: "tool_started"; data: Record<string, unknown> }
   | {
       type: "tool_approval_required";

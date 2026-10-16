@@ -54,10 +54,7 @@ export function createMcpSafeFetch(allowPrivateNetwork: boolean): typeof globalT
 }
 
 /** 公网 Server 强制 HTTPS；HTTP 仅供管理员显式放行的本地或私网服务。 */
-export async function assertMcpUrlAllowed(
-  url: URL,
-  allowPrivateNetwork: boolean
-): Promise<void> {
+export async function assertMcpUrlAllowed(url: URL, allowPrivateNetwork: boolean): Promise<void> {
   if (url.protocol !== "https:" && !(allowPrivateNetwork && url.protocol === "http:")) {
     throw new Error("MCP endpoint must use HTTPS unless private network access is enabled");
   }

@@ -1,4 +1,5 @@
 import { ChatSessionStatus } from "@prisma/client";
+import { AgentContentPart } from "../../agent_runtime/dto/content-part.dto";
 
 /** 持久消息保存的运行快照。字段均可 JSON 序列化，旧消息可以没有该结构。 */
 export type ChatMessageMetadata = {
@@ -122,6 +123,8 @@ export type ChatSessionMessageListItem = {
   role: "user" | "assistant";
   /** 消息正文。 */
   content: string;
+  /** 有序多类型内容；旧数据由服务层从 content 补成 text 块。 */
+  contentParts: AgentContentPart[];
   /** 回答运行快照；旧消息和用户消息通常为 null。 */
   metadata: ChatMessageMetadata | null;
   /** 当前成员已经提交的反馈。 */

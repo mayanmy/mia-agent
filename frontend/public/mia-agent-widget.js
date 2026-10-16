@@ -137,7 +137,7 @@
     '<section class="mia-agent-access-gate mia-agent-hidden">' +
     '<div class="mia-agent-access-card">' +
     '<div class="mia-agent-access-icon" aria-hidden="true">●</div>' +
-    '<strong>访问受保护</strong><span>输入密码后即可开始与此 Agent 对话</span>' +
+    "<strong>访问受保护</strong><span>输入密码后即可开始与此 Agent 对话</span>" +
     '<div class="mia-agent-access-form"><input class="mia-agent-access-password" type="password" autocomplete="current-password" placeholder="请输入访问密码" />' +
     '<button class="mia-agent-access-submit" type="button">进入对话</button></div>' +
     "</div>" +
@@ -208,6 +208,7 @@
     ".mia-agent-markdown pre{margin:10px 0;overflow-x:auto;border-radius:6px;background:#0f172a;color:#e2e8f0;padding:12px;white-space:pre-wrap}.mia-agent-markdown pre code{background:transparent;color:inherit;padding:0}" +
     ".mia-agent-markdown blockquote{margin:10px 0;border-left:3px solid #93c5fd;color:#475569;padding-left:12px}.mia-agent-markdown a{color:#2563eb;text-decoration:underline}" +
     ".mia-agent-markdown table{display:block;max-width:100%;margin:10px 0;overflow-x:auto;border-collapse:collapse}.mia-agent-markdown th,.mia-agent-markdown td{border:1px solid #dbe3ef;padding:6px 8px;text-align:left;white-space:nowrap}.mia-agent-markdown th{background:#f8fafc;font-weight:700}" +
+    ".mia-agent-output-image{display:block;max-width:100%;max-height:420px;margin:8px 0;object-fit:contain;border-radius:8px}.mia-agent-output-file{display:block;margin:8px 0;border:1px solid #dbe3ef;border-radius:8px;padding:9px 11px;color:#2563eb;text-decoration:none}" +
     ".mia-agent-tool-events{display:grid;gap:6px;max-width:84%;margin:0 0 8px 0}" +
     ".mia-agent-tool-event{display:grid;gap:4px;border:1px solid #dfe6ef;border-radius:8px;background:#f8fafc;color:#334155;padding:8px 10px;font-size:12px;line-height:1.45}" +
     ".mia-agent-tool-event-success{border-color:#cce8d7;background:#f7fdf9}" +
@@ -598,11 +599,14 @@
     }
 
     accessSubmitButton.disabled = true;
-    fetch(entry.apiBase + "/api/v1/public/agents/" + encodeURIComponent(entry.token) + "/verify-access", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: password })
-    })
+    fetch(
+      entry.apiBase + "/api/v1/public/agents/" + encodeURIComponent(entry.token) + "/verify-access",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: password })
+      }
+    )
       .then(function (response) {
         if (!response.ok) {
           throw new Error("访问密码错误");
@@ -678,6 +682,7 @@
           return {
             role: record.role === "assistant" ? "assistant" : "user",
             content: String(record.content || ""),
+            contentParts: Array.isArray(record.contentParts) ? record.contentParts : [],
             bubble: null,
             toolEvents: [],
             toolEventsEl: null,
@@ -790,6 +795,9 @@
             assistantMessage.loading = false;
             assistantMessage.content =
               event.data.content || assistantMessage.content || "未收到回复，请重试。";
+            assistantMessage.contentParts = Array.isArray(event.data.contentParts)
+              ? event.data.contentParts
+              : [];
             renderMessageContent(assistantMessage);
             scrollToBottomIfNeeded();
           }
@@ -1078,6 +1086,7 @@
     var message = {
       role: role,
       content: content,
+      contentParts: [],
       loading: Boolean(loading),
       bubble: bubble,
       toolEvents: [],
@@ -1189,10 +1198,51 @@
       return;
     }
 
+    if (Array.isArray(message.contentParts) && message.contentParts.length) {
+      bubble.classList.add("mia-agent-markdown");
+      message.contentParts.forEach(function (part) {
+        if (!part || !part.type) return;
+        if (part.type === "text") {
+          renderMarkdownBlocks(bubble, String(part.text || ""));
+        } else if (part.type === "json") {
+          var pre = document.createElement("pre");
+          var code = document.createElement("code");
+          code.textContent = JSON.stringify(part.value, null, 2);
+          pre.appendChild(code);
+          bubble.appendChild(pre);
+        } else if (part.type === "image" && part.url) {
+          var image = document.createElement("img");
+          image.className = "mia-agent-output-image";
+          image.loading = "lazy";
+          image.alt = String(part.alt || part.name || "Agent 输出图片");
+          image.src = resolveOutputUrl(part.url);
+          bubble.appendChild(image);
+        } else if (part.type === "file" && part.url) {
+          var link = document.createElement("a");
+          link.className = "mia-agent-output-file";
+          link.href = resolveOutputUrl(part.url);
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = String(part.name || "下载文件");
+          bubble.appendChild(link);
+        }
+      });
+      return;
+    }
+
     bubble.removeAttribute("role");
     bubble.removeAttribute("aria-live");
     bubble.classList.add("mia-agent-markdown");
     renderMarkdownBlocks(bubble, content || " ");
+  }
+
+  function resolveOutputUrl(url) {
+    var entry = getActiveEntry();
+    try {
+      return new URL(String(url), entry ? entry.apiBase : window.location.href).toString();
+    } catch (_error) {
+      return "";
+    }
   }
 
   function renderMarkdownBlocks(container, markdown) {
@@ -1310,7 +1360,10 @@
 
   function appendMarkdownTableRow(section, value, cellTag) {
     var row = document.createElement("tr");
-    var cells = value.trim().replace(/^\||\|$/g, "").split("|");
+    var cells = value
+      .trim()
+      .replace(/^\||\|$/g, "")
+      .split("|");
     cells.forEach(function (cellValue) {
       var cell = document.createElement(cellTag);
       appendInlineMarkdown(cell, cellValue.trim());
@@ -1723,15 +1776,16 @@
       return;
     }
 
-    writeLocalStorage("mia_widget_conversation:" + getWidgetStorageNamespace(entry), conversationId);
+    writeLocalStorage(
+      "mia_widget_conversation:" + getWidgetStorageNamespace(entry),
+      conversationId
+    );
   }
 
   /** 当服务端已删除会话时清理失效引用，下次发送会自动创建新的匿名会话。 */
   function clearWidgetConversationId(entry) {
     try {
-      window.localStorage.removeItem(
-        "mia_widget_conversation:" + getWidgetStorageNamespace(entry)
-      );
+      window.localStorage.removeItem("mia_widget_conversation:" + getWidgetStorageNamespace(entry));
     } catch (_) {
       // 存储不可用时无需额外处理，当前页面的后续请求也会让服务端创建新会话。
     }
@@ -1762,9 +1816,7 @@
 
     // 与服务端 ExternalAccessService 的外部用户格式保持一致，避免静默退回匿名身份造成串号。
     if (!/^[A-Za-z0-9_.:@-]{1,256}$/.test(normalized)) {
-      throw new Error(
-        "Mia Agent Widget: data-user-id 仅支持 1-256 位字母、数字及 _ . : @ -"
-      );
+      throw new Error("Mia Agent Widget: data-user-id 仅支持 1-256 位字母、数字及 _ . : @ -");
     }
 
     return normalized;

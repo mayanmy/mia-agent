@@ -371,6 +371,7 @@ async function collectStream(
 ) {
   let answer = "";
   let conversationId: string | null = null;
+  let contentParts: unknown[] = [];
 
   for await (const event of stream) {
     if (event.type === "message_start") {
@@ -385,6 +386,7 @@ async function collectStream(
     if (event.type === "message_end" && typeof event.data.content === "string") {
       // blocking 返回 End answer，避免把 Workflow 中间 LLM 节点的 token 当作最终结果。
       answer = event.data.content;
+      contentParts = Array.isArray(event.data.contentParts) ? event.data.contentParts : [];
     }
 
     if (event.type === "error") {
@@ -394,6 +396,7 @@ async function collectStream(
 
   return {
     answer,
+    content_parts: contentParts,
     conversation_id: conversationId
   };
 }

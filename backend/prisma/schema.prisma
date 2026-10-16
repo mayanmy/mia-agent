@@ -91,6 +91,13 @@ enum AgentExecutionMode {
   @@map("agent_execution_mode")
 }
 
+enum StoredFileStatus {
+  READY
+  DELETED
+
+  @@map("stored_file_status")
+}
+
 enum WorkflowStatus {
   DRAFT
   PUBLISHED
@@ -659,12 +666,54 @@ model ExternalMessage {
   conversationId String               @map("conversation_id") @db.Uuid
   role           String
   content        String               @db.Text
+  contentParts   Json?                @map("content_parts") @db.JsonB
   metadata       Json?                @db.JsonB
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   conversation   ExternalConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt, id], map: "idx_external_messages_conversation_created_at")
   @@map("external_messages")
+}
+
+/// Storage 元数据与物理后端解耦；业务消息只保存 file_id 和展示快照。
+model StoredFile {
+  id          String           @id @default(uuid()) @db.Uuid
+  workspaceId String           @map("workspace_id") @db.Uuid
+  storageKey  String           @unique @map("storage_key")
+  name        String
+  mimeType    String           @map("mime_type")
+  size        BigInt
+  sha256      String
+  status      StoredFileStatus @default(READY)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt   DateTime?        @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([workspaceId, createdAt(sort: Desc)], map: "idx_stored_files_workspace_created")
+  @@map("stored_files")
+}
+
+model ChatMessageAttachment {
+  messageId String   @map("message_id") @db.Uuid
+  fileId    String   @map("file_id") @db.Uuid
+  position  Int
+  kind      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@id([messageId, fileId])
+  @@index([fileId], map: "idx_chat_message_attachments_file")
+  @@map("chat_message_attachments")
+}
+
+model ExternalMessageAttachment {
+  messageId String   @map("message_id") @db.Uuid
+  fileId    String   @map("file_id") @db.Uuid
+  position  Int
+  kind      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@id([messageId, fileId])
+  @@index([fileId], map: "idx_external_message_attachments_file")
+  @@map("external_message_attachments")
 }
 
 model AgentTool {
@@ -939,6 +988,7 @@ model ChatSessionMessage {
   sessionId String                 @map("session_id") @db.Uuid
   role      ChatSessionMessageRole
   content   String                 @db.Text
+  contentParts Json?               @map("content_parts") @db.JsonB
   metadata  Json?                  @db.JsonB
   createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
   session   ChatSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)

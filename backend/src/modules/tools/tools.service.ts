@@ -20,6 +20,8 @@ import {
 } from "./dto/tool.dto";
 import { getBuiltinTool, getBuiltinToolDefinitions, listEnabledBuiltinTools } from "./registry";
 import { HttpToolExecutor } from "./http/http-tool.executor";
+import { StorageService } from "../storage/storage.service";
+import { AgentContentPart } from "../agent_runtime/dto/content-part.dto";
 
 @Injectable()
 export class ToolsService {
@@ -31,7 +33,8 @@ export class ToolsService {
     @Optional() private readonly httpToolExecutor?: HttpToolExecutor,
     @Optional() private readonly mcpService?: McpService,
     @Optional() private readonly mcpToolExecutor?: McpToolExecutor,
-    @Optional() private readonly mcpApprovalService?: McpApprovalService
+    @Optional() private readonly mcpApprovalService?: McpApprovalService,
+    @Optional() private readonly storageService?: StorageService
   ) {}
 
   /** 合并内置工具与管理员预配置工具，供 Agent 绑定页统一展示。 */
@@ -215,6 +218,7 @@ export class ToolsService {
         toolId,
         ok: true,
         output,
+        contentParts: await this.normalizeContentParts(output),
         elapsedMs: Date.now() - startedAt
       };
       await this.recordExecutionResult({ request, toolId, result });
@@ -232,6 +236,61 @@ export class ToolsService {
       }
       return result;
     }
+  }
+
+  /** 工具使用 { contentParts: [...] } 作为显式展示信封；二进制必须先进入 Storage。 */
+  private async normalizeContentParts(
+    output: ToolJsonValue
+  ): Promise<AgentContentPart[] | undefined> {
+    if (!output || Array.isArray(output) || typeof output !== "object") return undefined;
+    const rawParts = (output as Record<string, ToolJsonValue>).contentParts;
+    if (!Array.isArray(rawParts)) return undefined;
+    const parts: AgentContentPart[] = [];
+    for (const raw of rawParts.slice(0, 20)) {
+      if (!raw || Array.isArray(raw) || typeof raw !== "object") continue;
+      const part = raw as Record<string, ToolJsonValue>;
+      if (part.type === "text" && typeof part.text === "string") {
+        parts.push({ type: "text", text: part.text.slice(0, 200_000) });
+      } else if (part.type === "json" && "value" in part) {
+        parts.push({
+          type: "json",
+          value: part.value,
+          ...(typeof part.title === "string" ? { title: part.title.slice(0, 100) } : {})
+        });
+      } else if (
+        (part.type === "image" || part.type === "file") &&
+        typeof part.dataUrl === "string"
+      ) {
+        const match = /^data:([^;,]+);base64,([A-Za-z0-9+/=]+)$/u.exec(part.dataUrl);
+        if (!match || !this.storageService) continue;
+        const file = await this.storageService.saveBuffer({
+          name: typeof part.name === "string" ? part.name : "output",
+          mimeType: match[1],
+          data: Buffer.from(match[2], "base64")
+        });
+        parts.push(
+          part.type === "image"
+            ? {
+                type: "image",
+                fileId: file.id,
+                name: file.name,
+                mimeType: file.mimeType,
+                size: file.size,
+                url: file.url,
+                ...(typeof part.alt === "string" ? { alt: part.alt } : {})
+              }
+            : {
+                type: "file",
+                fileId: file.id,
+                name: file.name,
+                mimeType: file.mimeType,
+                size: file.size,
+                url: file.url
+              }
+        );
+      }
+    }
+    return parts.length ? parts : undefined;
   }
 
   /** 只允许 Runtime 为 MCP CONFIRM 工具创建审批，具体策略仍由 MCP 模块再次校验。 */
