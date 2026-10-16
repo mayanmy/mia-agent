@@ -207,13 +207,13 @@ async function* protectedStream() {
 
 ### 6.5 错误语义
 
-| 错误码 | 场景 | 用户提示 |
-| --- | --- | --- |
-| `model_queue_full` | 队列已满 | 当前请求较多，请稍后重试 |
-| `model_queue_timeout` | 排队超时 | 等待模型超时，请稍后重试 |
-| `model_canceled` | 排队或运行期间取消 | 已停止生成 |
-| `model_rate_limited` | Provider 返回 429 | 模型服务繁忙，请稍后重试 |
-| `server_overloaded` | 单机资源过载 | 服务器繁忙，请稍后重试 |
+| 错误码                | 场景               | 用户提示                 |
+| --------------------- | ------------------ | ------------------------ |
+| `model_queue_full`    | 队列已满           | 当前请求较多，请稍后重试 |
+| `model_queue_timeout` | 排队超时           | 等待模型超时，请稍后重试 |
+| `model_canceled`      | 排队或运行期间取消 | 已停止生成               |
+| `model_rate_limited`  | Provider 返回 429  | 模型服务繁忙，请稍后重试 |
+| `server_overloaded`   | 单机资源过载       | 服务器繁忙，请稍后重试   |
 
 SSE 已经输出内容后，不允许自动重试或切换模型继续拼接回答。
 

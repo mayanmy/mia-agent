@@ -155,13 +155,13 @@ backend/src/modules/
 
 职责：
 
-| 文件 | 职责 |
-| --- | --- |
+| 文件                       | 职责                                 |
+| -------------------------- | ------------------------------------ |
 | `agent-runtime.service.ts` | 编排 Agent、Retrieval、Model 和 Tool |
-| `prompt-builder.ts` | 纯函数组装模型消息和 RAG Context |
-| `runtime-error.ts` | 统一运行错误分类和外部安全消息 |
-| `agent-runs.service.ts` | Run/Step 状态流转、查询和脱敏 |
-| `agent-runs.controller.ts` | 管理员 Run 列表和详情接口 |
+| `prompt-builder.ts`        | 纯函数组装模型消息和 RAG Context     |
+| `runtime-error.ts`         | 统一运行错误分类和外部安全消息       |
+| `agent-runs.service.ts`    | Run/Step 状态流转、查询和脱敏        |
+| `agent-runs.controller.ts` | 管理员 Run 列表和详情接口            |
 
 ## 6. 数据库设计
 
@@ -296,11 +296,7 @@ stepId String? @map("step_id") @db.Uuid
 ### 7.1 AgentRunRequest
 
 ```typescript
-export type AgentRunSource =
-  | "INTERNAL_CHAT"
-  | "PUBLIC_WIDGET"
-  | "SERVICE_API"
-  | "ASYNC_TASK";
+export type AgentRunSource = "INTERNAL_CHAT" | "PUBLIC_WIDGET" | "SERVICE_API" | "ASYNC_TASK";
 
 export type AgentRunRequest = {
   requestId: string;
@@ -377,11 +373,11 @@ QUEUED -> RUNNING -> COMPLETED
 
 合法状态流转：
 
-| 当前状态 | 允许目标状态 |
-| --- | --- |
-| `QUEUED` | `RUNNING`、`CANCELED`、`FAILED` |
+| 当前状态  | 允许目标状态                                   |
+| --------- | ---------------------------------------------- |
+| `QUEUED`  | `RUNNING`、`CANCELED`、`FAILED`                |
 | `RUNNING` | `COMPLETED`、`FAILED`、`CANCELED`、`TIMED_OUT` |
-| 终态 | 不允许继续更新状态 |
+| 终态      | 不允许继续更新状态                             |
 
 `AgentRunsService` 使用 `updateMany({ where: { id, status: ... } })` 或事务内条件更新保证状态流转幂等。禁止暴露通用 `updateRun`。
 
@@ -690,17 +686,17 @@ export type ChatRequestContext = {
 
 第一阶段保持现有前端事件协议不变：
 
-| RuntimeEvent | ChatStreamEvent |
-| --- | --- |
-| `run_started` | `message_start`，data 增加 `runId` |
-| `retrieval_started` | `retrieval_start` |
-| `retrieval_completed` | `retrieval_result` |
-| `token` | `token` |
-| `tool_started` | `tool_call` |
-| `tool_completed` | `tool_result` |
-| `run_completed` | `message_end`，data 增加 `runId` 和 usage |
-| `run_failed` | `error`，data 增加 `runId` 和 errorType |
-| `run_canceled` | 不再继续写响应；Run Trace 记录取消 |
+| RuntimeEvent          | ChatStreamEvent                           |
+| --------------------- | ----------------------------------------- |
+| `run_started`         | `message_start`，data 增加 `runId`        |
+| `retrieval_started`   | `retrieval_start`                         |
+| `retrieval_completed` | `retrieval_result`                        |
+| `token`               | `token`                                   |
+| `tool_started`        | `tool_call`                               |
+| `tool_completed`      | `tool_result`                             |
+| `run_completed`       | `message_end`，data 增加 `runId` 和 usage |
+| `run_failed`          | `error`，data 增加 `runId` 和 errorType   |
+| `run_canceled`        | 不再继续写响应；Run Trace 记录取消        |
 
 现有客户端忽略未知字段，因此增加 `runId` 不需要同步破坏性升级。
 

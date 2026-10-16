@@ -4,12 +4,12 @@
 
 ## 1. 脚本职责
 
-| 脚本 | 使用场景 | 主要行为 | 数据影响 |
-| --- | --- | --- | --- |
-| `deploy.sh` | 当前后端发布统一入口 | 仅调用 `deploy-backend.sh`：构建后端、启动数据库、执行迁移并更新 API | 保留数据库和知识库命名卷 |
-| `deploy-backend.sh` | 只更新后端、数据库迁移或后端配置 | 构建后端镜像，启动 PostgreSQL，执行 Prisma migration，重建 API 容器 | 复用 `mia-backend_mia_postgres_data` 和 `mia-backend_mia_knowledge_data` |
-| `deploy-frontend.sh` | 只更新 React 页面、Nginx 配置或前端代理地址 | 构建前端镜像，重建 Web/Nginx 容器 | 不访问 PostgreSQL |
-| `scripts/init-docker-env.sh` | 被上述部署脚本自动调用 | 首次创建 `.env.docker` 并生成随机密钥 | 已存在的 `.env.docker` 不会被覆盖 |
+| 脚本                         | 使用场景                                    | 主要行为                                                             | 数据影响                                                                 |
+| ---------------------------- | ------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `deploy.sh`                  | 当前后端发布统一入口                        | 仅调用 `deploy-backend.sh`：构建后端、启动数据库、执行迁移并更新 API | 保留数据库和知识库命名卷                                                 |
+| `deploy-backend.sh`          | 只更新后端、数据库迁移或后端配置            | 构建后端镜像，启动 PostgreSQL，执行 Prisma migration，重建 API 容器  | 复用 `mia-backend_mia_postgres_data` 和 `mia-backend_mia_knowledge_data` |
+| `deploy-frontend.sh`         | 只更新 React 页面、Nginx 配置或前端代理地址 | 构建前端镜像，重建 Web/Nginx 容器                                    | 不访问 PostgreSQL                                                        |
+| `scripts/init-docker-env.sh` | 被上述部署脚本自动调用                      | 首次创建 `.env.docker` 并生成随机密钥                                | 已存在的 `.env.docker` 不会被覆盖                                        |
 
 辅助配置：
 

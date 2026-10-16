@@ -2,20 +2,20 @@
 
 本目录按 Mia 左侧菜单拆分。建议第一次使用时按下表顺序阅读。
 
-| 顺序 | 菜单 | 文档 | 谁能使用 | 主要目标 |
-| --- | --- | --- | --- | --- |
-| 1 | 模型供应商 | [模型供应商新手引导](./01-model-providers.md) | 空间 Owner / Manager | 配置 Chat 与 Embedding 模型 |
-| 2 | 知识库 | [知识库新手引导](./03-knowledge.md) | 空间成员 | 上传资料并完成向量索引 |
-| 3 | 工具 | [工具新手引导](./04-tools.md) | 空间 Owner / Manager | 创建受控 HTTP API 工具 |
-| 4 | MCP | [MCP 新手引导](./05-mcp.md) | 空间 Owner / Manager | 接入 MCP Server 并同步远程能力 |
-| 5 | Skill | [Skill 新手引导](./06-skills.md) | 空间 Owner / Manager | 创建可复用专业指令 |
-| 6 | Workflow | [Workflow 新手引导](./07-workflows.md) | 空间 Owner / Manager | 编排、校验并发布确定性流程 |
-| 7 | Agent | [Agent 新手引导](./02-agents.md) | 空间成员 | 组合模型、知识库、工具与 Workflow |
-| 8 | Workflow 应用 | [Workflow 应用新手引导](./08-workflow-apps.md) | 空间成员 | 运行已发布流程 |
-| 9 | 对话 | [对话新手引导](./09-chat.md) | 空间成员 | 使用 Agent、管理会话与附件 |
-| 10 | 运行链路 | [运行链路新手引导](./11-run-trace.md) | 空间 Owner / Manager | 排查一次 Agent/Workflow 的完整阶段 |
-| 11 | 请求日志 | [请求日志新手引导](./10-logs.md) | 空间 Owner / Manager | 排查工具选择与执行错误 |
-| 12 | 成员 | [成员管理新手引导](./12-users.md) | 空间 Owner / Manager | 邀请成员并管理空间角色 |
+| 顺序 | 菜单          | 文档                                           | 谁能使用             | 主要目标                           |
+| ---- | ------------- | ---------------------------------------------- | -------------------- | ---------------------------------- |
+| 1    | 模型供应商    | [模型供应商新手引导](./01-model-providers.md)  | 空间 Owner / Manager | 配置 Chat 与 Embedding 模型        |
+| 2    | 知识库        | [知识库新手引导](./03-knowledge.md)            | 空间成员             | 上传资料并完成向量索引             |
+| 3    | 工具          | [工具新手引导](./04-tools.md)                  | 空间 Owner / Manager | 创建受控 HTTP API 工具             |
+| 4    | MCP           | [MCP 新手引导](./05-mcp.md)                    | 空间 Owner / Manager | 接入 MCP Server 并同步远程能力     |
+| 5    | Skill         | [Skill 新手引导](./06-skills.md)               | 空间 Owner / Manager | 创建可复用专业指令                 |
+| 6    | Workflow      | [Workflow 新手引导](./07-workflows.md)         | 空间 Owner / Manager | 编排、校验并发布确定性流程         |
+| 7    | Agent         | [Agent 新手引导](./02-agents.md)               | 空间成员             | 组合模型、知识库、工具与 Workflow  |
+| 8    | Workflow 应用 | [Workflow 应用新手引导](./08-workflow-apps.md) | 空间成员             | 运行已发布流程                     |
+| 9    | 对话          | [对话新手引导](./09-chat.md)                   | 空间成员             | 使用 Agent、管理会话与附件         |
+| 10   | 运行链路      | [运行链路新手引导](./11-run-trace.md)          | 空间 Owner / Manager | 排查一次 Agent/Workflow 的完整阶段 |
+| 11   | 请求日志      | [请求日志新手引导](./10-logs.md)               | 空间 Owner / Manager | 排查工具选择与执行错误             |
+| 12   | 成员          | [成员管理新手引导](./12-users.md)              | 空间 Owner / Manager | 邀请成员并管理空间角色             |
 
 ## 三个容易混淆的概念
 

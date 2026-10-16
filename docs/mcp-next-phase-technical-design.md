@@ -25,20 +25,20 @@ Mia 当前 MCP 已经不是概念验证，而是具备基本生产闭环：管�
 
 ### 3.1 已完成能力
 
-| 领域 | 当前能力 | 主要实现位置 |
-| --- | --- | --- |
-| Transport | Streamable HTTP、协议自动协商、2025-era 回退 | `clients/mcp-protocol.client.ts` |
-| 鉴权 | None、Bearer、API Key、Client Credentials、OAuth + PKCE | `mcp-protocol-client.factory.ts`、`mcp-oauth.manager.ts` |
-| 网络安全 | 公网 HTTPS、私网显式授权、DNS 与重定向逐跳检查 | `mcp-network-policy.ts` |
-| Tool 发现 | 自动分页、Schema 快照、稳定 Runtime ID、新 Tool 默认停用 | `mcp.service.ts` |
-| Tool 执行 | 参数校验、超时、取消、并发限制、连接阶段重试、输出裁剪 | `mcp-tool.executor.ts` |
-| Runtime | Agent、Workflow 和统一 ToolsService 复用同一执行入口 | `tools.service.ts`、`agent-runtime.service.ts` |
-| Tool Search | 大量绑定工具时先检索目录再加载候选 Schema | `tools.service.ts` |
-| 审批 | CONFIRM 模式、Chat SSE 确认、一次性消费、防参数替换 | `mcp-approval.service.ts` |
-| Resources | 目录、文本预览、管理员显式导入知识库 | `mcp.service.ts`、`McpResourcesDrawer.tsx` |
-| Prompts | 目录、参数预览、导入停用 Skill 草稿 | `mcp.service.ts`、`McpPromptsDrawer.tsx` |
-| 运维 | 手工连接测试、手工同步、15 分钟巡检、tools/list_changed 防抖 | `mcp.service.ts` |
-| 日志 | 统一 ToolCallLog、Run Step、错误类型和耗时 | `tools.service.ts`、日志页面 |
+| 领域        | 当前能力                                                     | 主要实现位置                                             |
+| ----------- | ------------------------------------------------------------ | -------------------------------------------------------- |
+| Transport   | Streamable HTTP、协议自动协商、2025-era 回退                 | `clients/mcp-protocol.client.ts`                         |
+| 鉴权        | None、Bearer、API Key、Client Credentials、OAuth + PKCE      | `mcp-protocol-client.factory.ts`、`mcp-oauth.manager.ts` |
+| 网络安全    | 公网 HTTPS、私网显式授权、DNS 与重定向逐跳检查               | `mcp-network-policy.ts`                                  |
+| Tool 发现   | 自动分页、Schema 快照、稳定 Runtime ID、新 Tool 默认停用     | `mcp.service.ts`                                         |
+| Tool 执行   | 参数校验、超时、取消、并发限制、连接阶段重试、输出裁剪       | `mcp-tool.executor.ts`                                   |
+| Runtime     | Agent、Workflow 和统一 ToolsService 复用同一执行入口         | `tools.service.ts`、`agent-runtime.service.ts`           |
+| Tool Search | 大量绑定工具时先检索目录再加载候选 Schema                    | `tools.service.ts`                                       |
+| 审批        | CONFIRM 模式、Chat SSE 确认、一次性消费、防参数替换          | `mcp-approval.service.ts`                                |
+| Resources   | 目录、文本预览、管理员显式导入知识库                         | `mcp.service.ts`、`McpResourcesDrawer.tsx`               |
+| Prompts     | 目录、参数预览、导入停用 Skill 草稿                          | `mcp.service.ts`、`McpPromptsDrawer.tsx`                 |
+| 运维        | 手工连接测试、手工同步、15 分钟巡检、tools/list_changed 防抖 | `mcp.service.ts`                                         |
+| 日志        | 统一 ToolCallLog、Run Step、错误类型和耗时                   | `tools.service.ts`、日志页面                             |
 
 ### 3.2 当前运行链路
 
@@ -250,13 +250,13 @@ Tool 测试默认不支持交互审批；CONFIRM Tool 需要管理员在测试�
 
 ### 5.4 暂不实现的协议能力
 
-| 能力 | 决策 | 原因 |
-| --- | --- | --- |
-| Sampling | 暂不实现 | 允许远端反向触发模型调用，成本和权限边界复杂 |
+| 能力        | 决策     | 原因                                                  |
+| ----------- | -------- | ----------------------------------------------------- |
+| Sampling    | 暂不实现 | 允许远端反向触发模型调用，成本和权限边界复杂          |
 | Elicitation | 暂不实现 | 与现有 Chat 审批/表单状态机重叠，需要独立交互安全方案 |
-| Roots | 暂不实现 | Mia 当前没有把本地文件系统暴露给远端的业务需求 |
-| stdio | P3 评估 | 服务端执行进程会扩大任意代码执行风险 |
-| MCP Apps/UI | 暂不实现 | 远端 UI 沙箱、来源信任和 CSP 尚无产品需求 |
+| Roots       | 暂不实现 | Mia 当前没有把本地文件系统暴露给远端的业务需求        |
+| stdio       | P3 评估  | 服务端执行进程会扩大任意代码执行风险                  |
+| MCP Apps/UI | 暂不实现 | 远端 UI 沙箱、来源信任和 CSP 尚无产品需求             |
 
 ## 6. P3 独立方向
 
@@ -502,22 +502,22 @@ npm run build
 
 ## 14. 实施优先级清单
 
-| 优先级 | 工作项 | 预估复杂度 | 是否需要迁移 |
-| --- | --- | --- | --- |
-| P0 | MCP 输入/输出/错误脱敏 | 中 | 是 |
-| P0 | outputSchema 校验 | 小 | 否或小 |
-| P0 | Schema Revision 与审核 | 大 | 是 |
-| P0 | 异常 Tool 局部隔离及容量限制 | 中 | 建议 |
-| P1 | Runtime 健康回写 | 中 | 是 |
-| P1 | 同步互斥、巡检配置和遗留 Run 清理 | 中 | 可选 |
-| P1 | 同步历史、Schema Diff、Tool 测试台 | 大 | 否 |
-| P1 | 审批跨重启恢复 | 中 | 否 |
-| P1 | 结构化错误与 OAuth 生命周期 | 中 | 否 |
-| P2 | Resource Template 参数化 | 中 | 否 |
-| P2 | Resources/Prompts 变化通知 | 中 | 否 |
-| P2 | Tasks 评估 | 大 | 待定 |
-| P3 | 按用户 OAuth | 大 | 是 |
-| P3 | 受控 stdio | 很大 | 待定 |
-| P3 | Mia MCP Server | 很大 | 独立方案 |
+| 优先级 | 工作项                             | 预估复杂度 | 是否需要迁移 |
+| ------ | ---------------------------------- | ---------- | ------------ |
+| P0     | MCP 输入/输出/错误脱敏             | 中         | 是           |
+| P0     | outputSchema 校验                  | 小         | 否或小       |
+| P0     | Schema Revision 与审核             | 大         | 是           |
+| P0     | 异常 Tool 局部隔离及容量限制       | 中         | 建议         |
+| P1     | Runtime 健康回写                   | 中         | 是           |
+| P1     | 同步互斥、巡检配置和遗留 Run 清理  | 中         | 可选         |
+| P1     | 同步历史、Schema Diff、Tool 测试台 | 大         | 否           |
+| P1     | 审批跨重启恢复                     | 中         | 否           |
+| P1     | 结构化错误与 OAuth 生命周期        | 中         | 否           |
+| P2     | Resource Template 参数化           | 中         | 否           |
+| P2     | Resources/Prompts 变化通知         | 中         | 否           |
+| P2     | Tasks 评估                         | 大         | 待定         |
+| P3     | 按用户 OAuth                       | 大         | 是           |
+| P3     | 受控 stdio                         | 很大       | 待定         |
+| P3     | Mia MCP Server                     | 很大       | 独立方案     |
 
 最终建议：先执行 Phase A 和 Phase B。它们直接解决数据泄漏、权限静默扩大和同步脆弱性，是当前 MCP 从内部可用走向稳定生产使用的必要条件；协议新能力应排在治理闭环之后。

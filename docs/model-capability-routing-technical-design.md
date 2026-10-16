@@ -77,12 +77,12 @@ Agent 禁止图片、视觉模型停用或系统未配置默认视觉模型时�
 
 模型能力描述“这个模型原生能做什么”；Agent 内容块描述“Mia 最终向用户交付什么”。二者不能一一等同：
 
-| Agent 最终输出 | 是否必然要求模型能力 | 说明 |
-| --- | --- | --- |
-| `text` | 要求 `TEXT_CHAT` | 当前 Chat 主路径的基础能力 |
-| `json` | 不一定 | Workflow、工具可以直接返回 JSON；只有要求 Chat 模型原生 Schema 约束时才要求 `STRUCTURED_OUTPUT` |
-| `image` | 不一定 | 工具可以生成图片；只有直接调用图片生成模型时才要求 `IMAGE_GENERATION` |
-| `file` | 否 | 文件是 Mia Storage 和工具产物能力，不应声明为模型能力 |
+| Agent 最终输出 | 是否必然要求模型能力 | 说明                                                                                            |
+| -------------- | -------------------- | ----------------------------------------------------------------------------------------------- |
+| `text`         | 要求 `TEXT_CHAT`     | 当前 Chat 主路径的基础能力                                                                      |
+| `json`         | 不一定               | Workflow、工具可以直接返回 JSON；只有要求 Chat 模型原生 Schema 约束时才要求 `STRUCTURED_OUTPUT` |
+| `image`        | 不一定               | 工具可以生成图片；只有直接调用图片生成模型时才要求 `IMAGE_GENERATION`                           |
+| `file`         | 否                   | 文件是 Mia Storage 和工具产物能力，不应声明为模型能力                                           |
 
 因此不得增加 `FILE_OUTPUT` 这类模型能力，也不得因为最终消息包含图片就错误要求 Chat 模型具备 `IMAGE_GENERATION`。图片输入和图片输出是两个不同方向：
 
@@ -149,16 +149,16 @@ enum ModelCapabilityType {
 
 能力语义：
 
-| 能力 | 方向 | 路由使用条件 |
-| --- | --- | --- |
-| `TEXT_CHAT` | 输入/输出 | Chat 模型基础要求 |
-| `VISION_INPUT` | 输入 | 当前请求包含服务端确认的图片附件 |
-| `TOOL_CALLING` | 输出控制 | 本次 Agent Loop 向模型注入工具定义并允许模型调用工具 |
-| `STRUCTURED_OUTPUT` | 输出控制 | 本次调用要求供应商原生 JSON Schema/JSON Mode 保证 |
-| `REASONING` | 模型行为 | Agent 或模型配置要求显式思考能力时 |
-| `IMAGE_GENERATION` | 输出 | 直接调用图片生成模型时；不用于工具生成图片 |
-| `AUDIO_INPUT/AUDIO_OUTPUT` | 输入/输出 | 后续音频调用链启用时 |
-| `EMBEDDING/RERANK` | 专用用途 | Retrieval 专用模型，不进入 Chat 路由 |
+| 能力                       | 方向      | 路由使用条件                                         |
+| -------------------------- | --------- | ---------------------------------------------------- |
+| `TEXT_CHAT`                | 输入/输出 | Chat 模型基础要求                                    |
+| `VISION_INPUT`             | 输入      | 当前请求包含服务端确认的图片附件                     |
+| `TOOL_CALLING`             | 输出控制  | 本次 Agent Loop 向模型注入工具定义并允许模型调用工具 |
+| `STRUCTURED_OUTPUT`        | 输出控制  | 本次调用要求供应商原生 JSON Schema/JSON Mode 保证    |
+| `REASONING`                | 模型行为  | Agent 或模型配置要求显式思考能力时                   |
+| `IMAGE_GENERATION`         | 输出      | 直接调用图片生成模型时；不用于工具生成图片           |
+| `AUDIO_INPUT/AUDIO_OUTPUT` | 输入/输出 | 后续音频调用链启用时                                 |
+| `EMBEDDING/RERANK`         | 专用用途  | Retrieval 专用模型，不进入 Chat 路由                 |
 
 ### 6.2 模型能力表
 
@@ -233,12 +233,12 @@ model Agent {
 }
 ```
 
-| 模式 | 行为 |
-| --- | --- |
-| `AUTO` | 主模型支持视觉时使用主模型，否则使用系统默认视觉模型 |
-| `PRIMARY_ONLY` | 只允许主模型处理图片，不支持时明确失败 |
-| `DEDICATED` | 图片请求固定使用 Agent 指定的视觉模型 |
-| `DISABLED` | Agent 不允许图片输入 |
+| 模式           | 行为                                                 |
+| -------------- | ---------------------------------------------------- |
+| `AUTO`         | 主模型支持视觉时使用主模型，否则使用系统默认视觉模型 |
+| `PRIMARY_ONLY` | 只允许主模型处理图片，不支持时明确失败               |
+| `DEDICATED`    | 图片请求固定使用 Agent 指定的视觉模型                |
+| `DISABLED`     | Agent 不允许图片输入                                 |
 
 P0 前端只需展示“自动选择、指定视觉模型、禁止图片”。`PRIMARY_ONLY` 可放入高级配置或 P1 再开放。
 
@@ -283,10 +283,7 @@ type ModelRouteDecision = {
   selectedModelConfigId: string;
   selectedRole: "PRIMARY" | "SYSTEM_VISION" | "AGENT_VISION";
   requiredCapabilities: ModelCapabilityType[];
-  reason:
-    | "PRIMARY_SUPPORTS_ALL"
-    | "AGENT_VISION_SELECTED"
-    | "SYSTEM_VISION_FALLBACK";
+  reason: "PRIMARY_SUPPORTS_ALL" | "AGENT_VISION_SELECTED" | "SYSTEM_VISION_FALLBACK";
   fallbackUsed: boolean;
   capabilityEvidence: Array<{
     capability: ModelCapabilityType;
@@ -639,19 +636,19 @@ Service 必须验证 `DEDICATED` 模式下模型存在、启用且包含 `VISION
 
 ## 14. 错误模型
 
-| 错误码 | 用户提示 |
-| --- | --- |
-| `AGENT_VISION_DISABLED` | 当前 Agent 未启用图片处理 |
-| `PRIMARY_MODEL_NO_VISION` | 当前主模型不支持图片输入 |
-| `DEFAULT_VISION_MODEL_NOT_CONFIGURED` | 系统尚未配置默认视觉模型 |
-| `VISION_MODEL_DISABLED` | 配置的视觉模型已停用 |
-| `UNSUPPORTED_IMAGE_TYPE` | 不支持该图片格式 |
-| `IMAGE_TOO_LARGE` | 图片超过模型允许的大小 |
-| `TOO_MANY_IMAGES` | 图片数量超过模型限制 |
-| `MODEL_CAPABILITY_MISMATCH` | 模型声明能力与供应商实际能力不一致 |
-| `MODEL_TOOL_CALLING_UNSUPPORTED` | 当前模型不支持 Agent 所需的工具调用 |
-| `MODEL_STRUCTURED_OUTPUT_UNSUPPORTED` | 当前模型不支持要求的原生结构化输出模式 |
-| `IMAGE_GENERATION_MODEL_NOT_CONFIGURED` | 尚未配置可用的图片生成模型 |
+| 错误码                                  | 用户提示                               |
+| --------------------------------------- | -------------------------------------- |
+| `AGENT_VISION_DISABLED`                 | 当前 Agent 未启用图片处理              |
+| `PRIMARY_MODEL_NO_VISION`               | 当前主模型不支持图片输入               |
+| `DEFAULT_VISION_MODEL_NOT_CONFIGURED`   | 系统尚未配置默认视觉模型               |
+| `VISION_MODEL_DISABLED`                 | 配置的视觉模型已停用                   |
+| `UNSUPPORTED_IMAGE_TYPE`                | 不支持该图片格式                       |
+| `IMAGE_TOO_LARGE`                       | 图片超过模型允许的大小                 |
+| `TOO_MANY_IMAGES`                       | 图片数量超过模型限制                   |
+| `MODEL_CAPABILITY_MISMATCH`             | 模型声明能力与供应商实际能力不一致     |
+| `MODEL_TOOL_CALLING_UNSUPPORTED`        | 当前模型不支持 Agent 所需的工具调用    |
+| `MODEL_STRUCTURED_OUTPUT_UNSUPPORTED`   | 当前模型不支持要求的原生结构化输出模式 |
+| `IMAGE_GENERATION_MODEL_NOT_CONFIGURED` | 尚未配置可用的图片生成模型             |
 
 禁止统一转换为“模型调用失败”。
 

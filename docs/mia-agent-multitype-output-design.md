@@ -67,14 +67,14 @@ Tool / MCP / HTTP 输出 ──────┤
 
 ### 3.1 模块职责
 
-| 模块 | 职责 | 禁止事项 |
-| --- | --- | --- |
-| `agent_runtime` | 编排模型、Workflow 和工具输出，归一化内容块 | 不操作真实磁盘，不持久化 Chat 消息 |
-| `storage` | 保存、读取、删除文件，维护文件元数据和 Backend | 不理解 Agent、Chat、Knowledge 业务含义 |
-| `chat` | 输出 SSE，保存内部会话消息和附件关系 | 不保存 Base64、Buffer 或磁盘路径 |
-| `tools` | 执行工具，返回模型结果和可展示内容 | 不直接写 ChatMessage |
-| `external_access` | 管理 Widget/Service API 会话、消息和文件授权 | 不让 Chat 反向依赖外部会话表 |
-| 前端/Widget | 按内容块类型渲染和降级 | 不信任 MIME、文件名或 HTML |
+| 模块              | 职责                                           | 禁止事项                               |
+| ----------------- | ---------------------------------------------- | -------------------------------------- |
+| `agent_runtime`   | 编排模型、Workflow 和工具输出，归一化内容块    | 不操作真实磁盘，不持久化 Chat 消息     |
+| `storage`         | 保存、读取、删除文件，维护文件元数据和 Backend | 不理解 Agent、Chat、Knowledge 业务含义 |
+| `chat`            | 输出 SSE，保存内部会话消息和附件关系           | 不保存 Base64、Buffer 或磁盘路径       |
+| `tools`           | 执行工具，返回模型结果和可展示内容             | 不直接写 ChatMessage                   |
+| `external_access` | 管理 Widget/Service API 会话、消息和文件授权   | 不让 Chat 反向依赖外部会话表           |
+| 前端/Widget       | 按内容块类型渲染和降级                         | 不信任 MIME、文件名或 HTML             |
 
 ### 3.2 依赖方向
 
@@ -95,10 +95,7 @@ agent_runtime -> model_providers, tools, storage
 
 ```ts
 export type AgentContentPart =
-  | AgentTextContentPart
-  | AgentJsonContentPart
-  | AgentImageContentPart
-  | AgentFileContentPart;
+  AgentTextContentPart | AgentJsonContentPart | AgentImageContentPart | AgentFileContentPart;
 
 export type AgentTextContentPart = {
   type: "text";
@@ -262,9 +259,9 @@ JSON、图片和文件不做 token 化：
 
 ### 6.1 输出来源
 
-| 类型 | 允许来源 | 交付方式 |
-| --- | --- | --- |
-| `text` | LLM token、Workflow Template/End、工具显式文本 | SSE `token` |
+| 类型   | 允许来源                                                  | 交付方式            |
+| ------ | --------------------------------------------------------- | ------------------- |
+| `text` | LLM token、Workflow Template/End、工具显式文本            | SSE `token`         |
 | `json` | Workflow 结构化输出、LLM structured output、工具显式 JSON | 完整 `content_part` |
 
 ### 6.2 工具结果契约
@@ -481,9 +478,7 @@ function normalizeStoredMessage(message): AgentContentPart[] {
     return validateContentParts(message.contentParts);
   }
 
-  return message.content
-    ? [{ type: "text", text: message.content }]
-    : [];
+  return message.content ? [{ type: "text", text: message.content }] : [];
 }
 ```
 
@@ -493,13 +488,13 @@ function normalizeStoredMessage(message): AgentContentPart[] {
 
 ### 9.1 支持来源
 
-| 来源 | 是否允许 | 处理方式 |
-| --- | --- | --- |
-| Buffer/Stream | 允许 | 直接进入 Storage 校验和写入 |
-| 已有 `fileId` | 允许 | 校验 Workspace、状态和用途后复用 |
-| HTTPS URL | 受限允许 | 经过 SSRF 防护下载器后落库 |
-| 任意本地路径、`file://` | 禁止 | 避免任意文件读取 |
-| 临时供应商 URL 直接持久化 | 禁止 | 防止 URL 失效后历史消息不可恢复 |
+| 来源                      | 是否允许 | 处理方式                         |
+| ------------------------- | -------- | -------------------------------- |
+| Buffer/Stream             | 允许     | 直接进入 Storage 校验和写入      |
+| 已有 `fileId`             | 允许     | 校验 Workspace、状态和用途后复用 |
+| HTTPS URL                 | 受限允许 | 经过 SSRF 防护下载器后落库       |
+| 任意本地路径、`file://`   | 禁止     | 避免任意文件读取                 |
+| 临时供应商 URL 直接持久化 | 禁止     | 防止 URL 失效后历史消息不可恢复  |
 
 ### 9.2 文件处理流程
 
@@ -599,12 +594,12 @@ frontend/src/features/chat/components/content/
 
 展示规则：
 
-| 类型 | 展示行为 |
-| --- | --- |
-| `text` | 继续使用 `ReactMarkdown`，不解析原始 HTML |
-| `json` | 格式化、折叠、展开、复制 |
-| `image` | 加载占位、缩略图、点击预览、下载 |
-| `file` | 文件名、大小、类型图标和下载按钮 |
+| 类型    | 展示行为                                  |
+| ------- | ----------------------------------------- |
+| `text`  | 继续使用 `ReactMarkdown`，不解析原始 HTML |
+| `json`  | 格式化、折叠、展开、复制                  |
+| `image` | 加载占位、缩略图、点击预览、下载          |
+| `file`  | 文件名、大小、类型图标和下载按钮          |
 
 单个内容块加载失败不能导致整条消息不可见。
 
@@ -640,16 +635,16 @@ frontend/public/mia-agent-widget.min.js
 
 ### 13.1 建议默认限制
 
-| 控制项 | 建议默认值 |
-| --- | ---: |
-| 单图片大小 | 10 MB |
-| 单普通文件大小 | 25 MB |
-| 单消息附件数 | 10 |
-| 单消息附件总大小 | 50 MB |
-| JSON 序列化大小 | 1 MB |
-| 外部 URL 重定向 | 最多 3 次 |
-| 外部文件下载超时 | 30 秒 |
-| 文件名长度 | 255 字符 |
+| 控制项             |  建议默认值 |
+| ------------------ | ----------: |
+| 单图片大小         |       10 MB |
+| 单普通文件大小     |       25 MB |
+| 单消息附件数       |          10 |
+| 单消息附件总大小   |       50 MB |
+| JSON 序列化大小    |        1 MB |
+| 外部 URL 重定向    |   最多 3 次 |
+| 外部文件下载超时   |       30 秒 |
+| 文件名长度         |    255 字符 |
 | 公共下载令牌有效期 | 15～60 分钟 |
 
 ### 13.2 必须防护
@@ -782,15 +777,15 @@ PENDING_SCAN -> READY | QUARANTINED
 
 ## 17. 建议错误码
 
-| 错误码 | 含义 |
-| --- | --- |
-| `STORAGE_FILE_NOT_FOUND` | 文件不存在、已删除或无权访问 |
-| `STORAGE_FILE_TOO_LARGE` | 单文件或单消息文件总量超限 |
-| `STORAGE_UNSUPPORTED_MEDIA_TYPE` | 文件类型不支持 |
-| `STORAGE_REMOTE_FETCH_BLOCKED` | 远程 URL 被 SSRF 策略阻止 |
-| `STORAGE_REMOTE_FETCH_FAILED` | 远程文件下载失败或超时 |
-| `CHAT_CONTENT_PART_INVALID` | 内容块结构或字段不合法 |
-| `CHAT_CONTENT_LIMIT_EXCEEDED` | JSON、内容块数量或总体大小超限 |
+| 错误码                           | 含义                           |
+| -------------------------------- | ------------------------------ |
+| `STORAGE_FILE_NOT_FOUND`         | 文件不存在、已删除或无权访问   |
+| `STORAGE_FILE_TOO_LARGE`         | 单文件或单消息文件总量超限     |
+| `STORAGE_UNSUPPORTED_MEDIA_TYPE` | 文件类型不支持                 |
+| `STORAGE_REMOTE_FETCH_BLOCKED`   | 远程 URL 被 SSRF 策略阻止      |
+| `STORAGE_REMOTE_FETCH_FAILED`    | 远程文件下载失败或超时         |
+| `CHAT_CONTENT_PART_INVALID`      | 内容块结构或字段不合法         |
+| `CHAT_CONTENT_LIMIT_EXCEEDED`    | JSON、内容块数量或总体大小超限 |
 
 ## 18. 建议实施文件范围
 
@@ -835,4 +830,3 @@ frontend/public/mia-agent-widget.min.js
 - Workspace 是否需要文件总配额。
 - Service API 返回直接下载 URL，还是只返回 `fileId` 和独立下载接口。
 - 图片预览是否需要第一版同步生成缩略图。
-

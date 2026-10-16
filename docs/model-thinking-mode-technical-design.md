@@ -72,12 +72,12 @@ thinkingMode：模型默认思考模式
 
 模型层配置含义：
 
-| `thinkingSupported` | `thinkingMode` | 行为 |
-| --- | --- | --- |
-| `false` | `AUTO` | 不发送思考覆盖参数，完全沿用供应商行为 |
-| `true` | `AUTO` | Agent 跟随模型时，不发送覆盖参数 |
-| `true` | `ENABLED` | Agent 跟随模型时显式开启思考 |
-| `true` | `DISABLED` | Agent 跟随模型时显式关闭思考 |
+| `thinkingSupported` | `thinkingMode` | 行为                                   |
+| ------------------- | -------------- | -------------------------------------- |
+| `false`             | `AUTO`         | 不发送思考覆盖参数，完全沿用供应商行为 |
+| `true`              | `AUTO`         | Agent 跟随模型时，不发送覆盖参数       |
+| `true`              | `ENABLED`      | Agent 跟随模型时显式开启思考           |
+| `true`              | `DISABLED`     | Agent 跟随模型时显式关闭思考           |
 
 关闭 `thinkingSupported` 时，服务端和前端都会把模型默认模式重置为 `AUTO`，避免出现“声明不支持覆盖但仍发送关闭参数”的矛盾配置。
 
@@ -85,10 +85,10 @@ thinkingMode：模型默认思考模式
 
 Agent 保存 `thinkingMode`：
 
-| Agent 配置 | 含义 |
-| --- | --- |
-| `AUTO` | 跟随模型默认配置 |
-| `ENABLED` | 当前 Agent 显式开启思考 |
+| Agent 配置 | 含义                    |
+| ---------- | ----------------------- |
+| `AUTO`     | 跟随模型默认配置        |
+| `ENABLED`  | 当前 Agent 显式开启思考 |
 | `DISABLED` | 当前 Agent 显式关闭思考 |
 
 示例：
@@ -189,9 +189,7 @@ type ModelThinkingConfig = {
 服务端创建规则：
 
 ```ts
-thinkingMode = payload.thinkingSupported
-  ? normalize(payload.thinkingMode ?? "AUTO")
-  : "AUTO";
+thinkingMode = payload.thinkingSupported ? normalize(payload.thinkingMode ?? "AUTO") : "AUTO";
 ```
 
 服务端更新规则：
@@ -241,14 +239,14 @@ function resolveThinkingMode(
 
 解析结果：
 
-| 模型支持覆盖 | 模型默认 | Agent 配置 | 实际模式 |
-| --- | --- | --- | --- |
-| 否 | 任意 | 任意 | `AUTO` |
-| 是 | `AUTO` | `AUTO` | `AUTO` |
-| 是 | `DISABLED` | `AUTO` | `DISABLED` |
-| 是 | `ENABLED` | `AUTO` | `ENABLED` |
-| 是 | 任意 | `ENABLED` | `ENABLED` |
-| 是 | 任意 | `DISABLED` | `DISABLED` |
+| 模型支持覆盖 | 模型默认   | Agent 配置 | 实际模式   |
+| ------------ | ---------- | ---------- | ---------- |
+| 否           | 任意       | 任意       | `AUTO`     |
+| 是           | `AUTO`     | `AUTO`     | `AUTO`     |
+| 是           | `DISABLED` | `AUTO`     | `DISABLED` |
+| 是           | `ENABLED`  | `AUTO`     | `ENABLED`  |
+| 是           | 任意       | `ENABLED`  | `ENABLED`  |
+| 是           | 任意       | `DISABLED` | `DISABLED` |
 
 ### 8.2 调用链
 
@@ -266,7 +264,7 @@ Agent Runtime 传入的是实际生效模式，而不是 Agent 数据库原始�
 ```ts
 streamChatCompletion({
   modelConfigId: agent.modelConfigId,
-  thinkingMode: agent.thinkingMode,
+  thinkingMode: agent.thinkingMode
   // messages、tools、temperature、timeout 等
 });
 ```
@@ -276,7 +274,7 @@ Gateway 再次使用 `thinkingSupported` 做安全收口：
 ```ts
 thinkingMode: modelConfig.thinkingSupported
   ? (request.thinkingMode ?? modelConfig.thinkingMode)
-  : ModelThinkingMode.AUTO
+  : ModelThinkingMode.AUTO;
 ```
 
 即使其他调用方错误地传入 `ENABLED`，模型未声明支持时也不会向供应商发送覆盖参数。
@@ -291,18 +289,17 @@ const body = {
   ...(config.thinkingMode === ModelThinkingMode.AUTO
     ? {}
     : {
-        enable_thinking:
-          config.thinkingMode === ModelThinkingMode.ENABLED
+        enable_thinking: config.thinkingMode === ModelThinkingMode.ENABLED
       })
 };
 ```
 
 最终请求行为：
 
-| 实际模式 | 请求体 |
-| --- | --- |
-| `AUTO` | 不包含 `enable_thinking` |
-| `ENABLED` | `enable_thinking: true` |
+| 实际模式   | 请求体                   |
+| ---------- | ------------------------ |
+| `AUTO`     | 不包含 `enable_thinking` |
+| `ENABLED`  | `enable_thinking: true`  |
 | `DISABLED` | `enable_thinking: false` |
 
 `AUTO` 必须省略字段，不能等价发送 `false`，否则会改变已有模型的供应商默认行为。
@@ -362,13 +359,13 @@ type ChatCompletionResponse = {
 
 字段含义：
 
-| 字段 | 含义 |
-| --- | --- |
-| `firstUpstreamEventMs` | Mia 收到供应商首个非结束事件的耗时 |
-| `firstReasoningTokenMs` | 收到首个推理 Token 的耗时 |
-| `firstContentTokenMs` | 收到首个用户可见 Token 的耗时 |
-| `reasoningObserved` | 本次调用是否观察到推理内容 |
-| `reasoningCharacterCount` | 接收到的推理字符总数，不保存正文 |
+| 字段                      | 含义                               |
+| ------------------------- | ---------------------------------- |
+| `firstUpstreamEventMs`    | Mia 收到供应商首个非结束事件的耗时 |
+| `firstReasoningTokenMs`   | 收到首个推理 Token 的耗时          |
+| `firstContentTokenMs`     | 收到首个用户可见 Token 的耗时      |
+| `reasoningObserved`       | 本次调用是否观察到推理内容         |
+| `reasoningCharacterCount` | 接收到的推理字符总数，不保存正文   |
 
 判断方式：
 

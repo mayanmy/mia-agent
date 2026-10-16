@@ -6,16 +6,16 @@
 
 ## 二、页面按钮
 
-| 按钮 | 作用 |
-| --- | --- |
-| 刷新 | 重新加载工具列表 |
-| 新增 HTTP 工具 | 创建 GET/POST API 工具 |
-| 测试 | 输入业务参数 JSON 并真实执行一次 |
-| 编辑 | 修改工具和凭据；编辑时凭据留空可保留旧值 |
-| 删除 | 删除工具；先解除 Agent/Workflow 引用 |
-| 添加参数 | 声明 path/query/header/body 参数 |
-| 添加 Header | 配置固定 HTTP Header |
-| 执行测试 | 调用接口并显示结果或错误 |
+| 按钮           | 作用                                     |
+| -------------- | ---------------------------------------- |
+| 刷新           | 重新加载工具列表                         |
+| 新增 HTTP 工具 | 创建 GET/POST API 工具                   |
+| 测试           | 输入业务参数 JSON 并真实执行一次         |
+| 编辑           | 修改工具和凭据；编辑时凭据留空可保留旧值 |
+| 删除           | 删除工具；先解除 Agent/Workflow 引用     |
+| 添加参数       | 声明 path/query/header/body 参数         |
+| 添加 Header    | 配置固定 HTTP Header                     |
+| 执行测试       | 调用接口并显示结果或错误                 |
 
 ## 三、创建查询假期余额工具
 
@@ -43,8 +43,22 @@ Path：/api/leave-balance/{employeeId}
 
 ```json
 [
-  {"name":"employeeId","targetName":"employeeId","type":"string","location":"path","required":true,"sensitive":false},
-  {"name":"year","targetName":"year","type":"number","location":"query","required":true,"sensitive":false}
+  {
+    "name": "employeeId",
+    "targetName": "employeeId",
+    "type": "string",
+    "location": "path",
+    "required": true,
+    "sensitive": false
+  },
+  {
+    "name": "year",
+    "targetName": "year",
+    "type": "number",
+    "location": "query",
+    "required": true,
+    "sensitive": false
+  }
 ]
 ```
 
@@ -54,7 +68,7 @@ Path：/api/leave-balance/{employeeId}
 2. 输入：
 
    ```json
-   {"employeeId":"E1001","year":2026}
+   { "employeeId": "E1001", "year": 2026 }
    ```
 
 3. 点击“执行测试”，预期显示接口 JSON。

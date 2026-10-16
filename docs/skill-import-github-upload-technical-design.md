@@ -141,14 +141,14 @@ compatibility:
 
 ### 4.2 Front Matter 字段
 
-| 字段 | 必填 | 规则 | 用途 |
-| --- | --- | --- | --- |
-| `name` | 否 | 1–80 字符 | Skill 名称 |
-| `description` | 否 | 最多 500 字符 | Skill 描述 |
-| `version` | 否 | 建议 SemVer | 来源展示和更新比较 |
-| `author` | 否 | 最多 100 字符 | 来源展示 |
-| `tags` | 否 | 最多 20 个字符串 | 后续筛选预留 |
-| `compatibility.minimum_mia_version` | 否 | SemVer | 兼容性警告 |
+| 字段                                | 必填 | 规则             | 用途               |
+| ----------------------------------- | ---- | ---------------- | ------------------ |
+| `name`                              | 否   | 1–80 字符        | Skill 名称         |
+| `description`                       | 否   | 最多 500 字符    | Skill 描述         |
+| `version`                           | 否   | 建议 SemVer      | 来源展示和更新比较 |
+| `author`                            | 否   | 最多 100 字符    | 来源展示           |
+| `tags`                              | 否   | 最多 20 个字符串 | 后续筛选预留       |
+| `compatibility.minimum_mia_version` | 否   | SemVer           | 兼容性警告         |
 
 未知字段可以保存在来源 manifest 中，但不能改变系统行为或权限。
 
@@ -164,13 +164,13 @@ compatibility:
 
 ### 4.4 章节映射
 
-| Markdown 章节 | Mia 字段 |
-| --- | --- |
+| Markdown 章节                                  | Mia 字段          |
+| ---------------------------------------------- | ----------------- |
 | `When to use`、`Usage`、`使用条件`、`适用场景` | `usageConditions` |
-| `Instructions`、`指令`、`执行步骤` | `instructions` |
-| `Input guidance`、`输入要求` | `inputGuidance` |
-| `Output guidance`、`输出要求` | `outputGuidance` |
-| `Limitations`、`限制`、`禁止事项` | `limitations` |
+| `Instructions`、`指令`、`执行步骤`             | `instructions`    |
+| `Input guidance`、`输入要求`                   | `inputGuidance`   |
+| `Output guidance`、`输出要求`                  | `outputGuidance`  |
+| `Limitations`、`限制`、`禁止事项`              | `limitations`     |
 
 解析规则：
 
@@ -367,16 +367,16 @@ backend/src/
 
 ### 7.2 职责
 
-| 文件 | 职责 | 禁止事项 |
-| --- | --- | --- |
-| `skills.controller.ts` | 接收文件/DTO、获取用户、调用 Service | 不解析 Markdown，不访问 GitHub |
-| `skill-import.service.ts` | 编排获取、解析、校验、预览、创建草稿 | 不处理 HTTP Response |
-| `skill-markdown.parser.ts` | 纯函数解析 Front Matter 和章节 | 不访问数据库和网络 |
-| `skill-import.validator.ts` | 校验文件、字段、兼容性和来源 | 不保存数据 |
-| Upload Adapter | 将 Multer 文件转为统一获取结果 | 不解析业务字段 |
-| GitHub Adapter | Skill 查找规则，调用 GitHub Client | 不直接拼 HTTP 请求 |
-| `github.client.ts` | GitHub API、超时、错误映射 | 不理解 Skill，不写业务表 |
-| `skills.service.ts` | Skill 生命周期、Workspace、乐观锁 | 不访问 GitHub |
+| 文件                        | 职责                                 | 禁止事项                       |
+| --------------------------- | ------------------------------------ | ------------------------------ |
+| `skills.controller.ts`      | 接收文件/DTO、获取用户、调用 Service | 不解析 Markdown，不访问 GitHub |
+| `skill-import.service.ts`   | 编排获取、解析、校验、预览、创建草稿 | 不处理 HTTP Response           |
+| `skill-markdown.parser.ts`  | 纯函数解析 Front Matter 和章节       | 不访问数据库和网络             |
+| `skill-import.validator.ts` | 校验文件、字段、兼容性和来源         | 不保存数据                     |
+| Upload Adapter              | 将 Multer 文件转为统一获取结果       | 不解析业务字段                 |
+| GitHub Adapter              | Skill 查找规则，调用 GitHub Client   | 不直接拼 HTTP 请求             |
+| `github.client.ts`          | GitHub API、超时、错误映射           | 不理解 Skill，不写业务表       |
+| `skills.service.ts`         | Skill 生命周期、Workspace、乐观锁    | 不访问 GitHub                  |
 
 依赖方向：
 
@@ -568,12 +568,7 @@ https://github.com/{owner}/{repo}/blob/{ref}/{path}/SKILL.md
 export interface GitHubClient {
   getRepository(owner: string, repo: string): Promise<GitHubRepository>;
   resolveCommit(owner: string, repo: string, ref: string): Promise<string>;
-  getFile(
-    owner: string,
-    repo: string,
-    commitSha: string,
-    path: string
-  ): Promise<GitHubFile>;
+  getFile(owner: string, repo: string, commitSha: string, path: string): Promise<GitHubFile>;
 }
 ```
 
@@ -592,19 +587,19 @@ export interface GitHubClient {
 
 后端使用成熟 YAML 解析库，不自行实现 YAML Parser。Front Matter 最大 16 KB，解析后必须是普通对象，并对允许字段逐项校验。
 
-| 项目 | 第一阶段限制 |
-| --- | ---: |
-| 文件数量 | 1 |
-| 文件大小 | 256 KB |
-| Front Matter | 16 KB |
-| 编码 | UTF-8 |
-| 扩展名 | `.md` |
-| 推荐文件名 | `SKILL.md` |
-| 名称 | 1–80 字符 |
-| 描述 | 最多 500 字符 |
-| 核心指令 | 最多 8,000 字符 |
+| 项目         |        第一阶段限制 |
+| ------------ | ------------------: |
+| 文件数量     |                   1 |
+| 文件大小     |              256 KB |
+| Front Matter |               16 KB |
+| 编码         |               UTF-8 |
+| 扩展名       |               `.md` |
+| 推荐文件名   |          `SKILL.md` |
+| 名称         |           1–80 字符 |
+| 描述         |       最多 500 字符 |
+| 核心指令     |     最多 8,000 字符 |
 | 其他指令字段 | 每项最多 2,000 字符 |
-| GitHub 请求 | 10 秒 |
+| GitHub 请求  |               10 秒 |
 
 当前 `SkillsService` 的核心指令限制为 8,000 字符，第一阶段保持一致。后续提升限制时必须同步修改后端校验、前端 `maxLength`、Agent Prompt 预算和测试。
 
@@ -681,12 +676,12 @@ Skill 页面右上角：
 
 来源标签：
 
-| `sourceType` | 标签 |
-| --- | --- |
-| `manual` | 手动创建 |
-| `mcp_prompt` | MCP Prompt |
-| `skill_md_upload` | SKILL.md |
-| `github_skill` | GitHub |
+| `sourceType`      | 标签       |
+| ----------------- | ---------- |
+| `manual`          | 手动创建   |
+| `mcp_prompt`      | MCP Prompt |
+| `skill_md_upload` | SKILL.md   |
+| `github_skill`    | GitHub     |
 
 ### 14.2 上传交互
 
@@ -750,28 +745,28 @@ frontend/src/features/skills/
 
 ## 16. 错误码
 
-| 错误码 | HTTP | 含义 |
-| --- | ---: | --- |
-| `SKILL_FILE_REQUIRED` | 400 | 未上传文件 |
-| `SKILL_FILE_TOO_LARGE` | 413 | 文件过大 |
-| `SKILL_FILE_TYPE_INVALID` | 400 | 文件类型不支持 |
-| `SKILL_FILE_ENCODING_INVALID` | 422 | 不是有效 UTF-8 |
-| `SKILL_FRONT_MATTER_INVALID` | 422 | YAML 无效 |
-| `SKILL_CONTENT_EMPTY` | 422 | 正文为空 |
-| `SKILL_CONTENT_TOO_LARGE` | 422 | 字段超过限制 |
-| `SKILL_GITHUB_URL_INVALID` | 400 | URL 不支持 |
-| `SKILL_GITHUB_ORG_NOT_ALLOWED` | 403 | owner 不在允许列表 |
-| `SKILL_GITHUB_REPOSITORY_NOT_FOUND` | 404 | 仓库不存在 |
-| `SKILL_GITHUB_REF_NOT_FOUND` | 404 | ref 不存在 |
-| `SKILL_GITHUB_REF_AMBIGUOUS` | 422 | ref/path 有歧义 |
-| `SKILL_GITHUB_FILE_NOT_FOUND` | 404 | 未找到 SKILL.md |
-| `SKILL_GITHUB_UNAUTHORIZED` | 403 | 无权访问仓库 |
-| `SKILL_GITHUB_RATE_LIMITED` | 429 | GitHub 限流 |
-| `SKILL_GITHUB_TIMEOUT` | 504 | GitHub 超时 |
-| `SKILL_GITHUB_UNAVAILABLE` | 502 | GitHub 异常 |
-| `SKILL_SOURCE_CHANGED` | 409 | 预览后来源变化 |
-| `SKILL_SOURCE_DUPLICATED` | 409 | 相同内容已导入 |
-| `SKILL_REVISION_CONFLICT` | 409 | 并发修改冲突 |
+| 错误码                              | HTTP | 含义               |
+| ----------------------------------- | ---: | ------------------ |
+| `SKILL_FILE_REQUIRED`               |  400 | 未上传文件         |
+| `SKILL_FILE_TOO_LARGE`              |  413 | 文件过大           |
+| `SKILL_FILE_TYPE_INVALID`           |  400 | 文件类型不支持     |
+| `SKILL_FILE_ENCODING_INVALID`       |  422 | 不是有效 UTF-8     |
+| `SKILL_FRONT_MATTER_INVALID`        |  422 | YAML 无效          |
+| `SKILL_CONTENT_EMPTY`               |  422 | 正文为空           |
+| `SKILL_CONTENT_TOO_LARGE`           |  422 | 字段超过限制       |
+| `SKILL_GITHUB_URL_INVALID`          |  400 | URL 不支持         |
+| `SKILL_GITHUB_ORG_NOT_ALLOWED`      |  403 | owner 不在允许列表 |
+| `SKILL_GITHUB_REPOSITORY_NOT_FOUND` |  404 | 仓库不存在         |
+| `SKILL_GITHUB_REF_NOT_FOUND`        |  404 | ref 不存在         |
+| `SKILL_GITHUB_REF_AMBIGUOUS`        |  422 | ref/path 有歧义    |
+| `SKILL_GITHUB_FILE_NOT_FOUND`       |  404 | 未找到 SKILL.md    |
+| `SKILL_GITHUB_UNAUTHORIZED`         |  403 | 无权访问仓库       |
+| `SKILL_GITHUB_RATE_LIMITED`         |  429 | GitHub 限流        |
+| `SKILL_GITHUB_TIMEOUT`              |  504 | GitHub 超时        |
+| `SKILL_GITHUB_UNAVAILABLE`          |  502 | GitHub 异常        |
+| `SKILL_SOURCE_CHANGED`              |  409 | 预览后来源变化     |
+| `SKILL_SOURCE_DUPLICATED`           |  409 | 相同内容已导入     |
+| `SKILL_REVISION_CONFLICT`           |  409 | 并发修改冲突       |
 
 错误继续使用 `core/errors` 统一结构。
 

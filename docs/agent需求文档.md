@@ -2,6 +2,7 @@ Agent 页面现在有基础 CRUD 和模型选择，但离“能真正创建可�
 必须补
 默认模型接入：新增 Agent 时自动带出默认 Chat 模型，减少每次手选。
 真实对话入口：Agent 保存后应该能“测试对话”或进入 Chat 页面，否则 Agent 只是配置。
+
 # Agent 早期需求记录
 
 > 历史状态：本文记录 Agent 初期缺口，不再代表当前实现。当前 Agent 已接入真实 Builtin/HTTP/MCP 工具目录、知识库、Workflow、发布与 Runtime；新需求请以 `agent-requirements.md` 和当前技术方案为准。

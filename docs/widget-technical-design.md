@@ -115,18 +115,18 @@ frontend/src/features/agents/AgentsPage.tsx
 
 ## Script 参数
 
-| 参数                     | 必填        | 默认值                  | 说明                                                            |
-| ------------------------ | ----------- | ----------------------- | --------------------------------------------------------------- |
-| `src`                    | 是          | 无                      | Widget 脚本地址，通常是 Mia 前端服务下的 `/mia-agent-widget.js` |
-| `data-agent-token`       | 是          | 无                      | Agent 发布后生成的 share token                                  |
-| `data-user-id`           | 登录系统必填 | 无                      | 宿主当前用户的稳定非敏感 ID；用于按用户隔离会话和本地缓存          |
-| `data-api-base`          | 否          | script 所在 origin      | API 请求基地址                                                  |
-| `data-agent-name`        | 否          | 后端 Agent 名称或 `Mia` | Agent 初始显示名称                                              |
-| `data-mode`              | 否          | `floating`              | `floating` 或 `inline`                                          |
-| `data-container`         | inline 必填 | 无                      | inline 模式的挂载容器选择器                                     |
-| `data-launcher-icon`     | 否          | `M`                     | 浮窗入口文字或 emoji                                            |
-| `data-launcher-icon-url` | 否          | 无                      | 浮窗入口图片 URL，优先级高于 `data-launcher-icon`               |
-| `data-launcher-size`     | 否          | `56`                    | 浮窗入口尺寸，范围限制为 40-96                                  |
+| 参数                     | 必填         | 默认值                  | 说明                                                            |
+| ------------------------ | ------------ | ----------------------- | --------------------------------------------------------------- |
+| `src`                    | 是           | 无                      | Widget 脚本地址，通常是 Mia 前端服务下的 `/mia-agent-widget.js` |
+| `data-agent-token`       | 是           | 无                      | Agent 发布后生成的 share token                                  |
+| `data-user-id`           | 登录系统必填 | 无                      | 宿主当前用户的稳定非敏感 ID；用于按用户隔离会话和本地缓存       |
+| `data-api-base`          | 否           | script 所在 origin      | API 请求基地址                                                  |
+| `data-agent-name`        | 否           | 后端 Agent 名称或 `Mia` | Agent 初始显示名称                                              |
+| `data-mode`              | 否           | `floating`              | `floating` 或 `inline`                                          |
+| `data-container`         | inline 必填  | 无                      | inline 模式的挂载容器选择器                                     |
+| `data-launcher-icon`     | 否           | `M`                     | 浮窗入口文字或 emoji                                            |
+| `data-launcher-icon-url` | 否           | 无                      | 浮窗入口图片 URL，优先级高于 `data-launcher-icon`               |
+| `data-launcher-size`     | 否           | `56`                    | 浮窗入口尺寸，范围限制为 40-96                                  |
 
 ## 运行机制
 

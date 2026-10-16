@@ -34,10 +34,10 @@
 
 ### 2.1 会话模式
 
-| Agent 配置 | 行为 |
-| --- | --- |
-| `EPHEMERAL` | 前端内存会话；关闭、刷新、切换 Agent 后丢弃；不创建任何 `chat_sessions` 记录。 |
-| `PERSISTENT` | 用户可创建多条已保存会话；每条会话独立保存消息、摘要和生命周期状态。 |
+| Agent 配置   | 行为                                                                           |
+| ------------ | ------------------------------------------------------------------------------ |
+| `EPHEMERAL`  | 前端内存会话；关闭、刷新、切换 Agent 后丢弃；不创建任何 `chat_sessions` 记录。 |
+| `PERSISTENT` | 用户可创建多条已保存会话；每条会话独立保存消息、摘要和生命周期状态。           |
 
 ### 2.2 消息分页采用 Cursor，而非 Offset
 
@@ -173,16 +173,16 @@ CREATE INDEX "idx_chat_session_messages_cursor"
 
 所有接口位于 `/api/v1/chat`，均要求登录。Controller 只获取 `CurrentUser` 并调用 `ChatService`；会话归属校验集中在 Service 内部。
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| `GET` | `/sessions?agentId=...&status=ACTIVE&cursor=...&pageSize=20` | 获取当前用户在 Agent 下的会话列表。 |
-| `POST` | `/sessions` | 新建空会话，返回会话详情。 |
-| `GET` | `/sessions/:sessionId/messages?before=...&pageSize=50` | 获取一页历史消息。 |
-| `PATCH` | `/sessions/:sessionId` | 修改标题。 |
-| `POST` | `/sessions/:sessionId/archive` | 归档会话。 |
-| `POST` | `/sessions/:sessionId/restore` | 恢复已归档会话。 |
-| `DELETE` | `/sessions/:sessionId` | 软删除或彻底删除，v1 推荐先做软删除。 |
-| `POST` | `/stream` | 现有 SSE 接口；`sessionId` 改为保留型 Agent 的必填字段。 |
+| 方法     | 路径                                                         | 说明                                                     |
+| -------- | ------------------------------------------------------------ | -------------------------------------------------------- |
+| `GET`    | `/sessions?agentId=...&status=ACTIVE&cursor=...&pageSize=20` | 获取当前用户在 Agent 下的会话列表。                      |
+| `POST`   | `/sessions`                                                  | 新建空会话，返回会话详情。                               |
+| `GET`    | `/sessions/:sessionId/messages?before=...&pageSize=50`       | 获取一页历史消息。                                       |
+| `PATCH`  | `/sessions/:sessionId`                                       | 修改标题。                                               |
+| `POST`   | `/sessions/:sessionId/archive`                               | 归档会话。                                               |
+| `POST`   | `/sessions/:sessionId/restore`                               | 恢复已归档会话。                                         |
+| `DELETE` | `/sessions/:sessionId`                                       | 软删除或彻底删除，v1 推荐先做软删除。                    |
+| `POST`   | `/stream`                                                    | 现有 SSE 接口；`sessionId` 改为保留型 Agent 的必填字段。 |
 
 ### 4.1 DTO 摘要
 
@@ -215,7 +215,7 @@ type ChatMessagePage = {
 Cursor 推荐编码为 URL-safe Base64 JSON：
 
 ```json
-{"createdAt":"2026-07-21T10:30:00.000Z","id":"uuid"}
+{ "createdAt": "2026-07-21T10:30:00.000Z", "id": "uuid" }
 ```
 
 服务端必须严格解析、校验字段类型和时间格式；解析失败返回 `400`，不能将 cursor 当作 SQL 字符串拼接。

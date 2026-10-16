@@ -136,12 +136,12 @@ backend/src/modules/
 
 ## 5. 版本路线总览
 
-| 版本 | 产品目标 | 核心交付 |
-| --- | --- | --- |
-| V1 | Agent 稳定投入内部使用 | Runtime、Run Trace、模型韧性、Knowledge 任务化、Tool 安全 |
-| V2 | Agent 安全连接企业系统 | HTTP MCP、工具发现、统一工具网关、Skills |
-| V3 | Agent 可持续优化和发布 | Agent 版本、评测、反馈、调试器 |
-| V4 | Agent 承担持续和复杂任务 | Memory、异步任务、受控 Subagents、声明式 Hooks |
+| 版本 | 产品目标                 | 核心交付                                                  |
+| ---- | ------------------------ | --------------------------------------------------------- |
+| V1   | Agent 稳定投入内部使用   | Runtime、Run Trace、模型韧性、Knowledge 任务化、Tool 安全 |
+| V2   | Agent 安全连接企业系统   | HTTP MCP、工具发现、统一工具网关、Skills                  |
+| V3   | Agent 可持续优化和发布   | Agent 版本、评测、反馈、调试器                            |
+| V4   | Agent 承担持续和复杂任务 | Memory、异步任务、受控 Subagents、声明式 Hooks            |
 
 ## 6. V1：稳定可用的 Agent 工作台
 
@@ -798,16 +798,16 @@ mcp_server_id
 
 ## 13. 关键风险和控制措施
 
-| 风险 | 控制措施 |
-| --- | --- |
-| `chat.service` 持续膨胀 | 优先抽出 Agent Runtime，Chat 只保留会话和 SSE |
-| MCP 获得过高系统权限 | HTTP 优先、管理员配置、工具白名单、网络策略、Secret 隔离 |
+| 风险                        | 控制措施                                                   |
+| --------------------------- | ---------------------------------------------------------- |
+| `chat.service` 持续膨胀     | 优先抽出 Agent Runtime，Chat 只保留会话和 SSE              |
+| MCP 获得过高系统权限        | HTTP 优先、管理员配置、工具白名单、网络策略、Secret 隔离   |
 | Skills 互相冲突或撑爆上下文 | 固定 Prompt 优先级、数量限制、Token 预算、最终 Prompt 预览 |
-| Run 日志保存敏感内容 | Preview 截断、字段脱敏、受限权限和保留周期 |
-| Tool/MCP 循环失控 | 最大轮数、调用数、并发、总时长和总输出限制 |
-| Knowledge 任务阻塞 API | PostgreSQL 任务表、后台 Worker、重试和恢复 |
-| Agent 配置更新导致线上漂移 | 不可变 AgentVersion 和显式发布 |
-| Subagent 成本和权限扩散 | 深度 1、固定关系、权限不提升、父 Run 总预算 |
+| Run 日志保存敏感内容        | Preview 截断、字段脱敏、受限权限和保留周期                 |
+| Tool/MCP 循环失控           | 最大轮数、调用数、并发、总时长和总输出限制                 |
+| Knowledge 任务阻塞 API      | PostgreSQL 任务表、后台 Worker、重试和恢复                 |
+| Agent 配置更新导致线上漂移  | 不可变 AgentVersion 和显式发布                             |
+| Subagent 成本和权限扩散     | 深度 1、固定关系、权限不提升、父 Run 总预算                |
 
 ## 14. 结论
 

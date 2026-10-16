@@ -11,19 +11,19 @@ MCP 页面连接可信的 Streamable HTTP MCP Server，发现其工具、资源�
 
 ## 三、页面按钮
 
-| 按钮/图标 | 作用 |
-| --- | --- |
-| 刷新 | 更新 Server 列表 |
-| 新增 Server | 打开 MCP Server 表单 |
+| 按钮/图标           | 作用                           |
+| ------------------- | ------------------------------ |
+| 刷新                | 更新 Server 列表               |
+| 新增 Server         | 打开 MCP Server 表单           |
 | OAuth 授权/重新授权 | 完成 Authorization Code + PKCE |
-| 撤销 OAuth 授权 | 让既有授权立即失效 |
-| 测试连接 | 检查 Endpoint、鉴权和协议握手 |
-| 同步工具 | 重新发现远程工具目录 |
-| 工具目录 | 查看并启停单个远程工具 |
-| 资源目录 | 查看 MCP Resources |
-| Prompt 目录 | 查看 MCP Prompts |
-| 编辑 | 修改连接、安全策略和限额 |
-| 删除 | 删除 Server 与本地目录快照 |
+| 撤销 OAuth 授权     | 让既有授权立即失效             |
+| 测试连接            | 检查 Endpoint、鉴权和协议握手  |
+| 同步工具            | 重新发现远程工具目录           |
+| 工具目录            | 查看并启停单个远程工具         |
+| 资源目录            | 查看 MCP Resources             |
+| Prompt 目录         | 查看 MCP Prompts               |
+| 编辑                | 修改连接、安全策略和限额       |
+| 删除                | 删除 Server 与本地目录快照     |
 
 ## 四、创建一个 MCP Server
 
