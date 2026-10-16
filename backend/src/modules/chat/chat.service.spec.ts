@@ -928,7 +928,7 @@ export const tests = [
     }
   },
   {
-    name: "ChatService injects retrieved knowledge into the system prompt",
+    name: "ChatService injects retrieved knowledge as independently budgeted messages",
     run: async () => {
       const modelRequests: ChatCompletionRequest[] = [];
       const agentsService = {
@@ -1025,10 +1025,11 @@ export const tests = [
       assert.equal(events[3].data.content, "基于知识库回答。");
       assert.equal(modelRequests.length, 1);
       assert.equal(modelRequests[0].messages[0].role, "system");
-      const systemContent = modelRequests[0].messages[0].content;
-      assert.ok(typeof systemContent === "string");
-      assert.ok(systemContent.includes("知识库检索结果"));
-      assert.ok(systemContent.includes("Mia 支持知识库检索。"));
+      const systemContents = modelRequests[0].messages
+        .filter((message) => message.role === "system")
+        .map((message) => String(message.content));
+      assert.ok(systemContents.some((content) => content.includes("随后的知识库来源")));
+      assert.ok(systemContents.some((content) => content.includes("Mia 支持知识库检索。")));
     }
   },
   {

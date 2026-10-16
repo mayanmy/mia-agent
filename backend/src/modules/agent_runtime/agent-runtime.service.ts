@@ -29,6 +29,11 @@ import { AgentRuntimeEvent } from "./dto/runtime-event.dto";
 import { AgentPromptBuilder } from "./prompt-builder";
 import { SkillPromptRenderer } from "./skill-renderer";
 import { MAX_MODEL_HISTORY_BYTES, sanitizeHistory } from "./history-policy";
+import {
+  buildBudgetedModelContext,
+  rebudgetModelMessages,
+  resolveOutputReserveTokens
+} from "./context-budget";
 
 const MAX_TOOL_ROUNDS = 3;
 const DEFAULT_TIMEZONE = "Asia/Shanghai";
@@ -285,20 +290,22 @@ export class AgentRuntimeService {
         promptHash: renderedSkills.promptHash
       });
 
-      const messages: ChatMessage[] = [
-        {
-          role: "system",
-          content: this.requirePromptBuilder().buildSystemPrompt({
+      const systemPrompt = this.requirePromptBuilder().buildSystemPrompt({
             systemPrompt: agent.systemPrompt,
             query: request.message.text,
             skillPrompt: renderedSkills.prompt,
             tools: llmTools,
             retrievalContext
-          })
-        },
-        ...historyResult.messages,
-        this.buildUserMessage(request.message)
-      ];
+          });
+      const baseContext = buildBudgetedModelContext({
+        systemPrompt,
+        history: historyResult.messages,
+        retrievalContext,
+        currentMessage: this.buildUserMessage(request.message),
+        outputReserveTokens: agent.maxTokens
+      });
+      const messages: ChatMessage[] = baseContext.messages;
+      const effectiveMaxTokens = resolveOutputReserveTokens(agent.maxTokens);
       const collectedContentParts: AgentContentPart[] = [];
       const promptRuleCall = this.inferPromptRuleToolCall(
         request.message.text,
@@ -337,13 +344,16 @@ export class AgentRuntimeService {
         });
 
         try {
+          const budgetedMessages = rebudgetModelMessages(messages, {
+            outputReserveTokens: agent.maxTokens
+          }).messages;
           for await (const chunk of this.requireModelProvidersService().streamChatCompletion({
             modelConfigId: selectedModelConfigId,
-            messages,
+            messages: budgetedMessages,
             tools: llmTools,
             toolChoice: llmTools.length > 0 ? "auto" : undefined,
             temperature: agent.temperature,
-            maxTokens: agent.maxTokens,
+            maxTokens: effectiveMaxTokens,
             timeoutSeconds: agent.timeoutSeconds,
             thinkingMode: agent.thinkingMode,
             signal: request.signal

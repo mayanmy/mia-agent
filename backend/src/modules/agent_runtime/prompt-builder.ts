@@ -58,13 +58,7 @@ export class AgentPromptBuilder {
     }
 
     if (request.retrievalContext && request.retrievalContext.sources.length > 0) {
-      // 检索正文只进入模型上下文，不写入用户消息，避免污染会话原始输入。
-      sections.push(
-        "",
-        "知识库检索结果：",
-        this.formatRetrievalContext(request.retrievalContext),
-        "回答时优先基于知识库检索结果；如果资料不足，明确说明缺少依据。"
-      );
+      sections.push("", "回答时优先使用随后的知识库来源；如果资料不足，明确说明缺少依据。");
     }
 
     return sections.join("\n");
@@ -78,18 +72,6 @@ export class AgentPromptBuilder {
   /** 判断原始 Prompt 是否已经声明 query，避免带空格的占位符导致问题重复注入。 */
   private hasQueryPlaceholder(prompt: string): boolean {
     return /\{\{\s*query\s*\}\}/iu.test(prompt);
-  }
-
-  /** 使用稳定、可读的引用格式把检索片段写入模型上下文。 */
-  private formatRetrievalContext(context: RetrievalContext): string {
-    return context.sources
-      .map((source, index) =>
-        [
-          `[${index + 1}] ${source.documentName} #${source.chunkIndex} score=${source.score.toFixed(4)}`,
-          source.content
-        ].join("\n")
-      )
-      .join("\n\n");
   }
 
   /**

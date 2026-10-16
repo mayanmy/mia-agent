@@ -7,6 +7,7 @@ import { tests as agentRunTests } from "../modules/agent_runs/agent-runs.service
 import { tests as agentPromptBuilderTests } from "../modules/agent_runtime/prompt-builder.spec";
 import { tests as skillRendererTests } from "../modules/agent_runtime/skill-renderer.spec";
 import { tests as historyPolicyTests } from "../modules/agent_runtime/history-policy.spec";
+import { tests as contextBudgetTests } from "../modules/agent_runtime/context-budget.spec";
 import { tests as agentRuntimeTests } from "../modules/agent_runtime/agent-runtime.service.spec";
 import { tests as authTests } from "../modules/auth/auth.service.spec";
 import { tests as chatTests } from "../modules/chat/chat.service.spec";
@@ -63,6 +64,7 @@ const tests: TestCase[] = [
   ...agentPromptBuilderTests,
   ...skillRendererTests,
   ...historyPolicyTests,
+  ...contextBudgetTests,
   ...agentRuntimeTests,
   ...agentTests,
   ...workflowExpressionTests,
