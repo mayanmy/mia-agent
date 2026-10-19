@@ -988,7 +988,7 @@ model ChatSessionMessage {
   sessionId String                 @map("session_id") @db.Uuid
   role      ChatSessionMessageRole
   content   String                 @db.Text
-  contentParts Json?               @map("content_parts") @db.JsonB
+  contentParts Json?                  @map("content_parts") @db.JsonB
   metadata  Json?                  @db.JsonB
   createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
   session   ChatSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -1000,19 +1000,75 @@ model ChatSessionMessage {
 
 /// 成员对一条已持久化 Assistant 消息的质量反馈；归属通过消息所属会话再次校验。
 model ChatMessageFeedback {
-  id        String                    @id @default(uuid()) @db.Uuid
-  messageId String                    @map("message_id") @db.Uuid
-  userId    String                    @map("user_id") @db.Uuid
-  rating    ChatMessageFeedbackRating
-  reason    String?                   @db.Text
-  createdAt DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  message   ChatSessionMessage        @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String                    @id @default(uuid()) @db.Uuid
+  messageId       String                    @map("message_id") @db.Uuid
+  userId          String                    @map("user_id") @db.Uuid
+  rating          ChatMessageFeedbackRating
+  reason          String?                   @db.Text
+  reasonCodes     String[]                  @default([]) @map("reason_codes")
+  comment         String?                   @db.Text
+  correctedAnswer String?                   @map("corrected_answer") @db.Text
+  createdAt       DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  message         ChatSessionMessage        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user            User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId], map: "uq_chat_message_feedback_message_user")
   @@index([rating, createdAt(sort: Desc)], map: "idx_chat_message_feedback_rating_created_at")
   @@map("chat_message_feedbacks")
+}
+
+/// 一次在线 RAG 回答的受控快照。该表归 logs 模块，快照不得包含 Provider 密钥。
+model RagTrace {
+  id                      String   @id @default(uuid()) @db.Uuid
+  workspaceId             String   @map("workspace_id") @db.Uuid
+  requestId               String   @map("request_id")
+  sessionId               String?  @map("session_id") @db.Uuid
+  messageId               String?  @map("message_id") @db.Uuid
+  userId                  String?  @map("user_id") @db.Uuid
+  agentId                 String   @map("agent_id") @db.Uuid
+  agentConfigSnapshot     Json     @map("agent_config_snapshot") @db.JsonB
+  query                   String   @db.Text
+  rewrittenQuery          String?  @map("rewritten_query") @db.Text
+  retrievalConfigSnapshot Json     @map("retrieval_config_snapshot") @db.JsonB
+  candidateChunks         Json     @map("candidate_chunks") @db.JsonB
+  selectedChunks          Json     @map("selected_chunks") @db.JsonB
+  promptVersion           String   @map("prompt_version")
+  modelConfigSnapshot     Json     @map("model_config_snapshot") @db.JsonB
+  answer                  String   @db.Text
+  citations               Json     @db.JsonB
+  retrievalElapsedMs      Int?     @map("retrieval_elapsed_ms")
+  firstTokenElapsedMs     Int?     @map("first_token_elapsed_ms")
+  totalElapsedMs          Int?     @map("total_elapsed_ms")
+  tokenUsage              Json?    @map("token_usage") @db.JsonB
+  status                  String
+  error                   Json?    @db.JsonB
+  expiresAt               DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([requestId], map: "idx_rag_traces_request_id")
+  @@index([messageId], map: "idx_rag_traces_message_id")
+  @@index([agentId, createdAt(sort: Desc)], map: "idx_rag_traces_agent_created_at")
+  @@index([workspaceId, expiresAt], map: "idx_rag_traces_workspace_expires_at")
+  @@map("rag_traces")
+}
+
+/// 跨模块标准化事件，仅保存受控业务字段，不作为业务状态的权威数据源。
+model LogEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  requestId   String?  @map("request_id")
+  eventType   String   @map("event_type")
+  userId      String?  @map("user_id") @db.Uuid
+  agentId     String?  @map("agent_id") @db.Uuid
+  sessionId   String?  @map("session_id") @db.Uuid
+  messageId   String?  @map("message_id") @db.Uuid
+  payload     Json?    @db.JsonB
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([workspaceId, eventType, createdAt(sort: Desc)], map: "idx_log_events_workspace_type_created")
+  @@index([requestId], map: "idx_log_events_request_id")
+  @@map("log_events")
 }
 
 model ToolCallLog {

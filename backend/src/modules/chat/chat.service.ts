@@ -12,6 +12,7 @@ import { ModelProvidersService } from "../model-providers/model-providers.servic
 import { ChatMessage } from "../model-providers/dto/llm.dto";
 import { RetrievalService } from "../retrieval/retrieval.service";
 import { ToolsService } from "../tools/tools.service";
+import { LogsService } from "../logs/logs.service";
 import {
   ChatFileAttachmentDto,
   ChatImageAttachmentDto,
@@ -23,6 +24,7 @@ import {
 } from "./dto/chat.dto";
 import {
   ChatMessageMetadata,
+  ChatFeedbackQueryDto,
   ChatMessageFeedbackDto,
   ChatMessageQueryDto,
   ChatSessionListQueryDto,
@@ -76,7 +78,8 @@ export class ChatService {
     private readonly chatSessionsService?: ChatSessionsService,
     @Optional() private readonly agentRunsService?: AgentRunsService,
     @Optional() private readonly promptBuilder?: AgentPromptBuilder,
-    @Optional() private readonly agentRuntimeService?: AgentRuntimeService
+    @Optional() private readonly agentRuntimeService?: AgentRuntimeService,
+    @Optional() private readonly logsService?: LogsService
   ) {}
 
   /**
@@ -161,6 +164,17 @@ export class ChatService {
       this.requireSessionUserId(context),
       payload
     );
+  }
+
+  async deleteMessageFeedback(messageId: string, context: ChatRequestContext): Promise<void> {
+    return this.requireChatSessionsService().deleteMessageFeedback(
+      messageId,
+      this.requireSessionUserId(context)
+    );
+  }
+
+  async listFeedback(query: ChatFeedbackQueryDto) {
+    return this.requireChatSessionsService().listFeedback(query);
   }
 
   /** 更新会话标题；归属和标题合法性由会话 Service 统一保证。 */
@@ -405,7 +419,106 @@ export class ChatService {
           event.data.messageId = persistedMessageId;
         }
       }
+      if (event.type === "run_completed") {
+        metadata.runId = event.data.runId ?? metadata.runId;
+        metadata.usage = event.data.usage;
+        metadata.elapsedMs = Date.now() - startedAt;
+        await this.saveCompletedRagTrace({
+          requestId,
+          sessionId: sessionId ?? undefined,
+          messageId: event.data.messageId,
+          userId: context?.userId,
+          agent,
+          query: message,
+          answer: event.data.content,
+          metadata,
+          status: "completed"
+        });
+      }
+      if (event.type === "run_failed" || event.type === "run_canceled") {
+        metadata.runId = event.data.runId ?? metadata.runId;
+        metadata.elapsedMs = Date.now() - startedAt;
+        await this.saveCompletedRagTrace({
+          requestId,
+          sessionId: sessionId ?? undefined,
+          userId: context?.userId,
+          agent,
+          query: message,
+          answer: "",
+          metadata,
+          status: event.type === "run_failed" ? "failed" : "canceled",
+          error:
+            event.type === "run_failed" ? { type: event.data.error.type } : { type: "canceled" }
+        });
+      }
       yield event;
+    }
+  }
+
+  /** Trace 是观测数据，任何写入错误都不能破坏已经成功生成的在线回答。 */
+  private async saveCompletedRagTrace(input: {
+    requestId: string;
+    sessionId?: string;
+    messageId?: string;
+    userId?: string;
+    agent: Awaited<ReturnType<AgentsService["getAgentRuntimeConfig"]>>;
+    query: string;
+    answer: string;
+    metadata: ChatMessageMetadata;
+    status: "completed" | "failed" | "canceled";
+    error?: Record<string, unknown>;
+  }): Promise<void> {
+    if (!this.logsService) return;
+    const retrievalEvents = input.metadata.retrievalEvents ?? [];
+    const selectedChunks = retrievalEvents.flatMap((event) => event.sources);
+    try {
+      await this.logsService.createRagTrace({
+        requestId: input.requestId,
+        sessionId: input.sessionId,
+        messageId: input.messageId,
+        userId: input.userId,
+        agentId: input.agent.agentId,
+        agentConfigSnapshot: {
+          id: input.agent.agentId,
+          name: input.agent.name,
+          knowledgeBaseIds: input.agent.knowledgeBaseIds,
+          toolIds: input.agent.toolIds,
+          temperature: input.agent.temperature,
+          maxTokens: input.agent.maxTokens,
+          historyTurns: input.agent.historyTurns,
+          thinkingMode: input.agent.thinkingMode
+        },
+        query: input.query,
+        retrievalConfigSnapshot: {
+          strategy: "hybrid_rrf",
+          knowledgeBaseIds: input.agent.knowledgeBaseIds
+        },
+        // 当前 Retrieval 对外只暴露经融合和阈值筛选后的受控候选；首期候选与入模集合一致。
+        candidateChunks: selectedChunks,
+        selectedChunks,
+        promptVersion: "agent-runtime-v1",
+        modelConfigSnapshot: {
+          modelConfigId: input.metadata.modelConfigId,
+          modelName: input.metadata.modelName,
+          providerName: input.metadata.providerName,
+          providerId: input.agent.providerId,
+          providerType: input.agent.providerType,
+          timeoutSeconds: input.agent.timeoutSeconds
+        },
+        answer: input.answer,
+        citations: selectedChunks,
+        retrievalElapsedMs:
+          retrievalEvents.length > 0
+            ? retrievalEvents.reduce((total, event) => total + (event.elapsedMs ?? 0), 0)
+            : undefined,
+        firstTokenElapsedMs: input.metadata.firstTokenMs,
+        totalElapsedMs: input.metadata.elapsedMs,
+        tokenUsage: input.metadata.usage,
+        status: input.status,
+        error: input.error
+      });
+    } catch {
+      // 日志模块应自行观测数据库错误；Chat 不能因 Trace 失败改写生成终态。
     }
   }
 

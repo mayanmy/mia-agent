@@ -23,6 +23,7 @@ import { ChatService } from "./chat.service";
 import { ChatStreamsService } from "./chat-streams.service";
 import { ChatCompletionDto, ChatCompletionResult } from "./dto/chat.dto";
 import {
+  ChatFeedbackQueryDto,
   ChatMessageQueryDto,
   ChatMessageFeedbackDto,
   ChatSessionListQueryDto,
@@ -96,6 +97,21 @@ export class ChatController {
     @CurrentUser() currentUser: CurrentUserDto
   ) {
     return this.chatService.upsertMessageFeedback(messageId, payload, { userId: currentUser.id });
+  }
+
+  @Delete("messages/:messageId/feedback")
+  async deleteMessageFeedback(
+    @Param("messageId") messageId: string,
+    @CurrentUser() currentUser: CurrentUserDto
+  ): Promise<null> {
+    await this.chatService.deleteMessageFeedback(messageId, { userId: currentUser.id });
+    return null;
+  }
+
+  @Get("feedback")
+  @Roles(UserRole.ADMIN)
+  async listFeedback(@Query() query: ChatFeedbackQueryDto) {
+    return this.chatService.listFeedback(query);
   }
 
   /** 更新会话标题。 */

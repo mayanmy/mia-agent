@@ -61,6 +61,10 @@ export type UpdateChatSessionDto = {
 /** 成员对 Assistant 消息提交的赞踩和可选原因。 */
 export type ChatMessageFeedbackDto = {
   rating?: "UP" | "DOWN";
+  reasonCodes?: string[];
+  comment?: string;
+  correctedAnswer?: string;
+  /** 兼容旧客户端；服务端会映射为 comment。 */
   reason?: string;
 };
 
@@ -69,6 +73,17 @@ export type ChatMessageFeedbackResponse = {
   messageId: string;
   rating: "UP" | "DOWN";
   reason: string | null;
+  reasonCodes: string[];
+  comment: string | null;
+  correctedAnswer: string | null;
+};
+
+export type ChatFeedbackQueryDto = {
+  page?: string;
+  pageSize?: string;
+  rating?: "UP" | "DOWN";
+  agentId?: string;
+  reasonCode?: string;
 };
 
 /** 会话消息向前翻页的查询参数。 */

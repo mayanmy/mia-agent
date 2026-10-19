@@ -4,7 +4,7 @@ import { UserRole, WorkspaceRole } from "@prisma/client";
 import { Roles } from "../../core/auth/roles.decorator";
 import { WorkspaceRoles } from "../../core/auth/workspace.decorator";
 import { PageResult } from "../../core/result";
-import { ToolCallLogListItem, ToolCallLogQueryDto } from "./dto/log.dto";
+import { RagTraceQueryDto, ToolCallLogListItem, ToolCallLogQueryDto } from "./dto/log.dto";
 import { LogsService } from "./logs.service";
 
 @Controller("logs")
@@ -18,5 +18,11 @@ export class LogsController {
     @Query() query: ToolCallLogQueryDto
   ): Promise<PageResult<ToolCallLogListItem>> {
     return this.logsService.listToolCallLogs(query);
+  }
+
+  /** RAG Trace 可能包含用户问题和受控片段，仅空间管理员可查询。 */
+  @Get("rag-traces")
+  async listRagTraces(@Query() query: RagTraceQueryDto) {
+    return this.logsService.listRagTraces(query);
   }
 }

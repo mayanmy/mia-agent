@@ -95,6 +95,9 @@ export type ChatMessageFeedback = {
   messageId: string;
   rating: "UP" | "DOWN";
   reason: string | null;
+  reasonCodes: string[];
+  comment: string | null;
+  correctedAnswer: string | null;
 };
 
 /** 持久消息附带的运行、检索与工具事件快照。 */
@@ -423,12 +426,16 @@ export function deleteChatSession(sessionId: string): Promise<null> {
 export function submitChatMessageFeedback(
   messageId: string,
   rating: "UP" | "DOWN",
-  reason?: string
+  details?: { reasonCodes?: string[]; comment?: string; correctedAnswer?: string }
 ): Promise<ChatMessageFeedback> {
   return request<ChatMessageFeedback>(`/api/v1/chat/messages/${messageId}/feedback`, {
     method: "PUT",
-    body: JSON.stringify({ rating, reason })
+    body: JSON.stringify({ rating, ...details })
   });
+}
+
+export function deleteChatMessageFeedback(messageId: string): Promise<null> {
+  return request<null>(`/api/v1/chat/messages/${messageId}/feedback`, { method: "DELETE" });
 }
 
 /** 发起非流式对话，主要供无需逐 token 展示的调用方使用。 */

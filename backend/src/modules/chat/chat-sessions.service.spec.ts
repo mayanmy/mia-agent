@@ -137,7 +137,13 @@ export const tests = [
         chatMessageFeedback: {
           upsert: async (query: Record<string, unknown>) => {
             upsertQuery = query;
-            return { rating: "DOWN", reason: "引用不准确" };
+            return {
+              rating: "DOWN",
+              reason: "引用不准确",
+              reasonCodes: ["other"],
+              comment: "引用不准确",
+              correctedAnswer: null
+            };
           }
         }
       };
@@ -151,11 +157,15 @@ export const tests = [
       assert.deepEqual(feedback, {
         messageId: "assistant-message",
         rating: "DOWN",
-        reason: "引用不准确"
+        reason: "引用不准确",
+        reasonCodes: ["other"],
+        comment: "引用不准确",
+        correctedAnswer: null
       });
       assert.deepEqual(upsertQuery?.where, {
         messageId_userId: { messageId: "assistant-message", userId: "user-id" }
       });
+      assert.deepEqual((upsertQuery?.create as Record<string, unknown>).reasonCodes, ["other"]);
     }
   },
   {

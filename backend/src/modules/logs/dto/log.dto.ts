@@ -1,4 +1,51 @@
 import type { ToolCallLogStatus } from "../../tools/dto/tool.dto";
+import type { PageQuery } from "../../../core/pagination";
+
+export type RagTraceStatus = "completed" | "failed" | "canceled";
+
+/** Chat 模块提交给日志模块的完整、安全 RAG 快照。 */
+export type CreateRagTraceDto = {
+  requestId: string;
+  sessionId?: string;
+  messageId?: string;
+  userId?: string;
+  agentId: string;
+  agentConfigSnapshot: Record<string, unknown>;
+  query: string;
+  rewrittenQuery?: string;
+  retrievalConfigSnapshot: Record<string, unknown>;
+  candidateChunks: Array<Record<string, unknown>>;
+  selectedChunks: Array<Record<string, unknown>>;
+  promptVersion: string;
+  modelConfigSnapshot: Record<string, unknown>;
+  answer: string;
+  citations: Array<Record<string, unknown>>;
+  retrievalElapsedMs?: number;
+  firstTokenElapsedMs?: number;
+  totalElapsedMs?: number;
+  tokenUsage?: Record<string, unknown>;
+  status: RagTraceStatus;
+  error?: Record<string, unknown>;
+};
+
+export type RagTraceQueryDto = PageQuery & {
+  requestId?: string;
+  messageId?: string;
+  agentId?: string;
+  status?: RagTraceStatus;
+  createdFrom?: string;
+  createdTo?: string;
+};
+
+export type LogEventDto = {
+  requestId?: string;
+  eventType: string;
+  userId?: string;
+  agentId?: string;
+  sessionId?: string;
+  messageId?: string;
+  payload?: Record<string, unknown>;
+};
 
 /** 工具调用日志列表的分页、归属和时间范围筛选。 */
 export type ToolCallLogQueryDto = {

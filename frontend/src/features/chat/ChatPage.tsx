@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { App as AntdApp, Input } from "antd";
+import { App as AntdApp, Checkbox, Input, Space } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
 import { AgentRunDetailDrawer } from "../agent-runs/components/AgentRunDetailDrawer";
@@ -31,6 +31,18 @@ import { buildTransportHistory } from "./history";
 import type { ChatUiMessage } from "./types";
 import { createMessageId, isLikelyVisionModel } from "./utils";
 import "./chat.less";
+
+const FEEDBACK_REASON_OPTIONS = [
+  { label: "答案错误", value: "wrong_answer" },
+  { label: "信息不完整", value: "missing_information" },
+  { label: "检索内容不对", value: "wrong_retrieval" },
+  { label: "引用不准确", value: "wrong_citation" },
+  { label: "内容已过时", value: "outdated_content" },
+  { label: "未遵循要求", value: "not_following_instruction" },
+  { label: "过于冗长", value: "too_verbose" },
+  { label: "过于简略", value: "too_brief" },
+  { label: "其他", value: "other" }
+];
 
 /** Chat 路由页，负责编排 Agent、会话、附件与 SSE 状态。 */
 export function ChatPage() {
@@ -804,24 +816,56 @@ export function ChatPage() {
       return;
     }
     if (rating === "DOWN") {
-      let reason = item.feedback?.rating === "DOWN" ? item.feedback.reason || "" : "";
+      let reasonCodes = item.feedback?.rating === "DOWN" ? item.feedback.reasonCodes : [];
+      let comment = item.feedback?.rating === "DOWN" ? item.feedback.comment || "" : "";
+      let correctedAnswer =
+        item.feedback?.rating === "DOWN" ? item.feedback.correctedAnswer || "" : "";
       modal.confirm({
         title: "这条回答哪里需要改进？",
         content: (
-          <Input.TextArea
-            defaultValue={reason}
-            maxLength={500}
-            placeholder="可选：例如引用不准确、没有回答问题、工具调用错误"
-            rows={4}
-            showCount
-            onChange={(event) => {
-              reason = event.target.value;
-            }}
-          />
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Checkbox.Group
+              defaultValue={reasonCodes}
+              options={FEEDBACK_REASON_OPTIONS}
+              onChange={(values) => {
+                reasonCodes = values as string[];
+              }}
+            />
+            <Input.TextArea
+              defaultValue={comment}
+              maxLength={1000}
+              placeholder="补充说明（可选）"
+              rows={3}
+              showCount
+              onChange={(event) => {
+                comment = event.target.value;
+              }}
+            />
+            <Input.TextArea
+              defaultValue={correctedAnswer}
+              maxLength={10000}
+              placeholder="你期望的正确答案（可选）"
+              rows={3}
+              showCount
+              onChange={(event) => {
+                correctedAnswer = event.target.value;
+              }}
+            />
+          </Space>
         ),
         okText: "提交反馈",
         cancelText: "取消",
-        onOk: () => submitMessageFeedback(item.id, item.persistedMessageId!, rating, reason)
+        onOk: () => {
+          if (reasonCodes.length === 0) {
+            messageApi.warning("请至少选择一个改进原因");
+            return Promise.reject(new Error("reason required"));
+          }
+          return submitMessageFeedback(item.id, item.persistedMessageId!, rating, {
+            reasonCodes,
+            comment,
+            correctedAnswer
+          });
+        }
       });
       return;
     }
@@ -833,10 +877,10 @@ export function ChatPage() {
     messageId: string,
     persistedMessageId: string,
     rating: "UP" | "DOWN",
-    reason?: string
+    details?: { reasonCodes?: string[]; comment?: string; correctedAnswer?: string }
   ) {
     try {
-      const feedback = await submitChatMessageFeedback(persistedMessageId, rating, reason);
+      const feedback = await submitChatMessageFeedback(persistedMessageId, rating, details);
       setMessages((current) =>
         current.map((message) => (message.id === messageId ? { ...message, feedback } : message))
       );

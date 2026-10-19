@@ -10,11 +10,14 @@ import { AppError, ErrorCodes } from "../../core/errors";
 import { AgentContentPart, textContentParts } from "../agent_runtime/dto/content-part.dto";
 import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { PrismaService } from "../prisma/prisma.service";
+import { LogsService } from "../logs/logs.service";
+import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { StorageService } from "../storage/storage.service";
 import {
   ChatMessageQueryDto,
   ChatMessageMetadata,
   ChatMessageFeedbackDto,
+  ChatFeedbackQueryDto,
   ChatMessageFeedbackResponse,
   ChatSessionListItem,
   ChatSessionListQueryDto,
@@ -83,7 +86,8 @@ type SessionListRecord = {
 export class ChatSessionsService {
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() private readonly storage?: StorageService
+    @Optional() private readonly storage?: StorageService,
+    @Optional() private readonly logs?: LogsService
   ) {}
 
   /**
@@ -194,7 +198,10 @@ export class ChatSessionsService {
           ? {
               messageId: item.id,
               rating: item.feedbacks[0].rating,
-              reason: item.feedbacks[0].reason
+              reason: item.feedbacks[0].reason,
+              reasonCodes: item.feedbacks[0].reasonCodes,
+              comment: item.feedbacks[0].comment,
+              correctedAnswer: item.feedbacks[0].correctedAnswer
             }
           : null,
         createdAt: item.createdAt
@@ -382,23 +389,42 @@ export class ChatSessionsService {
     payload: ChatMessageFeedbackDto
   ): Promise<ChatMessageFeedbackResponse> {
     const rating = payload.rating;
-    const reason = payload.reason?.trim() || null;
+    const comment = payload.comment?.trim() || payload.reason?.trim() || null;
+    const correctedAnswer = payload.correctedAnswer?.trim() || null;
+    const reasonCodes = this.normalizeFeedbackReasonCodes(payload.reasonCodes);
+    if (rating === "DOWN" && reasonCodes.length === 0 && comment) reasonCodes.push("other");
     if (rating !== "UP" && rating !== "DOWN") {
       throw new AppError(ErrorCodes.common.badRequest, "feedback rating must be UP or DOWN");
     }
-    if (reason && reason.length > 500) {
+    if (comment && comment.length > 1000) {
       throw new AppError(
         ErrorCodes.common.badRequest,
-        "feedback reason cannot exceed 500 characters"
+        "feedback comment cannot exceed 1000 characters"
+      );
+    }
+    if (correctedAnswer && correctedAnswer.length > 10000) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "corrected answer cannot exceed 10000 characters"
+      );
+    }
+    if (rating === "DOWN" && reasonCodes.length === 0) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "down feedback requires at least one reason code"
       );
     }
     const message = await this.prisma.chatSessionMessage.findFirst({
       where: {
         id: messageId,
         role: ChatSessionMessageRole.ASSISTANT,
-        session: { userId }
+        session: { userId, workspaceId: requireWorkspaceId() }
       },
-      select: { id: true }
+      select: {
+        id: true,
+        metadata: true,
+        session: { select: { id: true, agentId: true, workspaceId: true } }
+      }
     });
     if (!message) {
       throw new AppError(
@@ -409,10 +435,152 @@ export class ChatSessionsService {
     }
     const feedback = await this.prisma.chatMessageFeedback.upsert({
       where: { messageId_userId: { messageId, userId } },
-      create: { messageId, userId, rating: rating as ChatMessageFeedbackRating, reason },
-      update: { rating: rating as ChatMessageFeedbackRating, reason }
+      create: {
+        messageId,
+        userId,
+        rating: rating as ChatMessageFeedbackRating,
+        reason: comment,
+        reasonCodes,
+        comment,
+        correctedAnswer
+      },
+      update: {
+        rating: rating as ChatMessageFeedbackRating,
+        reason: comment,
+        reasonCodes,
+        comment,
+        correctedAnswer
+      }
     });
-    return { messageId, rating: feedback.rating, reason: feedback.reason };
+    void this.recordFeedbackEvent(message, userId, feedback);
+    return this.toFeedbackResponse(messageId, feedback);
+  }
+
+  async deleteMessageFeedback(messageId: string, userId: string): Promise<void> {
+    const feedback = await this.prisma.chatMessageFeedback.findFirst({
+      where: {
+        messageId,
+        userId,
+        message: {
+          role: ChatSessionMessageRole.ASSISTANT,
+          session: { userId, workspaceId: requireWorkspaceId() }
+        }
+      },
+      select: { id: true }
+    });
+    if (!feedback) {
+      throw new AppError(
+        ErrorCodes.common.notFound,
+        "chat message feedback not found",
+        HttpStatus.NOT_FOUND
+      );
+    }
+    await this.prisma.chatMessageFeedback.delete({ where: { id: feedback.id } });
+  }
+
+  /** 反馈业务表归 chat 模块管理，管理员查询也不绕过本模块 Service。 */
+  async listFeedback(query: ChatFeedbackQueryDto) {
+    const page = normalizePageQuery(query);
+    const where: Prisma.ChatMessageFeedbackWhereInput = {
+      message: {
+        session: {
+          workspaceId: requireWorkspaceId(),
+          ...(query.agentId ? { agentId: query.agentId } : {})
+        }
+      },
+      ...(query.rating ? { rating: query.rating } : {}),
+      ...(query.reasonCode?.trim() ? { reasonCodes: { has: query.reasonCode.trim() } } : {})
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.chatMessageFeedback.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: page.skip,
+        take: page.take,
+        include: {
+          user: { select: { id: true, email: true, displayName: true } },
+          message: {
+            select: {
+              id: true,
+              content: true,
+              metadata: true,
+              session: { select: { id: true, agentId: true } }
+            }
+          }
+        }
+      }),
+      this.prisma.chatMessageFeedback.count({ where })
+    ]);
+    return createPageResult(rows, total, page.page, page.pageSize);
+  }
+
+  private normalizeFeedbackReasonCodes(value: unknown): string[] {
+    const allowed = new Set([
+      "wrong_answer",
+      "missing_information",
+      "wrong_retrieval",
+      "wrong_citation",
+      "outdated_content",
+      "not_following_instruction",
+      "too_verbose",
+      "too_brief",
+      "other"
+    ]);
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) {
+      throw new AppError(ErrorCodes.common.badRequest, "reasonCodes must be an array");
+    }
+    const codes = [...new Set(value)];
+    if (codes.some((code) => typeof code !== "string" || !allowed.has(code))) {
+      throw new AppError(ErrorCodes.common.badRequest, "feedback reason code is invalid");
+    }
+    return codes as string[];
+  }
+
+  private toFeedbackResponse(
+    messageId: string,
+    feedback: {
+      rating: ChatMessageFeedbackRating;
+      reason: string | null;
+      reasonCodes: string[];
+      comment: string | null;
+      correctedAnswer: string | null;
+    }
+  ): ChatMessageFeedbackResponse {
+    return {
+      messageId,
+      rating: feedback.rating,
+      reason: feedback.reason,
+      reasonCodes: feedback.reasonCodes ?? [],
+      comment: feedback.comment ?? feedback.reason,
+      correctedAnswer: feedback.correctedAnswer ?? null
+    };
+  }
+
+  private async recordFeedbackEvent(
+    message: {
+      id: string;
+      metadata: Prisma.JsonValue | null;
+      session: { id: string; agentId: string };
+    },
+    userId: string,
+    feedback: { rating: ChatMessageFeedbackRating; reasonCodes: string[] }
+  ): Promise<void> {
+    if (!this.logs) return;
+    const metadata = this.toMessageMetadata(message.metadata);
+    try {
+      await this.logs.recordEvent({
+        eventType: "message_feedback_created",
+        requestId: metadata?.requestId,
+        userId,
+        agentId: message.session.agentId,
+        sessionId: message.session.id,
+        messageId: message.id,
+        payload: { rating: feedback.rating, reasonCodes: feedback.reasonCodes }
+      });
+    } catch {
+      // 反馈是权威业务数据；观测事件失败不能反向导致用户提交失败。
+    }
   }
 
   /** Prisma JsonValue 经过边界检查后转换为稳定 DTO，旧数据或非对象值统一忽略。 */

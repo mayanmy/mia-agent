@@ -11,6 +11,7 @@ import { ChatSessionsService } from "./chat-sessions.service";
 import { ChatService } from "./chat.service";
 import { ChatStreamsService } from "./chat-streams.service";
 import { StorageModule } from "../storage/storage.module";
+import { LogsModule } from "../logs/logs.module";
 
 @Module({
   imports: [
@@ -20,7 +21,8 @@ import { StorageModule } from "../storage/storage.module";
     ModelProvidersModule,
     ToolsModule,
     RetrievalModule,
-    StorageModule
+    StorageModule,
+    LogsModule
   ],
   controllers: [ChatController],
   providers: [ChatService, ChatSessionsService, ChatStreamsService],
