@@ -1,13 +1,15 @@
 # Mia RAG 离线评估与线上反馈闭环技术方案
 
+> 数据集管理、评估运行、指标报告和 Baseline/Candidate 对比的页面与接口实施细节，见 [`rag-evaluation-console-technical-design.md`](./rag-evaluation-console-technical-design.md)。
+
 ## 1. 文档信息
 
-| 项目 | 内容 |
-| --- | --- |
-| 状态 | Draft |
-| 适用版本 | Mia v0.1+ |
-| 目标读者 | 产品、前端、后端、测试和运维 |
-| 范围 | RAG 离线评估、线上反馈、失败样本沉淀、回归验证和发布观测 |
+| 项目     | 内容                                                     |
+| -------- | -------------------------------------------------------- |
+| 状态     | Draft                                                    |
+| 适用版本 | Mia v0.1+                                                |
+| 目标读者 | 产品、前端、后端、测试和运维                             |
+| 范围     | RAG 离线评估、线上反馈、失败样本沉淀、回归验证和发布观测 |
 
 ## 2. 背景与目标
 
@@ -211,10 +213,7 @@ type RetrievalEvaluationResult = {
 建议在请求 DTO 中增加调用场景：
 
 ```typescript
-type ModelCallPurpose =
-  | 'online_chat'
-  | 'offline_evaluation'
-  | 'evaluation_grader';
+type ModelCallPurpose = "online_chat" | "offline_evaluation" | "evaluation_grader";
 ```
 
 ### 5.5 `logs` 模块
@@ -254,26 +253,26 @@ Job 必须幂等。使用 `run_id + case_id` 唯一约束，重复消费时跳�
 
 归属 `logs` 模块。
 
-| 字段 | 说明 |
-| --- | --- |
-| `id` | Trace ID |
-| `request_id` | 全链路请求 ID |
-| `session_id`、`message_id` | 会话和 Assistant 消息 |
-| `user_id`、`agent_id` | 用户和 Agent |
-| `agent_config_snapshot` | Agent 运行配置快照 |
-| `query`、`rewritten_query` | 原始和改写问题 |
-| `retrieval_config_snapshot` | 检索配置快照 |
-| `candidate_chunks` | 候选 chunk、分数和排名 |
-| `selected_chunks` | 实际进入上下文的 chunk |
-| `prompt_version` | Prompt 版本 |
-| `model_config_snapshot` | 非敏感模型配置 |
-| `answer`、`citations` | 最终回答和引用 |
-| `retrieval_elapsed_ms` | 检索耗时 |
-| `first_token_elapsed_ms` | 首 token 耗时 |
-| `total_elapsed_ms` | 总耗时 |
-| `token_usage` | Token 用量 |
-| `status`、`error` | 完成、失败或取消及错误 |
-| `created_at` | 创建时间 |
+| 字段                        | 说明                   |
+| --------------------------- | ---------------------- |
+| `id`                        | Trace ID               |
+| `request_id`                | 全链路请求 ID          |
+| `session_id`、`message_id`  | 会话和 Assistant 消息  |
+| `user_id`、`agent_id`       | 用户和 Agent           |
+| `agent_config_snapshot`     | Agent 运行配置快照     |
+| `query`、`rewritten_query`  | 原始和改写问题         |
+| `retrieval_config_snapshot` | 检索配置快照           |
+| `candidate_chunks`          | 候选 chunk、分数和排名 |
+| `selected_chunks`           | 实际进入上下文的 chunk |
+| `prompt_version`            | Prompt 版本            |
+| `model_config_snapshot`     | 非敏感模型配置         |
+| `answer`、`citations`       | 最终回答和引用         |
+| `retrieval_elapsed_ms`      | 检索耗时               |
+| `first_token_elapsed_ms`    | 首 token 耗时          |
+| `total_elapsed_ms`          | 总耗时                 |
+| `token_usage`               | Token 用量             |
+| `status`、`error`           | 完成、失败或取消及错误 |
+| `created_at`                | 创建时间               |
 
 对 `request_id`、`message_id`、`agent_id + created_at` 建索引。
 
@@ -281,16 +280,16 @@ Job 必须幂等。使用 `run_id + case_id` 唯一约束，重复消费时跳�
 
 归属 `chat` 模块。
 
-| 字段 | 说明 |
-| --- | --- |
-| `id` | 反馈 ID |
-| `request_id`、`session_id`、`message_id` | 链路和消息 |
-| `user_id`、`agent_id` | 用户和 Agent |
-| `rating` | `up/down` |
-| `reason_codes` | 原因标签 |
-| `comment` | 用户说明 |
-| `corrected_answer` | 用户提供的理想答案 |
-| `created_at`、`updated_at` | 时间 |
+| 字段                                     | 说明               |
+| ---------------------------------------- | ------------------ |
+| `id`                                     | 反馈 ID            |
+| `request_id`、`session_id`、`message_id` | 链路和消息         |
+| `user_id`、`agent_id`                    | 用户和 Agent       |
+| `rating`                                 | `up/down`          |
+| `reason_codes`                           | 原因标签           |
+| `comment`                                | 用户说明           |
+| `corrected_answer`                       | 用户提供的理想答案 |
+| `created_at`、`updated_at`               | 时间               |
 
 使用 `(message_id, user_id)` 唯一约束支持更新反馈。
 
@@ -474,26 +473,26 @@ Trace 保存失败不能中断用户对话，必须进入错误日志。
 
 ### 9.1 检索
 
-| 指标 | 说明 |
-| --- | --- |
-| `HitRate@K` | 前 K 个结果是否命中相关项 |
-| `Recall@K` | 相关项被召回的比例 |
-| `MRR` | 第一个相关结果排名的倒数 |
-| `nDCG@K` | 衡量相关程度和排序质量 |
-| `empty_retrieval_rate` | 空召回比例 |
-| `retrieval_latency` | 检索 P50/P95 |
+| 指标                   | 说明                      |
+| ---------------------- | ------------------------- |
+| `HitRate@K`            | 前 K 个结果是否命中相关项 |
+| `Recall@K`             | 相关项被召回的比例        |
+| `MRR`                  | 第一个相关结果排名的倒数  |
+| `nDCG@K`               | 衡量相关程度和排序质量    |
+| `empty_retrieval_rate` | 空召回比例                |
+| `retrieval_latency`    | 检索 P50/P95              |
 
 首版重点展示 `HitRate@5`、`Recall@5`、`MRR` 和检索耗时。
 
 ### 9.2 回答
 
-| 指标 | 方式 |
-| --- | --- |
-| `answer_correctness` | 标准答案/评分要点 + LLM 裁判 |
-| `faithfulness` | 答案是否被检索上下文支持 |
-| `answer_relevance` | 是否切中问题 |
-| `abstention_accuracy` | 不可回答时是否正确拒答 |
-| `instruction_following` | 是否遵守 Agent 指令 |
+| 指标                    | 方式                         |
+| ----------------------- | ---------------------------- |
+| `answer_correctness`    | 标准答案/评分要点 + LLM 裁判 |
+| `faithfulness`          | 答案是否被检索上下文支持     |
+| `answer_relevance`      | 是否切中问题                 |
+| `abstention_accuracy`   | 不可回答时是否正确拒答       |
+| `instruction_following` | 是否遵守 Agent 指令          |
 
 ### 9.3 引用
 
@@ -588,16 +587,16 @@ Trace 保存失败不能中断用户对话，必须进入错误日志。
 
 第一阶段只生成报告和警告，稳定后再接入 CI 或发布审批。
 
-| 指标 | 初始规则 |
-| --- | --- |
-| `Recall@5` | 相比 Baseline 不下降超过 2 个百分点 |
-| Faithfulness | 平均值不得下降，严重失败不得增加 |
-| Citation Correctness | 不得下降 |
-| Abstention Accuracy | 不得下降 |
-| 超时率 | 不上升超过 1 个百分点 |
-| P95 总耗时 | 不恶化超过 20% |
-| 严重安全失败 | 必须为 0 |
-| 线上差评回归集 | 必须全部执行 |
+| 指标                 | 初始规则                            |
+| -------------------- | ----------------------------------- |
+| `Recall@5`           | 相比 Baseline 不下降超过 2 个百分点 |
+| Faithfulness         | 平均值不得下降，严重失败不得增加    |
+| Citation Correctness | 不得下降                            |
+| Abstention Accuracy  | 不得下降                            |
+| 超时率               | 不上升超过 1 个百分点               |
+| P95 总耗时           | 不恶化超过 20%                      |
+| 严重安全失败         | 必须为 0                            |
+| 线上差评回归集       | 必须全部执行                        |
 
 小样本分类必须同时显示样本数，避免误判波动。
 
@@ -774,16 +773,16 @@ Assistant 消息操作区增加点赞、点踩及原因弹窗。反馈提交失�
 
 ## 21. 风险与应对
 
-| 风险 | 应对 |
-| --- | --- |
-| Golden Set 太小或分布失真 | 按业务分类建设，持续从线上补充，并展示样本数 |
-| LLM 裁判不稳定 | 固定模型和 Prompt，低温度，结构化输出，人工抽检 |
-| 文档更新导致答案过期 | 记录文档版本，在新数据集版本中审核关联用例 |
-| Trace 数据增长过快 | 候选摘要化、设置保留周期、正式用例单独保存 |
-| 离线任务影响在线调用 | 独立并发、低优先级队列、繁忙时暂停 |
-| 反馈含敏感信息 | 晋升前脱敏、权限隔离、限制导出 |
-| 平均分掩盖严重问题 | 分层和分类指标、严重失败计数、单题下钻 |
-| 自动门禁误报 | 初期只告警，稳定后再启用硬阻断 |
+| 风险                      | 应对                                            |
+| ------------------------- | ----------------------------------------------- |
+| Golden Set 太小或分布失真 | 按业务分类建设，持续从线上补充，并展示样本数    |
+| LLM 裁判不稳定            | 固定模型和 Prompt，低温度，结构化输出，人工抽检 |
+| 文档更新导致答案过期      | 记录文档版本，在新数据集版本中审核关联用例      |
+| Trace 数据增长过快        | 候选摘要化、设置保留周期、正式用例单独保存      |
+| 离线任务影响在线调用      | 独立并发、低优先级队列、繁忙时暂停              |
+| 反馈含敏感信息            | 晋升前脱敏、权限隔离、限制导出                  |
+| 平均分掩盖严重问题        | 分层和分类指标、严重失败计数、单题下钻          |
+| 自动门禁误报              | 初期只告警，稳定后再启用硬阻断                  |
 
 ## 22. 后续扩展
 
