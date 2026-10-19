@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { App as AntdApp, Checkbox, Input, Space } from "antd";
+import { App as AntdApp, Checkbox, Input } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
 import { AgentRunDetailDrawer } from "../agent-runs/components/AgentRunDetailDrawer";
@@ -821,37 +821,50 @@ export function ChatPage() {
       let correctedAnswer =
         item.feedback?.rating === "DOWN" ? item.feedback.correctedAnswer || "" : "";
       modal.confirm({
+        className: "chatFeedbackModal",
+        width: 560,
         title: "这条回答哪里需要改进？",
         content: (
-          <Space direction="vertical" size={12} style={{ width: "100%" }}>
-            <Checkbox.Group
-              defaultValue={reasonCodes}
-              options={FEEDBACK_REASON_OPTIONS}
-              onChange={(values) => {
-                reasonCodes = values as string[];
-              }}
-            />
-            <Input.TextArea
-              defaultValue={comment}
-              maxLength={1000}
-              placeholder="补充说明（可选）"
-              rows={3}
-              showCount
-              onChange={(event) => {
-                comment = event.target.value;
-              }}
-            />
-            <Input.TextArea
-              defaultValue={correctedAnswer}
-              maxLength={10000}
-              placeholder="你期望的正确答案（可选）"
-              rows={3}
-              showCount
-              onChange={(event) => {
-                correctedAnswer = event.target.value;
-              }}
-            />
-          </Space>
+          <div className="chatFeedbackForm">
+            <fieldset className="chatFeedbackReasonFieldset">
+              <legend>改进原因（至少选择一项）</legend>
+              <Checkbox.Group
+                defaultValue={reasonCodes}
+                options={FEEDBACK_REASON_OPTIONS}
+                onChange={(values) => {
+                  reasonCodes = values as string[];
+                }}
+              />
+            </fieldset>
+            <div className="chatFeedbackField">
+              <label htmlFor="chat-feedback-comment">补充说明（可选）</label>
+              <Input.TextArea
+                defaultValue={comment}
+                id="chat-feedback-comment"
+                maxLength={1000}
+                placeholder="请描述回答中需要改进的地方"
+                rows={3}
+                showCount
+                onChange={(event) => {
+                  comment = event.target.value;
+                }}
+              />
+            </div>
+            <div className="chatFeedbackField">
+              <label htmlFor="chat-feedback-corrected-answer">期望的正确答案（可选）</label>
+              <Input.TextArea
+                defaultValue={correctedAnswer}
+                id="chat-feedback-corrected-answer"
+                maxLength={10000}
+                placeholder="填写更准确或更完整的答案"
+                rows={3}
+                showCount
+                onChange={(event) => {
+                  correctedAnswer = event.target.value;
+                }}
+              />
+            </div>
+          </div>
         ),
         okText: "提交反馈",
         cancelText: "取消",

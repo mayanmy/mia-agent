@@ -1201,3 +1201,67 @@
 .chatFileGrid {
   margin-bottom: 10px;
 }
+
+.chatFeedbackModal {
+  .ant-modal-confirm-content {
+    max-width: none;
+  }
+
+  .ant-modal-confirm-btns {
+    margin-top: 8px;
+  }
+}
+
+.chatFeedbackForm {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.chatFeedbackReasonFieldset {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+
+  legend {
+    margin-bottom: 8px;
+    color: #334155;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .ant-checkbox-group {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 16px;
+  }
+
+  .ant-checkbox-wrapper {
+    margin-inline-start: 0;
+  }
+}
+
+.chatFeedbackField {
+  // Ant Design 的 showCount 使用独立计数行，显式预留空间，避免被下一字段或 footer 覆盖。
+  padding-bottom: 22px;
+
+  label {
+    display: block;
+    margin-bottom: 8px;
+    color: #334155;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .ant-input-textarea-show-count::after {
+    min-height: 22px;
+    line-height: 22px;
+  }
+}
+
+@media (max-width: 640px) {
+  .chatFeedbackReasonFieldset .ant-checkbox-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
