@@ -156,6 +156,26 @@ enum EvaluationCaseSourceType {
   @@map("evaluation_case_source_type")
 }
 
+enum EvaluationRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+
+  @@map("evaluation_run_status")
+}
+
+enum EvaluationCaseResultStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+
+  @@map("evaluation_case_result_status")
+}
+
 /// 外部访问入口决定 End User 与会话的隔离范围，不能只用一个字符串标识混合公开访客和业务用户。
 enum ExternalUserSource {
   WIDGET
@@ -290,34 +310,35 @@ enum McpSyncTrigger {
 }
 
 model User {
-  id                            String                  @id @default(uuid()) @db.Uuid
-  email                         String                  @unique(map: "uq_users_email")
-  displayName                   String                  @map("display_name")
-  passwordHash                  String                  @map("password_hash")
-  role                          UserRole                @default(USER)
-  lastLoginAt                   DateTime?               @map("last_login_at") @db.Timestamptz(6)
-  disabledAt                    DateTime?               @map("disabled_at") @db.Timestamptz(6)
-  passwordChangedAt             DateTime                @default(now()) @map("password_changed_at") @db.Timestamptz(6)
-  createdAt                     DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                     DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                            String                     @id @default(uuid()) @db.Uuid
+  email                         String                     @unique(map: "uq_users_email")
+  displayName                   String                     @map("display_name")
+  passwordHash                  String                     @map("password_hash")
+  role                          UserRole                   @default(USER)
+  lastLoginAt                   DateTime?                  @map("last_login_at") @db.Timestamptz(6)
+  disabledAt                    DateTime?                  @map("disabled_at") @db.Timestamptz(6)
+  passwordChangedAt             DateTime                   @default(now()) @map("password_changed_at") @db.Timestamptz(6)
+  createdAt                     DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                     DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
   authSessions                  AuthSession[]
-  sentInvitations               UserInvitation[]        @relation("UserInvitationInviter")
+  sentInvitations               UserInvitation[]           @relation("UserInvitationInviter")
   chatSessions                  ChatSession[]
-  createdAgentApiKeys           AgentApiKey[]           @relation("AgentApiKeyCreator")
-  createdAgents                 Agent[]                 @relation("AgentCreator")
+  createdAgentApiKeys           AgentApiKey[]              @relation("AgentApiKeyCreator")
+  createdAgents                 Agent[]                    @relation("AgentCreator")
   agentRuns                     AgentRun[]
-  createdHttpTools              HttpTool[]              @relation("HttpToolCreator")
-  createdToolSecrets            ToolSecret[]            @relation("ToolSecretCreator")
-  createdMcpServers             McpServer[]             @relation("McpServerCreator")
-  createdMcpSecrets             McpServerSecret[]       @relation("McpServerSecretCreator")
-  createdMcpOAuthAuthorizations McpOAuthAuthorization[] @relation("McpOAuthAuthorizationCreator")
+  createdHttpTools              HttpTool[]                 @relation("HttpToolCreator")
+  createdToolSecrets            ToolSecret[]               @relation("ToolSecretCreator")
+  createdMcpServers             McpServer[]                @relation("McpServerCreator")
+  createdMcpSecrets             McpServerSecret[]          @relation("McpServerSecretCreator")
+  createdMcpOAuthAuthorizations McpOAuthAuthorization[]    @relation("McpOAuthAuthorizationCreator")
   mcpToolApprovals              McpToolApproval[]
   chatMessageFeedbacks          ChatMessageFeedback[]
   workspaceMemberships          WorkspaceMember[]
-  createdWorkspaces             Workspace[]             @relation("WorkspaceCreator")
-  createdEvaluationDatasets     EvaluationDataset[]      @relation("EvaluationDatasetCreator")
+  createdWorkspaces             Workspace[]                @relation("WorkspaceCreator")
+  createdEvaluationDatasets     EvaluationDataset[]        @relation("EvaluationDatasetCreator")
   createdEvaluationVersions     EvaluationDatasetVersion[] @relation("EvaluationVersionCreator")
-  createdEvaluationCases        EvaluationCase[]         @relation("EvaluationCaseCreator")
+  createdEvaluationCases        EvaluationCase[]           @relation("EvaluationCaseCreator")
+  createdEvaluationRuns         EvaluationRun[]            @relation("EvaluationRunCreator")
 
   @@index([role, disabledAt], map: "idx_users_role_disabled_at")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
@@ -326,17 +347,18 @@ model User {
 
 /// 项目空间是 Mia 的一级数据和权限边界，同一用户可以加入多个空间。
 model Workspace {
-  id          String            @id @default(uuid()) @db.Uuid
-  name        String
-  description String            @default("") @db.Text
-  createdById String            @map("created_by_id") @db.Uuid
-  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt   DateTime?         @map("deleted_at") @db.Timestamptz(6)
-  createdBy   User              @relation("WorkspaceCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  members     WorkspaceMember[]
-  invitations UserInvitation[]
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  description        String              @default("") @db.Text
+  createdById        String              @map("created_by_id") @db.Uuid
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt          DateTime?           @map("deleted_at") @db.Timestamptz(6)
+  createdBy          User                @relation("WorkspaceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  members            WorkspaceMember[]
+  invitations        UserInvitation[]
   evaluationDatasets EvaluationDataset[]
+  evaluationRuns     EvaluationRun[]
 
   @@index([deletedAt, createdAt(sort: Desc)], map: "idx_workspaces_deleted_created_at")
   @@index([createdById], map: "idx_workspaces_created_by_id")
@@ -467,9 +489,9 @@ model ModelCapability {
   options       Json?               @db.JsonB
   verified      Boolean             @default(false)
   verifiedAt    DateTime?           @map("verified_at") @db.Timestamptz(6)
-  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
-  modelConfig   ModelConfig          @relation(fields: [modelConfigId], references: [id], onDelete: Cascade)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  modelConfig   ModelConfig         @relation(fields: [modelConfigId], references: [id], onDelete: Cascade)
 
   @@unique([modelConfigId, capability])
   @@index([capability, enabled])
@@ -535,6 +557,7 @@ model Agent {
   externalConversations ExternalConversation[]
   runs                  AgentRun[]
   agentWorkflow         AgentWorkflow?
+  evaluationRuns        EvaluationRun[]
 
   @@index([createdAt(sort: Desc)], map: "idx_agents_created_at")
   @@index([modelConfigId], map: "idx_agents_model_config_id")
@@ -600,24 +623,24 @@ model WorkflowVersion {
 
 /// Skill 是管理员维护的可复用指令；MCP Prompt 导入只创建停用草稿，不自动注入 Agent。
 model Skill {
-  id              String    @id @default(uuid()) @db.Uuid
-  workspaceId     String    @map("workspace_id") @db.Uuid
+  id              String       @id @default(uuid()) @db.Uuid
+  workspaceId     String       @map("workspace_id") @db.Uuid
   name            String
-  description     String    @default("") @db.Text
-  instructions    String    @db.Text
-  usageConditions String    @default("") @map("usage_conditions") @db.Text
-  inputGuidance   String    @default("") @map("input_guidance") @db.Text
-  outputGuidance  String    @default("") @map("output_guidance") @db.Text
-  limitations     String    @default("") @db.Text
-  enabled         Boolean   @default(false)
-  revision        Int       @default(1)
-  sourceType      String    @default("manual") @map("source_type")
-  sourceRef       Json?     @map("source_ref") @db.JsonB
-  sourceHash      String?   @map("source_hash")
-  createdByUserId String    @map("created_by_user_id") @db.Uuid
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+  description     String       @default("") @db.Text
+  instructions    String       @db.Text
+  usageConditions String       @default("") @map("usage_conditions") @db.Text
+  inputGuidance   String       @default("") @map("input_guidance") @db.Text
+  outputGuidance  String       @default("") @map("output_guidance") @db.Text
+  limitations     String       @default("") @db.Text
+  enabled         Boolean      @default(false)
+  revision        Int          @default(1)
+  sourceType      String       @default("manual") @map("source_type")
+  sourceRef       Json?        @map("source_ref") @db.JsonB
+  sourceHash      String?      @map("source_hash")
+  createdByUserId String       @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime?    @map("deleted_at") @db.Timestamptz(6)
   agentSkills     AgentSkill[]
 
   @@index([enabled, updatedAt(sort: Desc)], map: "idx_skills_enabled_updated_at")
@@ -1010,15 +1033,15 @@ model ChatSession {
 /// 会话的可恢复文本消息。附件二进制仍由文件存储模块负责，因此这里不保存 data URL，
 /// 防止一张图片把会话表无限放大；首期恢复文本和模型上下文即可。
 model ChatSessionMessage {
-  id        String                 @id @default(uuid()) @db.Uuid
-  sessionId String                 @map("session_id") @db.Uuid
-  role      ChatSessionMessageRole
-  content   String                 @db.Text
+  id           String                 @id @default(uuid()) @db.Uuid
+  sessionId    String                 @map("session_id") @db.Uuid
+  role         ChatSessionMessageRole
+  content      String                 @db.Text
   contentParts Json?                  @map("content_parts") @db.JsonB
-  metadata  Json?                  @db.JsonB
-  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  session   ChatSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  feedbacks ChatMessageFeedback[]
+  metadata     Json?                  @db.JsonB
+  createdAt    DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  session      ChatSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  feedbacks    ChatMessageFeedback[]
 
   @@index([sessionId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_chat_session_messages_cursor")
   @@map("chat_session_messages")
@@ -1350,17 +1373,17 @@ model AgentKnowledgeBase {
 
 /// 评估数据集是工作空间内 Golden Set 的稳定容器；归档不删除历史版本。
 model EvaluationDataset {
-  id              String                  @id @default(uuid()) @db.Uuid
-  workspaceId     String                  @map("workspace_id") @db.Uuid
+  id              String                     @id @default(uuid()) @db.Uuid
+  workspaceId     String                     @map("workspace_id") @db.Uuid
   name            String
-  normalizedName  String                  @map("normalized_name")
-  description     String                  @default("") @db.Text
-  status          EvaluationDatasetStatus @default(ACTIVE)
-  createdByUserId String                  @map("created_by_user_id") @db.Uuid
-  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  workspace       Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdBy       User                    @relation("EvaluationDatasetCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  normalizedName  String                     @map("normalized_name")
+  description     String                     @default("") @db.Text
+  status          EvaluationDatasetStatus    @default(ACTIVE)
+  createdByUserId String                     @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace       Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy       User                       @relation("EvaluationDatasetCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   versions        EvaluationDatasetVersion[]
 
   @@unique([workspaceId, normalizedName], map: "uq_evaluation_datasets_workspace_name")
@@ -1383,6 +1406,7 @@ model EvaluationDatasetVersion {
   dataset         EvaluationDataset              @relation(fields: [datasetId], references: [id], onDelete: Cascade)
   createdBy       User                           @relation("EvaluationVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   cases           EvaluationCase[]
+  runs            EvaluationRun[]
 
   @@unique([datasetId, version], map: "uq_evaluation_dataset_versions_dataset_version")
   @@index([datasetId, status, createdAt(sort: Desc)], map: "idx_evaluation_dataset_versions_dataset_status_created")
@@ -1409,8 +1433,80 @@ model EvaluationCase {
   updatedAt           DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
   datasetVersion      EvaluationDatasetVersion @relation(fields: [datasetVersionId], references: [id], onDelete: Cascade)
   createdBy           User                     @relation("EvaluationCaseCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  results             EvaluationCaseResult[]
 
   @@unique([datasetVersionId, questionHash], map: "uq_evaluation_cases_version_question_hash")
   @@index([datasetVersionId, createdAt(sort: Desc)], map: "idx_evaluation_cases_version_created")
   @@map("evaluation_cases")
+}
+
+/// 一次评估运行固定引用冻结的数据集版本，并保存不含密钥的运行配置快照。
+model EvaluationRun {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  workspaceId             String                   @map("workspace_id") @db.Uuid
+  datasetVersionId        String                   @map("dataset_version_id") @db.Uuid
+  agentId                 String                   @map("agent_id") @db.Uuid
+  baselineRunId           String?                  @map("baseline_run_id") @db.Uuid
+  status                  EvaluationRunStatus      @default(PENDING)
+  totalCases              Int                      @map("total_cases")
+  completedCases          Int                      @default(0) @map("completed_cases")
+  failedCases             Int                      @default(0) @map("failed_cases")
+  skippedCases            Int                      @default(0) @map("skipped_cases")
+  agentConfigSnapshot     Json                     @map("agent_config_snapshot") @db.JsonB
+  retrievalConfigSnapshot Json                     @map("retrieval_config_snapshot") @db.JsonB
+  modelConfigSnapshot     Json                     @map("model_config_snapshot") @db.JsonB
+  graderConfigSnapshot    Json                     @map("grader_config_snapshot") @db.JsonB
+  summaryMetrics          Json?                    @map("summary_metrics") @db.JsonB
+  metricsVersion          String                   @default("v1") @map("metrics_version")
+  snapshotHash            String                   @map("snapshot_hash")
+  cancelRequestedAt       DateTime?                @map("cancel_requested_at") @db.Timestamptz(6)
+  heartbeatAt             DateTime?                @map("heartbeat_at") @db.Timestamptz(6)
+  errorType               String?                  @map("error_type")
+  errorMessage            String?                  @map("error_message") @db.Text
+  createdByUserId         String                   @map("created_by_user_id") @db.Uuid
+  startedAt               DateTime?                @map("started_at") @db.Timestamptz(6)
+  finishedAt              DateTime?                @map("finished_at") @db.Timestamptz(6)
+  createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace               Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  datasetVersion          EvaluationDatasetVersion @relation(fields: [datasetVersionId], references: [id], onDelete: Restrict)
+  agent                   Agent                    @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  baselineRun             EvaluationRun?           @relation("EvaluationRunBaseline", fields: [baselineRunId], references: [id], onDelete: SetNull)
+  candidateRuns           EvaluationRun[]          @relation("EvaluationRunBaseline")
+  createdBy               User                     @relation("EvaluationRunCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  results                 EvaluationCaseResult[]
+
+  @@index([workspaceId, status, createdAt(sort: Desc)], map: "idx_evaluation_runs_workspace_status_created")
+  @@index([datasetVersionId, createdAt(sort: Desc)], map: "idx_evaluation_runs_version_created")
+  @@index([agentId, createdAt(sort: Desc)], map: "idx_evaluation_runs_agent_created")
+  @@map("evaluation_runs")
+}
+
+/// 单题结果以 run_id + case_id 幂等落库，失败不会阻断同一运行中的其他用例。
+model EvaluationCaseResult {
+  id               String                     @id @default(uuid()) @db.Uuid
+  runId            String                     @map("run_id") @db.Uuid
+  caseId           String                     @map("case_id") @db.Uuid
+  status           EvaluationCaseResultStatus @default(PENDING)
+  attempt          Int                        @default(0)
+  actualAnswer     String?                    @map("actual_answer") @db.Text
+  retrievedChunks  Json?                      @map("retrieved_chunks") @db.JsonB
+  citations        Json?                      @db.JsonB
+  retrievalMetrics Json?                      @map("retrieval_metrics") @db.JsonB
+  answerMetrics    Json?                      @map("answer_metrics") @db.JsonB
+  citationMetrics  Json?                      @map("citation_metrics") @db.JsonB
+  runtimeMetrics   Json?                      @map("runtime_metrics") @db.JsonB
+  graderDetails    Json?                      @map("grader_details") @db.JsonB
+  errorType        String?                    @map("error_type")
+  errorMessage     String?                    @map("error_message") @db.Text
+  startedAt        DateTime?                  @map("started_at") @db.Timestamptz(6)
+  finishedAt       DateTime?                  @map("finished_at") @db.Timestamptz(6)
+  createdAt        DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  run              EvaluationRun              @relation(fields: [runId], references: [id], onDelete: Cascade)
+  evaluationCase   EvaluationCase             @relation(fields: [caseId], references: [id], onDelete: Restrict)
+
+  @@unique([runId, caseId], map: "uq_evaluation_case_results_run_case")
+  @@index([runId, status, createdAt], map: "idx_evaluation_case_results_run_status_created")
+  @@map("evaluation_case_results")
 }

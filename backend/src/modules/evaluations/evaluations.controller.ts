@@ -22,8 +22,11 @@ import {
   CommitEvaluationImportDto,
   CreateEvaluationDatasetDto,
   CreateEvaluationVersionDto,
+  CreateEvaluationRunDto,
   EvaluationCaseQueryDto,
   EvaluationDatasetQueryDto,
+  EvaluationRunQueryDto,
+  EvaluationRunResultQueryDto,
   FreezeEvaluationVersionDto,
   UploadedEvaluationFile,
   UpdateEvaluationCaseDto,
@@ -37,6 +40,31 @@ import { EvaluationsService } from "./evaluations.service";
 @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
 export class EvaluationsController {
   constructor(private readonly evaluationsService: EvaluationsService) {}
+
+  @Get("runs")
+  listRuns(@Query() query: EvaluationRunQueryDto) {
+    return this.evaluationsService.listRuns(query);
+  }
+
+  @Post("runs")
+  createRun(@Body() payload: CreateEvaluationRunDto, @CurrentUser() user: CurrentUserDto) {
+    return this.evaluationsService.createRun(payload, user.id);
+  }
+
+  @Get("runs/:runId")
+  getRun(@Param("runId") runId: string) {
+    return this.evaluationsService.getRun(runId);
+  }
+
+  @Post("runs/:runId/cancel")
+  cancelRun(@Param("runId") runId: string) {
+    return this.evaluationsService.cancelRun(runId);
+  }
+
+  @Get("runs/:runId/results")
+  listRunResults(@Param("runId") runId: string, @Query() query: EvaluationRunResultQueryDto) {
+    return this.evaluationsService.listRunResults(runId, query);
+  }
 
   @Get("datasets")
   listDatasets(@Query() query: EvaluationDatasetQueryDto) {

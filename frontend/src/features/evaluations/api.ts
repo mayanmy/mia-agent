@@ -69,6 +69,33 @@ export type EvaluationImportPreview = {
   errors: Array<{ line: number; message: string }>;
 };
 
+export type EvaluationRunStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELED";
+export type EvaluationSummaryMetrics = {
+  retrieval?: { hitRateAt5: number | null; recallAt5: number | null; mrr: number | null; emptyRetrievalRate: number | null };
+  runtime?: { successRate: number | null; p95TotalMs: number | null };
+  sampleCount?: number;
+};
+export type EvaluationRun = {
+  id: string;
+  datasetVersionId: string;
+  dataset: { id: string; name: string; version: number };
+  agentId: string;
+  agentName: string;
+  baselineRunId: string | null;
+  status: EvaluationRunStatus;
+  totalCases: number;
+  completedCases: number;
+  failedCases: number;
+  skippedCases: number;
+  summaryMetrics: EvaluationSummaryMetrics | null;
+  cancelRequestedAt: string | null;
+  heartbeatAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 function queryString(values: Record<string, unknown>): string {
   const params = new URLSearchParams();
   Object.entries(values).forEach(([key, value]) => {
@@ -160,4 +187,23 @@ export function commitEvaluationImport(
     `/api/v1/evaluations/dataset-versions/${versionId}/import/commit`,
     { method: "POST", body: JSON.stringify({ importToken, onlyValidRows }) }
   );
+}
+
+export function listEvaluationRuns(query: { page: number; pageSize: number; status?: EvaluationRunStatus }): Promise<PageResult<EvaluationRun>> {
+  return request(`/api/v1/evaluations/runs?${queryString(query)}`);
+}
+
+export function createEvaluationRun(payload: {
+  datasetVersionId: string;
+  agentId: string;
+  overrides?: { retrieval?: { topK?: number; scoreThreshold?: number } };
+}) {
+  return request<{ id: string; status: EvaluationRunStatus; totalCases: number; createdAt: string }>("/api/v1/evaluations/runs", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function cancelEvaluationRun(runId: string) {
+  return request<EvaluationRun>(`/api/v1/evaluations/runs/${runId}/cancel`, { method: "POST" });
 }

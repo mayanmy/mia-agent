@@ -1,6 +1,7 @@
 import * as assert from "node:assert/strict";
 import { EvaluationDatasetVersionStatus } from "@prisma/client";
 
+import { runInWorkspaceContext } from "../../core/auth/workspace-context";
 import { EvaluationsService } from "./evaluations.service";
 
 const draftVersion = {
@@ -92,6 +93,52 @@ export const tests = [
           ),
         /frozen dataset version cannot be modified/u
       );
+    }
+  },
+  {
+    name: "EvaluationsService creates a pending run with a secret-free immutable snapshot",
+    run: async () => {
+      let runData: Record<string, unknown> | undefined;
+      let enqueuedId: string | undefined;
+      const transaction = {
+        evaluationRun: {
+          create: async ({ data }: { data: Record<string, unknown> }) => {
+            runData = data;
+            return { id: "run-id", status: "PENDING", totalCases: 1, createdAt: new Date(), ...data };
+          }
+        },
+        evaluationCaseResult: { createMany: async () => ({ count: 1 }) }
+      };
+      const prisma = {
+        evaluationDatasetVersion: {
+          findFirst: async () => ({
+            ...draftVersion,
+            status: EvaluationDatasetVersionStatus.FROZEN,
+            dataset: { status: "ACTIVE" },
+            cases: [{ id: "case-id" }]
+          })
+        },
+        $transaction: async (callback: (client: typeof transaction) => Promise<unknown>) => callback(transaction)
+      };
+      const agents = {
+        getAgentRuntimeConfig: async () => ({
+          agentId: "agent-id", name: "制度助手", systemPrompt: "仅按制度回答", modelConfigId: "model-id",
+          modelName: "model", providerId: "provider-id", providerType: "OPENAI_COMPATIBLE",
+          baseUrl: "https://secret.internal", temperature: 0.2, maxTokens: 1000, timeoutSeconds: 60,
+          thinkingMode: "AUTO", knowledgeBaseIds: ["kb-id"]
+        })
+      };
+      const job = { enqueue: (id: string) => { enqueuedId = id; } };
+      const service = new EvaluationsService(prisma as never, agents as never, job as never);
+
+      await runInWorkspaceContext("workspace-id", undefined, () => service.createRun({
+        datasetVersionId: draftVersion.id,
+        agentId: "agent-id"
+      }, "user-id"));
+
+      assert.equal(enqueuedId, "run-id");
+      assert.equal(JSON.stringify(runData).includes("secret.internal"), false);
+      assert.equal((runData?.retrievalConfigSnapshot as { topK: number }).topK, 5);
     }
   }
 ];

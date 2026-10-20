@@ -1,7 +1,8 @@
 import {
   EvaluationCaseSourceType,
   EvaluationDatasetStatus,
-  EvaluationDatasetVersionStatus
+  EvaluationDatasetVersionStatus,
+  EvaluationRunStatus
 } from "@prisma/client";
 
 export type EvaluationDatasetQueryDto = {
@@ -58,6 +59,23 @@ export type CommitEvaluationImportDto = {
   importToken?: string;
   onlyValidRows?: boolean;
 };
+
+export type CreateEvaluationRunDto = {
+  datasetVersionId?: string;
+  agentId?: string;
+  baselineRunId?: string | null;
+  overrides?: { retrieval?: { topK?: number; scoreThreshold?: number } };
+};
+
+export type EvaluationRunQueryDto = {
+  page?: string;
+  pageSize?: string;
+  status?: EvaluationRunStatus;
+  datasetVersionId?: string;
+  agentId?: string;
+};
+
+export type EvaluationRunResultQueryDto = { page?: string; pageSize?: string };
 
 export type EvaluationVersionSummary = {
   id: string;

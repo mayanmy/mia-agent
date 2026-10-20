@@ -11,6 +11,8 @@ import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PrismaService } from "../prisma/prisma.service";
+import { AgentsService } from "../agents/agents.service";
+import { RagEvaluationJob } from "../../jobs/rag-evaluation.job";
 import {
   EvaluationImportError,
   ImportedEvaluationCase,
@@ -21,10 +23,13 @@ import {
   CreateEvaluationDatasetDto,
   CreateEvaluationVersionDto,
   CommitEvaluationImportDto,
+  CreateEvaluationRunDto,
   EvaluationCaseQueryDto,
   EvaluationDatasetDetail,
   EvaluationDatasetListItem,
   EvaluationDatasetQueryDto,
+  EvaluationRunQueryDto,
+  EvaluationRunResultQueryDto,
   EvaluationVersionSummary,
   FreezeEvaluationVersionDto,
   UploadedEvaluationFile,
@@ -52,7 +57,136 @@ type PendingImport = {
 export class EvaluationsService {
   private readonly pendingImports = new Map<string, PendingImport>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly agentsService?: AgentsService,
+    private readonly ragEvaluationJob?: RagEvaluationJob
+  ) {}
+
+  async listRuns(query: EvaluationRunQueryDto) {
+    const page = normalizePageQuery(query);
+    const where: Prisma.EvaluationRunWhereInput = {
+      workspaceId: requireWorkspaceId(),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.datasetVersionId ? { datasetVersionId: query.datasetVersionId } : {}),
+      ...(query.agentId ? { agentId: query.agentId } : {})
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.evaluationRun.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: page.skip,
+        take: page.take,
+        include: { datasetVersion: { include: { dataset: true } } }
+      }),
+      this.prisma.evaluationRun.count({ where })
+    ]);
+    return createPageResult(rows.map((row) => this.toRunSummary(row)), total, page.page, page.pageSize);
+  }
+
+  async createRun(payload: CreateEvaluationRunDto, userId: string) {
+    const datasetVersionId = this.requireId(payload.datasetVersionId, "datasetVersionId");
+    const agentId = this.requireId(payload.agentId, "agentId");
+    const version = await this.prisma.evaluationDatasetVersion.findFirst({
+      where: { id: datasetVersionId, dataset: { workspaceId: requireWorkspaceId() } },
+      include: { dataset: true, cases: { select: { id: true } } }
+    });
+    if (!version) this.throwNotFound();
+    if (version.status !== "FROZEN") {
+      throw new AppError(ErrorCodes.common.conflict, "evaluation run requires a frozen dataset version", HttpStatus.CONFLICT);
+    }
+    if (version.dataset.status === "ARCHIVED") {
+      throw new AppError(ErrorCodes.common.conflict, "archived dataset cannot create runs", HttpStatus.CONFLICT);
+    }
+    if (!this.agentsService || !this.ragEvaluationJob) {
+      throw new Error("evaluation run dependencies are unavailable");
+    }
+    const runtime = await this.agentsService.getAgentRuntimeConfig(agentId);
+    const topK = this.normalizeTopK(payload.overrides?.retrieval?.topK);
+    const scoreThreshold = this.normalizeScoreThreshold(payload.overrides?.retrieval?.scoreThreshold);
+    if (payload.baselineRunId) await this.requireCompatibleBaseline(payload.baselineRunId, datasetVersionId);
+
+    // 快照白名单刻意排除 baseUrl、密钥、连接串和内部 SDK 对象。
+    const agentSnapshot = {
+      agentId: runtime.agentId,
+      name: runtime.name,
+      systemPrompt: runtime.systemPrompt,
+      modelConfigId: runtime.modelConfigId,
+      temperature: runtime.temperature,
+      maxTokens: runtime.maxTokens,
+      timeoutSeconds: runtime.timeoutSeconds,
+      thinkingMode: runtime.thinkingMode
+    };
+    const retrievalSnapshot = { knowledgeBaseIds: runtime.knowledgeBaseIds, topK, ...(scoreThreshold === undefined ? {} : { scoreThreshold }) };
+    const modelSnapshot = {
+      modelConfigId: runtime.modelConfigId,
+      modelName: runtime.modelName,
+      providerId: runtime.providerId,
+      providerType: runtime.providerType
+    };
+    const snapshotHash = createHash("sha256")
+      .update(JSON.stringify({ datasetVersionId, agentSnapshot, retrievalSnapshot, modelSnapshot }))
+      .digest("hex");
+    const run = await this.prisma.$transaction(async (transaction) => {
+      const created = await transaction.evaluationRun.create({
+        data: {
+          workspaceId: requireWorkspaceId(),
+          datasetVersionId,
+          agentId,
+          baselineRunId: payload.baselineRunId || null,
+          totalCases: version.cases.length,
+          agentConfigSnapshot: agentSnapshot,
+          retrievalConfigSnapshot: retrievalSnapshot,
+          modelConfigSnapshot: modelSnapshot,
+          graderConfigSnapshot: { enabled: false },
+          snapshotHash,
+          createdByUserId: userId
+        }
+      });
+      if (version.cases.length) {
+        await transaction.evaluationCaseResult.createMany({
+          data: version.cases.map(({ id }) => ({ runId: created.id, caseId: id }))
+        });
+      }
+      return created;
+    });
+    this.ragEvaluationJob.enqueue(run.id);
+    return { id: run.id, status: run.status, totalCases: run.totalCases, createdAt: run.createdAt };
+  }
+
+  async getRun(runId: string) {
+    const run = await this.prisma.evaluationRun.findFirst({
+      where: { id: runId, workspaceId: requireWorkspaceId() },
+      include: { datasetVersion: { include: { dataset: true } } }
+    });
+    if (!run) this.throwNotFound();
+    return { ...this.toRunSummary(run), agentConfigSnapshot: run.agentConfigSnapshot, retrievalConfigSnapshot: run.retrievalConfigSnapshot, modelConfigSnapshot: run.modelConfigSnapshot, graderConfigSnapshot: run.graderConfigSnapshot, errorType: run.errorType, errorMessage: run.errorMessage };
+  }
+
+  async cancelRun(runId: string) {
+    const updated = await this.prisma.evaluationRun.updateMany({
+      where: { id: runId, workspaceId: requireWorkspaceId(), status: { in: ["PENDING", "RUNNING"] } },
+      data: { cancelRequestedAt: new Date() }
+    });
+    if (!updated.count) {
+      const existing = await this.prisma.evaluationRun.findFirst({ where: { id: runId, workspaceId: requireWorkspaceId() } });
+      if (!existing) this.throwNotFound();
+      throw new AppError(ErrorCodes.common.conflict, "only pending or running evaluation can be canceled", HttpStatus.CONFLICT);
+    }
+    this.ragEvaluationJob?.cancel(runId);
+    return this.getRun(runId);
+  }
+
+  async listRunResults(runId: string, query: EvaluationRunResultQueryDto) {
+    await this.requireRun(runId);
+    const page = normalizePageQuery(query);
+    const where = { runId };
+    const [rows, total] = await Promise.all([
+      this.prisma.evaluationCaseResult.findMany({ where, orderBy: { createdAt: "asc" }, skip: page.skip, take: page.take, include: { evaluationCase: true } }),
+      this.prisma.evaluationCaseResult.count({ where })
+    ]);
+    return createPageResult(rows, total, page.page, page.pageSize);
+  }
 
   async listDatasets(query: EvaluationDatasetQueryDto) {
     const page = normalizePageQuery(query);
@@ -515,6 +649,95 @@ export class EvaluationsService {
     });
     if (!item) this.throwNotFound("evaluation case not found");
     return item;
+  }
+
+  private async requireRun(runId: string) {
+    const run = await this.prisma.evaluationRun.findFirst({
+      where: { id: runId, workspaceId: requireWorkspaceId() }
+    });
+    if (!run) this.throwNotFound("evaluation run not found");
+    return run;
+  }
+
+  private async requireCompatibleBaseline(runId: string, datasetVersionId: string): Promise<void> {
+    const baseline = await this.prisma.evaluationRun.findFirst({
+      where: { id: runId, workspaceId: requireWorkspaceId() }
+    });
+    if (!baseline) this.throwNotFound("baseline evaluation run not found");
+    if (baseline.status !== "COMPLETED") {
+      throw new AppError(ErrorCodes.common.conflict, "baseline run must be completed", HttpStatus.CONFLICT);
+    }
+    if (baseline.datasetVersionId !== datasetVersionId) {
+      throw new AppError(ErrorCodes.common.badRequest, "baseline must use the same dataset version");
+    }
+  }
+
+  private toRunSummary(run: {
+    id: string;
+    datasetVersionId: string;
+    agentId: string;
+    baselineRunId: string | null;
+    status: string;
+    totalCases: number;
+    completedCases: number;
+    failedCases: number;
+    skippedCases: number;
+    agentConfigSnapshot: Prisma.JsonValue;
+    summaryMetrics: Prisma.JsonValue | null;
+    cancelRequestedAt: Date | null;
+    heartbeatAt: Date | null;
+    startedAt: Date | null;
+    finishedAt: Date | null;
+    createdByUserId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    datasetVersion: { version: number; dataset: { id: string; name: string } };
+  }) {
+    const agent = run.agentConfigSnapshot as { name?: string } | null;
+    return {
+      id: run.id,
+      datasetVersionId: run.datasetVersionId,
+      dataset: { id: run.datasetVersion.dataset.id, name: run.datasetVersion.dataset.name, version: run.datasetVersion.version },
+      agentId: run.agentId,
+      agentName: agent?.name ?? "—",
+      baselineRunId: run.baselineRunId,
+      status: run.status,
+      totalCases: run.totalCases,
+      completedCases: run.completedCases,
+      failedCases: run.failedCases,
+      skippedCases: run.skippedCases,
+      summaryMetrics: run.summaryMetrics,
+      cancelRequestedAt: run.cancelRequestedAt,
+      heartbeatAt: run.heartbeatAt,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      createdByUserId: run.createdByUserId,
+      createdAt: run.createdAt,
+      updatedAt: run.updatedAt
+    };
+  }
+
+  private requireId(value: unknown, field: string): string {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new AppError(ErrorCodes.common.badRequest, `${field} is required`);
+    }
+    return value.trim();
+  }
+
+  private normalizeTopK(value: unknown): number {
+    if (value === undefined) return 5;
+    if (!Number.isInteger(value) || Number(value) < 1 || Number(value) > 50) {
+      throw new AppError(ErrorCodes.common.badRequest, "retrieval topK must be an integer from 1 to 50");
+    }
+    return Number(value);
+  }
+
+  private normalizeScoreThreshold(value: unknown): number | undefined {
+    if (value === undefined) return undefined;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+      throw new AppError(ErrorCodes.common.badRequest, "retrieval scoreThreshold must be between 0 and 1");
+    }
+    return value;
   }
 
   private toDatasetListItem(dataset: {

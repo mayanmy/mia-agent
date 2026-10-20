@@ -16,6 +16,7 @@ import { tests as chatStreamTests } from "../modules/chat/chat-streams.service.s
 import { tests as externalAccessTests } from "../modules/external_access/external-access.service.spec";
 import { tests as evaluationTests } from "../modules/evaluations/evaluations.service.spec";
 import { tests as evaluationImportTests } from "../modules/evaluations/dataset-import.spec";
+import { tests as evaluationRetrievalMetricTests } from "../modules/evaluations/metrics/retrieval.metrics.spec";
 import { tests as knowledgeTests } from "../modules/knowledge/knowledge.service.spec";
 import { tests as openAICompatibleClientTests } from "../modules/model-providers/clients/openai-compatible.client.spec";
 import { tests as modelRoutingTests } from "../modules/model-providers/model-routing.spec";
@@ -85,6 +86,7 @@ const tests: TestCase[] = [
   ...externalAccessTests,
   ...evaluationTests,
   ...evaluationImportTests,
+  ...evaluationRetrievalMetricTests,
   ...chatTests
 ];
 
