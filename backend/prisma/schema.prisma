@@ -134,6 +134,28 @@ enum ChatMessageFeedbackRating {
   @@map("chat_message_feedback_rating")
 }
 
+enum EvaluationDatasetStatus {
+  ACTIVE
+  ARCHIVED
+
+  @@map("evaluation_dataset_status")
+}
+
+enum EvaluationDatasetVersionStatus {
+  DRAFT
+  FROZEN
+
+  @@map("evaluation_dataset_version_status")
+}
+
+enum EvaluationCaseSourceType {
+  MANUAL
+  IMPORT
+  ONLINE_FEEDBACK
+
+  @@map("evaluation_case_source_type")
+}
+
 /// 外部访问入口决定 End User 与会话的隔离范围，不能只用一个字符串标识混合公开访客和业务用户。
 enum ExternalUserSource {
   WIDGET
@@ -293,6 +315,9 @@ model User {
   chatMessageFeedbacks          ChatMessageFeedback[]
   workspaceMemberships          WorkspaceMember[]
   createdWorkspaces             Workspace[]             @relation("WorkspaceCreator")
+  createdEvaluationDatasets     EvaluationDataset[]      @relation("EvaluationDatasetCreator")
+  createdEvaluationVersions     EvaluationDatasetVersion[] @relation("EvaluationVersionCreator")
+  createdEvaluationCases        EvaluationCase[]         @relation("EvaluationCaseCreator")
 
   @@index([role, disabledAt], map: "idx_users_role_disabled_at")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
@@ -311,6 +336,7 @@ model Workspace {
   createdBy   User              @relation("WorkspaceCreator", fields: [createdById], references: [id], onDelete: Restrict)
   members     WorkspaceMember[]
   invitations UserInvitation[]
+  evaluationDatasets EvaluationDataset[]
 
   @@index([deletedAt, createdAt(sort: Desc)], map: "idx_workspaces_deleted_created_at")
   @@index([createdById], map: "idx_workspaces_created_by_id")
@@ -1320,4 +1346,71 @@ model AgentKnowledgeBase {
   @@id([agentId, knowledgeBaseId])
   @@index([knowledgeBaseId], map: "idx_agent_knowledge_bases_knowledge_base_id")
   @@map("agent_knowledge_bases")
+}
+
+/// 评估数据集是工作空间内 Golden Set 的稳定容器；归档不删除历史版本。
+model EvaluationDataset {
+  id              String                  @id @default(uuid()) @db.Uuid
+  workspaceId     String                  @map("workspace_id") @db.Uuid
+  name            String
+  normalizedName  String                  @map("normalized_name")
+  description     String                  @default("") @db.Text
+  status          EvaluationDatasetStatus @default(ACTIVE)
+  createdByUserId String                  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace       Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy       User                    @relation("EvaluationDatasetCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  versions        EvaluationDatasetVersion[]
+
+  @@unique([workspaceId, normalizedName], map: "uq_evaluation_datasets_workspace_name")
+  @@index([workspaceId, status, updatedAt(sort: Desc)], map: "idx_evaluation_datasets_workspace_status_updated")
+  @@map("evaluation_datasets")
+}
+
+/// 冻结版本不可修改；新变更通过复制为新的 Draft 版本完成。
+model EvaluationDatasetVersion {
+  id              String                         @id @default(uuid()) @db.Uuid
+  datasetId       String                         @map("dataset_id") @db.Uuid
+  version         Int
+  status          EvaluationDatasetVersionStatus @default(DRAFT)
+  revision        Int                            @default(1)
+  caseCount       Int                            @default(0) @map("case_count")
+  createdByUserId String                         @map("created_by_user_id") @db.Uuid
+  frozenAt        DateTime?                      @map("frozen_at") @db.Timestamptz(6)
+  createdAt       DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  dataset         EvaluationDataset              @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  createdBy       User                           @relation("EvaluationVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  cases           EvaluationCase[]
+
+  @@unique([datasetId, version], map: "uq_evaluation_dataset_versions_dataset_version")
+  @@index([datasetId, status, createdAt(sort: Desc)], map: "idx_evaluation_dataset_versions_dataset_status_created")
+  @@map("evaluation_dataset_versions")
+}
+
+/// 冻结版本中的单条用例会被评估运行按 ID 固定引用。
+model EvaluationCase {
+  id                  String                   @id @default(uuid()) @db.Uuid
+  datasetVersionId    String                   @map("dataset_version_id") @db.Uuid
+  question            String                   @db.Text
+  questionHash        String                   @map("question_hash")
+  expectedAnswer      String?                  @map("expected_answer") @db.Text
+  expectedDocumentIds String[]                 @default([]) @map("expected_document_ids") @db.Uuid
+  expectedChunkIds    String[]                 @default([]) @map("expected_chunk_ids") @db.Uuid
+  answerable          Boolean                  @default(true)
+  category            String?
+  difficulty          String?
+  sourceType          EvaluationCaseSourceType @default(MANUAL) @map("source_type")
+  sourceFeedbackId    String?                  @map("source_feedback_id") @db.Uuid
+  metadata            Json?                    @db.JsonB
+  createdByUserId     String                   @map("created_by_user_id") @db.Uuid
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  datasetVersion      EvaluationDatasetVersion @relation(fields: [datasetVersionId], references: [id], onDelete: Cascade)
+  createdBy           User                     @relation("EvaluationCaseCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([datasetVersionId, questionHash], map: "uq_evaluation_cases_version_question_hash")
+  @@index([datasetVersionId, createdAt(sort: Desc)], map: "idx_evaluation_cases_version_created")
+  @@map("evaluation_cases")
 }

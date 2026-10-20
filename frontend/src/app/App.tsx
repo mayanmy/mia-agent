@@ -67,6 +67,16 @@ const AgentRunsPage = lazy(() =>
     default: module.AgentRunsPage
   }))
 );
+const EvaluationDatasetsPage = lazy(() =>
+  import("../features/evaluations/EvaluationDatasetsPage").then((module) => ({
+    default: module.EvaluationDatasetsPage
+  }))
+);
+const EvaluationDatasetPage = lazy(() =>
+  import("../features/evaluations/EvaluationDatasetPage").then((module) => ({
+    default: module.EvaluationDatasetPage
+  }))
+);
 const WorkflowsPage = lazy(() =>
   import("../features/workflows/WorkflowsPage").then((module) => ({
     default: module.WorkflowsPage
@@ -244,6 +254,8 @@ export function App() {
                 <Route index element={<Navigate replace to="traces" />} />
                 <Route path="logs" element={<LogsPage />} />
                 <Route path="traces" element={<AgentRunsPage />} />
+                <Route path="evaluation-datasets" element={<EvaluationDatasetsPage />} />
+                <Route path="evaluation-datasets/:datasetId" element={<EvaluationDatasetPage />} />
               </Route>
             </Route>
 
@@ -356,7 +368,12 @@ function OperationSectionTabs() {
     <WorkspaceSectionTabs
       tabs={[
         { label: "运行链路", path: "/operations/traces" },
-        { label: "请求日志", path: "/operations/logs" }
+        { label: "请求日志", path: "/operations/logs" },
+        {
+          label: "评估数据集",
+          path: "/operations/evaluation-datasets",
+          match: (pathname: string) => pathname.startsWith("/operations/evaluation-datasets")
+        }
       ]}
     />
   );

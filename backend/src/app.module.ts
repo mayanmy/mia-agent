@@ -6,6 +6,7 @@ import { AgentRunsModule } from "./modules/agent_runs/agent-runs.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { ChatModule } from "./modules/chat/chat.module";
 import { ExternalAccessModule } from "./modules/external_access/external-access.module";
+import { EvaluationsModule } from "./modules/evaluations/evaluations.module";
 import { HealthModule } from "./modules/health/health.module";
 import { KnowledgeModule } from "./modules/knowledge/knowledge.module";
 import { LogsModule } from "./modules/logs/logs.module";
@@ -40,6 +41,7 @@ import { WorkspaceContextInterceptor } from "./core/auth/workspace-context.inter
     AgentsModule,
     ChatModule,
     ExternalAccessModule,
+    EvaluationsModule,
     ToolsModule,
     LogsModule,
     KnowledgeModule,

@@ -1,0 +1,37 @@
+.evaluationWorkspace {
+  display: grid;
+  gap: 16px;
+}
+
+.evaluationFilters {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 180px auto;
+  gap: 12px;
+  padding: 16px;
+}
+
+.evaluationTablePanel {
+  overflow: hidden;
+  padding: 0;
+}
+
+.evaluationFrozenNotice {
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e40af;
+  padding: 12px 16px;
+}
+
+.evaluationFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .evaluationFilters,
+  .evaluationFormGrid {
+    grid-template-columns: 1fr;
+  }
+}
