@@ -47,6 +47,18 @@ export type FreezeEvaluationVersionDto = {
   expectedRevision?: number;
 };
 
+export type UploadedEvaluationFile = {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+};
+
+export type CommitEvaluationImportDto = {
+  importToken?: string;
+  onlyValidRows?: boolean;
+};
+
 export type EvaluationVersionSummary = {
   id: string;
   version: number;

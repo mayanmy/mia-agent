@@ -5,22 +5,29 @@ import {
   EvaluationDatasetVersionStatus,
   Prisma
 } from "@prisma/client";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PrismaService } from "../prisma/prisma.service";
 import {
+  EvaluationImportError,
+  ImportedEvaluationCase,
+  parseEvaluationImport
+} from "./dataset-import";
+import {
   CreateEvaluationCaseDto,
   CreateEvaluationDatasetDto,
   CreateEvaluationVersionDto,
+  CommitEvaluationImportDto,
   EvaluationCaseQueryDto,
   EvaluationDatasetDetail,
   EvaluationDatasetListItem,
   EvaluationDatasetQueryDto,
   EvaluationVersionSummary,
   FreezeEvaluationVersionDto,
+  UploadedEvaluationFile,
   UpdateEvaluationCaseDto,
   UpdateEvaluationDatasetDto
 } from "./dto/evaluation.dto";
@@ -29,9 +36,22 @@ const DATASET_NAME_MAX = 100;
 const DESCRIPTION_MAX = 1000;
 const QUESTION_MAX = 20_000;
 const EXPECTED_ANSWER_MAX = 50_000;
+const IMPORT_TOKEN_TTL_MS = 15 * 60_000;
+
+type PendingImport = {
+  workspaceId: string;
+  userId: string;
+  versionId: string;
+  rows: ImportedEvaluationCase[];
+  errors: EvaluationImportError[];
+  duplicateCount: number;
+  expiresAt: number;
+};
 
 @Injectable()
 export class EvaluationsService {
+  private readonly pendingImports = new Map<string, PendingImport>();
+
   constructor(private readonly prisma: PrismaService) {}
 
   async listDatasets(query: EvaluationDatasetQueryDto) {
@@ -316,6 +336,122 @@ export class EvaluationsService {
     return this.getVersion(versionId);
   }
 
+  async previewImport(versionId: string, file: UploadedEvaluationFile | undefined, userId: string) {
+    await this.requireMutableVersion(versionId);
+    if (!file?.buffer?.length)
+      throw new AppError(ErrorCodes.common.badRequest, "import file is required");
+    let parsed;
+    try {
+      parsed = parseEvaluationImport(file.originalname, file.buffer);
+    } catch (error) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        error instanceof Error ? error.message : "invalid import file"
+      );
+    }
+    const existing = parsed.rows.length
+      ? await this.prisma.evaluationCase.findMany({
+          where: {
+            datasetVersionId: versionId,
+            questionHash: { in: parsed.rows.map((row) => row.questionHash) }
+          },
+          select: { questionHash: true }
+        })
+      : [];
+    const knownHashes = new Set(existing.map((item) => item.questionHash));
+    const fileHashes = new Set<string>();
+    const rows: ImportedEvaluationCase[] = [];
+    const errors = [...parsed.errors];
+    let duplicateCount = 0;
+    for (const row of parsed.rows) {
+      if (knownHashes.has(row.questionHash) || fileHashes.has(row.questionHash)) {
+        duplicateCount += 1;
+        errors.push({ line: row.line, message: "duplicate question" });
+        continue;
+      }
+      fileHashes.add(row.questionHash);
+      rows.push(row);
+    }
+    this.pruneExpiredImports();
+    const importToken = randomUUID();
+    this.pendingImports.set(importToken, {
+      workspaceId: requireWorkspaceId(),
+      userId,
+      versionId,
+      rows,
+      errors,
+      duplicateCount,
+      expiresAt: Date.now() + IMPORT_TOKEN_TTL_MS
+    });
+    return {
+      importToken,
+      expiresAt: new Date(Date.now() + IMPORT_TOKEN_TTL_MS),
+      totalRows: parsed.totalRows,
+      validCount: rows.length,
+      errorCount: errors.length - duplicateCount,
+      duplicateCount,
+      preview: rows.slice(0, 20).map(({ questionHash: _questionHash, ...row }) => row),
+      errors
+    };
+  }
+
+  async commitImport(versionId: string, payload: CommitEvaluationImportDto, userId: string) {
+    await this.requireMutableVersion(versionId);
+    const token = payload.importToken?.trim();
+    if (!token) throw new AppError(ErrorCodes.common.badRequest, "importToken is required");
+    const pending = this.pendingImports.get(token);
+    if (
+      !pending ||
+      pending.expiresAt <= Date.now() ||
+      pending.workspaceId !== requireWorkspaceId() ||
+      pending.userId !== userId ||
+      pending.versionId !== versionId
+    ) {
+      this.pendingImports.delete(token);
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "import preview expired or does not belong to this request"
+      );
+    }
+    if (pending.errors.length > 0 && !payload.onlyValidRows) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "import contains invalid rows; confirm onlyValidRows to continue"
+      );
+    }
+    if (pending.rows.length === 0) {
+      throw new AppError(ErrorCodes.common.badRequest, "import has no valid rows");
+    }
+    try {
+      await this.prisma.$transaction(async (transaction) => {
+        await transaction.evaluationCase.createMany({
+          data: pending.rows.map((row) => ({
+            datasetVersionId: versionId,
+            question: row.question,
+            questionHash: row.questionHash,
+            expectedAnswer: row.expectedAnswer,
+            expectedDocumentIds: row.expectedDocumentIds,
+            expectedChunkIds: row.expectedChunkIds,
+            answerable: row.answerable,
+            category: row.category,
+            difficulty: row.difficulty,
+            sourceType: EvaluationCaseSourceType.IMPORT,
+            createdByUserId: userId
+          }))
+        });
+        await transaction.evaluationDatasetVersion.update({
+          where: { id: versionId },
+          data: { caseCount: { increment: pending.rows.length }, revision: { increment: 1 } }
+        });
+      });
+    } catch (error) {
+      this.throwIfUniqueConflict(error, "dataset changed after preview; preview the import again");
+      throw error;
+    }
+    this.pendingImports.delete(token);
+    return { importedCount: pending.rows.length, skippedCount: pending.errors.length };
+  }
+
   private normalizeCasePayload(payload: CreateEvaluationCaseDto) {
     const question = this.normalizeRequiredText(payload.question, "question", QUESTION_MAX);
     return {
@@ -332,6 +468,13 @@ export class EvaluationsService {
       sourceType: payload.sourceType ?? EvaluationCaseSourceType.MANUAL,
       sourceFeedbackId: this.normalizeOptionalText(payload.sourceFeedbackId, 64)
     };
+  }
+
+  private pruneExpiredImports(): void {
+    const now = Date.now();
+    for (const [token, pending] of this.pendingImports) {
+      if (pending.expiresAt <= now) this.pendingImports.delete(token);
+    }
   }
 
   private async requireDataset(datasetId: string) {

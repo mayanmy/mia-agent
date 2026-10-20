@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { CopyOutlined, LockOutlined, PlusOutlined } from "@ant-design/icons";
+import { CopyOutlined, ImportOutlined, LockOutlined, PlusOutlined } from "@ant-design/icons";
 import {
   App as AntdApp,
   Button,
@@ -30,6 +30,7 @@ import {
   type EvaluationVersion
 } from "./api";
 import "./evaluations.less";
+import { DatasetImportModal } from "./components/DatasetImportModal";
 
 export function EvaluationDatasetPage() {
   const { message, modal } = AntdApp.useApp();
@@ -43,6 +44,7 @@ export function EvaluationDatasetPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [caseModalOpen, setCaseModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingCase, setEditingCase] = useState<EvaluationCase | null>(null);
   const selectedVersionId = searchParams.get("versionId");
   const selectedVersion = useMemo(
@@ -238,6 +240,13 @@ export function EvaluationDatasetPage() {
               </Button>
             )}
             <Button
+              icon={<ImportOutlined />}
+              disabled={!mutable}
+              onClick={() => setImportModalOpen(true)}
+            >
+              导入
+            </Button>
+            <Button
               type="primary"
               icon={<PlusOutlined />}
               disabled={!mutable}
@@ -312,6 +321,17 @@ export function EvaluationDatasetPage() {
           </Form.Item>
         </Form>
       </Modal>
+      {selectedVersion ? (
+        <DatasetImportModal
+          open={importModalOpen}
+          versionId={selectedVersion.id}
+          onClose={() => setImportModalOpen(false)}
+          onImported={async () => {
+            await loadDataset(selectedVersion.id);
+            await loadCases(selectedVersion.id, 1);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

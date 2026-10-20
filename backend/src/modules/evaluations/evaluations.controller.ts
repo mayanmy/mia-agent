@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { UserRole, WorkspaceRole } from "@prisma/client";
 
 import { CurrentUser } from "../../core/auth/current-user.decorator";
@@ -7,11 +19,13 @@ import { WorkspaceRequired, WorkspaceRoles } from "../../core/auth/workspace.dec
 import { CurrentUserDto } from "../users/dto/user.dto";
 import {
   CreateEvaluationCaseDto,
+  CommitEvaluationImportDto,
   CreateEvaluationDatasetDto,
   CreateEvaluationVersionDto,
   EvaluationCaseQueryDto,
   EvaluationDatasetQueryDto,
   FreezeEvaluationVersionDto,
+  UploadedEvaluationFile,
   UpdateEvaluationCaseDto,
   UpdateEvaluationDatasetDto
 } from "./dto/evaluation.dto";
@@ -106,5 +120,24 @@ export class EvaluationsController {
     @Body() payload: FreezeEvaluationVersionDto
   ) {
     return this.evaluationsService.freezeVersion(versionId, payload);
+  }
+
+  @Post("dataset-versions/:versionId/import/preview")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
+  previewImport(
+    @Param("versionId") versionId: string,
+    @UploadedFile() file: UploadedEvaluationFile | undefined,
+    @CurrentUser() user: CurrentUserDto
+  ) {
+    return this.evaluationsService.previewImport(versionId, file, user.id);
+  }
+
+  @Post("dataset-versions/:versionId/import/commit")
+  commitImport(
+    @Param("versionId") versionId: string,
+    @Body() payload: CommitEvaluationImportDto,
+    @CurrentUser() user: CurrentUserDto
+  ) {
+    return this.evaluationsService.commitImport(versionId, payload, user.id);
   }
 }

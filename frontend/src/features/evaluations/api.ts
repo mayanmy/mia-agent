@@ -51,6 +51,24 @@ export type EvaluationCaseInput = {
   difficulty?: string | null;
 };
 
+export type EvaluationImportPreview = {
+  importToken: string;
+  expiresAt: string;
+  totalRows: number;
+  validCount: number;
+  errorCount: number;
+  duplicateCount: number;
+  preview: Array<{
+    line: number;
+    question: string;
+    expectedAnswer: string | null;
+    answerable: boolean;
+    category: string | null;
+    difficulty: string | null;
+  }>;
+  errors: Array<{ line: number; message: string }>;
+};
+
 function queryString(values: Record<string, unknown>): string {
   const params = new URLSearchParams();
   Object.entries(values).forEach(([key, value]) => {
@@ -122,4 +140,24 @@ export function freezeEvaluationVersion(versionId: string, expectedRevision: num
     method: "POST",
     body: JSON.stringify({ expectedRevision })
   });
+}
+
+export function previewEvaluationImport(versionId: string, file: File) {
+  const body = new FormData();
+  body.append("file", file);
+  return request<EvaluationImportPreview>(
+    `/api/v1/evaluations/dataset-versions/${versionId}/import/preview`,
+    { method: "POST", body }
+  );
+}
+
+export function commitEvaluationImport(
+  versionId: string,
+  importToken: string,
+  onlyValidRows: boolean
+) {
+  return request<{ importedCount: number; skippedCount: number }>(
+    `/api/v1/evaluations/dataset-versions/${versionId}/import/commit`,
+    { method: "POST", body: JSON.stringify({ importToken, onlyValidRows }) }
+  );
 }
