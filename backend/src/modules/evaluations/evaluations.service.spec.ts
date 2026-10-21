@@ -140,5 +140,27 @@ export const tests = [
       assert.equal(JSON.stringify(runData).includes("secret.internal"), false);
       assert.equal((runData?.retrievalConfigSnapshot as { topK: number }).topK, 5);
     }
+  },
+  {
+    name: "EvaluationsService reports incompatible dataset versions before comparison",
+    run: async () => {
+      const prisma = {
+        evaluationRun: {
+          findFirst: async ({ where }: { where: { id: string } }) => ({
+            id: where.id,
+            workspaceId: "workspace-id",
+            datasetVersionId: where.id === "baseline" ? "version-a" : "version-b",
+            metricsVersion: "v1",
+            status: "COMPLETED"
+          })
+        }
+      };
+      const service = new EvaluationsService(prisma as never);
+      const result = await runInWorkspaceContext("workspace-id", undefined, () =>
+        service.getComparisonCompatibility({ baselineRunId: "baseline", candidateRunId: "candidate" })
+      );
+      assert.equal(result.compatible, false);
+      assert.equal(result.reasons[0]?.field, "datasetVersionId");
+    }
   }
 ];

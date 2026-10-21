@@ -95,6 +95,44 @@ export type EvaluationRun = {
   createdAt: string;
   updatedAt: string;
 };
+export type EvaluationRunDetail = EvaluationRun & {
+  agentConfigSnapshot: Record<string, unknown>;
+  retrievalConfigSnapshot: Record<string, unknown>;
+  modelConfigSnapshot: Record<string, unknown>;
+  graderConfigSnapshot: Record<string, unknown>;
+  errorType: string | null;
+  errorMessage: string | null;
+};
+export type EvaluationCaseResult = {
+  id: string;
+  caseId: string;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "SKIPPED";
+  actualAnswer: string | null;
+  retrievedChunks: Array<{ documentId: string; documentName: string; chunkId: string; content: string; score: number }> | null;
+  retrievalMetrics: { hitRateAt5: number | null; recallAt5: number | null; mrr: number | null; emptyRetrieval: boolean } | null;
+  runtimeMetrics: { retrievalMs: number; totalMs: number; totalTokens: number | null } | null;
+  errorType: string | null;
+  errorMessage: string | null;
+  evaluationCase: EvaluationCase;
+};
+export type EvaluationComparison = {
+  baseline: EvaluationRunDetail;
+  candidate: EvaluationRunDetail;
+  compatibility: { compatible: boolean; reasons: Array<{ field: string; baselineValue: unknown; candidateValue: unknown; message: string }> };
+  metrics: Array<{
+    key: string;
+    label: string;
+    direction: "higher_is_better" | "lower_is_better";
+    baselineValue: number | null;
+    candidateValue: number | null;
+    absoluteDelta: number | null;
+    relativeDelta: number | null;
+    sampleCount: number;
+    verdict: "improved" | "regressed" | "unchanged" | "not_comparable";
+  }>;
+  caseCounts: { improved: number; regressed: number; unchanged: number; mixed: number };
+  gateResult: "not_evaluated";
+};
 
 function queryString(values: Record<string, unknown>): string {
   const params = new URLSearchParams();
@@ -206,4 +244,20 @@ export function createEvaluationRun(payload: {
 
 export function cancelEvaluationRun(runId: string) {
   return request<EvaluationRun>(`/api/v1/evaluations/runs/${runId}/cancel`, { method: "POST" });
+}
+
+export function getEvaluationRun(runId: string) {
+  return request<EvaluationRunDetail>(`/api/v1/evaluations/runs/${runId}`);
+}
+
+export function listEvaluationRunResults(runId: string, page = 1, pageSize = 50) {
+  return request<PageResult<EvaluationCaseResult>>(`/api/v1/evaluations/runs/${runId}/results?page=${page}&pageSize=${pageSize}`);
+}
+
+export function listCompatibleEvaluationBaselines(runId: string) {
+  return request<EvaluationRun[]>(`/api/v1/evaluations/runs/${runId}/compatible-baselines`);
+}
+
+export function getEvaluationComparison(baselineRunId: string, candidateRunId: string) {
+  return request<EvaluationComparison>(`/api/v1/evaluations/comparisons?${queryString({ baselineRunId, candidateRunId })}`);
 }

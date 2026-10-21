@@ -26,6 +26,7 @@ import {
   CreateEvaluationRunDto,
   EvaluationCaseQueryDto,
   EvaluationDatasetDetail,
+  EvaluationComparisonQueryDto,
   EvaluationDatasetListItem,
   EvaluationDatasetQueryDto,
   EvaluationRunQueryDto,
@@ -186,6 +187,102 @@ export class EvaluationsService {
       this.prisma.evaluationCaseResult.count({ where })
     ]);
     return createPageResult(rows, total, page.page, page.pageSize);
+  }
+
+  async listCompatibleBaselines(runId: string) {
+    const candidate = await this.requireRun(runId);
+    const rows = await this.prisma.evaluationRun.findMany({
+      where: {
+        workspaceId: requireWorkspaceId(),
+        datasetVersionId: candidate.datasetVersionId,
+        status: "COMPLETED",
+        id: { not: runId }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: { datasetVersion: { include: { dataset: true } } }
+    });
+    return rows.map((row) => this.toRunSummary(row));
+  }
+
+  async getComparisonCompatibility(query: EvaluationComparisonQueryDto) {
+    const { baseline, candidate } = await this.requireComparisonRuns(query);
+    const reasons: Array<{ field: string; baselineValue: unknown; candidateValue: unknown; message: string }> = [];
+    if (baseline.datasetVersionId !== candidate.datasetVersionId) {
+      reasons.push({
+        field: "datasetVersionId",
+        baselineValue: baseline.datasetVersionId,
+        candidateValue: candidate.datasetVersionId,
+        message: "Baseline 与 Candidate 必须使用同一冻结数据集版本"
+      });
+    }
+    if (baseline.metricsVersion !== candidate.metricsVersion) {
+      reasons.push({
+        field: "metricsVersion",
+        baselineValue: baseline.metricsVersion,
+        candidateValue: candidate.metricsVersion,
+        message: "两次运行的指标版本不同"
+      });
+    }
+    if (baseline.status !== "COMPLETED" || candidate.status !== "COMPLETED") {
+      reasons.push({
+        field: "status",
+        baselineValue: baseline.status,
+        candidateValue: candidate.status,
+        message: "只有已完成的运行可以生成精确对比"
+      });
+    }
+    return { compatible: reasons.length === 0, reasons };
+  }
+
+  async getComparison(query: EvaluationComparisonQueryDto) {
+    const { baseline, candidate } = await this.requireComparisonRuns(query);
+    const compatibility = await this.getComparisonCompatibility(query);
+    const baselineSummary = baseline.summaryMetrics as Record<string, unknown> | null;
+    const candidateSummary = candidate.summaryMetrics as Record<string, unknown> | null;
+    const catalog = [
+      { key: "retrieval.hitRateAt5", label: "HitRate@5", direction: "higher_is_better" as const },
+      { key: "retrieval.recallAt5", label: "Recall@5", direction: "higher_is_better" as const },
+      { key: "retrieval.mrr", label: "MRR", direction: "higher_is_better" as const },
+      { key: "retrieval.emptyRetrievalRate", label: "空召回率", direction: "lower_is_better" as const },
+      { key: "runtime.successRate", label: "成功率", direction: "higher_is_better" as const },
+      { key: "runtime.p95TotalMs", label: "P95 总耗时", direction: "lower_is_better" as const }
+    ];
+    const metrics = catalog.map((item) => {
+      const baselineValue = this.readMetric(baselineSummary, item.key);
+      const candidateValue = this.readMetric(candidateSummary, item.key);
+      const absoluteDelta = baselineValue === null || candidateValue === null ? null : candidateValue - baselineValue;
+      const relativeDelta =
+        absoluteDelta === null || baselineValue === null || baselineValue === 0
+          ? null
+          : absoluteDelta / Math.abs(baselineValue);
+      return {
+        ...item,
+        baselineValue,
+        candidateValue,
+        absoluteDelta,
+        relativeDelta,
+        sampleCount: this.readMetric(candidateSummary, "sampleCount") ?? 0,
+        verdict: !compatibility.compatible || absoluteDelta === null
+          ? "not_comparable"
+          : Math.abs(absoluteDelta) < 1e-9
+            ? "unchanged"
+            : (item.direction === "higher_is_better" ? absoluteDelta > 0 : absoluteDelta < 0)
+              ? "improved"
+              : "regressed"
+      };
+    });
+    const caseCounts = compatibility.compatible
+      ? await this.compareCaseResults(baseline.id, candidate.id)
+      : { improved: 0, regressed: 0, unchanged: 0, mixed: 0 };
+    return {
+      baseline: await this.getRun(baseline.id),
+      candidate: await this.getRun(candidate.id),
+      compatibility,
+      metrics,
+      caseCounts,
+      gateResult: "not_evaluated"
+    };
   }
 
   async listDatasets(query: EvaluationDatasetQueryDto) {
@@ -670,6 +767,62 @@ export class EvaluationsService {
     if (baseline.datasetVersionId !== datasetVersionId) {
       throw new AppError(ErrorCodes.common.badRequest, "baseline must use the same dataset version");
     }
+  }
+
+  private async requireComparisonRuns(query: EvaluationComparisonQueryDto) {
+    const baselineRunId = this.requireId(query.baselineRunId, "baselineRunId");
+    const candidateRunId = this.requireId(query.candidateRunId, "candidateRunId");
+    const [baseline, candidate] = await Promise.all([
+      this.prisma.evaluationRun.findFirst({ where: { id: baselineRunId, workspaceId: requireWorkspaceId() } }),
+      this.prisma.evaluationRun.findFirst({ where: { id: candidateRunId, workspaceId: requireWorkspaceId() } })
+    ]);
+    if (!baseline || !candidate) this.throwNotFound("evaluation run not found");
+    return { baseline, candidate };
+  }
+
+  private readMetric(summary: Record<string, unknown> | null, path: string): number | null {
+    let current: unknown = summary;
+    for (const segment of path.split(".")) {
+      if (!current || typeof current !== "object" || Array.isArray(current)) return null;
+      current = (current as Record<string, unknown>)[segment];
+    }
+    return typeof current === "number" && Number.isFinite(current) ? current : null;
+  }
+
+  private async compareCaseResults(baselineRunId: string, candidateRunId: string) {
+    const [baselineRows, candidateRows] = await Promise.all([
+      this.prisma.evaluationCaseResult.findMany({ where: { runId: baselineRunId } }),
+      this.prisma.evaluationCaseResult.findMany({ where: { runId: candidateRunId } })
+    ]);
+    const baselineByCase = new Map(baselineRows.map((row) => [row.caseId, row]));
+    const counts = { improved: 0, regressed: 0, unchanged: 0, mixed: 0 };
+    for (const candidate of candidateRows) {
+      const baseline = baselineByCase.get(candidate.caseId);
+      if (!baseline) continue;
+      const baselineRetrieval = baseline.retrievalMetrics as Record<string, unknown> | null;
+      const candidateRetrieval = candidate.retrievalMetrics as Record<string, unknown> | null;
+      const baselineRuntime = baseline.runtimeMetrics as Record<string, unknown> | null;
+      const candidateRuntime = candidate.runtimeMetrics as Record<string, unknown> | null;
+      const qualityDelta = this.metricDelta(baselineRetrieval, candidateRetrieval, "recallAt5");
+      const latencyDelta = this.metricDelta(baselineRuntime, candidateRuntime, "totalMs");
+      const qualityVerdict = qualityDelta === null || Math.abs(qualityDelta) < 1e-9 ? 0 : qualityDelta > 0 ? 1 : -1;
+      const latencyVerdict = latencyDelta === null || Math.abs(latencyDelta) < 1 ? 0 : latencyDelta < 0 ? 1 : -1;
+      if (qualityVerdict && latencyVerdict && qualityVerdict !== latencyVerdict) counts.mixed += 1;
+      else if (qualityVerdict > 0 || (!qualityVerdict && latencyVerdict > 0)) counts.improved += 1;
+      else if (qualityVerdict < 0 || (!qualityVerdict && latencyVerdict < 0)) counts.regressed += 1;
+      else counts.unchanged += 1;
+    }
+    return counts;
+  }
+
+  private metricDelta(
+    baseline: Record<string, unknown> | null,
+    candidate: Record<string, unknown> | null,
+    key: string
+  ): number | null {
+    const before = baseline?.[key];
+    const after = candidate?.[key];
+    return typeof before === "number" && typeof after === "number" ? after - before : null;
   }
 
   private toRunSummary(run: {

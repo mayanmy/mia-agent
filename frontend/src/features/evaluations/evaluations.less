@@ -50,6 +50,93 @@
   padding: 12px 0;
 }
 
+.evaluationRunHeader {
+  display: grid;
+  gap: 16px;
+}
+
+.evaluationSectionTitle {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
+.evaluationMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.evaluationMetricCard {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.evaluationMetricCard > span,
+.evaluationMetricCard > small,
+.evaluationComparisonPanel p {
+  color: var(--mia-text-muted);
+}
+
+.evaluationMetricCard > strong {
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+}
+
+.evaluationComparisonPanel {
+  display: grid;
+  gap: 16px;
+}
+
+.evaluationComparisonPanel h2,
+.evaluationComparisonPanel p {
+  margin: 0;
+}
+
+.evaluationComparisonTable,
+.evaluationCaseCounts {
+  display: grid;
+  gap: 12px;
+}
+
+.evaluationCaseCounts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.evaluationCaseCounts span {
+  padding: 12px;
+  border: 1px solid var(--mia-border);
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.evaluationQuestionLink {
+  height: auto;
+  padding: 4px 0;
+  text-align: left;
+  white-space: normal;
+}
+
+.evaluationLongText,
+.evaluationChunk p {
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.evaluationChunk {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--mia-border);
+  border-radius: 8px;
+}
+
+.evaluationChunk > span {
+  float: right;
+  color: var(--mia-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 720px) {
   .evaluationFilters,
   .evaluationFormGrid {
@@ -58,5 +145,10 @@
 
   .evaluationImportStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .evaluationMetricGrid,
+  .evaluationCaseCounts {
+    grid-template-columns: 1fr;
   }
 }

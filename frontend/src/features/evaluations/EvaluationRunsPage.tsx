@@ -16,6 +16,7 @@ import {
 
 import { listAgents, type AgentListItem } from "../agents/api";
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
+import { useNavigate } from "react-router-dom";
 import {
   cancelEvaluationRun,
   createEvaluationRun,
@@ -44,6 +45,7 @@ const statusMeta: Record<EvaluationRunStatus, { label: string; color: string }> 
 };
 
 export function EvaluationRunsPage() {
+  const navigate = useNavigate();
   const [form] = Form.useForm<CreateRunForm>();
   const [rows, setRows] = useState<EvaluationRun[]>([]);
   const [agents, setAgents] = useState<AgentListItem[]>([]);
@@ -185,9 +187,13 @@ export function EvaluationRunsPage() {
       },
       {
         title: "操作",
-        width: 90,
-        render: (_, row) =>
-          row.status === "PENDING" || row.status === "RUNNING" ? (
+        width: 160,
+        render: (_, row) => (
+          <Space>
+            <Button type="link" onClick={() => navigate(`/operations/evaluations/runs/${row.id}`)}>
+              查看报告
+            </Button>
+            {(row.status === "PENDING" || row.status === "RUNNING") && (
             <Button
               type="link"
               danger
@@ -200,12 +206,12 @@ export function EvaluationRunsPage() {
             >
               取消
             </Button>
-          ) : (
-            "—"
-          )
+            )}
+          </Space>
+        )
       }
     ],
-    [loadRuns]
+    [loadRuns, navigate]
   );
 
   return (

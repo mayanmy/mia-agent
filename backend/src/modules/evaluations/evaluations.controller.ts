@@ -25,6 +25,7 @@ import {
   CreateEvaluationRunDto,
   EvaluationCaseQueryDto,
   EvaluationDatasetQueryDto,
+  EvaluationComparisonQueryDto,
   EvaluationRunQueryDto,
   EvaluationRunResultQueryDto,
   FreezeEvaluationVersionDto,
@@ -40,6 +41,16 @@ import { EvaluationsService } from "./evaluations.service";
 @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
 export class EvaluationsController {
   constructor(private readonly evaluationsService: EvaluationsService) {}
+
+  @Get("comparisons")
+  getComparison(@Query() query: EvaluationComparisonQueryDto) {
+    return this.evaluationsService.getComparison(query);
+  }
+
+  @Get("comparisons/compatibility")
+  getComparisonCompatibility(@Query() query: EvaluationComparisonQueryDto) {
+    return this.evaluationsService.getComparisonCompatibility(query);
+  }
 
   @Get("runs")
   listRuns(@Query() query: EvaluationRunQueryDto) {
@@ -64,6 +75,11 @@ export class EvaluationsController {
   @Get("runs/:runId/results")
   listRunResults(@Param("runId") runId: string, @Query() query: EvaluationRunResultQueryDto) {
     return this.evaluationsService.listRunResults(runId, query);
+  }
+
+  @Get("runs/:runId/compatible-baselines")
+  listCompatibleBaselines(@Param("runId") runId: string) {
+    return this.evaluationsService.listCompatibleBaselines(runId);
   }
 
   @Get("datasets")

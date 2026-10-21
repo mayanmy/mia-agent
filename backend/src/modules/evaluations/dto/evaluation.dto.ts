@@ -77,6 +77,11 @@ export type EvaluationRunQueryDto = {
 
 export type EvaluationRunResultQueryDto = { page?: string; pageSize?: string };
 
+export type EvaluationComparisonQueryDto = {
+  baselineRunId?: string;
+  candidateRunId?: string;
+};
+
 export type EvaluationVersionSummary = {
   id: string;
   version: number;

@@ -82,6 +82,11 @@ const EvaluationRunsPage = lazy(() =>
     default: module.EvaluationRunsPage
   }))
 );
+const EvaluationRunPage = lazy(() =>
+  import("../features/evaluations/EvaluationRunPage").then((module) => ({
+    default: module.EvaluationRunPage
+  }))
+);
 const WorkflowsPage = lazy(() =>
   import("../features/workflows/WorkflowsPage").then((module) => ({
     default: module.WorkflowsPage
@@ -262,6 +267,7 @@ export function App() {
                 <Route path="evaluation-datasets" element={<EvaluationDatasetsPage />} />
                 <Route path="evaluation-datasets/:datasetId" element={<EvaluationDatasetPage />} />
                 <Route path="evaluations" element={<EvaluationRunsPage />} />
+                <Route path="evaluations/runs/:runId" element={<EvaluationRunPage />} />
               </Route>
             </Route>
 
