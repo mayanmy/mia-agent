@@ -17,6 +17,7 @@ import {
   EmbeddingResponse,
   ProviderRuntimeConfig
 } from "./dto/llm.dto";
+import { ModelCapacityService } from "./model-capacity.service";
 
 /** Prisma 查询结果在模型模块内部转换成运行配置，不向业务模块暴露 ORM Model。 */
 type ModelConfigWithProvider = {
@@ -34,7 +35,8 @@ export class ModelProvidersGateway {
   constructor(
     private readonly prisma: PrismaService,
     private readonly openAICompatibleClient: OpenAICompatibleClient,
-    private readonly ollamaClient: OllamaClient
+    private readonly ollamaClient: OllamaClient,
+    private readonly capacity: ModelCapacityService
   ) {}
 
   /** 非流式 Chat 的统一入口，负责配置加载、取消传播、超时和错误归一化。 */
@@ -45,6 +47,7 @@ export class ModelProvidersGateway {
     const abort = () => controller.abort();
     request.signal?.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const lease = await this.capacity.acquire(config.providerId, request.purpose ?? "online_chat", controller.signal);
 
     try {
       return await this.getClient(config.providerType).createChatCompletion(config, {
@@ -61,6 +64,7 @@ export class ModelProvidersGateway {
       // 无论成功、失败还是取消都清理定时器与监听器，避免长时间运行后积累闭包。
       clearTimeout(timeout);
       request.signal?.removeEventListener("abort", abort);
+      await lease.release();
     }
   }
 
@@ -71,6 +75,7 @@ export class ModelProvidersGateway {
     const abort = () => controller.abort();
     request.signal?.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const lease = await this.capacity.acquire(config.providerId, request.purpose ?? "embedding", controller.signal);
 
     try {
       return await this.getClient(config.providerType).createEmbedding(config, {
@@ -82,6 +87,7 @@ export class ModelProvidersGateway {
     } finally {
       clearTimeout(timeout);
       request.signal?.removeEventListener("abort", abort);
+      await lease.release();
     }
   }
 
@@ -92,6 +98,7 @@ export class ModelProvidersGateway {
     const abort = () => controller.abort();
     request.signal?.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const lease = await this.capacity.acquire(config.providerId, request.purpose ?? "online_chat", controller.signal);
 
     try {
       yield* this.getClient(config.providerType).streamChatCompletion(config, {
@@ -107,6 +114,7 @@ export class ModelProvidersGateway {
     } finally {
       clearTimeout(timeout);
       request.signal?.removeEventListener("abort", abort);
+      await lease.release();
     }
   }
 

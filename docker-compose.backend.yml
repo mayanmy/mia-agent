@@ -1,4 +1,16 @@
 services:
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - mia_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
@@ -46,6 +58,11 @@ services:
       MIA_SECRET_KEY: ${MIA_SECRET_KEY:?请在 .env.docker 中配置 MIA_SECRET_KEY}
       MIA_AUTH_JWT_SECRET: ${MIA_AUTH_JWT_SECRET:?请在 .env.docker 中配置 MIA_AUTH_JWT_SECRET}
       MIA_AUTH_COOKIE_SECURE: ${MIA_AUTH_COOKIE_SECURE:-false}
+      MIA_REDIS_URL: redis://redis:6379/0
+      MIA_REDIS_PREFIX: ${MIA_REDIS_PREFIX:-mia:production}
+      MIA_REDIS_REQUIRED: ${MIA_REDIS_REQUIRED:-true}
+      MIA_RATE_LIMIT_HASH_SECRET: ${MIA_RATE_LIMIT_HASH_SECRET:-}
+      MIA_LLM_DISTRIBUTED_CONCURRENCY_ENABLED: ${MIA_LLM_DISTRIBUTED_CONCURRENCY_ENABLED:-true}
       MIA_KNOWLEDGE_STORAGE_DIR: /app/storage/knowledge
       TOOLS_HTTP_ALLOWED_HOSTS: ${TOOLS_HTTP_ALLOWED_HOSTS:-}
       MIA_TOOLS_HTTP_ALLOW_LOCALHOST: ${MIA_TOOLS_HTTP_ALLOW_LOCALHOST:-false}
@@ -54,6 +71,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -66,6 +85,31 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  evaluation-worker:
+    build:
+      context: ./backend
+      target: runtime
+    command: ["node", "dist/evaluation-worker.js"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      MIA_ENVIRONMENT: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mia}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mia}
+      MIA_SECRET_KEY: ${MIA_SECRET_KEY:?请在 .env.docker 中配置 MIA_SECRET_KEY}
+      MIA_REDIS_URL: redis://redis:6379/0
+      MIA_REDIS_PREFIX: ${MIA_REDIS_PREFIX:-mia:production}
+      MIA_REDIS_REQUIRED: "true"
+      MIA_LLM_DISTRIBUTED_CONCURRENCY_ENABLED: "true"
+      MIA_EVALUATION_WORKER_CONCURRENCY: ${MIA_EVALUATION_WORKER_CONCURRENCY:-1}
+      MIA_KNOWLEDGE_STORAGE_DIR: /app/storage/knowledge
+    volumes:
+      - mia_knowledge_data:/app/storage/knowledge
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
   ops-demo-api:
     build:
@@ -88,3 +132,4 @@ services:
 volumes:
   mia_postgres_data:
   mia_knowledge_data:
+  mia_redis_data:

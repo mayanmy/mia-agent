@@ -12,7 +12,7 @@ import { AppError, ErrorCodes } from "../../core/errors";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PrismaService } from "../prisma/prisma.service";
 import { AgentsService } from "../agents/agents.service";
-import { RagEvaluationJob } from "../../jobs/rag-evaluation.job";
+import { EvaluationQueueService } from "../../jobs/evaluation-queue.service";
 import {
   EvaluationImportError,
   ImportedEvaluationCase,
@@ -61,7 +61,7 @@ export class EvaluationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly agentsService?: AgentsService,
-    private readonly ragEvaluationJob?: RagEvaluationJob
+    private readonly evaluationQueue?: EvaluationQueueService
   ) {}
 
   async listRuns(query: EvaluationRunQueryDto) {
@@ -99,7 +99,7 @@ export class EvaluationsService {
     if (version.dataset.status === "ARCHIVED") {
       throw new AppError(ErrorCodes.common.conflict, "archived dataset cannot create runs", HttpStatus.CONFLICT);
     }
-    if (!this.agentsService || !this.ragEvaluationJob) {
+    if (!this.agentsService || !this.evaluationQueue) {
       throw new Error("evaluation run dependencies are unavailable");
     }
     const runtime = await this.agentsService.getAgentRuntimeConfig(agentId);
@@ -149,9 +149,10 @@ export class EvaluationsService {
           data: version.cases.map(({ id }) => ({ runId: created.id, caseId: id }))
         });
       }
+      await transaction.evaluationJob.create({ data: { runId: created.id } });
       return created;
     });
-    this.ragEvaluationJob.enqueue(run.id);
+    void this.evaluationQueue.dispatchPending().catch(() => undefined);
     return { id: run.id, status: run.status, totalCases: run.totalCases, createdAt: run.createdAt };
   }
 
@@ -174,7 +175,6 @@ export class EvaluationsService {
       if (!existing) this.throwNotFound();
       throw new AppError(ErrorCodes.common.conflict, "only pending or running evaluation can be canceled", HttpStatus.CONFLICT);
     }
-    this.ragEvaluationJob?.cancel(runId);
     return this.getRun(runId);
   }
 

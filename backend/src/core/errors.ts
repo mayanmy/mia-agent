@@ -26,7 +26,9 @@ export const ErrorCodes = {
     inUse: 2003,
     connectionFailed: 2004,
     modelConfigNotFound: 2005,
-    modelConfigExists: 2006
+    modelConfigExists: 2006,
+    capacityUnavailable: 2007,
+    capacityTimeout: 2008
   },
   agent: {
     notFound: 3001,
@@ -49,7 +51,8 @@ export const ErrorCodes = {
     invalidApiKey: 5001,
     invalidExternalUser: 5002,
     conversationNotFound: 5003,
-    rateLimited: 5004
+    rateLimited: 5004,
+    rateLimitUnavailable: 5005
   },
   agentRun: {
     notFound: 6001,

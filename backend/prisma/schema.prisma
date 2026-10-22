@@ -176,6 +176,15 @@ enum EvaluationCaseResultStatus {
   @@map("evaluation_case_result_status")
 }
 
+enum EvaluationJobDispatchStatus {
+  PENDING
+  DISPATCHED
+  COMPLETED
+  DEAD
+
+  @@map("evaluation_job_dispatch_status")
+}
+
 /// 外部访问入口决定 End User 与会话的隔离范围，不能只用一个字符串标识混合公开访客和业务用户。
 enum ExternalUserSource {
   WIDGET
@@ -1475,11 +1484,29 @@ model EvaluationRun {
   candidateRuns           EvaluationRun[]          @relation("EvaluationRunBaseline")
   createdBy               User                     @relation("EvaluationRunCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   results                 EvaluationCaseResult[]
+  job                     EvaluationJob?
 
   @@index([workspaceId, status, createdAt(sort: Desc)], map: "idx_evaluation_runs_workspace_status_created")
   @@index([datasetVersionId, createdAt(sort: Desc)], map: "idx_evaluation_runs_version_created")
   @@index([agentId, createdAt(sort: Desc)], map: "idx_evaluation_runs_agent_created")
   @@map("evaluation_runs")
+}
+
+/// PostgreSQL outbox 保证评估运行与待投递任务同事务创建，Redis 恢复后可补投。
+model EvaluationJob {
+  id               String                      @id @default(uuid()) @db.Uuid
+  runId            String                      @unique(map: "uq_evaluation_jobs_run_id") @map("run_id") @db.Uuid
+  dispatchStatus   EvaluationJobDispatchStatus @default(PENDING) @map("dispatch_status")
+  dispatchAttempts Int                         @default(0) @map("dispatch_attempts")
+  nextDispatchAt   DateTime                    @default(now()) @map("next_dispatch_at") @db.Timestamptz(6)
+  lastErrorCode    String?                     @map("last_error_code")
+  dispatchedAt     DateTime?                   @map("dispatched_at") @db.Timestamptz(6)
+  createdAt        DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  run              EvaluationRun               @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([dispatchStatus, nextDispatchAt], map: "idx_evaluation_jobs_dispatch_due")
+  @@map("evaluation_jobs")
 }
 
 /// 单题结果以 run_id + case_id 幂等落库，失败不会阻断同一运行中的其他用例。

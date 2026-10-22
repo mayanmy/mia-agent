@@ -25,10 +25,12 @@ import { JwtAuthGuard } from "./core/auth/jwt-auth.guard";
 import { RolesGuard } from "./core/auth/roles.guard";
 import { WorkspaceGuard, WorkspaceRolesGuard } from "./core/auth/workspace.guard";
 import { WorkspaceContextInterceptor } from "./core/auth/workspace-context.interceptor";
+import { RedisModule } from "./modules/redis/redis.module";
 
 @Module({
   imports: [
     PrismaModule,
+    RedisModule,
     UsersModule,
     AuthModule,
     WorkspacesModule,

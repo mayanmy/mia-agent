@@ -119,7 +119,7 @@ export class PublicAgentsController {
   @Get("agents/:agentToken")
   /** Widget 只需要公开资料，接口在查询前按 token + IP 做基础限流。 */
   async getAgent(@Param("agentToken") agentToken: string, @Req() request: IncomingMessage) {
-    this.rateLimiter.assertAllowed(
+    await this.rateLimiter.assertAllowed(
       "public-profile",
       `${agentToken}:${this.getClientIp(request)}`,
       60
@@ -134,7 +134,7 @@ export class PublicAgentsController {
     @Body() payload: VerifyPublicAccessDto,
     @Req() request: IncomingMessage
   ): Promise<null> {
-    this.rateLimiter.assertAllowed(
+    await this.rateLimiter.assertAllowed(
       "public-password",
       `${agentToken}:${this.getClientIp(request)}`,
       10
@@ -156,7 +156,7 @@ export class PublicAgentsController {
   ): Promise<void> {
     const sessionId = payload.sessionId?.trim() ?? "";
     const agentToken = payload.agentToken?.trim() ?? "";
-    this.rateLimiter.assertAllowed(
+    await this.rateLimiter.assertAllowed(
       "public-chat",
       `${agentToken}:${sessionId}:${this.getClientIp(request)}`,
       20
@@ -200,7 +200,7 @@ export class PublicAgentsController {
   ) {
     const agentToken = payload.agentToken?.trim() ?? "";
     const sessionId = payload.sessionId?.trim() ?? "";
-    this.rateLimiter.assertAllowed(
+    await this.rateLimiter.assertAllowed(
       "public-messages",
       `${agentToken}:${sessionId}:${this.getClientIp(request)}`,
       60
@@ -257,7 +257,7 @@ export class ServiceApiController {
   ): Promise<void> {
     const key = request.agentApiKey!;
     const user = payload.user?.trim() ?? "";
-    this.rateLimiter.assertAllowed("service-chat", `${key.id}:${user}`, 60);
+    await this.rateLimiter.assertAllowed("service-chat", `${key.id}:${user}`, 60);
     await runInWorkspaceContext(key.workspaceId, undefined, async () => {
       const createStream = (signal?: AbortSignal) =>
         this.externalAccessService.streamMessage(

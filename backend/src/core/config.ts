@@ -20,6 +20,24 @@ export type AppConfig = {
   authCookieSecure: boolean;
   authInvitationTtlHours: number;
   publicBaseUrl: string;
+  rateLimitHashSecret: string;
+  redis: {
+    url?: string;
+    prefix: string;
+    required: boolean;
+    connectTimeoutMs: number;
+    commandTimeoutMs: number;
+  };
+  modelCapacity: {
+    enabled: boolean;
+    globalConcurrency: number;
+    providerConcurrency: number;
+    onlineConcurrency: number;
+    evaluationConcurrency: number;
+    embeddingConcurrency: number;
+    acquireTimeoutMs: number;
+    leaseMs: number;
+  };
 };
 
 let envLoaded = false;
@@ -199,6 +217,24 @@ export function getConfig(): AppConfig {
     authRefreshTokenTtlDays: readPositiveIntegerEnv("MIA_AUTH_REFRESH_TOKEN_TTL_DAYS", 30),
     authCookieSecure: readBooleanEnv("MIA_AUTH_COOKIE_SECURE"),
     authInvitationTtlHours: readPositiveIntegerEnv("MIA_AUTH_INVITATION_TTL_HOURS", 72),
-    publicBaseUrl: readPublicBaseUrl()
+    publicBaseUrl: readPublicBaseUrl(),
+    rateLimitHashSecret: process.env.MIA_RATE_LIMIT_HASH_SECRET?.trim() || readAuthJwtSecret(),
+    redis: {
+      url: process.env.MIA_REDIS_URL?.trim() || undefined,
+      prefix: process.env.MIA_REDIS_PREFIX?.trim() || `mia:${process.env.MIA_ENVIRONMENT ?? "local"}`,
+      required: readBooleanEnv("MIA_REDIS_REQUIRED"),
+      connectTimeoutMs: readPositiveIntegerEnv("MIA_REDIS_CONNECT_TIMEOUT_MS", 5_000),
+      commandTimeoutMs: readPositiveIntegerEnv("MIA_REDIS_COMMAND_TIMEOUT_MS", 2_000)
+    },
+    modelCapacity: {
+      enabled: readBooleanEnv("MIA_LLM_DISTRIBUTED_CONCURRENCY_ENABLED"),
+      globalConcurrency: readPositiveIntegerEnv("MIA_LLM_GLOBAL_CONCURRENCY", 10),
+      providerConcurrency: readPositiveIntegerEnv("MIA_LLM_PROVIDER_CONCURRENCY", 5),
+      onlineConcurrency: readPositiveIntegerEnv("MIA_LLM_ONLINE_CONCURRENCY", 8),
+      evaluationConcurrency: readPositiveIntegerEnv("MIA_LLM_EVALUATION_CONCURRENCY", 2),
+      embeddingConcurrency: readPositiveIntegerEnv("MIA_EMBEDDING_CONCURRENCY", 3),
+      acquireTimeoutMs: readPositiveIntegerEnv("MIA_LLM_ACQUIRE_TIMEOUT_MS", 10_000),
+      leaseMs: readPositiveIntegerEnv("MIA_LLM_LEASE_MS", 30_000)
+    }
   };
 }

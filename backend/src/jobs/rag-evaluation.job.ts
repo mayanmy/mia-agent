@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 
 import { runInWorkspaceContext } from "../core/auth/workspace-context";
@@ -18,7 +18,7 @@ type AgentSnapshot = {
 };
 
 @Injectable()
-export class RagEvaluationJob implements OnModuleInit {
+export class RagEvaluationJob {
   private readonly logger = new Logger(RagEvaluationJob.name);
   private readonly activeRuns = new Set<string>();
   private readonly abortControllers = new Map<string, AbortController>();
@@ -29,25 +29,11 @@ export class RagEvaluationJob implements OnModuleInit {
     private readonly modelProvidersService: ModelProvidersService
   ) {}
 
-  async onModuleInit(): Promise<void> {
-    // 本地部署重启后恢复未终态运行；用例唯一键和状态检查保证重复调度幂等。
-    const runs = await this.prisma.evaluationRun.findMany({
-      where: { status: { in: ["PENDING", "RUNNING"] } },
-      select: { id: true }
-    });
-    runs.forEach(({ id }) => this.enqueue(id));
-  }
-
-  enqueue(runId: string): void {
-    if (this.activeRuns.has(runId)) return;
-    setImmediate(() => void this.execute(runId));
-  }
-
   cancel(runId: string): void {
     this.abortControllers.get(runId)?.abort();
   }
 
-  private async execute(runId: string): Promise<void> {
+  async execute(runId: string): Promise<void> {
     if (this.activeRuns.has(runId)) return;
     this.activeRuns.add(runId);
     const controller = new AbortController();
@@ -64,6 +50,10 @@ export class RagEvaluationJob implements OnModuleInit {
         data: { status: "FAILED", errorType: "RUN_FAILED", errorMessage: message, finishedAt: new Date() }
       });
     } finally {
+      await this.prisma.evaluationJob.updateMany({
+        where: { runId },
+        data: { dispatchStatus: "COMPLETED" }
+      });
       this.abortControllers.delete(runId);
       this.activeRuns.delete(runId);
     }
@@ -143,6 +133,7 @@ export class RagEvaluationJob implements OnModuleInit {
         maxTokens: agent.maxTokens,
         timeoutSeconds: agent.timeoutSeconds,
         thinkingMode: agent.thinkingMode,
+        purpose: "evaluation_answer",
         signal
       });
       await this.prisma.$transaction([

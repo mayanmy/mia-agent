@@ -99,7 +99,8 @@ export const tests = [
     name: "EvaluationsService creates a pending run with a secret-free immutable snapshot",
     run: async () => {
       let runData: Record<string, unknown> | undefined;
-      let enqueuedId: string | undefined;
+      let outboxRunId: string | undefined;
+      let dispatched = false;
       const transaction = {
         evaluationRun: {
           create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -107,7 +108,12 @@ export const tests = [
             return { id: "run-id", status: "PENDING", totalCases: 1, createdAt: new Date(), ...data };
           }
         },
-        evaluationCaseResult: { createMany: async () => ({ count: 1 }) }
+        evaluationCaseResult: { createMany: async () => ({ count: 1 }) },
+        evaluationJob: {
+          create: async ({ data }: { data: { runId: string } }) => {
+            outboxRunId = data.runId;
+          }
+        }
       };
       const prisma = {
         evaluationDatasetVersion: {
@@ -128,15 +134,16 @@ export const tests = [
           thinkingMode: "AUTO", knowledgeBaseIds: ["kb-id"]
         })
       };
-      const job = { enqueue: (id: string) => { enqueuedId = id; } };
-      const service = new EvaluationsService(prisma as never, agents as never, job as never);
+      const queue = { dispatchPending: async () => { dispatched = true; } };
+      const service = new EvaluationsService(prisma as never, agents as never, queue as never);
 
       await runInWorkspaceContext("workspace-id", undefined, () => service.createRun({
         datasetVersionId: draftVersion.id,
         agentId: "agent-id"
       }, "user-id"));
 
-      assert.equal(enqueuedId, "run-id");
+      assert.equal(outboxRunId, "run-id");
+      assert.equal(dispatched, true);
       assert.equal(JSON.stringify(runData).includes("secret.internal"), false);
       assert.equal((runData?.retrievalConfigSnapshot as { topK: number }).topK, 5);
     }

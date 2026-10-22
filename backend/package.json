@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nest start --watch",
     "start": "node dist/main.js",
+    "start:evaluation-worker": "node dist/evaluation-worker.js",
     "build": "nest build",
     "test": "npm run build && node dist/test/run-tests.js",
     "typecheck": "tsc --noEmit",
@@ -24,6 +25,8 @@
     "@prisma/client": "^6.19.0",
     "ajv": "^8.18.0",
     "argon2": "^0.45.0",
+    "bullmq": "^6.3.8",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"

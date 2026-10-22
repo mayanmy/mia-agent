@@ -1,35 +1,65 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 
+import { getConfig } from "../../core/config";
 import { AppError, ErrorCodes } from "../../core/errors";
+import { RedisKeyFactory } from "../redis/redis-key.factory";
+import { RedisService } from "../redis/redis.service";
 
-type RateLimitWindow = {
-  count: number;
-  resetAt: number;
-};
+const TOKEN_BUCKET_SCRIPT = `
+local current = redis.call('HMGET', KEYS[1], 'tokens', 'updated_at')
+local now = tonumber(ARGV[1])
+local capacity = tonumber(ARGV[2])
+local refill_per_ms = tonumber(ARGV[3])
+local tokens = tonumber(current[1]) or capacity
+local updated_at = tonumber(current[2]) or now
+tokens = math.min(capacity, tokens + math.max(0, now - updated_at) * refill_per_ms)
+if tokens < 1 then
+  local retry_after_ms = math.ceil((1 - tokens) / refill_per_ms)
+  redis.call('PEXPIRE', KEYS[1], math.ceil(capacity / refill_per_ms) * 2)
+  return {0, math.floor(tokens), retry_after_ms}
+end
+tokens = tokens - 1
+redis.call('HSET', KEYS[1], 'tokens', tokens, 'updated_at', now)
+redis.call('PEXPIRE', KEYS[1], math.ceil(capacity / refill_per_ms) * 2)
+return {1, math.floor(tokens), 0}
+`;
 
 /**
- * v1 的轻量进程内限流器。
- *
- * Mia 当前为单实例本地部署，按分钟窗口即可阻挡误触发和公开 Widget 的基础滥用；未来多实例
- * 部署时替换为 Redis 实现，Controller 和业务接口无需变化。
+ * Redis 原子令牌桶在所有 API 实例间共享额度。Redis 故障时拒绝公网调用，
+ * 避免静默回退到本地内存后绕过限流。
  */
 @Injectable()
 export class ExternalRateLimiterService {
-  private readonly windows = new Map<string, RateLimitWindow>();
+  private readonly secret = getConfig().rateLimitHashSecret;
 
-  /** 在固定一分钟窗口内消费一次配额；超过上限时在模型调用前直接失败。 */
-  assertAllowed(scope: string, identifier: string, limit: number): void {
-    const now = Date.now();
-    const key = `${scope}:${this.hashIdentifier(identifier)}`;
-    const current = this.windows.get(key);
+  constructor(
+    private readonly redis: RedisService,
+    private readonly keys: RedisKeyFactory
+  ) {}
 
-    if (!current || current.resetAt <= now) {
-      this.windows.set(key, { count: 1, resetAt: now + 60_000 });
-      return;
+  async assertAllowed(scope: string, identifier: string, limitPerMinute: number): Promise<void> {
+    const key = this.keys.create("rate-limit", scope, this.hashIdentifier(identifier));
+    let result: unknown;
+    try {
+      result = await this.redis.getClient().eval(
+        TOKEN_BUCKET_SCRIPT,
+        1,
+        key,
+        Date.now(),
+        limitPerMinute,
+        limitPerMinute / 60_000
+      );
+    } catch {
+      throw new AppError(
+        ErrorCodes.externalAccess.rateLimitUnavailable,
+        "访问保护服务暂不可用，请稍后重试",
+        HttpStatus.SERVICE_UNAVAILABLE
+      );
     }
 
-    if (current.count >= limit) {
+    const [allowed] = result as [number, number, number];
+    if (allowed !== 1) {
       throw new AppError(
         ErrorCodes.externalAccess.rateLimited,
         "请求过于频繁，请稍后再试",
@@ -37,12 +67,9 @@ export class ExternalRateLimiterService {
       );
     }
 
-    current.count += 1;
   }
 
-  /** 对限流维度哈希，避免内存状态和诊断信息留下原始 user 或 sessionId。 */
   private hashIdentifier(value: string): string {
-    // 不在进程内 Map 保留原始 sessionId、业务 user 或 API Key，降低调试转储泄露风险。
-    return createHash("sha256").update(value).digest("hex");
+    return createHmac("sha256", this.secret).update(value).digest("hex").slice(0, 32);
   }
 }

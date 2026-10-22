@@ -7,10 +7,11 @@ import { OpenAICompatibleClient } from "./clients/openai-compatible.client";
 import { ModelProvidersGateway } from "./gateway";
 import { ModelProvidersController } from "./model-providers.controller";
 import { ModelProvidersService } from "./model-providers.service";
+import { ModelCapacityService } from "./model-capacity.service";
 
 @Module({
   controllers: [ModelProvidersController, ModelConfigsController, ModelDefaultsController],
-  providers: [ModelProvidersService, ModelProvidersGateway, OpenAICompatibleClient, OllamaClient],
+  providers: [ModelProvidersService, ModelProvidersGateway, ModelCapacityService, OpenAICompatibleClient, OllamaClient],
   exports: [ModelProvidersService]
 })
 export class ModelProvidersModule {}

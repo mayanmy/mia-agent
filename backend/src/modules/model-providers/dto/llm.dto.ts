@@ -52,6 +52,13 @@ export type LLMToolCall = {
 };
 
 /** 业务模块发起 Chat Completion 的统一请求。 */
+export type ModelCallPurpose =
+  | "online_chat"
+  | "workflow_runtime"
+  | "evaluation_answer"
+  | "evaluation_grader"
+  | "embedding";
+
 export type ChatCompletionRequest = {
   /** Mia 模型配置 ID，Gateway 据此加载供应商和密钥。 */
   modelConfigId: string;
@@ -66,6 +73,8 @@ export type ChatCompletionRequest = {
   toolChoice?: "auto" | "none";
   /** 用户取消或 SSE 断开时传递给上游请求。 */
   signal?: AbortSignal;
+  /** 分布式并发隔离用途；在线请求为默认值。 */
+  purpose?: ModelCallPurpose;
 };
 
 /** 业务模块发起 Embedding 的统一请求。 */
@@ -78,6 +87,7 @@ export type EmbeddingRequest = {
   timeoutSeconds?: number;
   /** 上游取消信号。 */
   signal?: AbortSignal;
+  purpose?: ModelCallPurpose;
 };
 
 /** 归一化后的 Embedding 响应。 */
