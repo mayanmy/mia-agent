@@ -64,6 +64,8 @@ export type ChatCompletionPayload = {
   agentId: string;
   /** 持久会话 ID；临时模式不传。 */
   sessionId?: string;
+  /** 每次发送的幂等 UUID，多端重试不会重复创建轮次。 */
+  clientMessageId?: string;
   /** 本轮用户输入。 */
   message: string;
   /** 本轮图片附件。 */
@@ -78,6 +80,9 @@ export type ChatCompletionPayload = {
 export type ChatSessionMessage = {
   /** 服务端消息 ID。 */
   id: string;
+  turnId: string | null;
+  turnSequence: string | null;
+  turnStatus: "QUEUED" | "GENERATING" | "COMPLETED" | "FAILED" | "CANCELED" | null;
   /** 消息发送方。 */
   role: ChatRole;
   /** 消息正文。 */
@@ -236,6 +241,8 @@ export type ChatStreamEventType =
 
 /** Chat SSE 各事件可能携带的字段集合。 */
 export type ChatStreamEventData = {
+  turnId?: string;
+  sequence?: string;
   /** 检索开始时计划查询的知识库 ID。 */
   knowledgeBaseIds?: string[];
   /** Tool Search 前的绑定数量。 */

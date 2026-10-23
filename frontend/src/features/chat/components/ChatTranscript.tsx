@@ -93,7 +93,7 @@ export function ChatTranscript({
         ) : (
           messages.map((item, index) => (
             <ChatMessageItem
-              generating={sending && item.role === "assistant" && index === messages.length - 1}
+              generating={item.role === "assistant" && item.generationStatus === "streaming"}
               item={item}
               key={item.id}
               onCopy={onCopyMessage}

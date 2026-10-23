@@ -59,7 +59,7 @@ export function ChatComposer({
   onRemoveImage,
   onRemoveFile
 }: ChatComposerProps) {
-  const controlsDisabled = !selectedAgentId || sending || disabled;
+  const controlsDisabled = !selectedAgentId || disabled;
 
   return (
     <div className="chatComposer">
@@ -126,24 +126,21 @@ export function ChatComposer({
         />
       </div>
       <Button
-        aria-label={sending ? "停止生成" : "发送消息"}
+        aria-label="发送消息"
         className="chatSendButton"
         disabled={disabled || sendButtonDisabled}
-        danger={sending}
-        icon={sending ? undefined : <SendOutlined />}
-        shape={sending ? undefined : "circle"}
+        icon={<SendOutlined />}
+        shape="circle"
         type="primary"
         onClick={() => {
-          if (sending) {
-            onStop();
-            return;
-          }
-
           onSend();
         }}
-      >
-        {sending ? "停止" : null}
-      </Button>
+      />
+      {sending ? (
+        <Button danger onClick={onStop}>
+          停止全部
+        </Button>
+      ) : null}
     </div>
   );
 }

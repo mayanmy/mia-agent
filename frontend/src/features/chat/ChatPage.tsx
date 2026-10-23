@@ -27,6 +27,7 @@ import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useChatAttachments } from "./hooks/useChatAttachments";
 import { useChatMessageEvents } from "./hooks/useChatMessageEvents";
 import { useTokenBuffer } from "./hooks/useTokenBuffer";
+import { useChatSessionSync } from "./hooks/useChatSessionSync";
 import { buildTransportHistory } from "./history";
 import type { ChatUiMessage } from "./types";
 import { createMessageId, isLikelyVisionModel } from "./utils";
@@ -48,8 +49,8 @@ const FEEDBACK_REASON_OPTIONS = [
 export function ChatPage() {
   const { message: messageApi, modal } = AntdApp.useApp();
   const navigate = useNavigate();
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const activeStreamIdRef = useRef<string | null>(null);
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const activeStreamIdsRef = useRef<Map<string, string>>(new Map());
   const streamStartedAtRef = useRef<Map<string, number>>(new Map());
   const firstTokenRecordedRef = useRef<Set<string>>(new Set());
   const disposedRef = useRef(false);
@@ -69,7 +70,8 @@ export function ChatPage() {
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [activeGenerationCount, setActiveGenerationCount] = useState(0);
+  const sending = activeGenerationCount > 0;
   const [traceRunId, setTraceRunId] = useState<string | null>(null);
   const {
     appendAssistantToken,
@@ -109,6 +111,25 @@ export function ChatPage() {
     resetAutoScroll
   } = useAutoScroll([messages, sending]);
 
+  useChatSessionSync({
+    // 当前端没有本地 SSE 时持续同步权威首屏，使其他标签页和设备的新 Turn 也能出现。
+    enabled: Boolean(sessionId) && activeGenerationCount === 0,
+    refresh: async () => {
+      if (!sessionId) return;
+      const targetSessionId = sessionId;
+      const page = await getChatSessionMessages(targetSessionId);
+      if (sessionId === targetSessionId && activeGenerationCount === 0) {
+        const latestMessages = page.list.map(toChatUiMessage);
+        setMessages((current) => {
+          // 已经向前翻页时保留更早前缀，只替换服务端权威的最新一页。
+          const olderCount = Math.max(0, current.length - latestMessages.length);
+          return [...current.slice(0, olderCount), ...latestMessages];
+        });
+        setHistoryCursor(page.nextBefore);
+      }
+    }
+  });
+
   const selectedAgent = useMemo(
     () => agents.find((agent) => agent.id === selectedAgentId) ?? null,
     [agents, selectedAgentId]
@@ -122,9 +143,7 @@ export function ChatPage() {
     // 切换 Agent 时先停止旧流，避免旧 Agent 的 token 混入新 Agent 恢复出的会话。
     clearBufferedTokens();
     cancelActiveStream();
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    setSending(false);
+    abortAllLocalStreams();
     setSessionId(null);
     setSessions([]);
     setSessionCursor(null);
@@ -190,10 +209,9 @@ export function ChatPage() {
     sessionStatus
   ]);
   const sendButtonDisabled =
-    !sending &&
-    (sessionStatus === "ARCHIVED" ||
-      !selectedAgentId ||
-      (!input.trim() && images.length === 0 && files.length === 0));
+    sessionStatus === "ARCHIVED" ||
+    !selectedAgentId ||
+    (!input.trim() && images.length === 0 && files.length === 0);
 
   useEffect(() => {
     let disposed = false;
@@ -204,11 +222,9 @@ export function ChatPage() {
     return () => {
       disposed = true;
       disposedRef.current = true;
-      // 页面离开时必须中断 SSE，避免后端继续生成并让旧回调写入已销毁的对话界面。
+      // 页面卸载只断开本地订阅；持久 Turn 在后端继续运行，刷新和换设备不会丢回复。
       clearBufferedTokens();
-      cancelActiveStream();
-      abortControllerRef.current?.abort();
-      abortControllerRef.current = null;
+      abortAllLocalStreams();
     };
   }, [clearBufferedTokens]);
 
@@ -255,7 +271,7 @@ export function ChatPage() {
   function handleBackToAgents() {
     clearBufferedTokens();
     cancelActiveStream();
-    abortControllerRef.current?.abort();
+    abortAllLocalStreams();
     setSearchParams({});
   }
 
@@ -286,9 +302,7 @@ export function ChatPage() {
     historyLoadVersionRef.current += 1;
     clearBufferedTokens();
     cancelActiveStream();
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    setSending(false);
+    abortAllLocalStreams();
     setMessages([]);
     setHistoryCursor(null);
     setLoadingHistory(true);
@@ -507,9 +521,6 @@ export function ChatPage() {
       return;
     }
 
-    // 只有请求确定可以启动后才清理旧批次；输入校验失败不能影响正在展示的消息。
-    clearBufferedTokens();
-
     const currentImages = (retry ? [] : images).map(({ name, mimeType, dataUrl }) => ({
       name,
       mimeType,
@@ -565,16 +576,17 @@ export function ChatPage() {
       setInput("");
       clearAttachments();
     }
-    setSending(true);
+    setActiveGenerationCount((current) => current + 1);
     const controller = new AbortController();
     let createdStreamId: string | null = null;
-    abortControllerRef.current = controller;
+    abortControllersRef.current.set(assistantMessageId, controller);
 
     try {
       await streamChatCompletion(
         {
           agentId: selectedAgentId,
           sessionId: sessionId ?? undefined,
+          clientMessageId: crypto.randomUUID(),
           message: content,
           images: currentImages,
           files: currentFiles,
@@ -584,7 +596,7 @@ export function ChatPage() {
           signal: controller.signal,
           onStreamCreated: (streamId) => {
             createdStreamId = streamId;
-            activeStreamIdRef.current = streamId;
+            activeStreamIdsRef.current.set(assistantMessageId, streamId);
           },
           onEvent: (event) => {
             // Abort 后仍可能有一个已经排队的 SSE 事件到达，不能让它更新已停止或已卸载的页面。
@@ -629,7 +641,7 @@ export function ChatPage() {
             // message_end 清空缓冲并使用最终正文覆盖
             if (event.type === "message_end" && typeof event.data.content === "string") {
               // Workflow End answer 是最终权威内容，可能没有 token，也可能转换过中间模型输出。
-              clearBufferedTokens();
+              clearBufferedTokens(assistantMessageId);
               replaceAssistantContent(assistantMessageId, event.data.content);
               setMessages((current) =>
                 updateAssistantContentPartsInList(
@@ -711,11 +723,11 @@ export function ChatPage() {
       if (error instanceof DOMException && error.name === "AbortError") {
         if (!disposedRef.current) {
           // 用户停止时保留已经收到但尚未进入 React 状态的尾部 Token。
-          flushBufferedTokens();
+          flushBufferedTokens(assistantMessageId);
           updateAssistantGeneration(assistantMessageId, "stopped");
         }
       } else if (!disposedRef.current) {
-        flushBufferedTokens();
+        flushBufferedTokens(assistantMessageId);
         updateAssistantGeneration(
           assistantMessageId,
           "error",
@@ -723,17 +735,15 @@ export function ChatPage() {
         );
       }
     } finally {
-      if (abortControllerRef.current === controller) {
-        abortControllerRef.current = null;
-      }
-      if (activeStreamIdRef.current === createdStreamId) {
-        activeStreamIdRef.current = null;
+      abortControllersRef.current.delete(assistantMessageId);
+      if (activeStreamIdsRef.current.get(assistantMessageId) === createdStreamId) {
+        activeStreamIdsRef.current.delete(assistantMessageId);
       }
       streamStartedAtRef.current.delete(assistantMessageId);
       firstTokenRecordedRef.current.delete(assistantMessageId);
 
       if (!disposedRef.current) {
-        setSending(false);
+        setActiveGenerationCount((current) => Math.max(0, current - 1));
       }
     }
 
@@ -766,16 +776,23 @@ export function ChatPage() {
 
   function handleStop() {
     cancelActiveStream();
-    abortControllerRef.current?.abort();
+    abortAllLocalStreams();
   }
 
   /** 主动离开或停止必须通知服务端；只有网络异常才允许进入 60 秒续流宽限期。 */
   function cancelActiveStream() {
-    const streamId = activeStreamIdRef.current;
-    activeStreamIdRef.current = null;
-    if (streamId) {
+    const streamIds = [...activeStreamIdsRef.current.values()];
+    activeStreamIdsRef.current.clear();
+    for (const streamId of streamIds) {
       void cancelChatStream(streamId).catch(() => undefined);
     }
+  }
+
+  /** 只断开当前页面订阅；服务端持久 Turn 是否取消由显式停止操作决定。 */
+  function abortAllLocalStreams() {
+    for (const controller of abortControllersRef.current.values()) controller.abort();
+    abortControllersRef.current.clear();
+    setActiveGenerationCount(0);
   }
 
   function handleRetryMessage(assistantMessageId: string) {
@@ -1042,6 +1059,9 @@ export function ChatPage() {
 type PersistedChatMessage = {
   /** 服务端消息 ID。 */
   id: string;
+  turnId: string | null;
+  turnSequence: string | null;
+  turnStatus: "QUEUED" | "GENERATING" | "COMPLETED" | "FAILED" | "CANCELED" | null;
   /** 消息发送方。 */
   role: "user" | "assistant";
   /** 消息正文。 */
@@ -1057,13 +1077,23 @@ type PersistedChatMessage = {
 
 /** 将接口返回的持久化消息映射成消息组件使用的视图模型。 */
 function toChatUiMessage(message: PersistedChatMessage): ChatUiMessage {
+  const generationStatus =
+    message.role !== "assistant"
+      ? undefined
+      : message.turnStatus === "QUEUED" || message.turnStatus === "GENERATING"
+        ? "streaming"
+        : message.turnStatus === "FAILED"
+          ? "error"
+          : message.turnStatus === "CANCELED"
+            ? "stopped"
+            : "completed";
   return {
     id: message.id,
     role: message.role,
     content: message.content,
     contentParts: message.contentParts,
     createdAt: new Date(message.createdAt).getTime(),
-    generationStatus: message.role === "assistant" ? "completed" : undefined,
+    generationStatus,
     retrievalEvents: message.metadata?.retrievalEvents?.map((event) => ({
       id: createMessageId(),
       knowledgeBaseIds: event.knowledgeBaseIds,

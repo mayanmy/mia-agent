@@ -213,6 +213,9 @@ export class ChatStreamsService implements OnModuleDestroy {
   }
 
   private scheduleDisconnectAbort(runtime: ChatStreamRuntime): void {
+    // 持久会话的数据库 Turn 是权威状态；页面刷新或设备断网不能等价为用户取消。
+    // 临时会话没有恢复载体，仍保留宽限期止损，避免无人消费的生成无限运行。
+    if (runtime.payload.sessionId) return;
     if (runtime.status !== "running" || runtime.subscribers > 0 || runtime.disconnectTimer) return;
 
     runtime.disconnectTimer = setTimeout(() => {

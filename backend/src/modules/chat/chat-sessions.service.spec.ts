@@ -183,6 +183,79 @@ export const tests = [
     }
   },
   {
+    name: "ChatSessionsService allocates stable turn sequences and assistant placeholders",
+    run: async () => {
+      let nextTurnSequence = 1n;
+      const turns = new Map<string, Record<string, unknown>>();
+      const messages: Array<Record<string, unknown>> = [];
+      const transaction = {
+        chatSession: {
+          update: async (query: {
+            data: Record<string, unknown>;
+            select?: Record<string, boolean>;
+          }) => {
+            if (query.data.nextTurnSequence) {
+              nextTurnSequence += 1n;
+              return { nextTurnSequence };
+            }
+            return {};
+          },
+          updateMany: async () => undefined
+        },
+        chatTurn: {
+          create: async ({ data }: { data: Record<string, unknown> }) => {
+            const turn = {
+              id: `turn-${String(data.sequence)}`,
+              createdAt: new Date(`2026-09-23T00:00:0${String(data.sequence)}.000Z`),
+              ...data
+            };
+            turns.set(String(data.clientMessageId), turn);
+            return turn;
+          },
+          update: async ({
+            where,
+            data
+          }: {
+            where: { id: string };
+            data: Record<string, unknown>;
+          }) => {
+            const turn = [...turns.values()].find((item) => item.id === where.id)!;
+            Object.assign(turn, data);
+            return turn;
+          }
+        },
+        chatSessionMessage: {
+          create: async ({ data }: { data: Record<string, unknown> }) => {
+            const message = { id: `message-${messages.length + 1}`, ...data };
+            messages.push(message);
+            return message;
+          }
+        }
+      };
+      const prisma = {
+        chatTurn: { findUnique: async () => null },
+        $transaction: async (callback: (client: typeof transaction) => Promise<unknown>) =>
+          callback(transaction)
+      };
+      const service = new ChatSessionsService(prisma as never);
+
+      const first = await service.startTurn("session-id", "client-1", "手机消息");
+      const second = await service.startTurn("session-id", "client-2", "电脑消息");
+
+      assert.equal(first.sequence, 1n);
+      assert.equal(second.sequence, 2n);
+      assert.deepEqual(
+        messages.map((item) => [item.turnSequence, item.turnPosition, item.role]),
+        [
+          [1n, 0, "USER"],
+          [1n, 1, "ASSISTANT"],
+          [2n, 0, "USER"],
+          [2n, 1, "ASSISTANT"]
+        ]
+      );
+    }
+  },
+  {
     name: "ChatSessionsService only deletes archived sessions",
     run: async () => {
       let deletedSessionId: string | null = null;

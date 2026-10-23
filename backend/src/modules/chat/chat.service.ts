@@ -1,8 +1,10 @@
 import { HttpStatus, Injectable, Optional } from "@nestjs/common";
-import { AgentChatSessionMode, AgentRunSource, ChatSessionMessageRole } from "@prisma/client";
+import { AgentChatSessionMode, AgentRunSource, ChatTurnStatus } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 
 import { AppError, ErrorCodes } from "../../core/errors";
 import { AgentRuntimeEvent, RuntimeCompletion } from "../agent_runtime/dto/runtime-event.dto";
+import { AgentContentPart, textContentParts } from "../agent_runtime/dto/content-part.dto";
 import { AgentRuntimeService } from "../agent_runtime/agent-runtime.service";
 import { MAX_TRANSPORT_HISTORY_BYTES, sanitizeHistory } from "../agent_runtime/history-policy";
 import { AgentPromptBuilder } from "../agent_runtime/prompt-builder";
@@ -299,10 +301,53 @@ export class ChatService {
     const sessionId = context?.skipInternalSessionPersistence
       ? null
       : await this.resolvePersistentSessionId(agent, payload.sessionId, context);
+    const turn = sessionId
+      ? await this.requireChatSessionsService().startTurn(
+          sessionId,
+          this.normalizeClientMessageId(payload.clientMessageId),
+          message
+        )
+      : null;
+    if (turn && !turn.created) {
+      const snapshot = await this.requireChatSessionsService().getTurnSnapshot(turn.turnId);
+      const assistant = snapshot?.messages.find((item) => item.id === snapshot.assistantMessageId);
+      if (snapshot?.status === ChatTurnStatus.COMPLETED && assistant) {
+        const storedMetadata =
+          assistant.metadata &&
+          typeof assistant.metadata === "object" &&
+          !Array.isArray(assistant.metadata)
+            ? (assistant.metadata as Record<string, unknown>)
+            : {};
+        yield {
+          type: "run_completed",
+          data: {
+            runId: snapshot.runId ?? undefined,
+            agentId,
+            modelConfigId: String(storedMetadata.modelConfigId ?? agent.modelConfigId),
+            modelName: String(storedMetadata.modelName ?? agent.modelName),
+            providerName: String(storedMetadata.providerName ?? agent.providerType),
+            sessionId,
+            content: assistant.content,
+            contentParts: Array.isArray(assistant.contentParts)
+              ? (assistant.contentParts as unknown as AgentContentPart[])
+              : textContentParts(assistant.content),
+            messageId: assistant.id,
+            turnId: turn.turnId,
+            sequence: turn.sequence.toString()
+          } as RuntimeCompletion & { turnId: string; sequence: string }
+        };
+        return;
+      }
+      throw new AppError(
+        ErrorCodes.common.conflict,
+        "chat turn is already generating",
+        HttpStatus.CONFLICT
+      );
+    }
     const rawHistory = context?.externalHistory
       ? context.externalHistory
-      : sessionId
-        ? await this.requireChatSessionsService().buildModelHistory(sessionId, agent.historyTurns)
+      : turn
+        ? await this.requireChatSessionsService().buildTurnModelHistory(turn, agent.historyTurns)
         : payload.history;
     // 无论历史来自客户端、外部会话还是数据库，都统一经过 Chat 权威策略后才进入 Runtime。
     const history = this.normalizeHistory(rawHistory, agent.historyTurns);
@@ -316,143 +361,176 @@ export class ChatService {
     let activeRetrievalKnowledgeBaseIds: string[] = [];
     let firstTokenRecorded = false;
 
-    if (sessionId) {
-      // 用户消息先于 Runtime 落库，模型失败或取消后仍可在会话中看到原始提问。
-      await this.requireChatSessionsService().appendMessage(
-        sessionId,
-        ChatSessionMessageRole.USER,
-        message
-      );
-    }
-
-    for await (const event of this.requireAgentRuntimeService().runAgent({
-      requestId,
-      source: context?.source ?? AgentRunSource.INTERNAL_CHAT,
-      agentId,
-      userId: context?.userId,
-      sessionId: sessionId ?? undefined,
-      externalConversationId: context?.externalConversationId,
-      message: { text: message, images, files },
-      history: history.flatMap((item) =>
-        (item.role === "user" || item.role === "assistant") && typeof item.content === "string"
-          ? [{ role: item.role, content: item.content }]
-          : []
-      ),
-      // 公开访问和 Service API 没有可信的交互审批主体，必须稳定走非交互拒绝策略。
-      allowInteractiveToolApproval:
-        (context?.source ?? AgentRunSource.INTERNAL_CHAT) === AgentRunSource.INTERNAL_CHAT &&
-        Boolean(context?.userId),
-      signal
-    })) {
-      if (event.type === "run_started") {
-        metadata.runId = event.data.runId;
-        metadata.modelConfigId = event.data.modelConfigId;
-        metadata.modelName = event.data.modelName;
-        metadata.providerName = event.data.providerName;
-      }
-
-      if (event.type === "tool_search_completed") {
-        metadata.toolSearch = event.data;
-      }
-
-      if (event.type === "retrieval_started") {
-        activeRetrievalKnowledgeBaseIds = this.readStringArray(event.data.knowledgeBaseIds);
-      }
-
-      if (event.type === "retrieval_completed") {
-        metadata.retrievalEvents?.push({
-          knowledgeBaseIds: activeRetrievalKnowledgeBaseIds,
-          status: "success",
-          sources: this.readRecordArray(event.data.sources),
-          elapsedMs: this.readOptionalNumber(event.data.elapsedMs)
-        });
-      }
-
-      if (event.type === "tool_started") {
-        metadata.toolEvents?.push({
-          id: this.readString(event.data.id) || this.readString(event.data.toolCallId) || "unknown",
-          name: this.readString(event.data.name) || "unknown_tool",
-          arguments: this.readOptionalRecord(event.data.arguments),
-          status: "success"
-        });
-      }
-
-      if (event.type === "tool_completed") {
-        const toolId = this.readString(event.data.toolId) || this.readString(event.data.id);
-        const toolEvents = metadata.toolEvents ?? [];
-        let toolIndex = -1;
-        for (let index = toolEvents.length - 1; index >= 0; index -= 1) {
-          if (toolEvents[index]?.name === toolId) {
-            toolIndex = index;
-            break;
+    try {
+      for await (const event of this.requireAgentRuntimeService().runAgent({
+        requestId,
+        source: context?.source ?? AgentRunSource.INTERNAL_CHAT,
+        agentId,
+        userId: context?.userId,
+        sessionId: sessionId ?? undefined,
+        externalConversationId: context?.externalConversationId,
+        message: { text: message, images, files },
+        history: history.flatMap((item) =>
+          (item.role === "user" || item.role === "assistant") && typeof item.content === "string"
+            ? [{ role: item.role, content: item.content }]
+            : []
+        ),
+        // 公开访问和 Service API 没有可信的交互审批主体，必须稳定走非交互拒绝策略。
+        allowInteractiveToolApproval:
+          (context?.source ?? AgentRunSource.INTERNAL_CHAT) === AgentRunSource.INTERNAL_CHAT &&
+          Boolean(context?.userId),
+        signal
+      })) {
+        if (event.type === "run_started") {
+          metadata.runId = event.data.runId;
+          metadata.modelConfigId = event.data.modelConfigId;
+          metadata.modelName = event.data.modelName;
+          metadata.providerName = event.data.providerName;
+          if (turn) {
+            await this.requireChatSessionsService().bindTurnRun(turn.turnId, event.data.runId);
           }
         }
-        const toolEvent = toolIndex >= 0 ? toolEvents[toolIndex] : undefined;
 
-        if (toolEvent) {
-          const ok = event.data.ok === true;
-          toolEvent.status = ok ? "success" : "error";
-          toolEvent.output = event.data.output;
-          toolEvent.errorType = this.readString(event.data.errorType) || undefined;
-          toolEvent.errorMessage = this.readString(event.data.errorMessage) || undefined;
-          toolEvent.elapsedMs = this.readOptionalNumber(event.data.elapsedMs);
+        if (turn) {
+          const turnData = event.data as unknown as Record<string, unknown>;
+          turnData.turnId = turn.turnId;
+          turnData.sequence = turn.sequence.toString();
+          turnData.messageId = turn.assistantMessageId;
         }
-      }
 
-      if (event.type === "token" && !firstTokenRecorded) {
-        firstTokenRecorded = true;
-        metadata.firstTokenMs = Date.now() - startedAt;
-      }
+        if (event.type === "tool_search_completed") {
+          metadata.toolSearch = event.data;
+        }
 
-      if (event.type === "run_completed" && sessionId) {
-        metadata.runId = event.data.runId ?? metadata.runId;
-        metadata.usage = event.data.usage;
-        metadata.elapsedMs = Date.now() - startedAt;
-        const persistedMessageId = await this.requireChatSessionsService().appendMessage(
-          sessionId,
-          ChatSessionMessageRole.ASSISTANT,
-          event.data.content,
-          metadata,
-          event.data.contentParts
+        if (event.type === "retrieval_started") {
+          activeRetrievalKnowledgeBaseIds = this.readStringArray(event.data.knowledgeBaseIds);
+        }
+
+        if (event.type === "retrieval_completed") {
+          metadata.retrievalEvents?.push({
+            knowledgeBaseIds: activeRetrievalKnowledgeBaseIds,
+            status: "success",
+            sources: this.readRecordArray(event.data.sources),
+            elapsedMs: this.readOptionalNumber(event.data.elapsedMs)
+          });
+        }
+
+        if (event.type === "tool_started") {
+          metadata.toolEvents?.push({
+            id:
+              this.readString(event.data.id) || this.readString(event.data.toolCallId) || "unknown",
+            name: this.readString(event.data.name) || "unknown_tool",
+            arguments: this.readOptionalRecord(event.data.arguments),
+            status: "success"
+          });
+        }
+
+        if (event.type === "tool_completed") {
+          const toolId = this.readString(event.data.toolId) || this.readString(event.data.id);
+          const toolEvents = metadata.toolEvents ?? [];
+          let toolIndex = -1;
+          for (let index = toolEvents.length - 1; index >= 0; index -= 1) {
+            if (toolEvents[index]?.name === toolId) {
+              toolIndex = index;
+              break;
+            }
+          }
+          const toolEvent = toolIndex >= 0 ? toolEvents[toolIndex] : undefined;
+
+          if (toolEvent) {
+            const ok = event.data.ok === true;
+            toolEvent.status = ok ? "success" : "error";
+            toolEvent.output = event.data.output;
+            toolEvent.errorType = this.readString(event.data.errorType) || undefined;
+            toolEvent.errorMessage = this.readString(event.data.errorMessage) || undefined;
+            toolEvent.elapsedMs = this.readOptionalNumber(event.data.elapsedMs);
+          }
+        }
+
+        if (event.type === "token" && !firstTokenRecorded) {
+          firstTokenRecorded = true;
+          metadata.firstTokenMs = Date.now() - startedAt;
+        }
+
+        if (event.type === "run_completed" && turn) {
+          metadata.runId = event.data.runId ?? metadata.runId;
+          metadata.usage = event.data.usage;
+          metadata.elapsedMs = Date.now() - startedAt;
+          const persistedMessageId = await this.requireChatSessionsService().completeTurn(
+            turn,
+            event.data.content,
+            metadata,
+            event.data.contentParts
+          );
+          if (persistedMessageId) {
+            event.data.messageId = persistedMessageId;
+          }
+        }
+        if (event.type === "run_completed") {
+          metadata.runId = event.data.runId ?? metadata.runId;
+          metadata.usage = event.data.usage;
+          metadata.elapsedMs = Date.now() - startedAt;
+          await this.saveCompletedRagTrace({
+            requestId,
+            sessionId: sessionId ?? undefined,
+            messageId: event.data.messageId,
+            userId: context?.userId,
+            agent,
+            query: message,
+            answer: event.data.content,
+            metadata,
+            status: "completed"
+          });
+        }
+        if (event.type === "run_failed" || event.type === "run_canceled") {
+          metadata.runId = event.data.runId ?? metadata.runId;
+          metadata.elapsedMs = Date.now() - startedAt;
+          if (turn) {
+            await this.requireChatSessionsService().failTurn(
+              turn.turnId,
+              event.type === "run_failed" ? ChatTurnStatus.FAILED : ChatTurnStatus.CANCELED,
+              event.type === "run_failed" ? event.data.error.type : "canceled",
+              event.type === "run_failed" ? event.data.error.message : undefined
+            );
+          }
+          await this.saveCompletedRagTrace({
+            requestId,
+            sessionId: sessionId ?? undefined,
+            userId: context?.userId,
+            agent,
+            query: message,
+            answer: "",
+            metadata,
+            status: event.type === "run_failed" ? "failed" : "canceled",
+            error:
+              event.type === "run_failed" ? { type: event.data.error.type } : { type: "canceled" }
+          });
+        }
+        yield event;
+      }
+    } catch (error) {
+      if (turn) {
+        const canceled = signal?.aborted === true;
+        await this.requireChatSessionsService().failTurn(
+          turn.turnId,
+          canceled ? ChatTurnStatus.CANCELED : ChatTurnStatus.FAILED,
+          canceled ? "canceled" : "stream_interrupted",
+          error instanceof Error ? error.message : undefined
         );
-        if (persistedMessageId) {
-          event.data.messageId = persistedMessageId;
-        }
       }
-      if (event.type === "run_completed") {
-        metadata.runId = event.data.runId ?? metadata.runId;
-        metadata.usage = event.data.usage;
-        metadata.elapsedMs = Date.now() - startedAt;
-        await this.saveCompletedRagTrace({
-          requestId,
-          sessionId: sessionId ?? undefined,
-          messageId: event.data.messageId,
-          userId: context?.userId,
-          agent,
-          query: message,
-          answer: event.data.content,
-          metadata,
-          status: "completed"
-        });
-      }
-      if (event.type === "run_failed" || event.type === "run_canceled") {
-        metadata.runId = event.data.runId ?? metadata.runId;
-        metadata.elapsedMs = Date.now() - startedAt;
-        await this.saveCompletedRagTrace({
-          requestId,
-          sessionId: sessionId ?? undefined,
-          userId: context?.userId,
-          agent,
-          query: message,
-          answer: "",
-          metadata,
-          status: event.type === "run_failed" ? "failed" : "canceled",
-          error:
-            event.type === "run_failed" ? { type: event.data.error.type } : { type: "canceled" }
-        });
-      }
-      yield event;
+      throw error;
     }
+  }
+
+  private normalizeClientMessageId(value: string | undefined): string {
+    if (value === undefined) return randomUUID();
+    const normalized = value.trim();
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)
+    ) {
+      throw new AppError(ErrorCodes.common.badRequest, "clientMessageId must be a UUID");
+    }
+    return normalized;
   }
 
   /** Trace 是观测数据，任何写入错误都不能破坏已经成功生成的在线回答。 */
@@ -580,6 +658,7 @@ export class ChatService {
         return {
           type: "message_end",
           data: {
+            ...(event.data as unknown as Record<string, unknown>),
             runId: event.data.runId,
             messageId: event.data.messageId,
             content: event.data.content,
@@ -594,6 +673,7 @@ export class ChatService {
         return {
           type: "error",
           data: {
+            ...(event.data as unknown as Record<string, unknown>),
             runId: event.data.runId,
             errorType: event.data.error.type,
             message: event.data.error.publicMessage
@@ -603,6 +683,7 @@ export class ChatService {
         return {
           type: "error",
           data: {
+            ...(event.data as unknown as Record<string, unknown>),
             runId: event.data.runId,
             errorType: "canceled",
             message: "Agent 调用已取消"

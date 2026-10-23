@@ -40,6 +40,8 @@ export type ChatCompletionDto = {
   agentId?: string;
   /** 持久会话 ID；临时会话可以不传。 */
   sessionId?: string;
+  /** 客户端为本次发送生成的 UUID；持久会话用它保证重试幂等。 */
+  clientMessageId?: string;
   /** 本轮用户输入正文。 */
   message?: string;
   /** 本轮图片附件。 */

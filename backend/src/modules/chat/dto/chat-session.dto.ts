@@ -134,6 +134,12 @@ export type ChatSessionListResponse = {
 export type ChatSessionMessageListItem = {
   /** 消息 ID。 */
   id: string;
+  /** 新版消息所属轮次；旧历史消息为 null。 */
+  turnId: string | null;
+  /** 会话内由服务端分配的稳定轮次序号；JSON 中以字符串返回。 */
+  turnSequence: string | null;
+  /** 当前轮次生成状态；用户消息和旧消息为 null。 */
+  turnStatus: "QUEUED" | "GENERATING" | "COMPLETED" | "FAILED" | "CANCELED" | null;
   /** 消息发送方。 */
   role: "user" | "assistant";
   /** 消息正文。 */

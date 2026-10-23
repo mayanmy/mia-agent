@@ -3,6 +3,7 @@ import {
   ChatMessageFeedbackRating,
   ChatSessionMessageRole,
   ChatSessionStatus,
+  ChatTurnStatus,
   Prisma
 } from "@prisma/client";
 
@@ -41,12 +42,24 @@ type SessionOwner = {
   userId: string;
 };
 
+export type StartedChatTurn = {
+  sessionId: string;
+  turnId: string;
+  sequence: bigint;
+  userMessageId: string;
+  assistantMessageId: string;
+  createdAt: Date;
+  created: boolean;
+};
+
 /** 消息按创建时间倒序翻页时使用的复合游标，id 用于解决同毫秒排序冲突。 */
 type CreatedAtCursor = {
   /** 同一创建时间下用于稳定排序的消息 ID。 */
   id: string;
   /** 消息创建时间。 */
   createdAt: Date;
+  turnSequence?: bigint;
+  turnPosition?: number;
 };
 /** 会话按最近更新时间倒序翻页时使用的复合游标。 */
 type UpdatedAtCursor = {
@@ -166,17 +179,40 @@ export class ChatSessionsService {
       where: {
         sessionId,
         ...(before
-          ? {
-              OR: [
-                { createdAt: { lt: before.createdAt } },
-                { createdAt: before.createdAt, id: { lt: before.id } }
-              ]
-            }
+          ? before.turnSequence !== undefined && before.turnPosition !== undefined
+            ? {
+                OR: [
+                  { turnSequence: { lt: before.turnSequence } },
+                  { turnSequence: null },
+                  {
+                    turnSequence: before.turnSequence,
+                    turnPosition: { lt: before.turnPosition }
+                  },
+                  {
+                    turnSequence: before.turnSequence,
+                    turnPosition: before.turnPosition,
+                    id: { lt: before.id }
+                  }
+                ]
+              }
+            : {
+                turnSequence: null,
+                OR: [
+                  { createdAt: { lt: before.createdAt } },
+                  { createdAt: before.createdAt, id: { lt: before.id } }
+                ]
+              }
           : {})
       },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy: [
+        { turnSequence: { sort: "desc", nulls: "last" } },
+        { turnPosition: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+        { id: "desc" }
+      ],
       take: pageSize + 1,
       include: {
+        turn: { select: { status: true } },
         feedbacks: {
           where: { userId: owner.userId },
           take: 1
@@ -190,6 +226,10 @@ export class ChatSessionsService {
     return {
       list: pageRows.reverse().map((item) => ({
         id: item.id,
+        turnId: item.turnId,
+        turnSequence: item.turnSequence?.toString() ?? null,
+        turnStatus:
+          item.role === ChatSessionMessageRole.ASSISTANT ? (item.turn?.status ?? null) : null,
         role: item.role === ChatSessionMessageRole.USER ? "user" : "assistant",
         content: item.content,
         contentParts: this.toContentParts(item.contentParts, item.content),
@@ -209,7 +249,16 @@ export class ChatSessionsService {
       hasMore,
       nextBefore:
         hasMore && oldest
-          ? this.encodeCursor({ createdAt: oldest.createdAt.toISOString(), id: oldest.id })
+          ? this.encodeCursor({
+              createdAt: oldest.createdAt.toISOString(),
+              id: oldest.id,
+              ...(oldest.turnSequence != null
+                ? {
+                    turnSequence: oldest.turnSequence.toString(),
+                    turnPosition: String(oldest.turnPosition ?? 0)
+                  }
+                : {})
+            })
           : null
     };
   }
@@ -328,6 +377,204 @@ export class ChatSessionsService {
       role: item.role === ChatSessionMessageRole.USER ? ("user" as const) : ("assistant" as const),
       content: item.content
     }));
+  }
+
+  /**
+   * 原子分配会话序号并创建一对消息。短事务只负责确定因果顺序，后续 LLM 调用仍可并发。
+   * clientMessageId 的唯一约束让浏览器重试安全返回同一轮次。
+   */
+  async startTurn(
+    sessionId: string,
+    clientMessageId: string,
+    content: string
+  ): Promise<StartedChatTurn> {
+    const existing = await this.prisma.chatTurn.findUnique({
+      where: { sessionId_clientMessageId: { sessionId, clientMessageId } }
+    });
+    if (existing?.userMessageId && existing.assistantMessageId) {
+      return {
+        turnId: existing.id,
+        sessionId,
+        sequence: existing.sequence,
+        userMessageId: existing.userMessageId,
+        assistantMessageId: existing.assistantMessageId,
+        createdAt: existing.createdAt,
+        created: false
+      };
+    }
+
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        // 同一 session 行上的原子自增只串行化序号分配，不持有整个模型生成周期的锁。
+        const session = await transaction.chatSession.update({
+          where: { id: sessionId },
+          data: { nextTurnSequence: { increment: 1 } },
+          select: { nextTurnSequence: true }
+        });
+        const sequence = session.nextTurnSequence - 1n;
+        const turn = await transaction.chatTurn.create({
+          data: { sessionId, sequence, clientMessageId }
+        });
+        const createdAt = turn.createdAt;
+        const userMessage = await transaction.chatSessionMessage.create({
+          data: {
+            sessionId,
+            role: ChatSessionMessageRole.USER,
+            content,
+            contentParts: textContentParts(content) as Prisma.InputJsonValue,
+            turnId: turn.id,
+            turnSequence: sequence,
+            turnPosition: 0,
+            createdAt
+          }
+        });
+        const assistantMessage = await transaction.chatSessionMessage.create({
+          data: {
+            sessionId,
+            role: ChatSessionMessageRole.ASSISTANT,
+            content: "",
+            contentParts: [] as Prisma.InputJsonValue,
+            turnId: turn.id,
+            turnSequence: sequence,
+            turnPosition: 1,
+            createdAt: new Date(createdAt.getTime() + 1)
+          }
+        });
+        await transaction.chatTurn.update({
+          where: { id: turn.id },
+          data: {
+            userMessageId: userMessage.id,
+            assistantMessageId: assistantMessage.id,
+            status: ChatTurnStatus.GENERATING,
+            startedAt: new Date()
+          }
+        });
+        await transaction.chatSession.update({
+          where: { id: sessionId },
+          data: { lastMessageAt: createdAt, updatedAt: createdAt }
+        });
+        await transaction.chatSession.updateMany({
+          where: { id: sessionId, title: DEFAULT_SESSION_TITLE },
+          data: { title: this.createTitleFromMessage(content) }
+        });
+        return {
+          turnId: turn.id,
+          sessionId,
+          sequence,
+          userMessageId: userMessage.id,
+          assistantMessageId: assistantMessage.id,
+          createdAt,
+          created: true
+        };
+      });
+    } catch (error) {
+      // 两个相同幂等请求可能同时越过首次查询；唯一约束胜出的记录是权威结果。
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const winner = await this.prisma.chatTurn.findUnique({
+          where: { sessionId_clientMessageId: { sessionId, clientMessageId } }
+        });
+        if (winner?.userMessageId && winner.assistantMessageId) {
+          return {
+            turnId: winner.id,
+            sessionId,
+            sequence: winner.sequence,
+            userMessageId: winner.userMessageId,
+            assistantMessageId: winner.assistantMessageId,
+            createdAt: winner.createdAt,
+            created: false
+          };
+        }
+      }
+      throw error;
+    }
+  }
+
+  async getTurnSnapshot(turnId: string) {
+    return this.prisma.chatTurn.findUnique({
+      where: { id: turnId },
+      include: { messages: { orderBy: { turnPosition: "asc" } } }
+    });
+  }
+
+  async bindTurnRun(turnId: string, runId: string | undefined): Promise<void> {
+    if (!runId) return;
+    await this.prisma.chatTurn.update({
+      where: { id: turnId },
+      data: { runId, status: ChatTurnStatus.GENERATING, startedAt: new Date() }
+    });
+  }
+
+  /** 只读取当前轮次创建前已经完成的问答，排除其他并发中的半轮消息。 */
+  async buildTurnModelHistory(turn: StartedChatTurn, historyTurns: number) {
+    if (historyTurns <= 0) return [];
+    const turns = await this.prisma.chatTurn.findMany({
+      where: {
+        sessionId: turn.sessionId,
+        sequence: { lt: turn.sequence },
+        status: ChatTurnStatus.COMPLETED,
+        completedAt: { lte: turn.createdAt }
+      },
+      orderBy: { sequence: "desc" },
+      take: historyTurns,
+      include: { messages: { orderBy: { turnPosition: "asc" } } }
+    });
+    return turns.reverse().flatMap((item) =>
+      item.messages.flatMap((message) =>
+        message.role === ChatSessionMessageRole.USER ||
+        message.role === ChatSessionMessageRole.ASSISTANT
+          ? [
+              {
+                role:
+                  message.role === ChatSessionMessageRole.USER
+                    ? ("user" as const)
+                    : ("assistant" as const),
+                content: message.content
+              }
+            ]
+          : []
+      )
+    );
+  }
+
+  async completeTurn(
+    turn: StartedChatTurn,
+    content: string,
+    metadata: ChatMessageMetadata,
+    contentParts: AgentContentPart[]
+  ): Promise<string> {
+    await this.prisma.$transaction([
+      this.prisma.chatSessionMessage.update({
+        where: { id: turn.assistantMessageId },
+        data: {
+          content,
+          contentParts: contentParts as Prisma.InputJsonValue,
+          metadata: metadata as Prisma.InputJsonValue
+        }
+      }),
+      this.prisma.chatTurn.update({
+        where: { id: turn.turnId },
+        data: {
+          runId: metadata.runId,
+          status: ChatTurnStatus.COMPLETED,
+          completedAt: new Date(),
+          errorType: null,
+          errorMessage: null
+        }
+      })
+    ]);
+    return turn.assistantMessageId;
+  }
+
+  async failTurn(
+    turnId: string,
+    status: ChatTurnStatus,
+    errorType: string,
+    errorMessage?: string
+  ): Promise<void> {
+    await this.prisma.chatTurn.update({
+      where: { id: turnId },
+      data: { status, errorType, errorMessage: errorMessage ?? null, completedAt: new Date() }
+    });
   }
 
   /**
@@ -665,7 +912,23 @@ export class ChatSessionsService {
   /** 解码消息分页游标。 */
   private decodeCreatedAtCursor(value: string | undefined): CreatedAtCursor | null {
     const decoded = this.decodeCursor(value, "createdAt");
-    return decoded ? { id: decoded.id, createdAt: decoded.date } : null;
+    if (!decoded || !value) return decoded ? { id: decoded.id, createdAt: decoded.date } : null;
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Record<
+      string,
+      unknown
+    >;
+    const rawSequence = parsed.turnSequence;
+    const rawPosition = parsed.turnPosition;
+    return {
+      id: decoded.id,
+      createdAt: decoded.date,
+      ...(typeof rawSequence === "string" && /^\d+$/u.test(rawSequence)
+        ? { turnSequence: BigInt(rawSequence) }
+        : {}),
+      ...(typeof rawPosition === "string" && /^\d+$/u.test(rawPosition)
+        ? { turnPosition: Number(rawPosition) }
+        : {})
+    };
   }
 
   /** 解码会话分页游标。 */

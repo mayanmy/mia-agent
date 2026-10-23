@@ -1130,10 +1130,25 @@ export const tests = [
       };
       const chatSessionsService = {
         requireActiveSession: async () => ({ id: "session-id" }),
-        buildModelHistory: async () => [{ role: "user" as const, content: "上一条消息" }],
-        appendMessage: async (_sessionId: string, role: string, content: string) => {
-          storedMessages.push({ role, content });
-        }
+        startTurn: async (_sessionId: string, _clientMessageId: string, content: string) => {
+          storedMessages.push({ role: "USER", content });
+          return {
+            sessionId: "session-id",
+            turnId: "turn-id",
+            sequence: 1n,
+            userMessageId: "user-message-id",
+            assistantMessageId: "assistant-message-id",
+            createdAt: new Date(),
+            created: true
+          };
+        },
+        buildTurnModelHistory: async () => [{ role: "user" as const, content: "上一条消息" }],
+        bindTurnRun: async () => undefined,
+        completeTurn: async (_turn: unknown, content: string) => {
+          storedMessages.push({ role: "ASSISTANT", content });
+          return "assistant-message-id";
+        },
+        failTurn: async () => undefined
       };
       const service = new ChatService(
         agentsService as never,
