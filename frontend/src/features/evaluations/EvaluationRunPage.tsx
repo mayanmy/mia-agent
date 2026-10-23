@@ -1,6 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { StopOutlined } from "@ant-design/icons";
-import { Alert, Button, Descriptions, Drawer, Empty, Progress, Select, Space, Spin, Table, Tag, message, type TableProps } from "antd";
+import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  DatabaseOutlined,
+  ExperimentOutlined,
+  StopOutlined
+} from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Descriptions,
+  Drawer,
+  Empty,
+  Progress,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Tag,
+  message,
+  type TableProps
+} from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
@@ -65,40 +85,119 @@ export function EvaluationRunPage() {
   const done = run.completedCases + run.failedCases + run.skippedCases;
   const active = run.status === "PENDING" || run.status === "RUNNING";
 
-  return <section className="workspace evaluationWorkspace">
-    <WorkspacePageHeader eyebrow="OPERATIONS / EVALUATION REPORT" title={`${run.dataset.name} · v${run.dataset.version}`} description={`Agent：${run.agentName}`} onBack={() => navigate("/operations/evaluations")} actions={active ? <Button danger icon={<StopOutlined />} onClick={async () => { await cancelEvaluationRun(run.id); message.success("已请求取消"); await load(); }}>取消运行</Button> : undefined} />
-    <section className="panel evaluationRunHeader">
-      <Space wrap><Tag color={statusMeta[run.status].color}>{statusMeta[run.status].label}</Tag><span>创建于 {new Date(run.createdAt).toLocaleString()}</span>{run.finishedAt && <span>完成于 {new Date(run.finishedAt).toLocaleString()}</span>}</Space>
-      <Progress percent={run.totalCases ? Math.round(done / run.totalCases * 100) : 0} format={() => `${done}/${run.totalCases}`} />
-      {run.errorMessage && <Alert type="error" showIcon message={run.errorType || "运行失败"} description={run.errorMessage} />}
+  const progress = run.totalCases ? Math.round((done / run.totalCases) * 100) : 0;
+
+  return (
+    <section className="workspace evaluationWorkspace">
+      <WorkspacePageHeader
+        eyebrow="OPERATIONS / EVALUATION REPORT"
+        title={`${run.dataset.name} · v${run.dataset.version}`}
+        description={<>由 <strong>{run.agentName}</strong> 执行 · 使用冻结配置快照</>}
+        meta={<Tag color={statusMeta[run.status].color}>{statusMeta[run.status].label}</Tag>}
+        onBack={() => navigate("/operations/evaluations")}
+        actions={active ? <Button danger icon={<StopOutlined />} onClick={async () => { await cancelEvaluationRun(run.id); message.success("已请求取消"); await load(); }}>取消运行</Button> : undefined}
+      />
+
+      <section className="panel evaluationRunSummary" aria-label="运行概况">
+        <div className="evaluationRunSummaryMain">
+          <div>
+            <span className="evaluationSummaryEyebrow">运行进度</span>
+            <strong>{done}<small> / {run.totalCases} 个用例</small></strong>
+          </div>
+          <Progress
+            aria-label={`已完成 ${done} 个，共 ${run.totalCases} 个`}
+            percent={progress}
+            showInfo={false}
+            status={run.status === "FAILED" ? "exception" : active ? "active" : "success"}
+          />
+        </div>
+        <dl className="evaluationRunFacts">
+          <div><dt><ClockCircleOutlined aria-hidden="true" />创建时间</dt><dd>{formatDateTime(run.createdAt)}</dd></div>
+          <div><dt><CheckCircleOutlined aria-hidden="true" />完成时间</dt><dd>{run.finishedAt ? formatDateTime(run.finishedAt) : "尚未完成"}</dd></div>
+          <div><dt><ExperimentOutlined aria-hidden="true" />有效样本</dt><dd>{run.summaryMetrics?.sampleCount ?? run.completedCases} / {run.totalCases}</dd></div>
+        </dl>
+        {run.errorMessage && <Alert type="error" showIcon message={run.errorType || "运行失败"} description={run.errorMessage} />}
+      </section>
+
+      <section aria-labelledby="metric-heading">
+        <SectionHeading
+          id="metric-heading"
+          title="评估指标"
+          description="检索质量与运行表现分组展示，便于快速定位回归来源。"
+        />
+        <MetricGrid run={run} comparison={comparison} />
+      </section>
+
+      <section className="panel evaluationComparisonPanel" aria-labelledby="comparison-heading">
+        <div className="evaluationPanelHeader">
+          <SectionHeading
+            id="comparison-heading"
+            title="Baseline / Candidate 对比"
+            description="仅比较相同冻结数据集及指标版本的已完成运行。"
+          />
+          <Select
+            aria-label="选择 Baseline 运行"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={baselines.length ? "选择 Baseline" : "暂无可比较运行"}
+            disabled={!baselines.length}
+            className="evaluationBaselineSelect"
+            options={baselines.map((item) => ({ value: item.id, label: `${item.agentName} · ${formatDateTime(item.createdAt)}` }))}
+            onChange={async (baselineId) => {
+              if (!baselineId) return setComparison(null);
+              try { setComparison(await getEvaluationComparison(baselineId, run.id)); }
+              catch (error) { message.error(error instanceof Error ? error.message : "对比加载失败"); }
+            }}
+          />
+        </div>
+        {comparison ? <ComparisonTable comparison={comparison} /> : (
+          <div className="evaluationComparisonEmpty">
+            <DatabaseOutlined aria-hidden="true" />
+            <span>{baselines.length ? "选择一次历史运行，查看指标变化与用例回归。" : "完成第二次同数据集评估后，即可在这里生成回归对比。"}</span>
+          </div>
+        )}
+      </section>
+
+      <section className="panel evaluationTablePanel" aria-labelledby="case-heading">
+        <div className="evaluationTableHeader">
+          <SectionHeading id="case-heading" title="用例结果" description={`${results.length} 条结果，点击问题查看答案与检索片段。`} />
+          <div className="evaluationResultLegend" aria-label="用例结果统计">
+            <span><i className="is-success" />完成 {run.completedCases}</span>
+            <span><i className="is-danger" />失败 {run.failedCases}</span>
+            <span><i className="is-muted" />跳过 {run.skippedCases}</span>
+          </div>
+        </div>
+        <Table rowKey="id" columns={columns} dataSource={results} pagination={{ pageSize: 20, showSizeChanger: false }} scroll={{ x: 900 }} />
+      </section>
+      <ResultDrawer result={selectedResult} onClose={() => setSelectedResult(null)} />
     </section>
-
-    <section aria-labelledby="metric-heading"><h2 id="metric-heading" className="evaluationSectionTitle">分层指标</h2><MetricGrid run={run} comparison={comparison} /></section>
-
-    <section className="panel evaluationComparisonPanel" aria-labelledby="comparison-heading">
-      <div><h2 id="comparison-heading">Baseline / Candidate 对比</h2><p>只列出相同冻结数据集和指标版本的已完成运行。</p></div>
-      <Select allowClear showSearch optionFilterProp="label" placeholder="选择 Baseline" style={{ minWidth: 320 }} options={baselines.map((item) => ({ value: item.id, label: `${item.agentName} · ${new Date(item.createdAt).toLocaleString()}` }))} onChange={async (baselineId) => { if (!baselineId) return setComparison(null); try { setComparison(await getEvaluationComparison(baselineId, run.id)); } catch (error) { message.error(error instanceof Error ? error.message : "对比加载失败"); } }} />
-      {comparison && <ComparisonTable comparison={comparison} />}
-    </section>
-
-    <section className="panel evaluationTablePanel" aria-labelledby="case-heading"><h2 id="case-heading" className="evaluationSectionTitle">用例结果</h2><Table rowKey="id" columns={columns} dataSource={results} pagination={{ pageSize: 20 }} scroll={{ x: 900 }} /></section>
-    <ResultDrawer result={selectedResult} onClose={() => setSelectedResult(null)} />
-  </section>;
+  );
 }
 
 function MetricGrid({ run, comparison }: { run: EvaluationRunDetail; comparison: EvaluationComparison | null }) {
   const cards = [
-    { key: "retrieval.hitRateAt5", label: "HitRate@5", value: run.summaryMetrics?.retrieval?.hitRateAt5, percent: true },
-    { key: "retrieval.recallAt5", label: "Recall@5", value: run.summaryMetrics?.retrieval?.recallAt5, percent: true },
-    { key: "retrieval.mrr", label: "MRR", value: run.summaryMetrics?.retrieval?.mrr, percent: false },
-    { key: "retrieval.emptyRetrievalRate", label: "空召回率", value: run.summaryMetrics?.retrieval?.emptyRetrievalRate, percent: true },
-    { key: "runtime.successRate", label: "成功率", value: run.summaryMetrics?.runtime?.successRate, percent: true },
-    { key: "runtime.p95TotalMs", label: "P95 总耗时", value: run.summaryMetrics?.runtime?.p95TotalMs, unit: "ms", percent: false }
+    { key: "retrieval.hitRateAt5", group: "检索质量", label: "HitRate@5", hint: "前 5 条中至少命中一条", value: run.summaryMetrics?.retrieval?.hitRateAt5, percent: true },
+    { key: "retrieval.recallAt5", group: "检索质量", label: "Recall@5", hint: "期望内容被召回的比例", value: run.summaryMetrics?.retrieval?.recallAt5, percent: true },
+    { key: "retrieval.mrr", group: "检索质量", label: "MRR", hint: "首个正确结果的排序质量", value: run.summaryMetrics?.retrieval?.mrr, percent: false },
+    { key: "retrieval.emptyRetrievalRate", group: "检索质量", label: "空召回率", hint: "未检索到任何片段的比例", value: run.summaryMetrics?.retrieval?.emptyRetrievalRate, percent: true },
+    { key: "runtime.successRate", group: "运行表现", label: "成功率", hint: "成功生成答案的用例比例", value: run.summaryMetrics?.runtime?.successRate, percent: true },
+    { key: "runtime.p95TotalMs", group: "运行表现", label: "P95 总耗时", hint: "95% 用例在此时间内完成", value: run.summaryMetrics?.runtime?.p95TotalMs, duration: true, percent: false }
   ];
   return <div className="evaluationMetricGrid">{cards.map((card) => {
     const delta = comparison?.metrics.find((item) => item.key === card.key);
-    return <article className="panel evaluationMetricCard" key={card.key}><span>{card.label}</span><strong>{card.value == null ? "—" : card.percent ? formatPercent(card.value) : `${formatDecimal(card.value)}${card.unit ? ` ${card.unit}` : ""}`}</strong><small>{run.summaryMetrics?.sampleCount ?? 0}/{run.totalCases} 个有效样本{delta?.absoluteDelta == null ? "" : ` · Δ ${delta.absoluteDelta > 0 ? "+" : ""}${formatDecimal(delta.absoluteDelta)}`}</small></article>;
+    const value = card.value == null ? "—" : card.duration ? formatDuration(card.value) : card.percent ? formatPercent(card.value) : formatDecimal(card.value);
+    return <article className="panel evaluationMetricCard" key={card.key}>
+      <div className="evaluationMetricMeta"><span>{card.group}</span>{delta?.absoluteDelta != null && <Tag color={delta.verdict === "improved" ? "success" : delta.verdict === "regressed" ? "error" : "default"}>{verdictLabel(delta.verdict)}</Tag>}</div>
+      <div><h3>{card.label}</h3><p>{card.hint}</p></div>
+      <strong>{value}</strong>
+      <small>{run.summaryMetrics?.sampleCount ?? 0}/{run.totalCases} 个有效样本{card.duration && card.value != null ? ` · ${Math.round(card.value).toLocaleString()} ms` : ""}</small>
+    </article>;
   })}</div>;
+}
+
+function SectionHeading({ id, title, description }: { id: string; title: string; description: string }) {
+  return <div className="evaluationSectionHeading"><h2 id={id}>{title}</h2><p>{description}</p></div>;
 }
 
 function ComparisonTable({ comparison }: { comparison: EvaluationComparison }) {
@@ -122,5 +221,7 @@ function ResultDrawer({ result, onClose }: { result: EvaluationCaseResult | null
 
 function formatPercent(value: number | null | undefined) { return value == null ? "—" : `${(value * 100).toFixed(1)}%`; }
 function formatDecimal(value: number | null | undefined) { return value == null ? "—" : Math.abs(value) >= 100 ? Math.round(value).toLocaleString() : value.toFixed(3); }
+function formatDuration(value: number) { return value >= 1000 ? `${(value / 1000).toFixed(1)} s` : `${Math.round(value)} ms`; }
+function formatDateTime(value: string) { return new Date(value).toLocaleString(undefined, { hour12: false }); }
 function caseStatus(value: EvaluationCaseResult["status"]) { return ({ PENDING: "等待", RUNNING: "执行中", COMPLETED: "完成", FAILED: "失败", SKIPPED: "跳过" } as const)[value]; }
 function verdictLabel(value: EvaluationComparison["metrics"][number]["verdict"]) { return ({ improved: "改善", regressed: "退化", unchanged: "不变", not_comparable: "不可比较" } as const)[value]; }
