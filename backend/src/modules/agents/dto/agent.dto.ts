@@ -1,6 +1,7 @@
 import {
   AgentChatSessionMode,
   AgentExecutionMode,
+  AgentRuntimeMode,
   AgentVisionMode,
   ModelConfigType,
   ModelThinkingMode,
@@ -130,6 +131,12 @@ export type AgentListItem = {
   createdAt: Date;
   /** Agent 最近更新时间。 */
   updatedAt: Date;
+  /** 当前可编辑配置的乐观锁修订号。 */
+  draftRevision: number;
+  /** 发布、回滚和下线的乐观锁修订号。 */
+  releaseRevision: number;
+  /** 当前线上不可变版本 ID；未发布时为 null。 */
+  publishedVersionId: string | null;
 };
 
 /** Agent 编辑页与运行配置需要的完整详情。 */
@@ -242,6 +249,61 @@ export type AgentPublishResult = {
   publishedAt: Date | null;
   /** 当前公开链接令牌；未发布时为 null。 */
   shareToken: string | null;
+  /** 当前线上版本 ID；下线时为 null。 */
+  publishedVersionId: string | null;
+  /** 发布事务完成后的修订号。 */
+  releaseRevision: number;
+};
+
+export type CreateAgentVersionDto = {
+  expectedDraftRevision?: number;
+  changeSummary?: string;
+};
+
+export type ActivateAgentVersionDto = {
+  versionId?: string;
+  action?: "PUBLISH" | "ROLLBACK";
+  expectedReleaseRevision?: number;
+  evaluationRunId?: string;
+  reason?: string;
+};
+
+export type UnpublishAgentDto = {
+  expectedReleaseRevision?: number;
+  reason?: string;
+};
+
+export type AgentVersionQueryDto = {
+  page?: string;
+  pageSize?: string;
+};
+
+export type AgentVersionListItem = {
+  id: string;
+  version: number;
+  schemaVersion: number;
+  sourceDraftRevision: number;
+  configHash: string;
+  changeSummary: string;
+  isPublished: boolean;
+  createdBy: { id: string; displayName: string };
+  createdAt: Date;
+};
+
+export type AgentVersionDetail = AgentVersionListItem & {
+  configSnapshot: JsonValue;
+};
+
+export type AgentReleaseListItem = {
+  id: string;
+  sequence: number;
+  action: "PUBLISH" | "ROLLBACK" | "UNPUBLISH";
+  fromVersionId: string | null;
+  targetVersionId: string | null;
+  evaluationRunId: string | null;
+  reason: string;
+  createdBy: { id: string; displayName: string };
+  createdAt: Date;
 };
 
 /** 匿名访问者可读取的最小 Agent 信息。 */
@@ -288,6 +350,12 @@ export type AgentPublicAccessConfig = {
 export type AgentRuntimeConfig = {
   /** Agent ID。 */
   agentId: string;
+  /** 正式或指定版本运行时固定的不可变版本 ID。 */
+  agentVersionId: string | null;
+  /** 规范化配置摘要，用于 Run Trace 和完整性校验。 */
+  configHash: string;
+  /** 当前配置来自草稿、指定版本、正式发布或迁移兼容路径。 */
+  runtimeMode: AgentRuntimeMode;
   /** Agent 名称，用于日志和运行记录。 */
   name: string;
   /** 注入模型上下文的系统提示词。 */

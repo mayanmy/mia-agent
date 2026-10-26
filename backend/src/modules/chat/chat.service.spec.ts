@@ -4,6 +4,7 @@ import {
   AgentRunSource,
   AgentRunStatus,
   AgentRunStepType,
+  AgentRuntimeMode,
   ModelProviderType
 } from "@prisma/client";
 
@@ -28,10 +29,80 @@ function createEmptyRetrievalService() {
 
 export const tests = [
   {
+    name: "ChatService pins public traffic to the published AgentVersion",
+    run: async () => {
+      let publishedReads = 0;
+      let runtimeRequest: Record<string, unknown> | undefined;
+      const service = new ChatService(
+        {
+          getPublishedRuntimeConfig: async () => {
+            publishedReads += 1;
+            return {
+              agentId: "agent-id",
+              agentVersionId: "version-id",
+              configHash: "config-hash",
+              runtimeMode: AgentRuntimeMode.PUBLISHED,
+              chatSessionMode: AgentChatSessionMode.EPHEMERAL,
+              historyTurns: 6,
+              modelConfigId: "model-id",
+              modelName: "model",
+              providerType: ModelProviderType.OPENAI_COMPATIBLE
+            };
+          },
+          getDefaultChatRuntimeConfig: async () => {
+            throw new Error("正式流量不应读取草稿或默认配置");
+          }
+        } as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        undefined,
+        undefined,
+        undefined,
+        {
+          resolveRequestId: () => "request-id",
+          async *runAgent(request: Record<string, unknown>) {
+            runtimeRequest = request;
+            yield {
+              type: "run_completed",
+              data: {
+                runId: "run-id",
+                agentId: "agent-id",
+                modelConfigId: "model-id",
+                modelName: "model",
+                providerName: ModelProviderType.OPENAI_COMPATIBLE,
+                sessionId: null,
+                content: "ok"
+              }
+            };
+          }
+        } as never
+      );
+
+      for await (const _event of service.streamRuntimeEvents(
+        { agentId: "agent-id", message: "hello" },
+        undefined,
+        {
+          source: AgentRunSource.PUBLIC_WIDGET,
+          skipInternalSessionPersistence: true
+        }
+      )) {
+        // 消费完整流，确保 Runtime 请求已构造。
+      }
+
+      assert.equal(publishedReads, 1);
+      assert.equal(runtimeRequest?.agentVersionId, "version-id");
+      assert.equal(runtimeRequest?.runtimeMode, AgentRuntimeMode.PUBLISHED);
+    }
+  },
+  {
     name: "ChatService traces streaming model execution with the incoming request ID",
     run: async () => {
       const traceCalls: Array<{ method: string; payload?: unknown }> = [];
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "Trace Agent",
@@ -142,6 +213,9 @@ export const tests = [
       const canceledRuns: string[] = [];
       const controller = new AbortController();
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "Cancel Agent",
@@ -219,6 +293,9 @@ export const tests = [
     name: "ChatService exposes unified Runtime events and aggregates them for blocking completion",
     run: async () => {
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "Runtime Agent",
@@ -288,6 +365,9 @@ export const tests = [
     run: async () => {
       const modelRequests: ChatCompletionRequest[] = [];
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "Tool Agent",
@@ -421,6 +501,9 @@ export const tests = [
     run: async () => {
       const modelRequests: ChatCompletionRequest[] = [];
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "Tool Agent",
@@ -525,6 +608,9 @@ export const tests = [
       const executions: Array<{ toolId: string; input: Record<string, unknown> }> = [];
       let routerCalls = 0;
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "Outfit Agent",
@@ -632,6 +718,9 @@ export const tests = [
       let routerCalls = 0;
       const executedInputs: Array<Record<string, unknown>> = [];
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "Outfit Agent",
@@ -725,6 +814,9 @@ export const tests = [
     name: "ChatService falls back to current_time tool result for US time when model returns empty content",
     run: async () => {
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "Time Agent",
@@ -815,6 +907,9 @@ export const tests = [
     run: async () => {
       const modelRequests: ChatCompletionRequest[] = [];
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "HTTP Agent",
@@ -932,6 +1027,9 @@ export const tests = [
     run: async () => {
       const modelRequests: ChatCompletionRequest[] = [];
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "Knowledge Agent",
@@ -1037,6 +1135,9 @@ export const tests = [
     run: async () => {
       const modelRequests: ChatCompletionRequest[] = [];
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "Template Agent",
@@ -1099,6 +1200,9 @@ export const tests = [
     run: async () => {
       const storedMessages: Array<{ role: string; content: string }> = [];
       const agentsService = {
+        getDefaultChatRuntimeConfig() {
+          return this.getAgentRuntimeConfig();
+        },
         getAgentRuntimeConfig: async () => ({
           agentId: "agent-id",
           name: "Persistent Agent",

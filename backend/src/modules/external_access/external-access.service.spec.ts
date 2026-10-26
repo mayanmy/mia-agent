@@ -293,7 +293,7 @@ export const tests: TestCase[] = [
           }
         } as never,
         {
-          getAgentRuntimeConfig: async () => ({ historyTurns: 6 })
+          getPublishedRuntimeConfig: async () => ({ historyTurns: 6 })
         } as never,
         {
           async *streamCompletion() {

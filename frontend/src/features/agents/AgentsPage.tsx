@@ -30,6 +30,7 @@ import { AgentPublicAccessModal } from "./components/AgentPublicAccessModal";
 import { AgentEmbedModal } from "./components/AgentEmbedModal";
 import { AgentFormModal } from "./components/AgentFormModal";
 import { AgentGallery } from "./components/AgentGallery";
+import { AgentVersionsModal } from "./components/AgentVersionsModal";
 import type { AgentFormValues, AgentTableItem, EmbedScenario } from "./types";
 import { defaultAgentFormValues, toAgentFormValues, toAgentPayload } from "./utils/agent-form";
 import { getEmbedCode, getShareUrl } from "./utils/embed-code";
@@ -52,6 +53,7 @@ export function AgentsPage() {
   const [embedAgent, setEmbedAgent] = useState<AgentTableItem | null>(null);
   const [apiKeyAgent, setApiKeyAgent] = useState<AgentTableItem | null>(null);
   const [publicAccessAgent, setPublicAccessAgent] = useState<AgentTableItem | null>(null);
+  const [versionsAgent, setVersionsAgent] = useState<AgentTableItem | null>(null);
   const [embedScenario, setEmbedScenario] = useState<EmbedScenario>("iframe");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loadedToolIds, setLoadedToolIds] = useState<string[]>([]);
@@ -298,7 +300,7 @@ export function AgentsPage() {
     }
   }
 
-  function confirmUnpublish(id: string) {
+  function confirmUnpublish(agent: AgentTableItem) {
     Modal.confirm({
       title: "取消发布 Agent",
       content: "确认取消发布这个 Agent？",
@@ -307,15 +309,18 @@ export function AgentsPage() {
         danger: true
       },
       cancelText: "取消",
-      onOk: () => handleUnpublish(id)
+      onOk: () => handleUnpublish(agent.id, agent.releaseRevision)
     });
   }
 
-  async function handleUnpublish(id: string) {
+  async function handleUnpublish(id: string, expectedReleaseRevision: number) {
     setLoading(true);
 
     try {
-      await unpublishAgent(id);
+      await unpublishAgent(id, {
+        expectedReleaseRevision,
+        reason: "管理端手动下线"
+      });
       message.success("Agent 已取消发布");
       await refresh();
     } catch (error) {
@@ -437,6 +442,7 @@ export function AgentsPage() {
         onOpenEmbed={openEmbedDialog}
         onOpenApiKeys={setApiKeyAgent}
         onOpenPublicAccess={setPublicAccessAgent}
+        onOpenVersions={setVersionsAgent}
         onPageChange={(page, pageSize) => void refresh(page, pageSize)}
         onPublish={confirmPublish}
         onTest={(agentId) => navigate(`/chat?agentId=${agentId}`)}
@@ -470,6 +476,15 @@ export function AgentsPage() {
         agent={publicAccessAgent}
         onCancel={() => setPublicAccessAgent(null)}
         onTokenRotated={() => void refresh()}
+      />
+      <AgentVersionsModal
+        agent={versionsAgent}
+        open={Boolean(versionsAgent)}
+        onChanged={async () => {
+          await refresh();
+          setVersionsAgent(null);
+        }}
+        onClose={() => setVersionsAgent(null)}
       />
     </section>
   );

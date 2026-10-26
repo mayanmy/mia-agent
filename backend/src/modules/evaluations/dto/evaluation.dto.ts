@@ -63,6 +63,7 @@ export type CommitEvaluationImportDto = {
 export type CreateEvaluationRunDto = {
   datasetVersionId?: string;
   agentId?: string;
+  agentVersionId?: string;
   baselineRunId?: string | null;
   graderModelConfigId?: string | null;
   overrides?: { retrieval?: { topK?: number; scoreThreshold?: number } };

@@ -1,4 +1,4 @@
-import { AgentRunSource, AgentRunStatus, WorkflowRunMode } from "@prisma/client";
+import { AgentRunSource, AgentRunStatus, AgentRuntimeMode, WorkflowRunMode } from "@prisma/client";
 
 /** 创建 Agent Run 主记录的输入；仅包含可跨模块传递的业务字段。 */
 export type CreateAgentRunDto = {
@@ -8,6 +8,9 @@ export type CreateAgentRunDto = {
   source: AgentRunSource;
   /** 本次运行使用的 Agent ID；独立 Workflow 应用运行时为空。 */
   agentId?: string;
+  agentVersionId?: string;
+  configHash?: string;
+  runtimeMode?: AgentRuntimeMode;
   /** 匿名入口没有用户 ID。 */
   userId?: string;
   /** 持久会话 ID；临时对话为空。 */

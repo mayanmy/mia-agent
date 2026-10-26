@@ -6,6 +6,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   GlobalOutlined,
+  HistoryOutlined,
   KeyOutlined,
   MessageOutlined,
   MoreOutlined,
@@ -31,7 +32,8 @@ type AgentGalleryProps = {
   onOpenEmbed: (agent: AgentTableItem) => void;
   onOpenApiKeys: (agent: AgentTableItem) => void;
   onOpenPublicAccess: (agent: AgentTableItem) => void;
-  onUnpublish: (agentId: string) => void;
+  onOpenVersions: (agent: AgentTableItem) => void;
+  onUnpublish: (agent: AgentTableItem) => void;
   onEdit: (agentId: string) => void;
   onDelete: (agentId: string) => void;
 };
@@ -180,6 +182,7 @@ function createMenuItems(agent: AgentTableItem): MenuProps["items"] {
         ]
       : []),
     { type: "divider" },
+    { key: "versions", icon: <HistoryOutlined />, label: "版本与发布" },
     { key: "edit", icon: <EditOutlined />, label: "编辑 Agent" },
     { key: "delete", icon: <DeleteOutlined />, label: "删除 Agent", danger: true }
   ];
@@ -191,7 +194,8 @@ function handleMenu(key: string, agent: AgentTableItem, props: AgentGalleryProps
   if (key === "embed") props.onOpenEmbed(agent);
   if (key === "api-keys") props.onOpenApiKeys(agent);
   if (key === "public-access") props.onOpenPublicAccess(agent);
-  if (key === "unpublish") props.onUnpublish(agent.id);
+  if (key === "versions") props.onOpenVersions(agent);
+  if (key === "unpublish") props.onUnpublish(agent);
   if (key === "edit") props.onEdit(agent.id);
   if (key === "delete") props.onDelete(agent.id);
 }

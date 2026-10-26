@@ -104,7 +104,13 @@ export class ChatService {
    * 保留型 Agent 立即不可用。
    */
   async getSession(agentId: string, context: ChatRequestContext): Promise<ChatSessionResponse> {
-    const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
+    const runtimeSource = context?.source ?? AgentRunSource.INTERNAL_CHAT;
+    const formalRuntime =
+      runtimeSource === AgentRunSource.PUBLIC_WIDGET ||
+      runtimeSource === AgentRunSource.SERVICE_API;
+    const agent = formalRuntime
+      ? await this.agentsService.getPublishedRuntimeConfig(agentId)
+      : await this.agentsService.getDefaultChatRuntimeConfig(agentId);
 
     if (agent.chatSessionMode !== AgentChatSessionMode.PERSISTENT) {
       return { mode: "EPHEMERAL", sessionId: null, messages: [] };
@@ -297,7 +303,14 @@ export class ChatService {
     const images = this.normalizeImages(payload.images);
     const files = this.normalizeFiles(payload.files);
     const message = this.normalizeUserMessage(payload.message, images, files);
-    const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
+    const runtimeSource = context?.source ?? AgentRunSource.INTERNAL_CHAT;
+    const formalRuntime =
+      runtimeSource === AgentRunSource.PUBLIC_WIDGET ||
+      runtimeSource === AgentRunSource.SERVICE_API;
+    // 正式入口必须在进入会话和 Runtime 前就固定发布版本，不能先读取草稿再把它传下去。
+    const agent = formalRuntime
+      ? await this.agentsService.getPublishedRuntimeConfig(agentId)
+      : await this.agentsService.getDefaultChatRuntimeConfig(agentId);
     const sessionId = context?.skipInternalSessionPersistence
       ? null
       : await this.resolvePersistentSessionId(agent, payload.sessionId, context);
@@ -366,6 +379,8 @@ export class ChatService {
         requestId,
         source: context?.source ?? AgentRunSource.INTERNAL_CHAT,
         agentId,
+        agentVersionId: agent.agentVersionId ?? undefined,
+        runtimeMode: agent.runtimeMode,
         userId: context?.userId,
         sessionId: sessionId ?? undefined,
         externalConversationId: context?.externalConversationId,
@@ -738,7 +753,7 @@ export class ChatService {
 
   /** 确保传入 Agent 使用持久会话模式，阻止临时 Agent 进入会话管理流程。 */
   private async requirePersistentAgent(agentId: string) {
-    const agent = await this.agentsService.getAgentRuntimeConfig(agentId);
+    const agent = await this.agentsService.getDefaultChatRuntimeConfig(agentId);
 
     if (agent.chatSessionMode !== AgentChatSessionMode.PERSISTENT) {
       throw new AppError(

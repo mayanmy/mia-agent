@@ -15,7 +15,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio --schema prisma/schema.prisma",
     "users:bootstrap-admin": "npm run build && node dist/scripts/bootstrap-admin.js",
-    "agent-runs:cleanup": "npm run build && node dist/scripts/cleanup-agent-runs.js"
+    "agent-runs:cleanup": "npm run build && node dist/scripts/cleanup-agent-runs.js",
+    "agent-versions:backfill": "npm run build && node dist/scripts/backfill-agent-versions.js"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.0.0",

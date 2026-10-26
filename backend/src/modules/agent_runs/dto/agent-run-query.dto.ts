@@ -1,6 +1,7 @@
 import {
   AgentRunSource,
   AgentRunStatus,
+  AgentRuntimeMode,
   AgentRunStepStatus,
   AgentRunStepType,
   WorkflowRunMode
@@ -16,6 +17,8 @@ export type AgentRunQueryDto = {
   requestId?: string;
   /** 限定 Agent ID。 */
   agentId?: string;
+  /** 限定不可变 Agent 版本。 */
+  agentVersionId?: string;
   /** 限定发起成员 ID。 */
   userId?: string;
   /** 限定 Workflow ID。 */
@@ -44,6 +47,12 @@ export type AgentRunListItem = {
   status: AgentRunStatus;
   /** 执行使用的 Agent ID。 */
   agentId: string | null;
+  /** 正式或版本测试运行使用的不可变 Agent 版本。 */
+  agentVersionId: string | null;
+  /** 版本配置完整性摘要。 */
+  configHash: string | null;
+  /** 草稿、指定版本、正式发布或迁移兼容来源。 */
+  runtimeMode: AgentRuntimeMode | null;
   /** 匿名运行时为空。 */
   userId: string | null;
   /** 临时会话或外部调用时为空。 */

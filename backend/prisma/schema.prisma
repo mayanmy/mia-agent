@@ -91,6 +91,25 @@ enum AgentExecutionMode {
   @@map("agent_execution_mode")
 }
 
+/// Agent 正式发布、历史回滚和下线的审计动作。
+enum AgentReleaseAction {
+  PUBLISH
+  ROLLBACK
+  UNPUBLISH
+
+  @@map("agent_release_action")
+}
+
+/// 一次 Agent Run 解析配置的来源，正式流量只能使用 PUBLISHED。
+enum AgentRuntimeMode {
+  DRAFT_PREVIEW
+  VERSION_TEST
+  PUBLISHED
+  LEGACY
+
+  @@map("agent_runtime_mode")
+}
+
 enum StoredFileStatus {
   READY
   DELETED
@@ -358,6 +377,8 @@ model User {
   createdEvaluationVersions     EvaluationDatasetVersion[] @relation("EvaluationVersionCreator")
   createdEvaluationCases        EvaluationCase[]           @relation("EvaluationCaseCreator")
   createdEvaluationRuns         EvaluationRun[]            @relation("EvaluationRunCreator")
+  createdAgentVersions          AgentVersion[]             @relation("AgentVersionCreator")
+  createdAgentReleases          AgentRelease[]             @relation("AgentReleaseCreator")
 
   @@index([role, disabledAt], map: "idx_users_role_disabled_at")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
@@ -464,38 +485,38 @@ model ModelProvider {
 }
 
 model ModelConfig {
-  id                       String                   @id @default(uuid()) @db.Uuid
-  workspaceId              String                   @map("workspace_id") @db.Uuid
-  providerId               String                   @map("provider_id") @db.Uuid
-  modelName                String                   @map("model_name")
-  modelType                ModelConfigType          @map("model_type")
-  credentialName           String                   @default("") @map("credential_name")
-  contextLength            Int                      @default(4096) @map("context_length")
-  embeddingDimension       Int?                     @map("embedding_dimension")
-  enabled                  Boolean                  @default(true)
-  timeoutSeconds           Int                      @default(120) @map("timeout_seconds")
-  maxTokens                Int?                     @map("max_tokens")
-  thinkingMode             ModelThinkingMode        @default(AUTO) @map("thinking_mode")
+  id                         String                   @id @default(uuid()) @db.Uuid
+  workspaceId                String                   @map("workspace_id") @db.Uuid
+  providerId                 String                   @map("provider_id") @db.Uuid
+  modelName                  String                   @map("model_name")
+  modelType                  ModelConfigType          @map("model_type")
+  credentialName             String                   @default("") @map("credential_name")
+  contextLength              Int                      @default(4096) @map("context_length")
+  embeddingDimension         Int?                     @map("embedding_dimension")
+  enabled                    Boolean                  @default(true)
+  timeoutSeconds             Int                      @default(120) @map("timeout_seconds")
+  maxTokens                  Int?                     @map("max_tokens")
+  thinkingMode               ModelThinkingMode        @default(AUTO) @map("thinking_mode")
   /// 是否支持由调用方显式开启/关闭思考；不支持时 Agent 不得覆盖模型默认行为。
-  thinkingSupported        Boolean                  @default(false) @map("thinking_supported")
-  inputTokenPricePerMillion  Decimal?               @map("input_token_price_per_million") @db.Decimal(14, 6)
-  outputTokenPricePerMillion Decimal?               @map("output_token_price_per_million") @db.Decimal(14, 6)
-  priceCurrency              String                 @default("CNY") @map("price_currency")
-  createdAt                DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt                DateTime?                @map("deleted_at") @db.Timestamptz(6)
-  provider                 ModelProvider            @relation(fields: [providerId], references: [id])
-  agents                   Agent[]
-  knowledgeBases           KnowledgeBase[]
-  knowledgeEmbeddings      KnowledgeEmbedding[]
-  knowledgeEmbeddings1024  KnowledgeEmbedding1024[]
-  knowledgeEmbeddings1536  KnowledgeEmbedding1536[]
-  knowledgeEmbeddings3072  KnowledgeEmbedding3072[]
-  defaultChatSettings      DefaultModelSetting[]    @relation("DefaultChatModel")
-  defaultEmbeddingSettings DefaultModelSetting[]    @relation("DefaultEmbeddingModel")
-  defaultVisionSettings    DefaultModelSetting[]    @relation("DefaultVisionModel")
-  capabilities             ModelCapability[]
-  visionAgents             Agent[]                  @relation("AgentVisionModel")
+  thinkingSupported          Boolean                  @default(false) @map("thinking_supported")
+  inputTokenPricePerMillion  Decimal?                 @map("input_token_price_per_million") @db.Decimal(14, 6)
+  outputTokenPricePerMillion Decimal?                 @map("output_token_price_per_million") @db.Decimal(14, 6)
+  priceCurrency              String                   @default("CNY") @map("price_currency")
+  createdAt                  DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                  DateTime?                @map("deleted_at") @db.Timestamptz(6)
+  provider                   ModelProvider            @relation(fields: [providerId], references: [id])
+  agents                     Agent[]
+  knowledgeBases             KnowledgeBase[]
+  knowledgeEmbeddings        KnowledgeEmbedding[]
+  knowledgeEmbeddings1024    KnowledgeEmbedding1024[]
+  knowledgeEmbeddings1536    KnowledgeEmbedding1536[]
+  knowledgeEmbeddings3072    KnowledgeEmbedding3072[]
+  defaultChatSettings        DefaultModelSetting[]    @relation("DefaultChatModel")
+  defaultEmbeddingSettings   DefaultModelSetting[]    @relation("DefaultEmbeddingModel")
+  defaultVisionSettings      DefaultModelSetting[]    @relation("DefaultVisionModel")
+  capabilities               ModelCapability[]
+  visionAgents               Agent[]                  @relation("AgentVisionModel")
 
   @@index([providerId], map: "idx_model_configs_provider_id")
   @@index([modelType, enabled], map: "idx_model_configs_type_enabled")
@@ -560,6 +581,9 @@ model Agent {
   enabled               Boolean                @default(true)
   published             Boolean                @default(false)
   publishedAt           DateTime?              @map("published_at") @db.Timestamptz(6)
+  draftRevision         Int                    @default(1) @map("draft_revision")
+  releaseRevision       Int                    @default(0) @map("release_revision")
+  publishedVersionId    String?                @unique(map: "uq_agents_published_version_id") @map("published_version_id") @db.Uuid
   shareToken            String?                @unique(map: "uq_agents_share_token") @map("share_token")
   publicExpiresAt       DateTime?              @map("public_expires_at") @db.Timestamptz(6)
   publicAllowedOrigins  String[]               @default([]) @map("public_allowed_origins")
@@ -580,14 +604,70 @@ model Agent {
   runs                  AgentRun[]
   agentWorkflow         AgentWorkflow?
   evaluationRuns        EvaluationRun[]
+  versions              AgentVersion[]         @relation("AgentVersions")
+  releases              AgentRelease[]
+  publishedVersion      AgentVersion?          @relation("AgentPublishedVersion", fields: [publishedVersionId], references: [id], onDelete: Restrict)
 
   @@index([createdAt(sort: Desc)], map: "idx_agents_created_at")
   @@index([modelConfigId], map: "idx_agents_model_config_id")
   @@index([visionModelConfigId], map: "idx_agents_vision_model_config_id")
   @@index([enabled, createdAt(sort: Desc)], map: "idx_agents_enabled_created_at")
   @@index([published, publishedAt(sort: Desc)], map: "idx_agents_published_published_at")
+  @@index([publishedVersionId], map: "idx_agents_published_version_id")
   @@index([workspaceId, createdByUserId, deletedAt, createdAt(sort: Desc)], map: "idx_agents_workspace_creator_deleted_created")
   @@map("agents")
+}
+
+/// 从 Agent 草稿生成的不可变运行配置；创建后禁止更新或删除。
+model AgentVersion {
+  id                  String          @id @default(uuid()) @db.Uuid
+  workspaceId         String          @map("workspace_id") @db.Uuid
+  agentId             String          @map("agent_id") @db.Uuid
+  version             Int
+  schemaVersion       Int             @default(1) @map("schema_version")
+  sourceDraftRevision Int             @map("source_draft_revision")
+  configSnapshot      Json            @map("config_snapshot") @db.JsonB
+  configHash          String          @map("config_hash")
+  changeSummary       String          @default("") @map("change_summary") @db.Text
+  createdByUserId     String          @map("created_by_user_id") @db.Uuid
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  agent               Agent           @relation("AgentVersions", fields: [agentId], references: [id], onDelete: Restrict)
+  createdBy           User            @relation("AgentVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  publishedByAgent    Agent?          @relation("AgentPublishedVersion")
+  sourceReleases      AgentRelease[]  @relation("AgentReleaseFromVersion")
+  targetReleases      AgentRelease[]  @relation("AgentReleaseTargetVersion")
+  runs                AgentRun[]
+  evaluationRuns      EvaluationRun[]
+
+  @@unique([agentId, version], map: "uq_agent_versions_agent_version")
+  @@index([agentId, createdAt(sort: Desc)], map: "idx_agent_versions_agent_created_at")
+  @@index([workspaceId, configHash], map: "idx_agent_versions_workspace_hash")
+  @@map("agent_versions")
+}
+
+/// 每次上线、回滚和下线都生成独立审计事件；配置本身由 AgentVersion 承载。
+model AgentRelease {
+  id                    String             @id @default(uuid()) @db.Uuid
+  workspaceId           String             @map("workspace_id") @db.Uuid
+  agentId               String             @map("agent_id") @db.Uuid
+  sequence              Int
+  action                AgentReleaseAction
+  fromVersionId         String?            @map("from_version_id") @db.Uuid
+  targetVersionId       String?            @map("target_version_id") @db.Uuid
+  evaluationRunId       String?            @map("evaluation_run_id") @db.Uuid
+  reason                String             @default("") @db.Text
+  expectedDraftRevision Int?               @map("expected_draft_revision")
+  createdByUserId       String             @map("created_by_user_id") @db.Uuid
+  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  agent                 Agent              @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  fromVersion           AgentVersion?      @relation("AgentReleaseFromVersion", fields: [fromVersionId], references: [id], onDelete: Restrict)
+  targetVersion         AgentVersion?      @relation("AgentReleaseTargetVersion", fields: [targetVersionId], references: [id], onDelete: Restrict)
+  createdBy             User               @relation("AgentReleaseCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([agentId, sequence], map: "uq_agent_releases_agent_sequence")
+  @@index([agentId, createdAt(sort: Desc)], map: "idx_agent_releases_agent_created_at")
+  @@index([targetVersionId, createdAt(sort: Desc)], map: "idx_agent_releases_target_created_at")
+  @@map("agent_releases")
 }
 
 /// Agent 只绑定一个明确的已发布 Workflow Version；关系生命周期归 agents 模块管理。
@@ -1031,23 +1111,23 @@ model McpSyncRun {
 /// 一个成员可以为同一个 Agent 创建多条会话；所有查询都必须同时按 user_id 和 agent_id
 /// 过滤，避免仅凭 session ID 访问到其他成员的对话。
 model ChatSession {
-  id             String               @id @default(uuid()) @db.Uuid
-  workspaceId    String               @map("workspace_id") @db.Uuid
-  agentId        String               @map("agent_id") @db.Uuid
-  userId         String               @map("user_id") @db.Uuid
-  title          String               @default("")
-  status         ChatSessionStatus    @default(ACTIVE)
-  summary        String?              @db.Text
-  summaryUntilId String?              @map("summary_until_id") @db.Uuid
-  lastMessageAt  DateTime?            @map("last_message_at") @db.Timestamptz(6)
-  archivedAt     DateTime?            @map("archived_at") @db.Timestamptz(6)
-  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
-  nextTurnSequence BigInt             @default(1) @map("next_turn_sequence")
-  agent          Agent                @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages       ChatSessionMessage[]
-  turns          ChatTurn[]
+  id               String               @id @default(uuid()) @db.Uuid
+  workspaceId      String               @map("workspace_id") @db.Uuid
+  agentId          String               @map("agent_id") @db.Uuid
+  userId           String               @map("user_id") @db.Uuid
+  title            String               @default("")
+  status           ChatSessionStatus    @default(ACTIVE)
+  summary          String?              @db.Text
+  summaryUntilId   String?              @map("summary_until_id") @db.Uuid
+  lastMessageAt    DateTime?            @map("last_message_at") @db.Timestamptz(6)
+  archivedAt       DateTime?            @map("archived_at") @db.Timestamptz(6)
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  nextTurnSequence BigInt               @default(1) @map("next_turn_sequence")
+  agent            Agent                @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages         ChatSessionMessage[]
+  turns            ChatTurn[]
 
   @@index([agentId, userId, status, lastMessageAt(sort: Desc)], map: "idx_chat_sessions_agent_user_status_last_message")
   @@index([userId, status, updatedAt(sort: Desc)], map: "idx_chat_sessions_user_status_updated_at")
@@ -1056,22 +1136,22 @@ model ChatSession {
 
 /// 一次可并发执行的用户提问。sequence 决定稳定展示顺序，完成先后不改变问答位置。
 model ChatTurn {
-  id                      String         @id @default(uuid()) @db.Uuid
-  sessionId               String         @map("session_id") @db.Uuid
-  sequence                BigInt
-  clientMessageId         String         @map("client_message_id")
-  userMessageId           String?        @unique @map("user_message_id") @db.Uuid
-  assistantMessageId      String?        @unique @map("assistant_message_id") @db.Uuid
-  runId                   String?        @map("run_id") @db.Uuid
-  status                  ChatTurnStatus @default(QUEUED)
-  errorType               String?        @map("error_type")
-  errorMessage            String?        @map("error_message") @db.Text
-  startedAt               DateTime?      @map("started_at") @db.Timestamptz(6)
-  completedAt             DateTime?      @map("completed_at") @db.Timestamptz(6)
-  createdAt               DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt               DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
-  session                 ChatSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  messages                ChatSessionMessage[]
+  id                 String               @id @default(uuid()) @db.Uuid
+  sessionId          String               @map("session_id") @db.Uuid
+  sequence           BigInt
+  clientMessageId    String               @map("client_message_id")
+  userMessageId      String?              @unique @map("user_message_id") @db.Uuid
+  assistantMessageId String?              @unique @map("assistant_message_id") @db.Uuid
+  runId              String?              @map("run_id") @db.Uuid
+  status             ChatTurnStatus       @default(QUEUED)
+  errorType          String?              @map("error_type")
+  errorMessage       String?              @map("error_message") @db.Text
+  startedAt          DateTime?            @map("started_at") @db.Timestamptz(6)
+  completedAt        DateTime?            @map("completed_at") @db.Timestamptz(6)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  session            ChatSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  messages           ChatSessionMessage[]
 
   @@unique([sessionId, sequence], map: "uq_chat_turns_session_sequence")
   @@unique([sessionId, clientMessageId], map: "uq_chat_turns_session_client_message")
@@ -1206,33 +1286,37 @@ model ToolCallLog {
 
 /// 一次 Agent 执行的顶层记录。会话 ID 只作为跨模块追踪键，不建立到会话表的 ORM 关系。
 model AgentRun {
-  id                     String           @id @default(uuid()) @db.Uuid
-  workspaceId            String           @map("workspace_id") @db.Uuid
-  requestId              String           @map("request_id")
+  id                     String            @id @default(uuid()) @db.Uuid
+  workspaceId            String            @map("workspace_id") @db.Uuid
+  requestId              String            @map("request_id")
   source                 AgentRunSource
-  agentId                String?          @map("agent_id") @db.Uuid
-  userId                 String?          @map("user_id") @db.Uuid
-  sessionId              String?          @map("session_id") @db.Uuid
-  externalConversationId String?          @map("external_conversation_id") @db.Uuid
-  status                 AgentRunStatus   @default(QUEUED)
-  modelConfigId          String?          @map("model_config_id") @db.Uuid
-  workflowId             String?          @map("workflow_id") @db.Uuid
-  workflowVersionId      String?          @map("workflow_version_id") @db.Uuid
-  workflowRunMode        WorkflowRunMode? @map("workflow_run_mode")
-  inputPreview           String           @map("input_preview") @db.Text
-  outputPreview          String?          @map("output_preview") @db.Text
-  inputTokens            Int?             @map("input_tokens")
-  outputTokens           Int?             @map("output_tokens")
-  estimatedCost          Decimal?         @map("estimated_cost") @db.Decimal(12, 6)
-  firstTokenAt           DateTime?        @map("first_token_at") @db.Timestamptz(6)
-  startedAt              DateTime?        @map("started_at") @db.Timestamptz(6)
-  finishedAt             DateTime?        @map("finished_at") @db.Timestamptz(6)
-  errorType              String?          @map("error_type")
-  errorMessage           String?          @map("error_message") @db.Text
-  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  agent                  Agent?           @relation(fields: [agentId], references: [id], onDelete: SetNull)
-  user                   User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  agentId                String?           @map("agent_id") @db.Uuid
+  userId                 String?           @map("user_id") @db.Uuid
+  sessionId              String?           @map("session_id") @db.Uuid
+  externalConversationId String?           @map("external_conversation_id") @db.Uuid
+  status                 AgentRunStatus    @default(QUEUED)
+  modelConfigId          String?           @map("model_config_id") @db.Uuid
+  workflowId             String?           @map("workflow_id") @db.Uuid
+  workflowVersionId      String?           @map("workflow_version_id") @db.Uuid
+  workflowRunMode        WorkflowRunMode?  @map("workflow_run_mode")
+  agentVersionId         String?           @map("agent_version_id") @db.Uuid
+  configHash             String?           @map("config_hash")
+  runtimeMode            AgentRuntimeMode? @map("runtime_mode")
+  inputPreview           String            @map("input_preview") @db.Text
+  outputPreview          String?           @map("output_preview") @db.Text
+  inputTokens            Int?              @map("input_tokens")
+  outputTokens           Int?              @map("output_tokens")
+  estimatedCost          Decimal?          @map("estimated_cost") @db.Decimal(12, 6)
+  firstTokenAt           DateTime?         @map("first_token_at") @db.Timestamptz(6)
+  startedAt              DateTime?         @map("started_at") @db.Timestamptz(6)
+  finishedAt             DateTime?         @map("finished_at") @db.Timestamptz(6)
+  errorType              String?           @map("error_type")
+  errorMessage           String?           @map("error_message") @db.Text
+  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  agent                  Agent?            @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  agentVersion           AgentVersion?     @relation(fields: [agentVersionId], references: [id], onDelete: Restrict)
+  user                   User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
   steps                  AgentRunStep[]
 
   @@index([requestId], map: "idx_agent_runs_request_id")
@@ -1242,6 +1326,7 @@ model AgentRun {
   @@index([sessionId, createdAt(sort: Desc)], map: "idx_agent_runs_session_created_at")
   @@index([externalConversationId, createdAt(sort: Desc)], map: "idx_agent_runs_external_conversation_created_at")
   @@index([workflowId, workflowVersionId, createdAt(sort: Desc)], map: "idx_agent_runs_workflow_version_created_at")
+  @@index([agentVersionId, createdAt(sort: Desc)], map: "idx_agent_runs_version_created_at")
   @@map("agent_runs")
 }
 
@@ -1500,6 +1585,7 @@ model EvaluationRun {
   workspaceId             String                   @map("workspace_id") @db.Uuid
   datasetVersionId        String                   @map("dataset_version_id") @db.Uuid
   agentId                 String                   @map("agent_id") @db.Uuid
+  agentVersionId          String?                  @map("agent_version_id") @db.Uuid
   baselineRunId           String?                  @map("baseline_run_id") @db.Uuid
   status                  EvaluationRunStatus      @default(PENDING)
   totalCases              Int                      @map("total_cases")
@@ -1525,6 +1611,7 @@ model EvaluationRun {
   workspace               Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   datasetVersion          EvaluationDatasetVersion @relation(fields: [datasetVersionId], references: [id], onDelete: Restrict)
   agent                   Agent                    @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  agentVersion            AgentVersion?            @relation(fields: [agentVersionId], references: [id], onDelete: Restrict)
   baselineRun             EvaluationRun?           @relation("EvaluationRunBaseline", fields: [baselineRunId], references: [id], onDelete: SetNull)
   candidateRuns           EvaluationRun[]          @relation("EvaluationRunBaseline")
   createdBy               User                     @relation("EvaluationRunCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
@@ -1534,6 +1621,7 @@ model EvaluationRun {
   @@index([workspaceId, status, createdAt(sort: Desc)], map: "idx_evaluation_runs_workspace_status_created")
   @@index([datasetVersionId, createdAt(sort: Desc)], map: "idx_evaluation_runs_version_created")
   @@index([agentId, createdAt(sort: Desc)], map: "idx_evaluation_runs_agent_created")
+  @@index([agentVersionId, createdAt(sort: Desc)], map: "idx_evaluation_runs_agent_version_created")
   @@map("evaluation_runs")
 }
 

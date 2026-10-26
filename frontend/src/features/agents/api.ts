@@ -46,6 +46,9 @@ export type AgentListItem = {
   publishedAt: string | null;
   /** 当前分享令牌；未发布时为 null。 */
   shareToken: string | null;
+  draftRevision: number;
+  releaseRevision: number;
+  publishedVersionId: string | null;
   /** ISO 格式创建时间。 */
   createdAt: string;
   /** ISO 格式更新时间。 */
@@ -165,7 +168,72 @@ export type AgentPublishResult = {
   publishedAt: string | null;
   /** 当前分享令牌。 */
   shareToken: string | null;
+  publishedVersionId: string | null;
+  releaseRevision: number;
 };
+
+export type AgentVersionListItem = {
+  id: string;
+  version: number;
+  schemaVersion: number;
+  sourceDraftRevision: number;
+  configHash: string;
+  changeSummary: string;
+  isPublished: boolean;
+  createdBy: { id: string; displayName: string };
+  createdAt: string;
+};
+
+export type AgentReleaseListItem = {
+  id: string;
+  sequence: number;
+  action: "PUBLISH" | "ROLLBACK" | "UNPUBLISH";
+  fromVersionId: string | null;
+  targetVersionId: string | null;
+  evaluationRunId: string | null;
+  reason: string;
+  createdBy: { id: string; displayName: string };
+  createdAt: string;
+};
+
+export function createAgentVersion(
+  agentId: string,
+  payload: { expectedDraftRevision: number; changeSummary?: string }
+): Promise<AgentVersionListItem> {
+  return request<AgentVersionListItem>(`/api/v1/agents/${agentId}/versions`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function listAgentVersions(
+  agentId: string,
+  page = 1,
+  pageSize = 50
+): Promise<PageResult<AgentVersionListItem>> {
+  return request<PageResult<AgentVersionListItem>>(
+    `/api/v1/agents/${agentId}/versions?page=${page}&pageSize=${pageSize}`
+  );
+}
+
+export function listAgentReleases(agentId: string): Promise<AgentReleaseListItem[]> {
+  return request<AgentReleaseListItem[]>(`/api/v1/agents/${agentId}/releases`);
+}
+
+export function activateAgentVersion(
+  agentId: string,
+  payload: {
+    versionId: string;
+    action: "PUBLISH" | "ROLLBACK";
+    expectedReleaseRevision: number;
+    reason?: string;
+  }
+): Promise<AgentPublishResult> {
+  return request<AgentPublishResult>(`/api/v1/agents/${agentId}/releases`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
 
 /** 匿名分享页面可以展示的 Agent 信息。 */
 export type SharedAgentDetail = {
@@ -188,10 +256,14 @@ export function publishAgent(id: string): Promise<AgentPublishResult> {
   });
 }
 
-/** 取消发布并使旧分享链接失效。 */
-export function unpublishAgent(id: string): Promise<AgentPublishResult> {
+/** 下线当前正式版本；expectedReleaseRevision 防止覆盖并发发布。 */
+export function unpublishAgent(
+  id: string,
+  payload: { expectedReleaseRevision: number; reason?: string }
+): Promise<AgentPublishResult> {
   return request<AgentPublishResult>(`/api/v1/agents/${id}/publish`, {
-    method: "DELETE"
+    method: "DELETE",
+    body: JSON.stringify(payload)
   });
 }
 

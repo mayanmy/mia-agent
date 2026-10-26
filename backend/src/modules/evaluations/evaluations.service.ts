@@ -117,7 +117,13 @@ export class EvaluationsService {
     if (!this.agentsService || !this.evaluationQueue) {
       throw new Error("evaluation run dependencies are unavailable");
     }
-    const runtime = await this.agentsService.getAgentRuntimeConfig(agentId);
+    // 评测必须固定不可变版本；旧客户端未传版本时先从当前草稿生成候选版本。
+    const agentVersion = payload.agentVersionId?.trim()
+      ? await this.agentsService.getAgentVersion(agentId, payload.agentVersionId.trim())
+      : await this.agentsService.createAgentVersion(agentId, {
+          changeSummary: "评测运行自动冻结"
+        });
+    const runtime = await this.agentsService.getVersionRuntimeConfig(agentId, agentVersion.id);
     const evaluatedModel = await this.modelProvidersService?.getEvaluationModelConfig(
       runtime.modelConfigId
     );
@@ -186,6 +192,7 @@ export class EvaluationsService {
           workspaceId: requireWorkspaceId(),
           datasetVersionId,
           agentId,
+          agentVersionId: agentVersion.id,
           baselineRunId: payload.baselineRunId || null,
           totalCases: version.cases.length,
           agentConfigSnapshot: agentSnapshot,

@@ -105,7 +105,13 @@ export const tests = [
         evaluationRun: {
           create: async ({ data }: { data: Record<string, unknown> }) => {
             runData = data;
-            return { id: "run-id", status: "PENDING", totalCases: 1, createdAt: new Date(), ...data };
+            return {
+              id: "run-id",
+              status: "PENDING",
+              totalCases: 1,
+              createdAt: new Date(),
+              ...data
+            };
           }
         },
         evaluationCaseResult: { createMany: async () => ({ count: 1 }) },
@@ -124,23 +130,43 @@ export const tests = [
             cases: [{ id: "case-id" }]
           })
         },
-        $transaction: async (callback: (client: typeof transaction) => Promise<unknown>) => callback(transaction)
+        $transaction: async (callback: (client: typeof transaction) => Promise<unknown>) =>
+          callback(transaction)
       };
       const agents = {
-        getAgentRuntimeConfig: async () => ({
-          agentId: "agent-id", name: "制度助手", systemPrompt: "仅按制度回答", modelConfigId: "model-id",
-          modelName: "model", providerId: "provider-id", providerType: "OPENAI_COMPATIBLE",
-          baseUrl: "https://secret.internal", temperature: 0.2, maxTokens: 1000, timeoutSeconds: 60,
-          thinkingMode: "AUTO", knowledgeBaseIds: ["kb-id"]
+        createAgentVersion: async () => ({ id: "agent-version-id" }),
+        getVersionRuntimeConfig: async () => ({
+          agentId: "agent-id",
+          name: "制度助手",
+          systemPrompt: "仅按制度回答",
+          modelConfigId: "model-id",
+          modelName: "model",
+          providerId: "provider-id",
+          providerType: "OPENAI_COMPATIBLE",
+          baseUrl: "https://secret.internal",
+          temperature: 0.2,
+          maxTokens: 1000,
+          timeoutSeconds: 60,
+          thinkingMode: "AUTO",
+          knowledgeBaseIds: ["kb-id"]
         })
       };
-      const queue = { dispatchPending: async () => { dispatched = true; } };
+      const queue = {
+        dispatchPending: async () => {
+          dispatched = true;
+        }
+      };
       const service = new EvaluationsService(prisma as never, agents as never, queue as never);
 
-      await runInWorkspaceContext("workspace-id", undefined, () => service.createRun({
-        datasetVersionId: draftVersion.id,
-        agentId: "agent-id"
-      }, "user-id"));
+      await runInWorkspaceContext("workspace-id", undefined, () =>
+        service.createRun(
+          {
+            datasetVersionId: draftVersion.id,
+            agentId: "agent-id"
+          },
+          "user-id"
+        )
+      );
 
       assert.equal(outboxRunId, "run-id");
       assert.equal(dispatched, true);
@@ -164,7 +190,10 @@ export const tests = [
       };
       const service = new EvaluationsService(prisma as never);
       const result = await runInWorkspaceContext("workspace-id", undefined, () =>
-        service.getComparisonCompatibility({ baselineRunId: "baseline", candidateRunId: "candidate" })
+        service.getComparisonCompatibility({
+          baselineRunId: "baseline",
+          candidateRunId: "candidate"
+        })
       );
       assert.equal(result.compatible, false);
       assert.equal(result.reasons[0]?.field, "datasetVersionId");

@@ -1,4 +1,4 @@
-import { AgentRunSource } from "@prisma/client";
+import { AgentRunSource, AgentRuntimeMode } from "@prisma/client";
 
 /** Runtime 接收的内联图片输入。 */
 export type AgentRuntimeImageInput = {
@@ -26,6 +26,9 @@ export type AgentRunRequest = {
   requestId: string;
   source: AgentRunSource;
   agentId: string;
+  /** Chat 已解析出的版本选择，避免会话准备与 Runtime 执行读取到不同发布指针。 */
+  agentVersionId?: string;
+  runtimeMode?: AgentRuntimeMode;
   userId?: string;
   sessionId?: string;
   externalConversationId?: string;

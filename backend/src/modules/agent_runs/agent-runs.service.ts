@@ -182,6 +182,9 @@ export class AgentRunsService {
         requestId: this.requireText(payload.requestId, "requestId"),
         source: payload.source,
         agentId,
+        agentVersionId: this.optionalText(payload.agentVersionId),
+        configHash: this.optionalText(payload.configHash),
+        runtimeMode: payload.runtimeMode,
         userId: this.optionalText(payload.userId),
         sessionId: this.optionalText(payload.sessionId),
         externalConversationId: this.optionalText(payload.externalConversationId),
@@ -529,6 +532,7 @@ export class AgentRunsService {
     const where: Prisma.AgentRunWhereInput = { workspaceId: requireWorkspaceId() };
     if (query.requestId?.trim()) where.requestId = query.requestId.trim();
     if (query.agentId?.trim()) where.agentId = query.agentId.trim();
+    if (query.agentVersionId?.trim()) where.agentVersionId = query.agentVersionId.trim();
     if (query.userId?.trim()) where.userId = query.userId.trim();
     if (query.workflowId?.trim()) where.workflowId = query.workflowId.trim();
     if (query.workflowVersionId?.trim()) {
@@ -555,6 +559,9 @@ export class AgentRunsService {
       source: run.source,
       status: run.status,
       agentId: run.agentId,
+      agentVersionId: run.agentVersionId,
+      configHash: run.configHash,
+      runtimeMode: run.runtimeMode,
       userId: run.userId,
       sessionId: run.sessionId,
       modelConfigId: run.modelConfigId,

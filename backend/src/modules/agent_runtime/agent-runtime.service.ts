@@ -3,6 +3,7 @@ import {
   AgentExecutionMode,
   AgentRunSource,
   AgentRunStepType,
+  AgentRuntimeMode,
   ModelCapabilityType,
   WorkflowRunMode
 } from "@prisma/client";
@@ -74,7 +75,17 @@ export class AgentRuntimeService {
     let trace: AgentRuntimeTrace | undefined;
 
     try {
-      const agent = await this.requireAgentsService().getAgentRuntimeConfig(request.agentId);
+      const agent = request.agentVersionId
+        ? await this.requireAgentsService().getVersionRuntimeConfig(
+            request.agentId,
+            request.agentVersionId,
+            request.runtimeMode === AgentRuntimeMode.PUBLISHED
+              ? AgentRuntimeMode.PUBLISHED
+              : AgentRuntimeMode.VERSION_TEST
+          )
+        : request.runtimeMode === "PUBLISHED" || request.runtimeMode === "LEGACY"
+          ? await this.requireAgentsService().getPublishedRuntimeConfig(request.agentId)
+          : await this.requireAgentsService().getAgentRuntimeConfig(request.agentId);
       const historyResult = sanitizeHistory(request.history, {
         maxTurns: agent.historyTurns,
         maxTotalBytes: MAX_MODEL_HISTORY_BYTES,
@@ -91,6 +102,9 @@ export class AgentRuntimeService {
         requestId: request.requestId,
         source: request.source,
         agentId: agent.agentId,
+        ...(agent.agentVersionId ? { agentVersionId: agent.agentVersionId } : {}),
+        ...(agent.configHash ? { configHash: agent.configHash } : {}),
+        ...(agent.runtimeMode ? { runtimeMode: agent.runtimeMode } : {}),
         userId: request.userId,
         sessionId: request.sessionId,
         externalConversationId: request.externalConversationId,
@@ -291,12 +305,12 @@ export class AgentRuntimeService {
       });
 
       const systemPrompt = this.requirePromptBuilder().buildSystemPrompt({
-            systemPrompt: agent.systemPrompt,
-            query: request.message.text,
-            skillPrompt: renderedSkills.prompt,
-            tools: llmTools,
-            retrievalContext
-          });
+        systemPrompt: agent.systemPrompt,
+        query: request.message.text,
+        skillPrompt: renderedSkills.prompt,
+        tools: llmTools,
+        retrievalContext
+      });
       const baseContext = buildBudgetedModelContext({
         systemPrompt,
         history: historyResult.messages,
@@ -724,6 +738,9 @@ export class AgentRuntimeService {
     requestId: string;
     source: AgentRunSource;
     agentId: string;
+    agentVersionId?: string;
+    configHash?: string;
+    runtimeMode?: AgentRuntimeMode;
     userId?: string;
     sessionId?: string;
     externalConversationId?: string;

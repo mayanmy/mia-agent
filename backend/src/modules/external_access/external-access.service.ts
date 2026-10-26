@@ -56,7 +56,7 @@ export class ExternalAccessService {
     requestId?: string
   ): AsyncIterable<ChatStreamEvent> {
     const conversation = await this.resolveConversation(owner);
-    const runtime = await this.agentsService.getAgentRuntimeConfig(owner.agentId);
+    const runtime = await this.agentsService.getPublishedRuntimeConfig(owner.agentId);
     const history = await this.getModelHistory(conversation.id, runtime.historyTurns);
     const message = payload.message?.trim() ?? "";
 

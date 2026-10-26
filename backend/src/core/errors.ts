@@ -38,7 +38,12 @@ export const ErrorCodes = {
     invalidWorkflow: 3005,
     invalidSkills: 3006,
     skillUnavailable: 3007,
-    tooManySkills: 3008
+    tooManySkills: 3008,
+    draftConflict: 3009,
+    releaseConflict: 3010,
+    versionNotFound: 3011,
+    versionInvalid: 3012,
+    notPublished: 3013
   },
   knowledge: {
     notFound: 4001,

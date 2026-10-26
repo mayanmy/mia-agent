@@ -2,6 +2,7 @@ import { HttpStatus, Injectable, Optional } from "@nestjs/common";
 import {
   AgentChatSessionMode,
   AgentExecutionMode,
+  AgentRuntimeMode,
   AgentVisionMode,
   ModelConfigType,
   ModelThinkingMode,
@@ -28,11 +29,13 @@ import { CurrentWorkspaceDto } from "../workspaces/dto/workspace.dto";
 import { WorkflowsService } from "../workflows/workflows.service";
 import {
   AgentCreateDto,
+  ActivateAgentVersionDto,
   AgentDetail,
   AgentGenerationParams,
   AgentKnowledgeBaseBindingDto,
   AgentKnowledgeBaseBindingResult,
   AgentListItem,
+  AgentReleaseListItem,
   AgentModelConfigSummary,
   AgentPublicAccessConfig,
   AgentPublicAccessRuntime,
@@ -44,10 +47,19 @@ import {
   AgentToolBindingDto,
   AgentToolBindingResult,
   AgentUpdateDto,
+  AgentVersionDetail,
+  AgentVersionListItem,
+  AgentVersionQueryDto,
+  CreateAgentVersionDto,
   AgentWorkflowBindingDto,
   AgentWorkflowBindingResult,
   SharedAgentDetail
 } from "./dto/agent.dto";
+import {
+  AGENT_VERSION_SCHEMA_VERSION,
+  createAgentVersionSnapshot,
+  hydrateAgentVersionSnapshot
+} from "./agent-version.snapshot";
 
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_TIMEOUT_SECONDS = 120;
@@ -294,6 +306,19 @@ export class AgentsService {
         : existing.visionModelConfigId
     );
 
+    const runtimeChanged = [
+      "systemPrompt",
+      "modelConfigId",
+      "visionMode",
+      "visionModelConfigId",
+      "temperature",
+      "maxTokens",
+      "timeoutSeconds",
+      "historyTurns",
+      "chatSessionMode",
+      "generationParams",
+      "thinkingMode"
+    ].some((field) => Object.prototype.hasOwnProperty.call(payload, field));
     const agent = await this.prisma.agent.update({
       where: { id, workspaceId: requireWorkspaceId() },
       data: {
@@ -324,7 +349,8 @@ export class AgentsService {
           ? { generationParams: this.toPrismaJson(data.generationParams) }
           : {}),
         ...(data.thinkingMode !== undefined ? { thinkingMode: data.thinkingMode } : {}),
-        ...(data.enabled !== undefined ? { enabled: data.enabled } : {})
+        ...(data.enabled !== undefined ? { enabled: data.enabled } : {}),
+        ...(runtimeChanged ? { draftRevision: { increment: 1 } } : {})
       },
       include: {
         modelConfig: {
@@ -350,6 +376,155 @@ export class AgentsService {
     return this.toAgentDetail(agent);
   }
 
+  /** 从当前草稿生成不可变版本；配置 Hash 相同时复用已有版本，避免制造空版本。 */
+  async createAgentVersion(
+    id: string,
+    payload: CreateAgentVersionDto = {}
+  ): Promise<AgentVersionDetail> {
+    await this.ensureCanManageAgent(id);
+    const agent = await this.findAgentDetail(id);
+    if (
+      payload.expectedDraftRevision !== undefined &&
+      payload.expectedDraftRevision !== agent.draftRevision
+    ) {
+      throw new AppError(
+        ErrorCodes.agent.draftConflict,
+        "Agent 草稿已被修改，请重新加载后再创建版本",
+        HttpStatus.CONFLICT
+      );
+    }
+    if (agent.executionMode === AgentExecutionMode.WORKFLOW) {
+      if (!agent.agentWorkflow) {
+        throw new AppError(
+          ErrorCodes.agent.invalidWorkflow,
+          "WORKFLOW 模式的 Agent 必须绑定已发布 Workflow Version"
+        );
+      }
+      await this.workflowsService.getPublishedRuntimeConfig(
+        agent.agentWorkflow.workflowId,
+        agent.agentWorkflow.workflowVersionId
+      );
+    }
+    const runtime = await this.toDraftRuntimeConfig(agent);
+    const snapshot = createAgentVersionSnapshot(runtime);
+    const actor = requireWorkspaceActor();
+    const changeSummary = (payload.changeSummary ?? "").trim().slice(0, 2_000);
+
+    const existing = await this.prisma.agentVersion.findFirst({
+      where: { agentId: id, workspaceId: requireWorkspaceId(), configHash: snapshot.configHash },
+      include: { createdBy: { select: { id: true, displayName: true } } },
+      orderBy: { version: "desc" }
+    });
+    if (existing) return this.toAgentVersionDetail(existing, agent.publishedVersionId);
+
+    const created = await this.prisma.$transaction(
+      async (transaction) => {
+        const current = await transaction.agent.findFirst({
+          where: { id, workspaceId: requireWorkspaceId(), deletedAt: null },
+          select: { draftRevision: true, publishedVersionId: true }
+        });
+        if (!current || current.draftRevision !== agent.draftRevision) {
+          throw new AppError(
+            ErrorCodes.agent.draftConflict,
+            "Agent 草稿已被修改，请重新加载后再创建版本",
+            HttpStatus.CONFLICT
+          );
+        }
+        const latest = await transaction.agentVersion.findFirst({
+          where: { agentId: id },
+          select: { version: true },
+          orderBy: { version: "desc" }
+        });
+        return transaction.agentVersion.create({
+          data: {
+            workspaceId: requireWorkspaceId(),
+            agentId: id,
+            version: (latest?.version ?? 0) + 1,
+            schemaVersion: AGENT_VERSION_SCHEMA_VERSION,
+            sourceDraftRevision: agent.draftRevision,
+            configSnapshot: snapshot.prismaJson,
+            configHash: snapshot.configHash,
+            changeSummary,
+            createdByUserId: actor.userId
+          },
+          include: { createdBy: { select: { id: true, displayName: true } } }
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+    return this.toAgentVersionDetail(created, agent.publishedVersionId);
+  }
+
+  async listAgentVersions(
+    id: string,
+    query: AgentVersionQueryDto
+  ): Promise<PageResult<AgentVersionListItem>> {
+    await this.ensureCanManageAgent(id);
+    const page = normalizePageQuery(query);
+    const agent = await this.prisma.agent.findFirstOrThrow({
+      where: { id, workspaceId: requireWorkspaceId(), deletedAt: null },
+      select: { publishedVersionId: true }
+    });
+    const where = { agentId: id, workspaceId: requireWorkspaceId() };
+    const [versions, total] = await this.prisma.$transaction([
+      this.prisma.agentVersion.findMany({
+        where,
+        include: { createdBy: { select: { id: true, displayName: true } } },
+        orderBy: { version: "desc" },
+        skip: page.skip,
+        take: page.take
+      }),
+      this.prisma.agentVersion.count({ where })
+    ]);
+    return createPageResult(
+      versions.map((version) => this.toAgentVersionListItem(version, agent.publishedVersionId)),
+      total,
+      page.page,
+      page.pageSize
+    );
+  }
+
+  async getAgentVersion(id: string, versionId: string): Promise<AgentVersionDetail> {
+    await this.ensureCanManageAgent(id);
+    const agent = await this.prisma.agent.findFirstOrThrow({
+      where: { id, workspaceId: requireWorkspaceId(), deletedAt: null },
+      select: { publishedVersionId: true }
+    });
+    const version = await this.prisma.agentVersion.findFirst({
+      where: { id: versionId, agentId: id, workspaceId: requireWorkspaceId() },
+      include: { createdBy: { select: { id: true, displayName: true } } }
+    });
+    if (!version) {
+      throw new AppError(
+        ErrorCodes.agent.versionNotFound,
+        "Agent 版本不存在",
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return this.toAgentVersionDetail(version, agent.publishedVersionId);
+  }
+
+  async listAgentReleases(id: string): Promise<AgentReleaseListItem[]> {
+    await this.ensureCanManageAgent(id);
+    const releases = await this.prisma.agentRelease.findMany({
+      where: { agentId: id, workspaceId: requireWorkspaceId() },
+      include: { createdBy: { select: { id: true, displayName: true } } },
+      orderBy: { sequence: "desc" },
+      take: 100
+    });
+    return releases.map((release) => ({
+      id: release.id,
+      sequence: release.sequence,
+      action: release.action,
+      fromVersionId: release.fromVersionId,
+      targetVersionId: release.targetVersionId,
+      evaluationRunId: release.evaluationRunId,
+      reason: release.reason,
+      createdBy: release.createdBy,
+      createdAt: release.createdAt
+    }));
+  }
+
   /** 软删除 Agent，保留审计与历史运行关联。 */
   async deleteAgent(id: string): Promise<void> {
     await this.ensureCanManageAgent(id);
@@ -363,7 +538,7 @@ export class AgentsService {
     });
   }
 
-  /** 发布 Agent 并生成不可预测的公开分享令牌。 */
+  /** 兼容旧发布入口：先冻结当前草稿，再原子切换正式版本。 */
   async publishAgent(id: string): Promise<AgentPublishResult> {
     await this.ensureCanManageAgent(id);
     const existing = await this.prisma.agent.findUnique({
@@ -387,54 +562,239 @@ export class AgentsService {
         existing.agentWorkflow.workflowVersionId
       );
     }
-    const shareToken = existing?.shareToken || this.createShareToken();
-
-    const agent = await this.prisma.agent.update({
+    const version = await this.createAgentVersion(id, {});
+    const state = await this.prisma.agent.findFirstOrThrow({
       where: { id, workspaceId: requireWorkspaceId() },
-      data: {
-        published: true,
-        publishedAt: new Date(),
-        shareToken
-      },
-      select: {
-        id: true,
-        published: true,
-        publishedAt: true,
-        shareToken: true
-      }
+      select: { releaseRevision: true }
     });
+    return this.activateAgentVersion(id, {
+      versionId: version.id,
+      action: "PUBLISH",
+      expectedReleaseRevision: state.releaseRevision,
+      reason: "兼容发布入口创建"
+    });
+  }
 
+  /** 原子发布或回滚到指定不可变版本。 */
+  async activateAgentVersion(
+    id: string,
+    payload: ActivateAgentVersionDto
+  ): Promise<AgentPublishResult> {
+    await this.ensureCanManageAgent(id);
+    const versionId = this.requireNonEmptyString(payload.versionId, "versionId");
+    if (
+      payload.action !== undefined &&
+      payload.action !== "PUBLISH" &&
+      payload.action !== "ROLLBACK"
+    ) {
+      throw new AppError(ErrorCodes.common.badRequest, "action must be PUBLISH or ROLLBACK");
+    }
+    const action = payload.action ?? "PUBLISH";
+    const expectedReleaseRevision = payload.expectedReleaseRevision;
+    if (!Number.isInteger(expectedReleaseRevision) || Number(expectedReleaseRevision) < 0) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "expectedReleaseRevision must be a non-negative integer"
+      );
+    }
+    const actor = requireWorkspaceActor();
+    const result = await this.prisma.$transaction(
+      async (transaction) => {
+        const agent = await transaction.agent.findFirst({
+          where: { id, workspaceId: requireWorkspaceId(), deletedAt: null },
+          select: {
+            id: true,
+            publishedVersionId: true,
+            releaseRevision: true,
+            shareToken: true,
+            publishedAt: true,
+            publishedVersion: { select: { version: true } }
+          }
+        });
+        if (!agent) {
+          throw new AppError(ErrorCodes.agent.notFound, "agent not found", HttpStatus.NOT_FOUND);
+        }
+        if (
+          expectedReleaseRevision !== undefined &&
+          expectedReleaseRevision !== agent.releaseRevision
+        ) {
+          throw new AppError(
+            ErrorCodes.agent.releaseConflict,
+            "Agent 线上版本已被修改，请重新加载后再操作",
+            HttpStatus.CONFLICT
+          );
+        }
+        const version = await transaction.agentVersion.findFirst({
+          where: { id: versionId, agentId: id, workspaceId: requireWorkspaceId() },
+          select: {
+            id: true,
+            version: true,
+            sourceDraftRevision: true,
+            configSnapshot: true,
+            configHash: true
+          }
+        });
+        if (!version) {
+          throw new AppError(
+            ErrorCodes.agent.versionNotFound,
+            "Agent 版本不存在",
+            HttpStatus.NOT_FOUND
+          );
+        }
+        try {
+          hydrateAgentVersionSnapshot(
+            version.configSnapshot,
+            version.configHash,
+            AgentRuntimeMode.PUBLISHED
+          );
+        } catch {
+          throw new AppError(
+            ErrorCodes.agent.versionInvalid,
+            "Agent 版本配置损坏或不受支持",
+            HttpStatus.CONFLICT
+          );
+        }
+        if (agent.publishedVersionId === versionId) {
+          return {
+            ...agent,
+            published: true,
+            publishedVersionId: versionId
+          };
+        }
+        if (
+          action === "ROLLBACK" &&
+          (!agent.publishedVersion || version.version >= agent.publishedVersion.version)
+        ) {
+          throw new AppError(
+            ErrorCodes.common.badRequest,
+            "ROLLBACK 只能切换到低于当前线上版本的历史版本"
+          );
+        }
+        const nextRevision = agent.releaseRevision + 1;
+        const publishedAt = new Date();
+        const shareToken = agent.shareToken || this.createShareToken();
+        await transaction.agentRelease.create({
+          data: {
+            workspaceId: requireWorkspaceId(),
+            agentId: id,
+            sequence: nextRevision,
+            action,
+            fromVersionId: agent.publishedVersionId,
+            targetVersionId: versionId,
+            evaluationRunId: payload.evaluationRunId?.trim() || null,
+            reason: (payload.reason ?? "").trim().slice(0, 2_000),
+            expectedDraftRevision: version.sourceDraftRevision,
+            createdByUserId: actor.userId
+          }
+        });
+        return transaction.agent.update({
+          where: { id, workspaceId: requireWorkspaceId() },
+          data: {
+            published: true,
+            publishedAt,
+            publishedVersionId: versionId,
+            releaseRevision: nextRevision,
+            shareToken
+          },
+          select: {
+            id: true,
+            published: true,
+            publishedAt: true,
+            shareToken: true,
+            publishedVersionId: true,
+            releaseRevision: true
+          }
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
     return {
-      agentId: agent.id,
-      published: agent.published,
-      publishedAt: agent.publishedAt,
-      shareToken: agent.shareToken
+      agentId: result.id,
+      published: result.published,
+      publishedAt: result.publishedAt,
+      shareToken: result.shareToken,
+      publishedVersionId: result.publishedVersionId,
+      releaseRevision: result.releaseRevision
     };
   }
 
-  /** 取消发布并使现有公开链接立即失效。 */
-  async unpublishAgent(id: string): Promise<AgentPublishResult> {
+  /** 下线只清除正式版本指针，不覆盖草稿、不删除版本，也不轮换访问凭据。 */
+  async unpublishAgent(
+    id: string,
+    payload: { expectedReleaseRevision?: number; reason?: string } = {}
+  ): Promise<AgentPublishResult> {
     await this.ensureCanManageAgent(id);
-
-    const agent = await this.prisma.agent.update({
-      where: { id, workspaceId: requireWorkspaceId() },
-      data: {
-        published: false,
-        publishedAt: null
+    const actor = requireWorkspaceActor();
+    const result = await this.prisma.$transaction(
+      async (transaction) => {
+        const agent = await transaction.agent.findFirstOrThrow({
+          where: { id, workspaceId: requireWorkspaceId(), deletedAt: null },
+          select: {
+            id: true,
+            published: true,
+            publishedVersionId: true,
+            releaseRevision: true,
+            shareToken: true
+          }
+        });
+        if (
+          payload.expectedReleaseRevision !== undefined &&
+          payload.expectedReleaseRevision !== agent.releaseRevision
+        ) {
+          throw new AppError(
+            ErrorCodes.agent.releaseConflict,
+            "Agent 线上版本已被修改，请重新加载后再操作",
+            HttpStatus.CONFLICT
+          );
+        }
+        if (!agent.publishedVersionId && !agent.published) {
+          return {
+            ...agent,
+            published: false,
+            publishedAt: null,
+            releaseRevision: agent.releaseRevision
+          };
+        }
+        const nextRevision = agent.releaseRevision + 1;
+        await transaction.agentRelease.create({
+          data: {
+            workspaceId: requireWorkspaceId(),
+            agentId: id,
+            sequence: nextRevision,
+            action: "UNPUBLISH",
+            fromVersionId: agent.publishedVersionId,
+            targetVersionId: null,
+            reason: (payload.reason ?? "").trim().slice(0, 2_000),
+            createdByUserId: actor.userId
+          }
+        });
+        return transaction.agent.update({
+          where: { id, workspaceId: requireWorkspaceId() },
+          data: {
+            published: false,
+            publishedAt: null,
+            publishedVersionId: null,
+            releaseRevision: nextRevision
+          },
+          select: {
+            id: true,
+            published: true,
+            publishedAt: true,
+            shareToken: true,
+            publishedVersionId: true,
+            releaseRevision: true
+          }
+        });
       },
-      select: {
-        id: true,
-        published: true,
-        publishedAt: true,
-        shareToken: true
-      }
-    });
-
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
     return {
-      agentId: agent.id,
-      published: agent.published,
-      publishedAt: agent.publishedAt,
-      shareToken: agent.shareToken
+      agentId: result.id,
+      published: result.published,
+      publishedAt: result.publishedAt,
+      shareToken: result.shareToken,
+      publishedVersionId: result.publishedVersionId,
+      releaseRevision: result.releaseRevision
     };
   }
 
@@ -453,7 +813,9 @@ export class AgentsService {
         id: true,
         published: true,
         publishedAt: true,
-        shareToken: true
+        shareToken: true,
+        publishedVersionId: true,
+        releaseRevision: true
       }
     });
 
@@ -461,7 +823,9 @@ export class AgentsService {
       agentId: agent.id,
       published: agent.published,
       publishedAt: agent.publishedAt,
-      shareToken: agent.shareToken
+      shareToken: agent.shareToken,
+      publishedVersionId: agent.publishedVersionId,
+      releaseRevision: agent.releaseRevision
     };
   }
 
@@ -581,14 +945,103 @@ export class AgentsService {
     };
   }
 
-  /** 返回 Chat/Runtime 使用的跨模块 DTO，不泄露 Prisma 实体和供应商密钥。 */
+  /** 兼容内部草稿预览；正式入口必须改用 getPublishedRuntimeConfig。 */
   async getAgentRuntimeConfig(id: string): Promise<AgentRuntimeConfig> {
     const agent = await this.findAgentDetail(id);
-
     if (!agent.enabled) {
       throw new AppError(ErrorCodes.agent.notFound, "agent not found", HttpStatus.NOT_FOUND);
     }
+    return this.toDraftRuntimeConfig(agent);
+  }
 
+  /** 读取指定不可变版本并校验内容 Hash。 */
+  async getVersionRuntimeConfig(
+    id: string,
+    versionId: string,
+    mode: AgentRuntimeMode = AgentRuntimeMode.VERSION_TEST
+  ): Promise<AgentRuntimeConfig> {
+    const agent = await this.prisma.agent.findFirst({
+      where: {
+        id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
+        enabled: true,
+        deletedAt: null
+      },
+      select: { id: true }
+    });
+    if (!agent) {
+      throw new AppError(ErrorCodes.agent.notFound, "agent not found", HttpStatus.NOT_FOUND);
+    }
+    const version = await this.prisma.agentVersion.findFirst({
+      where: {
+        id: versionId,
+        agentId: id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {})
+      }
+    });
+    if (!version) {
+      throw new AppError(
+        ErrorCodes.agent.versionNotFound,
+        "Agent 版本不存在",
+        HttpStatus.NOT_FOUND
+      );
+    }
+    try {
+      return {
+        ...hydrateAgentVersionSnapshot(version.configSnapshot, version.configHash, mode),
+        agentVersionId: version.id
+      };
+    } catch {
+      throw new AppError(
+        ErrorCodes.agent.versionInvalid,
+        "Agent 版本配置损坏或不受支持",
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  /** 正式入口只解析当前发布指针；迁移期对旧 published 数据保留 LEGACY 兼容。 */
+  async getPublishedRuntimeConfig(id: string): Promise<AgentRuntimeConfig> {
+    const agent = await this.prisma.agent.findFirst({
+      where: {
+        id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
+        enabled: true,
+        deletedAt: null
+      },
+      select: { published: true, publishedVersionId: true }
+    });
+    if (!agent || (!agent.publishedVersionId && !agent.published)) {
+      throw new AppError(ErrorCodes.agent.notPublished, "Agent 尚未发布", HttpStatus.CONFLICT);
+    }
+    if (agent.publishedVersionId) {
+      return this.getVersionRuntimeConfig(id, agent.publishedVersionId, AgentRuntimeMode.PUBLISHED);
+    }
+    const legacy = await this.getAgentRuntimeConfig(id);
+    return { ...legacy, runtimeMode: AgentRuntimeMode.LEGACY };
+  }
+
+  /** 工作台优先使用已发布版本；尚未发布时保留创建者调试草稿的兼容体验。 */
+  async getDefaultChatRuntimeConfig(id: string): Promise<AgentRuntimeConfig> {
+    const state = await this.prisma.agent.findFirst({
+      where: {
+        id,
+        ...(getWorkspaceId() ? { workspaceId: getWorkspaceId()! } : {}),
+        enabled: true,
+        deletedAt: null
+      },
+      select: { published: true, publishedVersionId: true }
+    });
+    if (!state) {
+      throw new AppError(ErrorCodes.agent.notFound, "agent not found", HttpStatus.NOT_FOUND);
+    }
+    return state.published || state.publishedVersionId
+      ? this.getPublishedRuntimeConfig(id)
+      : this.getAgentRuntimeConfig(id);
+  }
+
+  /** 将可编辑 Agent 投影转换为草稿运行配置，并生成稳定配置摘要。 */
+  private async toDraftRuntimeConfig(agent: AgentWithModelConfig): Promise<AgentRuntimeConfig> {
     const orderedSkillBindings = [...(agent.agentSkills ?? [])].sort(
       (left, right) =>
         left.position - right.position ||
@@ -605,8 +1058,11 @@ export class AgentsService {
       enabledSkillBindings.map((binding) => [binding.skillId, binding.position])
     );
 
-    return {
+    const runtime: AgentRuntimeConfig = {
       agentId: agent.id,
+      agentVersionId: null,
+      configHash: "",
+      runtimeMode: AgentRuntimeMode.DRAFT_PREVIEW,
       name: agent.name,
       systemPrompt: agent.systemPrompt,
       modelConfigId: agent.modelConfigId,
@@ -657,6 +1113,7 @@ export class AgentsService {
         }))
       ]
     };
+    return { ...runtime, configHash: createAgentVersionSnapshot(runtime).configHash };
   }
 
   /** 读取 Agent 已绑定的工具 ID。 */
@@ -714,7 +1171,10 @@ export class AgentsService {
         this.prisma.agentWorkflow.deleteMany({ where: { agentId: id } }),
         this.prisma.agent.update({
           where: { id, workspaceId: requireWorkspaceId() },
-          data: { executionMode: AgentExecutionMode.AGENT_LOOP }
+          data: {
+            executionMode: AgentExecutionMode.AGENT_LOOP,
+            draftRevision: { increment: 1 }
+          }
         })
       ]);
       return { agentId: id, executionMode, workflow: null };
@@ -735,7 +1195,10 @@ export class AgentsService {
       }),
       this.prisma.agent.update({
         where: { id, workspaceId: requireWorkspaceId() },
-        data: { executionMode: AgentExecutionMode.WORKFLOW }
+        data: {
+          executionMode: AgentExecutionMode.WORKFLOW,
+          draftRevision: { increment: 1 }
+        }
       })
     ]);
     return {
@@ -770,7 +1233,11 @@ export class AgentsService {
               }))
             })
           ]
-        : [])
+        : []),
+      this.prisma.agent.update({
+        where: { id, workspaceId: requireWorkspaceId() },
+        data: { draftRevision: { increment: 1 } }
+      })
     ]);
 
     return {
@@ -813,7 +1280,11 @@ export class AgentsService {
               data: skills.map((binding) => ({ agentId: id, ...binding }))
             })
           ]
-        : [])
+        : []),
+      this.prisma.agent.update({
+        where: { id, workspaceId: requireWorkspaceId() },
+        data: { draftRevision: { increment: 1 } }
+      })
     ]);
     return { agentId: id, skills };
   }
@@ -862,7 +1333,11 @@ export class AgentsService {
               }))
             })
           ]
-        : [])
+        : []),
+      this.prisma.agent.update({
+        where: { id, workspaceId: requireWorkspaceId() },
+        data: { draftRevision: { increment: 1 } }
+      })
     ]);
 
     return {
@@ -1413,6 +1888,9 @@ export class AgentsService {
       published: agent.published,
       publishedAt: agent.publishedAt,
       shareToken: agent.shareToken,
+      draftRevision: agent.draftRevision,
+      releaseRevision: agent.releaseRevision,
+      publishedVersionId: agent.publishedVersionId,
       createdAt: agent.createdAt,
       updatedAt: agent.updatedAt
     };
@@ -1465,6 +1943,44 @@ export class AgentsService {
       providerId: agent.modelConfig.providerId,
       providerName: agent.modelConfig.provider.name,
       providerType: agent.modelConfig.provider.providerType
+    };
+  }
+
+  private toAgentVersionListItem(
+    version: {
+      id: string;
+      version: number;
+      schemaVersion: number;
+      sourceDraftRevision: number;
+      configHash: string;
+      changeSummary: string;
+      createdAt: Date;
+      createdBy: { id: string; displayName: string };
+    },
+    publishedVersionId: string | null
+  ): AgentVersionListItem {
+    return {
+      id: version.id,
+      version: version.version,
+      schemaVersion: version.schemaVersion,
+      sourceDraftRevision: version.sourceDraftRevision,
+      configHash: version.configHash,
+      changeSummary: version.changeSummary,
+      isPublished: version.id === publishedVersionId,
+      createdBy: version.createdBy,
+      createdAt: version.createdAt
+    };
+  }
+
+  private toAgentVersionDetail(
+    version: Parameters<AgentsService["toAgentVersionListItem"]>[0] & {
+      configSnapshot: Prisma.JsonValue;
+    },
+    publishedVersionId: string | null
+  ): AgentVersionDetail {
+    return {
+      ...this.toAgentVersionListItem(version, publishedVersionId),
+      configSnapshot: version.configSnapshot as AgentVersionDetail["configSnapshot"]
     };
   }
 

@@ -37,7 +37,8 @@ export const tests = [
     run: async () => {
       const prisma = {
         agent: {
-          findFirst: async () => ({ id: "agent-id" })
+          findFirst: async () => ({ id: "agent-id" }),
+          update: async () => ({})
         },
         $transaction: async () => {
           throw new Error("transaction should not run for invalid tool IDs");
@@ -211,7 +212,10 @@ export const tests = [
     run: async () => {
       const writes: string[] = [];
       const prisma = {
-        agent: { findFirst: async () => ({ id: "agent-id", createdByUserId: "owner" }) },
+        agent: {
+          findFirst: async () => ({ id: "agent-id", createdByUserId: "owner" }),
+          update: async () => ({})
+        },
         agentSkill: {
           deleteMany: async () => {
             writes.push("delete");
@@ -241,6 +245,65 @@ export const tests = [
         result.skills.map((item) => item.skillId),
         ["skill-b", "skill-a"]
       );
+    }
+  },
+  {
+    name: "AgentsService unpublishes a legacy published Agent without a version pointer",
+    run: async () => {
+      let releaseData: Record<string, unknown> | undefined;
+      let updateData: Record<string, unknown> | undefined;
+      const transaction = {
+        agent: {
+          findFirstOrThrow: async () => ({
+            id: "agent-id",
+            published: true,
+            publishedVersionId: null,
+            releaseRevision: 0,
+            shareToken: "share-token"
+          }),
+          update: async ({ data }: { data: Record<string, unknown> }) => {
+            updateData = data;
+            return {
+              id: "agent-id",
+              published: false,
+              publishedAt: null,
+              shareToken: "share-token",
+              publishedVersionId: null,
+              releaseRevision: 1
+            };
+          }
+        },
+        agentRelease: {
+          create: async ({ data }: { data: Record<string, unknown> }) => {
+            releaseData = data;
+            return {};
+          }
+        }
+      };
+      const service = new AgentsService(
+        {
+          agent: {
+            findFirst: async () => ({ id: "agent-id", createdByUserId: "owner-id" })
+          },
+          $transaction: async (callback: (client: typeof transaction) => Promise<unknown>) =>
+            callback(transaction)
+        } as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never
+      );
+
+      const result = await runInWorkspaceContext(
+        "00000000-0000-4000-8000-000000000001",
+        { userId: "owner-id", role: WorkspaceRole.OWNER },
+        () => service.unpublishAgent("agent-id", { reason: "迁移期下线" })
+      );
+
+      assert.equal(releaseData?.action, "UNPUBLISH");
+      assert.equal(releaseData?.fromVersionId, null);
+      assert.equal(updateData?.published, false);
+      assert.equal(result.releaseRevision, 1);
     }
   }
 ];

@@ -11,10 +11,12 @@ import { CurrentUserDto } from "../users/dto/user.dto";
 import { CurrentWorkspaceDto } from "../workspaces/dto/workspace.dto";
 import {
   AgentCreateDto,
+  ActivateAgentVersionDto,
   AgentDetail,
   AgentKnowledgeBaseBindingDto,
   AgentKnowledgeBaseBindingResult,
   AgentListItem,
+  AgentReleaseListItem,
   AgentPublishResult,
   AgentQueryDto,
   SharedAgentDetail,
@@ -23,6 +25,11 @@ import {
   AgentSkillBindingDto,
   AgentSkillBindingResult,
   AgentUpdateDto,
+  AgentVersionDetail,
+  AgentVersionListItem,
+  AgentVersionQueryDto,
+  CreateAgentVersionDto,
+  UnpublishAgentDto,
   AgentWorkflowBindingDto,
   AgentWorkflowBindingResult
 } from "./dto/agent.dto";
@@ -100,8 +107,60 @@ export class AgentsController {
   @Delete(":id/publish")
   @Roles(UserRole.ADMIN, UserRole.USER)
   @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
-  async unpublishAgent(@Param("id") id: string): Promise<AgentPublishResult> {
-    return this.agentsService.unpublishAgent(id);
+  async unpublishAgent(
+    @Param("id") id: string,
+    @Body() payload: UnpublishAgentDto
+  ): Promise<AgentPublishResult> {
+    return this.agentsService.unpublishAgent(id, payload);
+  }
+
+  /** 从当前草稿创建不可变候选版本。 */
+  @Post(":id/versions")
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
+  createAgentVersion(
+    @Param("id") id: string,
+    @Body() payload: CreateAgentVersionDto
+  ): Promise<AgentVersionDetail> {
+    return this.agentsService.createAgentVersion(id, payload);
+  }
+
+  @Get(":id/versions")
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
+  listAgentVersions(
+    @Param("id") id: string,
+    @Query() query: AgentVersionQueryDto
+  ): Promise<PageResult<AgentVersionListItem>> {
+    return this.agentsService.listAgentVersions(id, query);
+  }
+
+  @Get(":id/versions/:versionId")
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
+  getAgentVersion(
+    @Param("id") id: string,
+    @Param("versionId") versionId: string
+  ): Promise<AgentVersionDetail> {
+    return this.agentsService.getAgentVersion(id, versionId);
+  }
+
+  /** 发布候选版本或回滚到历史版本。 */
+  @Post(":id/releases")
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
+  activateAgentVersion(
+    @Param("id") id: string,
+    @Body() payload: ActivateAgentVersionDto
+  ): Promise<AgentPublishResult> {
+    return this.agentsService.activateAgentVersion(id, payload);
+  }
+
+  @Get(":id/releases")
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.MEMBER)
+  listAgentReleases(@Param("id") id: string): Promise<AgentReleaseListItem[]> {
+    return this.agentsService.listAgentReleases(id);
   }
 
   /** 获取 Agent 工具绑定。 */
