@@ -120,6 +120,16 @@ enum ChatSessionMessageRole {
   @@map("chat_session_message_role")
 }
 
+enum ChatTurnStatus {
+  QUEUED
+  GENERATING
+  COMPLETED
+  FAILED
+  CANCELED
+
+  @@map("chat_turn_status")
+}
+
 enum ChatSessionStatus {
   ACTIVE
   ARCHIVED
@@ -468,6 +478,9 @@ model ModelConfig {
   thinkingMode             ModelThinkingMode        @default(AUTO) @map("thinking_mode")
   /// 是否支持由调用方显式开启/关闭思考；不支持时 Agent 不得覆盖模型默认行为。
   thinkingSupported        Boolean                  @default(false) @map("thinking_supported")
+  inputTokenPricePerMillion  Decimal?               @map("input_token_price_per_million") @db.Decimal(14, 6)
+  outputTokenPricePerMillion Decimal?               @map("output_token_price_per_million") @db.Decimal(14, 6)
+  priceCurrency              String                 @default("CNY") @map("price_currency")
   createdAt                DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                DateTime?                @map("deleted_at") @db.Timestamptz(6)
@@ -1030,13 +1043,40 @@ model ChatSession {
   archivedAt     DateTime?            @map("archived_at") @db.Timestamptz(6)
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  nextTurnSequence BigInt             @default(1) @map("next_turn_sequence")
   agent          Agent                @relation(fields: [agentId], references: [id], onDelete: Cascade)
   user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages       ChatSessionMessage[]
+  turns          ChatTurn[]
 
   @@index([agentId, userId, status, lastMessageAt(sort: Desc)], map: "idx_chat_sessions_agent_user_status_last_message")
   @@index([userId, status, updatedAt(sort: Desc)], map: "idx_chat_sessions_user_status_updated_at")
   @@map("chat_sessions")
+}
+
+/// 一次可并发执行的用户提问。sequence 决定稳定展示顺序，完成先后不改变问答位置。
+model ChatTurn {
+  id                      String         @id @default(uuid()) @db.Uuid
+  sessionId               String         @map("session_id") @db.Uuid
+  sequence                BigInt
+  clientMessageId         String         @map("client_message_id")
+  userMessageId           String?        @unique @map("user_message_id") @db.Uuid
+  assistantMessageId      String?        @unique @map("assistant_message_id") @db.Uuid
+  runId                   String?        @map("run_id") @db.Uuid
+  status                  ChatTurnStatus @default(QUEUED)
+  errorType               String?        @map("error_type")
+  errorMessage            String?        @map("error_message") @db.Text
+  startedAt               DateTime?      @map("started_at") @db.Timestamptz(6)
+  completedAt             DateTime?      @map("completed_at") @db.Timestamptz(6)
+  createdAt               DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  session                 ChatSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  messages                ChatSessionMessage[]
+
+  @@unique([sessionId, sequence], map: "uq_chat_turns_session_sequence")
+  @@unique([sessionId, clientMessageId], map: "uq_chat_turns_session_client_message")
+  @@index([sessionId, status, sequence], map: "idx_chat_turns_session_status_sequence")
+  @@map("chat_turns")
 }
 
 /// 会话的可恢复文本消息。附件二进制仍由文件存储模块负责，因此这里不保存 data URL，
@@ -1048,11 +1088,16 @@ model ChatSessionMessage {
   content      String                 @db.Text
   contentParts Json?                  @map("content_parts") @db.JsonB
   metadata     Json?                  @db.JsonB
+  turnId       String?                @map("turn_id") @db.Uuid
+  turnSequence BigInt?                @map("turn_sequence")
+  turnPosition Int?                   @map("turn_position")
   createdAt    DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
   session      ChatSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  turn         ChatTurn?              @relation(fields: [turnId], references: [id], onDelete: Cascade)
   feedbacks    ChatMessageFeedback[]
 
   @@index([sessionId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_chat_session_messages_cursor")
+  @@index([sessionId, turnSequence, turnPosition], map: "idx_chat_session_messages_turn_order")
   @@map("chat_session_messages")
 }
 
