@@ -285,9 +285,15 @@
     background: var(--mia-text-muted);
   }
 
-  .is-success { background: #16a34a; }
-  .is-danger { background: #dc2626; }
-  .is-muted { background: #94a3b8; }
+  .is-success {
+    background: #16a34a;
+  }
+  .is-danger {
+    background: #dc2626;
+  }
+  .is-muted {
+    background: #94a3b8;
+  }
 }
 
 .evaluationTablePanel .ant-table-thead > tr > th {
@@ -327,6 +333,40 @@
   font-variant-numeric: tabular-nums;
 }
 
+.evaluationJudgeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.evaluationJudgeCard {
+  padding: 14px;
+  border: 1px solid var(--mia-border);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.evaluationJudgeCard > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.evaluationJudgeCard > b {
+  display: block;
+  margin: 10px 0 6px;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.evaluationJudgeCard p,
+.evaluationJudgeCard ul {
+  margin: 6px 0 0;
+  color: var(--mia-text-muted);
+  line-height: 1.6;
+}
+
 @media (max-width: 720px) {
   .evaluationFilters,
   .evaluationFormGrid {
@@ -338,6 +378,7 @@
   }
 
   .evaluationMetricGrid,
+  .evaluationJudgeGrid,
   .evaluationCaseCounts {
     grid-template-columns: 1fr;
   }

@@ -21,9 +21,9 @@ type UseTokenBufferResult = {
   /** 追加 Token，并安排下一次批量刷新。 */
   append: (messageId: string, content: string) => void;
   /** 同步提交当前缓冲，供停止和错误路径保留尾部内容。 */
-  flush: () => void;
+  flush: (messageId?: string) => void;
   /** 丢弃当前缓冲，供最终正文覆盖和页面切换使用。 */
-  clear: () => void;
+  clear: (messageId?: string) => void;
 };
 
 const DEFAULT_MAX_WAIT_MS = 50;
@@ -38,8 +38,7 @@ export function useTokenBuffer({
   maxBufferChars = DEFAULT_MAX_BUFFER_CHARS,
   onFlush
 }: UseTokenBufferOptions): UseTokenBufferResult {
-  const messageIdRef = useRef<string | null>(null);
-  const bufferRef = useRef("");
+  const buffersRef = useRef<Map<string, string>>(new Map());
   const animationFrameRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const onFlushRef = useRef(onFlush);
@@ -60,24 +59,28 @@ export function useTokenBuffer({
     }
   }, []);
 
-  const flush = useCallback(() => {
-    cancelScheduledFlush();
+  const flush = useCallback(
+    (targetMessageId?: string) => {
+      cancelScheduledFlush();
+      const entries = targetMessageId
+        ? ([[targetMessageId, buffersRef.current.get(targetMessageId) ?? ""]] as const)
+        : [...buffersRef.current.entries()];
+      for (const [messageId, content] of entries) {
+        buffersRef.current.delete(messageId);
+        if (content) onFlushRef.current({ messageId, content });
+      }
+    },
+    [cancelScheduledFlush]
+  );
 
-    const messageId = messageIdRef.current;
-    const content = bufferRef.current;
-    messageIdRef.current = null;
-    bufferRef.current = "";
-
-    if (messageId && content) {
-      onFlushRef.current({ messageId, content });
-    }
-  }, [cancelScheduledFlush]);
-
-  const clear = useCallback(() => {
-    cancelScheduledFlush();
-    messageIdRef.current = null;
-    bufferRef.current = "";
-  }, [cancelScheduledFlush]);
+  const clear = useCallback(
+    (targetMessageId?: string) => {
+      cancelScheduledFlush();
+      if (targetMessageId) buffersRef.current.delete(targetMessageId);
+      else buffersRef.current.clear();
+    },
+    [cancelScheduledFlush]
+  );
 
   const scheduleFlush = useCallback(() => {
     if (animationFrameRef.current === null) {
@@ -101,16 +104,11 @@ export function useTokenBuffer({
         return;
       }
 
-      // 理论上同一页面仅有一个活动流；仍按消息隔离，防止旧帧污染下一次生成。
-      if (messageIdRef.current && messageIdRef.current !== messageId) {
-        flush();
-      }
+      const next = `${buffersRef.current.get(messageId) ?? ""}${content}`;
+      buffersRef.current.set(messageId, next);
 
-      messageIdRef.current = messageId;
-      bufferRef.current += content;
-
-      if (bufferRef.current.length >= maxBufferChars) {
-        flush();
+      if (next.length >= maxBufferChars) {
+        flush(messageId);
         return;
       }
 

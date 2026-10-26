@@ -60,6 +60,9 @@ export type ModelConfigListItem = {
   maxTokens: number | null;
   thinkingMode: ModelThinkingMode;
   thinkingSupported: boolean;
+  inputTokenPricePerMillion: string | null;
+  outputTokenPricePerMillion: string | null;
+  priceCurrency: string;
   capabilities?: ModelCapabilityType[];
   createdAt: string;
   updatedAt: string;
@@ -83,6 +86,9 @@ export type ModelConfigPayload = {
   maxTokens: number | null;
   thinkingMode: ModelThinkingMode;
   thinkingSupported: boolean;
+  inputTokenPricePerMillion: number | null;
+  outputTokenPricePerMillion: number | null;
+  priceCurrency: string;
 };
 
 /** 模型能力分类。 */

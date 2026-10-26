@@ -238,6 +238,29 @@ function OpenModelConfigModal({
         </div>
         {selectedModelType === "CHAT" && (
           <>
+            <div className="modelCredentialSection">
+              <span>Token 成本（每百万 Token）</span>
+            </div>
+            <div className="providerModalGrid">
+              <Form.Item label="输入价格" name="inputTokenPricePerMillion">
+                <InputNumber min={0} precision={6} style={{ width: "100%" }} placeholder="未配置" />
+              </Form.Item>
+              <Form.Item label="输出价格" name="outputTokenPricePerMillion">
+                <InputNumber min={0} precision={6} style={{ width: "100%" }} placeholder="未配置" />
+              </Form.Item>
+              <Form.Item label="币种" name="priceCurrency">
+                <Select
+                  options={[
+                    { label: "CNY", value: "CNY" },
+                    { label: "USD", value: "USD" }
+                  ]}
+                />
+              </Form.Item>
+            </div>
+          </>
+        )}
+        {selectedModelType === "CHAT" && (
+          <>
             <Form.Item
               extra="启用后，Runtime 才会将图片输入路由到此模型；该声明默认标记为未验证。"
               label="支持图片理解"

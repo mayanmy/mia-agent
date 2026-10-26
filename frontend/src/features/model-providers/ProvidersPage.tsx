@@ -225,6 +225,15 @@ export function ProvidersPage() {
         maxTokens: config.maxTokens,
         thinkingMode: config.thinkingMode,
         thinkingSupported: config.thinkingSupported,
+        inputTokenPricePerMillion:
+          config.inputTokenPricePerMillion == null
+            ? null
+            : Number(config.inputTokenPricePerMillion),
+        outputTokenPricePerMillion:
+          config.outputTokenPricePerMillion == null
+            ? null
+            : Number(config.outputTokenPricePerMillion),
+        priceCurrency: config.priceCurrency,
         visionInput: config.capabilities?.includes("VISION_INPUT") ?? false,
         visionMaxImages: typeof visionOptions.maxImages === "number" ? visionOptions.maxImages : 4,
         visionMaxImageMb:

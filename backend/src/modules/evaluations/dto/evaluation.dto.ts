@@ -64,6 +64,7 @@ export type CreateEvaluationRunDto = {
   datasetVersionId?: string;
   agentId?: string;
   baselineRunId?: string | null;
+  graderModelConfigId?: string | null;
   overrides?: { retrieval?: { topK?: number; scoreThreshold?: number } };
 };
 

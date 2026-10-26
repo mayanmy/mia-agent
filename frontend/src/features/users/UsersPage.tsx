@@ -233,7 +233,6 @@ function WorkspaceMembersPanel() {
   return (
     <section className="workspace">
       <WorkspacePageHeader
-        eyebrow="Workspace Settings"
         title="项目空间管理"
         description={`管理“${currentWorkspace.name}”的资料、成员和空间内角色。`}
         actions={

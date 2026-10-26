@@ -27,6 +27,9 @@ export type ModelFormValues = {
   maxTokens?: number | null;
   thinkingMode: ModelThinkingMode;
   thinkingSupported: boolean;
+  inputTokenPricePerMillion?: number | null;
+  outputTokenPricePerMillion?: number | null;
+  priceCurrency: string;
   visionInput: boolean;
   visionMaxImages: number;
   visionMaxImageMb: number;

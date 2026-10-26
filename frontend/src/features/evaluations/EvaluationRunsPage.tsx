@@ -15,6 +15,7 @@ import {
 } from "antd";
 
 import { listAgents, type AgentListItem } from "../agents/api";
+import { listModelConfigs, type ModelConfigListItem } from "../model-providers/api";
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
 import { useNavigate } from "react-router-dom";
 import {
@@ -33,6 +34,7 @@ type CreateRunForm = {
   agentId: string;
   topK: number;
   scoreThreshold?: number;
+  graderModelConfigId?: string;
 };
 type FrozenOption = { value: string; label: string; caseCount: number };
 
@@ -50,6 +52,7 @@ export function EvaluationRunsPage() {
   const [rows, setRows] = useState<EvaluationRun[]>([]);
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [versions, setVersions] = useState<FrozenOption[]>([]);
+  const [graderModels, setGraderModels] = useState<ModelConfigListItem[]>([]);
   const [status, setStatus] = useState<EvaluationRunStatus | undefined>();
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -85,11 +88,15 @@ export function EvaluationRunsPage() {
     setDrawerOpen(true);
     form.setFieldsValue({ topK: 5 });
     try {
-      const [agentPage, datasetPage] = await Promise.all([
+      const [agentPage, datasetPage, modelPage] = await Promise.all([
         listAgents(1, 100),
-        listEvaluationDatasets({ page: 1, pageSize: 100, status: "ACTIVE" })
+        listEvaluationDatasets({ page: 1, pageSize: 100, status: "ACTIVE" }),
+        listModelConfigs(1, 100)
       ]);
       setAgents(agentPage.list.filter((agent) => agent.enabled));
+      setGraderModels(
+        modelPage.list.filter((model) => model.enabled && model.modelType === "CHAT")
+      );
       const details = await Promise.all(
         datasetPage.list.map((dataset) => getEvaluationDataset(dataset.id))
       );
@@ -115,6 +122,7 @@ export function EvaluationRunsPage() {
       await createEvaluationRun({
         datasetVersionId: values.datasetVersionId,
         agentId: values.agentId,
+        graderModelConfigId: values.graderModelConfigId,
         overrides: { retrieval: { topK: values.topK, scoreThreshold: values.scoreThreshold } }
       });
       message.success("评估运行已创建，正在后台执行");
@@ -194,18 +202,18 @@ export function EvaluationRunsPage() {
               查看报告
             </Button>
             {(row.status === "PENDING" || row.status === "RUNNING") && (
-            <Button
-              type="link"
-              danger
-              icon={<StopOutlined />}
-              onClick={async () => {
-                await cancelEvaluationRun(row.id);
-                message.success("已请求取消");
-                await loadRuns();
-              }}
-            >
-              取消
-            </Button>
+              <Button
+                type="link"
+                danger
+                icon={<StopOutlined />}
+                onClick={async () => {
+                  await cancelEvaluationRun(row.id);
+                  message.success("已请求取消");
+                  await loadRuns();
+                }}
+              >
+                取消
+              </Button>
             )}
           </Space>
         )
@@ -298,8 +306,22 @@ export function EvaluationRunsPage() {
               <InputNumber min={0} max={1} step={0.05} style={{ width: "100%" }} />
             </Form.Item>
           </div>
+          <Form.Item
+            name="graderModelConfigId"
+            label="LLM 裁判模型（可选）"
+            extra="启用后评估答案正确性、忠实度和相关性；Judge 用量与成本会单独统计。"
+          >
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="不启用答案质量评估"
+              options={graderModels.map((model) => ({ value: model.id, label: model.modelName }))}
+            />
+          </Form.Item>
           <p className="evaluationImportHint">
-            创建后会保存不含密钥的 Agent、模型与检索配置快照。语义裁判当前未启用，不会显示为 0 分。
+            创建后会保存不含密钥的 Agent、模型、裁判与检索配置快照。未配置 Judge
+            或价格的指标会显示为“未采集”，不会记作 0。
           </p>
         </Form>
       </Drawer>

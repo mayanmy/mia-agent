@@ -107,6 +107,9 @@ export type ModelConfigListItem = {
   thinkingMode: ModelThinkingMode;
   /** 是否允许 Agent 显式覆盖思考模式。 */
   thinkingSupported: boolean;
+  inputTokenPricePerMillion: string | null;
+  outputTokenPricePerMillion: string | null;
+  priceCurrency: string;
   capabilities?: ModelCapabilityType[];
   createdAt: Date;
   updatedAt: Date;
@@ -183,6 +186,9 @@ export type ModelConfigCreateDto = {
   maxTokens?: number | null;
   thinkingMode?: ModelThinkingMode;
   thinkingSupported?: boolean;
+  inputTokenPricePerMillion?: number | string | null;
+  outputTokenPricePerMillion?: number | string | null;
+  priceCurrency?: string;
 };
 
 /** 更新模型配置的输入；未提供字段保持原值。 */
@@ -198,6 +204,9 @@ export type ModelConfigUpdateDto = {
   maxTokens?: number | null;
   thinkingMode?: ModelThinkingMode;
   thinkingSupported?: boolean;
+  inputTokenPricePerMillion?: number | string | null;
+  outputTokenPricePerMillion?: number | string | null;
+  priceCurrency?: string;
 };
 
 /** 发起模型能力检查的输入。 */

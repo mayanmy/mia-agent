@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import {
   AgentVisionMode,
   ModelCapabilityType,
+  ModelConfig as PrismaModelConfig,
   ModelConfigType,
   ModelProvider,
   ModelProviderType,
@@ -556,6 +557,43 @@ export class ModelProvidersService {
     return this.gateway.createChatCompletion(request);
   }
 
+  /** 评估运行只读取可冻结的计费配置，不暴露供应商密钥和连接信息。 */
+  async getEvaluationModelConfig(id: string) {
+    const config = await this.prisma.modelConfig.findFirst({
+      where: {
+        id,
+        workspaceId: requireWorkspaceId(),
+        modelType: ModelConfigType.CHAT,
+        enabled: true,
+        deletedAt: null,
+        provider: { enabled: true, deletedAt: null }
+      },
+      select: {
+        id: true,
+        modelName: true,
+        providerId: true,
+        inputTokenPricePerMillion: true,
+        outputTokenPricePerMillion: true,
+        priceCurrency: true
+      }
+    });
+    if (!config) {
+      throw new AppError(
+        ErrorCodes.provider.modelConfigNotFound,
+        "grader model config not found or disabled",
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return {
+      id: config.id,
+      modelName: config.modelName,
+      providerId: config.providerId,
+      inputTokenPricePerMillion: config.inputTokenPricePerMillion?.toString() ?? null,
+      outputTokenPricePerMillion: config.outputTokenPricePerMillion?.toString() ?? null,
+      priceCurrency: config.priceCurrency
+    };
+  }
+
   async createEmbedding(request: EmbeddingRequest): Promise<EmbeddingResponse> {
     return this.gateway.createEmbedding(request);
   }
@@ -830,7 +868,10 @@ export class ModelProvidersService {
       thinkingMode: payload.thinkingSupported
         ? this.requireThinkingMode(payload.thinkingMode ?? ModelThinkingMode.AUTO)
         : ModelThinkingMode.AUTO,
-      thinkingSupported: Boolean(payload.thinkingSupported)
+      thinkingSupported: Boolean(payload.thinkingSupported),
+      inputTokenPricePerMillion: this.normalizeTokenPrice(payload.inputTokenPricePerMillion),
+      outputTokenPricePerMillion: this.normalizeTokenPrice(payload.outputTokenPricePerMillion),
+      priceCurrency: this.normalizeCurrency(payload.priceCurrency)
     };
   }
 
@@ -877,8 +918,39 @@ export class ModelProvidersService {
           : {}),
       ...(payload.thinkingSupported !== undefined
         ? { thinkingSupported: Boolean(payload.thinkingSupported) }
+        : {}),
+      ...(payload.inputTokenPricePerMillion !== undefined
+        ? { inputTokenPricePerMillion: this.normalizeTokenPrice(payload.inputTokenPricePerMillion) }
+        : {}),
+      ...(payload.outputTokenPricePerMillion !== undefined
+        ? {
+            outputTokenPricePerMillion: this.normalizeTokenPrice(payload.outputTokenPricePerMillion)
+          }
+        : {}),
+      ...(payload.priceCurrency !== undefined
+        ? { priceCurrency: this.normalizeCurrency(payload.priceCurrency) }
         : {})
     };
+  }
+
+  private normalizeTokenPrice(value: unknown): string | null {
+    if (value === undefined || value === null || value === "") return null;
+    const price = Number(value);
+    if (!Number.isFinite(price) || price < 0 || price > 1_000_000) {
+      throw new AppError(ErrorCodes.common.badRequest, "token price must be a non-negative number");
+    }
+    return price.toFixed(6);
+  }
+
+  private normalizeCurrency(value: unknown): string {
+    const currency = typeof value === "string" && value.trim() ? value.trim().toUpperCase() : "CNY";
+    if (!/^[A-Z]{3}$/u.test(currency)) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "priceCurrency must be a 3-letter currency code"
+      );
+    }
+    return currency;
   }
 
   private requireNonEmptyString(value: unknown, field: string): string {
@@ -1803,7 +1875,7 @@ export class ModelProvidersService {
   }
 
   private toProviderDetail(
-    provider: ModelProvider & { modelConfigs: ModelConfigListItem[] }
+    provider: ModelProvider & { modelConfigs: PrismaModelConfig[] }
   ): ProviderDetail {
     return {
       ...this.toProviderListItem(provider),
@@ -1812,7 +1884,7 @@ export class ModelProvidersService {
   }
 
   private toModelConfigListItem(
-    config: Omit<ModelConfigListItem, "capabilities"> & {
+    config: PrismaModelConfig & {
       capabilities?: Array<
         ModelCapabilityType | { capability: ModelCapabilityType; enabled: boolean }
       >;
@@ -1831,6 +1903,9 @@ export class ModelProvidersService {
       maxTokens: config.maxTokens,
       thinkingMode: config.thinkingMode,
       thinkingSupported: config.thinkingSupported,
+      inputTokenPricePerMillion: config.inputTokenPricePerMillion?.toString() ?? null,
+      outputTokenPricePerMillion: config.outputTokenPricePerMillion?.toString() ?? null,
+      priceCurrency: config.priceCurrency,
       ...(config.capabilities
         ? {
             capabilities: config.capabilities.flatMap((item) =>
@@ -1844,7 +1919,7 @@ export class ModelProvidersService {
   }
 
   private toModelConfigDetail(
-    config: ModelConfigListItem & { provider: ModelProvider }
+    config: PrismaModelConfig & { provider: ModelProvider }
   ): ModelConfigDetail {
     return {
       ...this.toModelConfigListItem(config),

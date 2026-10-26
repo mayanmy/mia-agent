@@ -12,6 +12,7 @@ import { AppError, ErrorCodes } from "../../core/errors";
 import { createPageResult, normalizePageQuery } from "../../core/pagination";
 import { PrismaService } from "../prisma/prisma.service";
 import { AgentsService } from "../agents/agents.service";
+import { ModelProvidersService } from "../model-providers/model-providers.service";
 import { EvaluationQueueService } from "../../jobs/evaluation-queue.service";
 import {
   EvaluationImportError,
@@ -61,7 +62,8 @@ export class EvaluationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly agentsService?: AgentsService,
-    private readonly evaluationQueue?: EvaluationQueueService
+    private readonly evaluationQueue?: EvaluationQueueService,
+    private readonly modelProvidersService?: ModelProvidersService
   ) {}
 
   async listRuns(query: EvaluationRunQueryDto) {
@@ -82,7 +84,12 @@ export class EvaluationsService {
       }),
       this.prisma.evaluationRun.count({ where })
     ]);
-    return createPageResult(rows.map((row) => this.toRunSummary(row)), total, page.page, page.pageSize);
+    return createPageResult(
+      rows.map((row) => this.toRunSummary(row)),
+      total,
+      page.page,
+      page.pageSize
+    );
   }
 
   async createRun(payload: CreateEvaluationRunDto, userId: string) {
@@ -94,18 +101,36 @@ export class EvaluationsService {
     });
     if (!version) this.throwNotFound();
     if (version.status !== "FROZEN") {
-      throw new AppError(ErrorCodes.common.conflict, "evaluation run requires a frozen dataset version", HttpStatus.CONFLICT);
+      throw new AppError(
+        ErrorCodes.common.conflict,
+        "evaluation run requires a frozen dataset version",
+        HttpStatus.CONFLICT
+      );
     }
     if (version.dataset.status === "ARCHIVED") {
-      throw new AppError(ErrorCodes.common.conflict, "archived dataset cannot create runs", HttpStatus.CONFLICT);
+      throw new AppError(
+        ErrorCodes.common.conflict,
+        "archived dataset cannot create runs",
+        HttpStatus.CONFLICT
+      );
     }
     if (!this.agentsService || !this.evaluationQueue) {
       throw new Error("evaluation run dependencies are unavailable");
     }
     const runtime = await this.agentsService.getAgentRuntimeConfig(agentId);
+    const evaluatedModel = await this.modelProvidersService?.getEvaluationModelConfig(
+      runtime.modelConfigId
+    );
+    const graderModelConfigId = payload.graderModelConfigId?.trim() || null;
+    const graderModel = graderModelConfigId
+      ? await this.modelProvidersService?.getEvaluationModelConfig(graderModelConfigId)
+      : null;
     const topK = this.normalizeTopK(payload.overrides?.retrieval?.topK);
-    const scoreThreshold = this.normalizeScoreThreshold(payload.overrides?.retrieval?.scoreThreshold);
-    if (payload.baselineRunId) await this.requireCompatibleBaseline(payload.baselineRunId, datasetVersionId);
+    const scoreThreshold = this.normalizeScoreThreshold(
+      payload.overrides?.retrieval?.scoreThreshold
+    );
+    if (payload.baselineRunId)
+      await this.requireCompatibleBaseline(payload.baselineRunId, datasetVersionId);
 
     // 快照白名单刻意排除 baseUrl、密钥、连接串和内部 SDK 对象。
     const agentSnapshot = {
@@ -118,15 +143,42 @@ export class EvaluationsService {
       timeoutSeconds: runtime.timeoutSeconds,
       thinkingMode: runtime.thinkingMode
     };
-    const retrievalSnapshot = { knowledgeBaseIds: runtime.knowledgeBaseIds, topK, ...(scoreThreshold === undefined ? {} : { scoreThreshold }) };
+    const retrievalSnapshot = {
+      knowledgeBaseIds: runtime.knowledgeBaseIds,
+      topK,
+      ...(scoreThreshold === undefined ? {} : { scoreThreshold })
+    };
     const modelSnapshot = {
       modelConfigId: runtime.modelConfigId,
       modelName: runtime.modelName,
       providerId: runtime.providerId,
-      providerType: runtime.providerType
+      providerType: runtime.providerType,
+      inputTokenPricePerMillion: evaluatedModel?.inputTokenPricePerMillion ?? null,
+      outputTokenPricePerMillion: evaluatedModel?.outputTokenPricePerMillion ?? null,
+      priceCurrency: evaluatedModel?.priceCurrency ?? "CNY"
     };
+    const graderSnapshot = graderModel
+      ? {
+          enabled: true,
+          modelConfigId: graderModel.id,
+          modelName: graderModel.modelName,
+          providerId: graderModel.providerId,
+          promptVersion: "rag-judge-v1",
+          inputTokenPricePerMillion: graderModel.inputTokenPricePerMillion,
+          outputTokenPricePerMillion: graderModel.outputTokenPricePerMillion,
+          priceCurrency: graderModel.priceCurrency
+        }
+      : { enabled: false, promptVersion: "rag-judge-v1" };
     const snapshotHash = createHash("sha256")
-      .update(JSON.stringify({ datasetVersionId, agentSnapshot, retrievalSnapshot, modelSnapshot }))
+      .update(
+        JSON.stringify({
+          datasetVersionId,
+          agentSnapshot,
+          retrievalSnapshot,
+          modelSnapshot,
+          graderSnapshot
+        })
+      )
       .digest("hex");
     const run = await this.prisma.$transaction(async (transaction) => {
       const created = await transaction.evaluationRun.create({
@@ -139,7 +191,8 @@ export class EvaluationsService {
           agentConfigSnapshot: agentSnapshot,
           retrievalConfigSnapshot: retrievalSnapshot,
           modelConfigSnapshot: modelSnapshot,
-          graderConfigSnapshot: { enabled: false },
+          graderConfigSnapshot: graderSnapshot,
+          metricsVersion: "v2",
           snapshotHash,
           createdByUserId: userId
         }
@@ -162,18 +215,36 @@ export class EvaluationsService {
       include: { datasetVersion: { include: { dataset: true } } }
     });
     if (!run) this.throwNotFound();
-    return { ...this.toRunSummary(run), agentConfigSnapshot: run.agentConfigSnapshot, retrievalConfigSnapshot: run.retrievalConfigSnapshot, modelConfigSnapshot: run.modelConfigSnapshot, graderConfigSnapshot: run.graderConfigSnapshot, errorType: run.errorType, errorMessage: run.errorMessage };
+    return {
+      ...this.toRunSummary(run),
+      agentConfigSnapshot: run.agentConfigSnapshot,
+      retrievalConfigSnapshot: run.retrievalConfigSnapshot,
+      modelConfigSnapshot: run.modelConfigSnapshot,
+      graderConfigSnapshot: run.graderConfigSnapshot,
+      errorType: run.errorType,
+      errorMessage: run.errorMessage
+    };
   }
 
   async cancelRun(runId: string) {
     const updated = await this.prisma.evaluationRun.updateMany({
-      where: { id: runId, workspaceId: requireWorkspaceId(), status: { in: ["PENDING", "RUNNING"] } },
+      where: {
+        id: runId,
+        workspaceId: requireWorkspaceId(),
+        status: { in: ["PENDING", "RUNNING"] }
+      },
       data: { cancelRequestedAt: new Date() }
     });
     if (!updated.count) {
-      const existing = await this.prisma.evaluationRun.findFirst({ where: { id: runId, workspaceId: requireWorkspaceId() } });
+      const existing = await this.prisma.evaluationRun.findFirst({
+        where: { id: runId, workspaceId: requireWorkspaceId() }
+      });
       if (!existing) this.throwNotFound();
-      throw new AppError(ErrorCodes.common.conflict, "only pending or running evaluation can be canceled", HttpStatus.CONFLICT);
+      throw new AppError(
+        ErrorCodes.common.conflict,
+        "only pending or running evaluation can be canceled",
+        HttpStatus.CONFLICT
+      );
     }
     return this.getRun(runId);
   }
@@ -183,7 +254,13 @@ export class EvaluationsService {
     const page = normalizePageQuery(query);
     const where = { runId };
     const [rows, total] = await Promise.all([
-      this.prisma.evaluationCaseResult.findMany({ where, orderBy: { createdAt: "asc" }, skip: page.skip, take: page.take, include: { evaluationCase: true } }),
+      this.prisma.evaluationCaseResult.findMany({
+        where,
+        orderBy: { createdAt: "asc" },
+        skip: page.skip,
+        take: page.take,
+        include: { evaluationCase: true }
+      }),
       this.prisma.evaluationCaseResult.count({ where })
     ]);
     return createPageResult(rows, total, page.page, page.pageSize);
@@ -207,7 +284,12 @@ export class EvaluationsService {
 
   async getComparisonCompatibility(query: EvaluationComparisonQueryDto) {
     const { baseline, candidate } = await this.requireComparisonRuns(query);
-    const reasons: Array<{ field: string; baselineValue: unknown; candidateValue: unknown; message: string }> = [];
+    const reasons: Array<{
+      field: string;
+      baselineValue: unknown;
+      candidateValue: unknown;
+      message: string;
+    }> = [];
     if (baseline.datasetVersionId !== candidate.datasetVersionId) {
       reasons.push({
         field: "datasetVersionId",
@@ -244,14 +326,27 @@ export class EvaluationsService {
       { key: "retrieval.hitRateAt5", label: "HitRate@5", direction: "higher_is_better" as const },
       { key: "retrieval.recallAt5", label: "Recall@5", direction: "higher_is_better" as const },
       { key: "retrieval.mrr", label: "MRR", direction: "higher_is_better" as const },
-      { key: "retrieval.emptyRetrievalRate", label: "空召回率", direction: "lower_is_better" as const },
+      {
+        key: "retrieval.emptyRetrievalRate",
+        label: "空召回率",
+        direction: "lower_is_better" as const
+      },
+      { key: "answer.correctness", label: "答案正确性", direction: "higher_is_better" as const },
+      { key: "answer.faithfulness", label: "忠实度", direction: "higher_is_better" as const },
+      { key: "answer.relevance", label: "答案相关性", direction: "higher_is_better" as const },
       { key: "runtime.successRate", label: "成功率", direction: "higher_is_better" as const },
-      { key: "runtime.p95TotalMs", label: "P95 总耗时", direction: "lower_is_better" as const }
+      { key: "runtime.p95TotalMs", label: "P95 总耗时", direction: "lower_is_better" as const },
+      {
+        key: "runtime.totalCostMicros",
+        label: "估算成本（微货币单位）",
+        direction: "lower_is_better" as const
+      }
     ];
     const metrics = catalog.map((item) => {
       const baselineValue = this.readMetric(baselineSummary, item.key);
       const candidateValue = this.readMetric(candidateSummary, item.key);
-      const absoluteDelta = baselineValue === null || candidateValue === null ? null : candidateValue - baselineValue;
+      const absoluteDelta =
+        baselineValue === null || candidateValue === null ? null : candidateValue - baselineValue;
       const relativeDelta =
         absoluteDelta === null || baselineValue === null || baselineValue === 0
           ? null
@@ -263,13 +358,14 @@ export class EvaluationsService {
         absoluteDelta,
         relativeDelta,
         sampleCount: this.readMetric(candidateSummary, "sampleCount") ?? 0,
-        verdict: !compatibility.compatible || absoluteDelta === null
-          ? "not_comparable"
-          : Math.abs(absoluteDelta) < 1e-9
-            ? "unchanged"
-            : (item.direction === "higher_is_better" ? absoluteDelta > 0 : absoluteDelta < 0)
-              ? "improved"
-              : "regressed"
+        verdict:
+          !compatibility.compatible || absoluteDelta === null
+            ? "not_comparable"
+            : Math.abs(absoluteDelta) < 1e-9
+              ? "unchanged"
+              : (item.direction === "higher_is_better" ? absoluteDelta > 0 : absoluteDelta < 0)
+                ? "improved"
+                : "regressed"
       };
     });
     const caseCounts = compatibility.compatible
@@ -762,10 +858,17 @@ export class EvaluationsService {
     });
     if (!baseline) this.throwNotFound("baseline evaluation run not found");
     if (baseline.status !== "COMPLETED") {
-      throw new AppError(ErrorCodes.common.conflict, "baseline run must be completed", HttpStatus.CONFLICT);
+      throw new AppError(
+        ErrorCodes.common.conflict,
+        "baseline run must be completed",
+        HttpStatus.CONFLICT
+      );
     }
     if (baseline.datasetVersionId !== datasetVersionId) {
-      throw new AppError(ErrorCodes.common.badRequest, "baseline must use the same dataset version");
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "baseline must use the same dataset version"
+      );
     }
   }
 
@@ -773,8 +876,12 @@ export class EvaluationsService {
     const baselineRunId = this.requireId(query.baselineRunId, "baselineRunId");
     const candidateRunId = this.requireId(query.candidateRunId, "candidateRunId");
     const [baseline, candidate] = await Promise.all([
-      this.prisma.evaluationRun.findFirst({ where: { id: baselineRunId, workspaceId: requireWorkspaceId() } }),
-      this.prisma.evaluationRun.findFirst({ where: { id: candidateRunId, workspaceId: requireWorkspaceId() } })
+      this.prisma.evaluationRun.findFirst({
+        where: { id: baselineRunId, workspaceId: requireWorkspaceId() }
+      }),
+      this.prisma.evaluationRun.findFirst({
+        where: { id: candidateRunId, workspaceId: requireWorkspaceId() }
+      })
     ]);
     if (!baseline || !candidate) this.throwNotFound("evaluation run not found");
     return { baseline, candidate };
@@ -805,8 +912,10 @@ export class EvaluationsService {
       const candidateRuntime = candidate.runtimeMetrics as Record<string, unknown> | null;
       const qualityDelta = this.metricDelta(baselineRetrieval, candidateRetrieval, "recallAt5");
       const latencyDelta = this.metricDelta(baselineRuntime, candidateRuntime, "totalMs");
-      const qualityVerdict = qualityDelta === null || Math.abs(qualityDelta) < 1e-9 ? 0 : qualityDelta > 0 ? 1 : -1;
-      const latencyVerdict = latencyDelta === null || Math.abs(latencyDelta) < 1 ? 0 : latencyDelta < 0 ? 1 : -1;
+      const qualityVerdict =
+        qualityDelta === null || Math.abs(qualityDelta) < 1e-9 ? 0 : qualityDelta > 0 ? 1 : -1;
+      const latencyVerdict =
+        latencyDelta === null || Math.abs(latencyDelta) < 1 ? 0 : latencyDelta < 0 ? 1 : -1;
       if (qualityVerdict && latencyVerdict && qualityVerdict !== latencyVerdict) counts.mixed += 1;
       else if (qualityVerdict > 0 || (!qualityVerdict && latencyVerdict > 0)) counts.improved += 1;
       else if (qualityVerdict < 0 || (!qualityVerdict && latencyVerdict < 0)) counts.regressed += 1;
@@ -850,7 +959,11 @@ export class EvaluationsService {
     return {
       id: run.id,
       datasetVersionId: run.datasetVersionId,
-      dataset: { id: run.datasetVersion.dataset.id, name: run.datasetVersion.dataset.name, version: run.datasetVersion.version },
+      dataset: {
+        id: run.datasetVersion.dataset.id,
+        name: run.datasetVersion.dataset.name,
+        version: run.datasetVersion.version
+      },
       agentId: run.agentId,
       agentName: agent?.name ?? "—",
       baselineRunId: run.baselineRunId,
@@ -880,7 +993,10 @@ export class EvaluationsService {
   private normalizeTopK(value: unknown): number {
     if (value === undefined) return 5;
     if (!Number.isInteger(value) || Number(value) < 1 || Number(value) > 50) {
-      throw new AppError(ErrorCodes.common.badRequest, "retrieval topK must be an integer from 1 to 50");
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "retrieval topK must be an integer from 1 to 50"
+      );
     }
     return Number(value);
   }
@@ -888,7 +1004,10 @@ export class EvaluationsService {
   private normalizeScoreThreshold(value: unknown): number | undefined {
     if (value === undefined) return undefined;
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
-      throw new AppError(ErrorCodes.common.badRequest, "retrieval scoreThreshold must be between 0 and 1");
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "retrieval scoreThreshold must be between 0 and 1"
+      );
     }
     return value;
   }

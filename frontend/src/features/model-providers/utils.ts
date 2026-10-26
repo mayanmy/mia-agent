@@ -193,6 +193,9 @@ export const modelDefaults: ModelFormValues = {
   maxTokens: null,
   thinkingMode: "AUTO",
   thinkingSupported: false,
+  inputTokenPricePerMillion: null,
+  outputTokenPricePerMillion: null,
+  priceCurrency: "CNY",
   visionInput: false,
   visionMaxImages: 4,
   visionMaxImageMb: 5,
@@ -227,6 +230,9 @@ export function toModelConfigPayload(values: ModelFormValues): ModelConfigPayloa
     maxTokens: values.maxTokens ?? null,
     thinkingMode: values.thinkingMode,
     thinkingSupported: values.thinkingSupported,
+    inputTokenPricePerMillion: values.inputTokenPricePerMillion ?? null,
+    outputTokenPricePerMillion: values.outputTokenPricePerMillion ?? null,
+    priceCurrency: values.priceCurrency,
     enabled: values.enabled
   };
 }

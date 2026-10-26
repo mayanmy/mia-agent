@@ -71,8 +71,24 @@ export type EvaluationImportPreview = {
 
 export type EvaluationRunStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELED";
 export type EvaluationSummaryMetrics = {
-  retrieval?: { hitRateAt5: number | null; recallAt5: number | null; mrr: number | null; emptyRetrievalRate: number | null };
-  runtime?: { successRate: number | null; p95TotalMs: number | null };
+  retrieval?: {
+    hitRateAt5: number | null;
+    recallAt5: number | null;
+    mrr: number | null;
+    emptyRetrievalRate: number | null;
+  };
+  answer?: { correctness: number | null; faithfulness: number | null; relevance: number | null };
+  runtime?: {
+    successRate: number | null;
+    p95TotalMs: number | null;
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    evaluatedCostMicros?: number | null;
+    graderCostMicros?: number | null;
+    totalCostMicros?: number | null;
+    currency?: string | null;
+  };
   sampleCount?: number;
 };
 export type EvaluationRun = {
@@ -108,17 +124,66 @@ export type EvaluationCaseResult = {
   caseId: string;
   status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "SKIPPED";
   actualAnswer: string | null;
-  retrievedChunks: Array<{ documentId: string; documentName: string; chunkId: string; content: string; score: number }> | null;
-  retrievalMetrics: { hitRateAt5: number | null; recallAt5: number | null; mrr: number | null; emptyRetrieval: boolean } | null;
-  runtimeMetrics: { retrievalMs: number; totalMs: number; totalTokens: number | null } | null;
+  retrievedChunks: Array<{
+    documentId: string;
+    documentName: string;
+    chunkId: string;
+    content: string;
+    score: number;
+  }> | null;
+  retrievalMetrics: {
+    hitRateAt5: number | null;
+    recallAt5: number | null;
+    mrr: number | null;
+    emptyRetrieval: boolean;
+  } | null;
+  answerMetrics: { correctness: number; faithfulness: number; relevance: number } | null;
+  graderDetails: {
+    promptVersion: string;
+    metrics: Record<
+      "correctness" | "faithfulness" | "relevance",
+      {
+        score: number;
+        passed: boolean;
+        reason: string;
+        evidence: string[];
+        failureType: string | null;
+      }
+    > | null;
+    warning: string | null;
+  } | null;
+  runtimeMetrics: {
+    retrievalMs: number;
+    totalMs: number;
+    totalTokens: number | null;
+    agentUsage?: TokenUsage | null;
+    graderUsage?: TokenUsage | null;
+    estimatedCostMicros?: number | null;
+    currency?: string | null;
+  } | null;
   errorType: string | null;
   errorMessage: string | null;
   evaluationCase: EvaluationCase;
 };
+export type TokenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costMicros: number | null;
+  currency: string | null;
+};
 export type EvaluationComparison = {
   baseline: EvaluationRunDetail;
   candidate: EvaluationRunDetail;
-  compatibility: { compatible: boolean; reasons: Array<{ field: string; baselineValue: unknown; candidateValue: unknown; message: string }> };
+  compatibility: {
+    compatible: boolean;
+    reasons: Array<{
+      field: string;
+      baselineValue: unknown;
+      candidateValue: unknown;
+      message: string;
+    }>;
+  };
   metrics: Array<{
     key: string;
     label: string;
@@ -227,16 +292,26 @@ export function commitEvaluationImport(
   );
 }
 
-export function listEvaluationRuns(query: { page: number; pageSize: number; status?: EvaluationRunStatus }): Promise<PageResult<EvaluationRun>> {
+export function listEvaluationRuns(query: {
+  page: number;
+  pageSize: number;
+  status?: EvaluationRunStatus;
+}): Promise<PageResult<EvaluationRun>> {
   return request(`/api/v1/evaluations/runs?${queryString(query)}`);
 }
 
 export function createEvaluationRun(payload: {
   datasetVersionId: string;
   agentId: string;
+  graderModelConfigId?: string;
   overrides?: { retrieval?: { topK?: number; scoreThreshold?: number } };
 }) {
-  return request<{ id: string; status: EvaluationRunStatus; totalCases: number; createdAt: string }>("/api/v1/evaluations/runs", {
+  return request<{
+    id: string;
+    status: EvaluationRunStatus;
+    totalCases: number;
+    createdAt: string;
+  }>("/api/v1/evaluations/runs", {
     method: "POST",
     body: JSON.stringify(payload)
   });
@@ -251,7 +326,9 @@ export function getEvaluationRun(runId: string) {
 }
 
 export function listEvaluationRunResults(runId: string, page = 1, pageSize = 50) {
-  return request<PageResult<EvaluationCaseResult>>(`/api/v1/evaluations/runs/${runId}/results?page=${page}&pageSize=${pageSize}`);
+  return request<PageResult<EvaluationCaseResult>>(
+    `/api/v1/evaluations/runs/${runId}/results?page=${page}&pageSize=${pageSize}`
+  );
 }
 
 export function listCompatibleEvaluationBaselines(runId: string) {
@@ -259,5 +336,7 @@ export function listCompatibleEvaluationBaselines(runId: string) {
 }
 
 export function getEvaluationComparison(baselineRunId: string, candidateRunId: string) {
-  return request<EvaluationComparison>(`/api/v1/evaluations/comparisons?${queryString({ baselineRunId, candidateRunId })}`);
+  return request<EvaluationComparison>(
+    `/api/v1/evaluations/comparisons?${queryString({ baselineRunId, candidateRunId })}`
+  );
 }
