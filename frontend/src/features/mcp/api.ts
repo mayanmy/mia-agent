@@ -130,6 +130,11 @@ export type McpServerTool = {
   lastSeenAt: string;
 };
 
+/** MCP 工具管理页的局部更新；approvalMode=null 表示清除覆盖并继承 Server。 */
+export type McpServerToolChanges = Omit<Partial<McpServerTool>, "approvalMode"> & {
+  approvalMode?: McpApprovalMode | null;
+};
+
 /** MCP 工具目录同步结果。 */
 export type McpSyncResult = {
   syncRunId: string;

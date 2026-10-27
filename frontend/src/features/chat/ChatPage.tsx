@@ -123,7 +123,10 @@ export function ChatPage() {
         setMessages((current) => {
           // 已经向前翻页时保留更早前缀，只替换服务端权威的最新一页。
           const olderCount = Math.max(0, current.length - latestMessages.length);
-          return [...current.slice(0, olderCount), ...latestMessages];
+          const synchronizedMessages = latestMessages.map((latest) =>
+            preserveChatUiIdentity(current, latest)
+          );
+          return [...current.slice(0, olderCount), ...synchronizedMessages];
         });
         setHistoryCursor(page.nextBefore);
       }
@@ -1094,8 +1097,10 @@ function toChatUiMessage(message: PersistedChatMessage): ChatUiMessage {
     contentParts: message.contentParts,
     createdAt: new Date(message.createdAt).getTime(),
     generationStatus,
-    retrievalEvents: message.metadata?.retrievalEvents?.map((event) => ({
-      id: createMessageId(),
+    retrievalEvents: message.metadata?.retrievalEvents?.map((event, index) => ({
+      // 会话轮询会重复将同一条持久化消息转换为视图模型。
+      // 使用稳定 ID 避免 React 重新挂载检索卡片并丢失用户的展开状态。
+      id: `${message.id}:retrieval:${index}`,
       knowledgeBaseIds: event.knowledgeBaseIds,
       status: event.status,
       sources: event.sources,
@@ -1117,6 +1122,32 @@ function toChatUiMessage(message: PersistedChatMessage): ChatUiMessage {
       : undefined,
     feedback: message.feedback,
     persistedMessageId: message.role === "assistant" ? message.id : undefined
+  };
+}
+
+/**
+ * 会话同步时保留已渲染消息的 UI 身份。
+ *
+ * 本地 SSE 先使用临时消息 ID，服务端持久化后才返回真实 ID。如果直接
+ * 替换整条消息，React 会重新挂载内部检索卡片，使用户手动展开的内容自动收起。
+ */
+function preserveChatUiIdentity(
+  currentMessages: ChatUiMessage[],
+  latest: ChatUiMessage
+): ChatUiMessage {
+  const current = currentMessages.find(
+    (item) => item.id === latest.id || item.persistedMessageId === latest.id
+  );
+
+  if (!current) return latest;
+
+  return {
+    ...latest,
+    id: current.id,
+    retrievalEvents: latest.retrievalEvents?.map((event, index) => ({
+      ...event,
+      id: current.retrievalEvents?.[index]?.id ?? event.id
+    }))
   };
 }
 

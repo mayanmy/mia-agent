@@ -47,7 +47,8 @@ import type {
   McpPromptPreview,
   McpServerListItem,
   McpServerPayload,
-  McpServerTool
+  McpServerTool,
+  McpServerToolChanges
 } from "./api";
 import { McpServerFormModal } from "./components/McpServerFormModal";
 import { McpResourcesDrawer } from "./components/McpResourcesDrawer";
@@ -430,14 +431,16 @@ export function McpServersPage() {
     }
   }
 
-  async function updateTool(tool: McpServerTool, changes: Partial<McpServerTool>) {
+  async function updateTool(tool: McpServerTool, changes: McpServerToolChanges) {
     if (!toolServer) return;
     setUpdatingToolId(tool.id);
     try {
       const updated = await updateMcpServerTool(toolServer.id, tool.id, {
         enabled: changes.enabled ?? tool.enabled,
         riskLevel: changes.riskLevel ?? tool.riskLevel,
-        approvalMode: changes.approvalMode ?? tool.approvalMode ?? null,
+        // null 是“恢复继承”的有效值，不能用空值合并回退到旧策略。
+        approvalMode:
+          "approvalMode" in changes ? (changes.approvalMode ?? null) : (tool.approvalMode ?? null),
         sensitiveInputPaths: changes.sensitiveInputPaths ?? tool.sensitiveInputPaths,
         sensitiveOutputPaths: changes.sensitiveOutputPaths ?? tool.sensitiveOutputPaths
       });

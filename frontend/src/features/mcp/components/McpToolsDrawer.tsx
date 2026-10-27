@@ -1,7 +1,13 @@
 import { Alert, Drawer, Empty, Select, Space, Switch, Table, Tag, Typography } from "antd";
 import type { TableProps } from "antd";
 
-import type { McpRiskLevel, McpServerListItem, McpServerTool } from "../api";
+import type {
+  McpApprovalMode,
+  McpRiskLevel,
+  McpServerListItem,
+  McpServerTool,
+  McpServerToolChanges
+} from "../api";
 
 type McpToolsDrawerProps = {
   server: McpServerListItem | null;
@@ -9,7 +15,7 @@ type McpToolsDrawerProps = {
   loading: boolean;
   updatingToolId: string | null;
   onClose: () => void;
-  onUpdate: (tool: McpServerTool, changes: Partial<McpServerTool>) => void;
+  onUpdate: (tool: McpServerTool, changes: McpServerToolChanges) => void;
 };
 
 export function McpToolsDrawer({
@@ -55,6 +61,26 @@ export function McpToolsDrawer({
           size="small"
           value={riskLevel}
           onChange={(value) => onUpdate(tool, { riskLevel: value })}
+        />
+      )
+    },
+    {
+      title: "执行策略",
+      dataIndex: "approvalMode",
+      width: 150,
+      render: (approvalMode: McpApprovalMode | undefined, tool) => (
+        <Select<McpApprovalMode | "inherit">
+          aria-label={`${tool.remoteName} 执行策略`}
+          disabled={updatingToolId === tool.id}
+          options={[
+            { label: "继承 Server", value: "inherit" },
+            { label: "自动执行", value: "auto" },
+            { label: "人工确认", value: "confirm" },
+            { label: "禁止执行", value: "disabled" }
+          ]}
+          size="small"
+          value={approvalMode ?? "inherit"}
+          onChange={(value) => onUpdate(tool, { approvalMode: value === "inherit" ? null : value })}
         />
       )
     },
@@ -137,7 +163,7 @@ export function McpToolsDrawer({
         }}
         pagination={false}
         rowKey="id"
-        scroll={{ x: 1080 }}
+        scroll={{ x: 1230 }}
       />
     </Drawer>
   );

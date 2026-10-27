@@ -213,6 +213,7 @@ export function McpServerFormModal({
               className="mcpPolicySelect"
               options={[
                 { label: "自动执行", value: "auto" },
+                { label: "人工确认", value: "confirm" },
                 { label: "禁止执行", value: "disabled" }
               ]}
             />
