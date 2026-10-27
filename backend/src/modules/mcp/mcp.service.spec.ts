@@ -44,6 +44,37 @@ function makeServer() {
 
 export const tests = [
   {
+    name: "McpService explicitly includes tools that inherit an executable Server policy",
+    run: async () => {
+      let runtimeWhere: Record<string, unknown> | undefined;
+      const service = new McpService(
+        {
+          mcpServerTool: {
+            findMany: async ({ where }: { where: Record<string, unknown> }) => {
+              runtimeWhere = where;
+              return [];
+            }
+          }
+        } as never,
+        {} as never,
+        {} as never
+      );
+
+      await service.listRuntimeTools();
+
+      assert.deepEqual(runtimeWhere?.OR, [
+        { approvalMode: { in: [McpApprovalMode.AUTO, McpApprovalMode.CONFIRM] } },
+        {
+          approvalMode: null,
+          server: {
+            approvalMode: { in: [McpApprovalMode.AUTO, McpApprovalMode.CONFIRM] }
+          }
+        }
+      ]);
+      assert.equal("NOT" in (runtimeWhere ?? {}), false);
+    }
+  },
+  {
     name: "McpService lists Resource metadata without reading remote content",
     run: async () => {
       const server = makeServer();

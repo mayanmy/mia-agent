@@ -1066,12 +1066,16 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
         deletedAt: null,
         healthStatus: { in: [McpHealthStatus.HEALTHY, McpHealthStatus.DEGRADED] }
       },
-      NOT: {
-        OR: [
-          { approvalMode: McpApprovalMode.DISABLED },
-          { approvalMode: null, server: { approvalMode: McpApprovalMode.DISABLED } }
-        ]
-      }
+      // 显式列出可执行策略，避免 SQL 的 NULL 三值逻辑把“继承 Server”的工具误过滤掉。
+      OR: [
+        { approvalMode: { in: [McpApprovalMode.AUTO, McpApprovalMode.CONFIRM] } },
+        {
+          approvalMode: null,
+          server: {
+            approvalMode: { in: [McpApprovalMode.AUTO, McpApprovalMode.CONFIRM] }
+          }
+        }
+      ]
     };
   }
 
