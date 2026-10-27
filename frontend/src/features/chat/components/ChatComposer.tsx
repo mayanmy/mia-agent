@@ -63,44 +63,6 @@ export function ChatComposer({
 
   return (
     <div className="chatComposer">
-      <div className="chatComposerToolbar">
-        <Upload
-          accept="image/*"
-          beforeUpload={onImageBeforeUpload}
-          disabled={controlsDisabled}
-          maxCount={4}
-          showUploadList={false}
-        >
-          <Tooltip title="上传图片">
-            <Button
-              aria-label="上传图片"
-              className="chatComposerToolButton"
-              disabled={controlsDisabled}
-              icon={<PictureOutlined />}
-              shape="circle"
-              type="text"
-            />
-          </Tooltip>
-        </Upload>
-        <Upload
-          accept={supportedTextFileExtensions.join(",")}
-          beforeUpload={onFileBeforeUpload}
-          disabled={controlsDisabled}
-          maxCount={4}
-          showUploadList={false}
-        >
-          <Tooltip title="上传文本文件">
-            <Button
-              aria-label="上传文本文件"
-              className="chatComposerToolButton"
-              disabled={controlsDisabled}
-              icon={<FileTextOutlined />}
-              shape="circle"
-              type="text"
-            />
-          </Tooltip>
-        </Upload>
-      </div>
       <div className="chatComposerInput">
         <AttachmentPreviewList
           files={files}
@@ -125,22 +87,72 @@ export function ChatComposer({
           }}
         />
       </div>
-      <Button
-        aria-label="发送消息"
-        className="chatSendButton"
-        disabled={disabled || sendButtonDisabled}
-        icon={<SendOutlined />}
-        shape="circle"
-        type="primary"
-        onClick={() => {
-          onSend();
-        }}
-      />
-      {sending ? (
-        <Button danger onClick={onStop}>
-          停止全部
-        </Button>
-      ) : null}
+      <div className="chatComposerFooter">
+        <div className="chatComposerToolbar">
+          <Upload
+            accept="image/*"
+            beforeUpload={onImageBeforeUpload}
+            disabled={controlsDisabled}
+            maxCount={4}
+            showUploadList={false}
+          >
+            <Tooltip title="上传图片">
+              <Button
+                aria-label="上传图片"
+                className="chatComposerToolButton"
+                disabled={controlsDisabled}
+                icon={<PictureOutlined />}
+                shape="circle"
+                type="text"
+              />
+            </Tooltip>
+          </Upload>
+          <Upload
+            accept={supportedTextFileExtensions.join(",")}
+            beforeUpload={onFileBeforeUpload}
+            disabled={controlsDisabled}
+            maxCount={4}
+            showUploadList={false}
+          >
+            <Tooltip title="上传文本文件">
+              <Button
+                aria-label="上传文本文件"
+                className="chatComposerToolButton"
+                disabled={controlsDisabled}
+                icon={<FileTextOutlined />}
+                shape="circle"
+                type="text"
+              />
+            </Tooltip>
+          </Upload>
+        </div>
+        <div className="chatComposerActions">
+          {sending ? (
+            <Tooltip title="停止全部生成">
+              <Button
+                aria-label="停止全部生成"
+                className="chatStopButton"
+                icon={<span aria-hidden="true" className="chatStopGlyph" />}
+                shape="circle"
+                onClick={onStop}
+              />
+            </Tooltip>
+          ) : null}
+          <Tooltip title="发送消息">
+            <Button
+              aria-label="发送消息"
+              className="chatSendButton"
+              disabled={disabled || sendButtonDisabled}
+              icon={<SendOutlined />}
+              shape="circle"
+              type="primary"
+              onClick={() => {
+                onSend();
+              }}
+            />
+          </Tooltip>
+        </div>
+      </div>
     </div>
   );
 }
