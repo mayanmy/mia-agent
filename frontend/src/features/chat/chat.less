@@ -267,6 +267,14 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.chatTranscript {
+  min-height: 0;
+  min-width: 0;
   overflow: hidden;
   position: relative;
 }
@@ -275,13 +283,42 @@
   display: grid;
   align-content: start;
   gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  height: 100%;
+  max-width: 100%;
   min-height: 0;
-  overflow: auto;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
-  /* 为最后一条消息的时间和操作栏保留安全区，避免贴近输入框时被边界视觉裁切。 */
-  padding: 28px 32px 36px;
-  scroll-padding-bottom: 32px;
+  /* 为最后一条消息和“回到底部”按钮保留安全区，避免被悬浮操作遮挡。 */
+  padding: 28px 32px 64px;
+  scroll-padding-bottom: 64px;
   scroll-behavior: smooth;
+  scrollbar-color: rgb(100 116 139 / 38%) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.chatMessages::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.chatMessages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chatMessages::-webkit-scrollbar-thumb {
+  background: rgb(100 116 139 / 32%);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+
+.chatMessages::-webkit-scrollbar-thumb:hover {
+  background: rgb(71 85 105 / 52%);
+  background-clip: padding-box;
 }
 
 .chatWelcome {
@@ -365,17 +402,16 @@
   align-items: center;
   background: #fff;
   border: 1px solid #dfe3ea;
-  bottom: 126px;
+  bottom: 14px;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
   color: #111827;
   display: inline-flex;
-  height: 42px;
+  height: 36px;
   justify-content: center;
   left: 50%;
   position: absolute;
   transform: translateX(-50%);
-  width: 32px;
-  height: 32px;
+  width: 36px;
   z-index: 2;
 }
 
@@ -389,6 +425,8 @@
   display: grid;
   gap: 6px;
   max-width: 78%;
+  min-width: 0;
+  width: fit-content;
 }
 
 .chatMessage.user {
@@ -397,7 +435,8 @@
 
 .chatMessage.assistant {
   justify-self: start;
-  max-width: min(860px, 78%);
+  max-width: min(960px, 100%);
+  width: min(960px, 100%);
 }
 
 .chatMessageRole {
@@ -416,6 +455,9 @@
   background: #ffffff;
   color: #111827;
   line-height: 1.7;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   padding: 12px 14px;
   overflow-wrap: anywhere;
 }
@@ -423,9 +465,12 @@
 .chatContentParts {
   display: grid;
   gap: 12px;
+  max-width: 100%;
   min-width: 0;
 }
 .chatJsonPart {
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   border: 1px solid var(--mia-border-color, #e5e7eb);
   border-radius: 10px;
@@ -441,6 +486,39 @@
   margin: 0;
   padding: 12px;
   font-size: 13px;
+}
+
+.chatJsonPart pre,
+.chatMarkdown pre,
+.chatMarkdown table,
+.chatToolEventJson {
+  scrollbar-color: rgb(100 116 139 / 38%) transparent;
+  scrollbar-width: thin;
+}
+
+.chatJsonPart pre::-webkit-scrollbar,
+.chatMarkdown pre::-webkit-scrollbar,
+.chatMarkdown table::-webkit-scrollbar,
+.chatToolEventJson::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.chatJsonPart pre::-webkit-scrollbar-track,
+.chatMarkdown pre::-webkit-scrollbar-track,
+.chatMarkdown table::-webkit-scrollbar-track,
+.chatToolEventJson::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chatJsonPart pre::-webkit-scrollbar-thumb,
+.chatMarkdown pre::-webkit-scrollbar-thumb,
+.chatMarkdown table::-webkit-scrollbar-thumb,
+.chatToolEventJson::-webkit-scrollbar-thumb {
+  background: rgb(100 116 139 / 34%);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
 }
 .chatOutputImage {
   display: block;
@@ -463,6 +541,8 @@
 
 /* Markdown 本身控制段落和换行，不能再对气泡整体使用 white-space: pre-wrap。 */
 .chatMarkdown {
+  max-width: 100%;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 
@@ -531,6 +611,7 @@
   border-radius: 6px;
   color: #e2e8f0;
   margin: 10px 0;
+  max-width: 100%;
   overflow-x: auto;
   padding: 12px;
 }
@@ -554,6 +635,7 @@
   margin: 10px 0;
   max-width: 100%;
   overflow-x: auto;
+  width: 100%;
 }
 
 .chatMarkdown th,
@@ -579,6 +661,7 @@
   display: grid;
   gap: 8px;
   margin-bottom: 10px;
+  min-width: 0;
   white-space: normal;
 }
 
@@ -860,8 +943,10 @@
   color: #334155;
   display: grid;
   gap: 4px;
-  max-width: 520px;
+  max-width: min(520px, 100%);
+  min-width: 0;
   padding: 8px 10px;
+  width: 100%;
 }
 
 .chatToolEvent.success {
@@ -907,12 +992,15 @@
   display: flex;
   gap: 10px;
   justify-content: space-between;
+  min-width: 0;
 }
 
 .chatToolEventName {
   color: #111827;
   font-size: 13px;
   font-weight: 700;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .chatToolEventStatus,
@@ -922,7 +1010,12 @@
   line-height: 1.45;
 }
 
+.chatToolEventStatus {
+  flex: none;
+}
+
 .chatToolEventDetail {
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 
@@ -964,6 +1057,7 @@
 .chatToolFailure {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .chatToolFailureReason {
@@ -981,6 +1075,7 @@
   border: 1px solid rgba(248, 113, 113, 0.22);
   border-radius: 6px;
   display: grid;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -1003,6 +1098,7 @@
 .chatToolFailureValue {
   color: #475569;
   font-size: 12px;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 

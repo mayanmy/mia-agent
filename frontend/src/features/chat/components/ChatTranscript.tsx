@@ -54,7 +54,7 @@ export function ChatTranscript({
   onUsePrompt
 }: ChatTranscriptProps) {
   return (
-    <>
+    <div className="chatTranscript">
       <div
         className="chatMessages"
         ref={messagesRef}
@@ -114,6 +114,6 @@ export function ChatTranscript({
           onClick={onScrollBottom}
         />
       ) : null}
-    </>
+    </div>
   );
 }
