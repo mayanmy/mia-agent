@@ -57,6 +57,52 @@ export const tests = [
     }
   },
   {
+    name: "McpToolExecutor supports MCP input schemas using JSON Schema 2020-12",
+    run: async () => {
+      let callCount = 0;
+      const executor = new McpToolExecutor({
+        create: () => ({
+          connect: async () => undefined,
+          callTool: async () => {
+            callCount += 1;
+            return { content: [{ type: "text", text: "ok" }], isError: false };
+          },
+          close: async () => undefined
+        })
+      } as never);
+      const config = makeConfig({
+        schemaHash: "schema-2020-12",
+        inputSchema: {
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          properties: {
+            query: { type: "string" },
+            libraryName: { type: "string" }
+          },
+          required: ["query", "libraryName"],
+          additionalProperties: false
+        }
+      });
+
+      assert.equal(
+        await executor.execute(config, {
+          query: "React useEffect cleanup function execution timing",
+          libraryName: "React"
+        }),
+        "ok"
+      );
+      assert.equal(callCount, 1);
+      await assert.rejects(
+        executor.execute(config, { query: "missing library name" }),
+        (error: unknown) =>
+          error instanceof Error &&
+          "errorType" in error &&
+          error.errorType === "mcp_invalid_arguments"
+      );
+      assert.equal(callCount, 1);
+    }
+  },
+  {
     name: "McpToolExecutor enforces server concurrency and adapts structured output",
     run: async () => {
       let active = 0;

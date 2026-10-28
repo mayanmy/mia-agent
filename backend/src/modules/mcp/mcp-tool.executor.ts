@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 
 import { Injectable } from "@nestjs/common";
 import Ajv, { ValidateFunction } from "ajv";
+import Ajv2020 from "ajv/dist/2020";
 
 import { ToolJsonValue } from "../tools/dto/tool.dto";
 import { McpProtocolClientFactory } from "./clients/mcp-protocol-client.factory";
@@ -34,6 +35,8 @@ export class McpToolExecutionError extends Error {
 @Injectable()
 export class McpToolExecutor {
   private readonly ajv = new Ajv({ allErrors: true, strict: false });
+  // MCP Server 可以显式声明 JSON Schema 2020-12；AJV 不允许在默认 Draft-07 实例中混用该方言。
+  private readonly ajv2020 = new Ajv2020({ allErrors: true, strict: false });
   private readonly validators = new Map<string, ValidateFunction>();
   private readonly semaphores = new Map<string, ServerSemaphore>();
 
@@ -136,7 +139,7 @@ export class McpToolExecutor {
   ): void {
     let validator = this.validators.get(config.schemaHash);
     try {
-      validator ??= this.ajv.compile(config.inputSchema);
+      validator ??= this.schemaValidator(config.inputSchema);
       this.validators.set(config.schemaHash, validator);
     } catch (error) {
       throw new McpToolExecutionError(
@@ -149,6 +152,18 @@ export class McpToolExecutor {
       const details = this.ajv.errorsText(validator.errors, { separator: "; " });
       throw new McpToolExecutionError("mcp_invalid_arguments", `MCP 工具参数不合法：${details}`);
     }
+  }
+
+  /** 按 Server 声明的 Schema 方言选择编译器；未声明时兼容现有 Draft-07 工具。 */
+  private schemaValidator(schema: McpRuntimeToolConfig["inputSchema"]): ValidateFunction {
+    const dialect = schema.$schema;
+    if (
+      typeof dialect === "string" &&
+      /^https?:\/\/json-schema\.org\/draft\/2020-12\/schema#?$/.test(dialect)
+    ) {
+      return this.ajv2020.compile(schema);
+    }
+    return this.ajv.compile(schema);
   }
 
   /** 协议结果先执行硬字节限制，再转成适合模型上下文和日志的纯 JSON。 */
