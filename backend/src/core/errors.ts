@@ -89,7 +89,14 @@ export const ErrorCodes = {
     nodeTimeout: 7009,
     executionLimitExceeded: 7010,
     contextTooLarge: 7011,
-    outputInvalid: 7012
+    outputInvalid: 7012,
+    scheduleInvalidCron: 7013,
+    scheduleInvalidTimezone: 7014,
+    scheduleInvalidPolicy: 7015,
+    scheduleInputTooLarge: 7016,
+    scheduleCatchUpLimitInvalid: 7017,
+    scheduleTimeoutInvalid: 7018,
+    schedulePreviewCountInvalid: 7019
   },
   mcp: {
     notFound: 9001,

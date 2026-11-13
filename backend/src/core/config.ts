@@ -38,6 +38,17 @@ export type AppConfig = {
     acquireTimeoutMs: number;
     leaseMs: number;
   };
+  workflowScheduler: {
+    enabled: boolean;
+    pollMs: number;
+    batchSize: number;
+    dispatchPollMs: number;
+    workerConcurrency: number;
+    heartbeatMs: number;
+    staleMs: number;
+    shutdownGraceMs: number;
+    maxCatchUpRuns: number;
+  };
 };
 
 let envLoaded = false;
@@ -144,6 +155,21 @@ function readPositiveIntegerEnv(key: string, defaultValue: number): number {
   return value;
 }
 
+function readIntegerEnvInRange(
+  key: string,
+  defaultValue: number,
+  minimum: number,
+  maximum: number
+): number {
+  const value = Number(process.env[key] ?? defaultValue);
+
+  if (!Number.isInteger(value) || value < minimum || value > maximum) {
+    throw new Error(`${key} must be an integer between ${minimum} and ${maximum}`);
+  }
+
+  return value;
+}
+
 /**
  * 读取 JWT 签名密钥。
  *
@@ -221,7 +247,8 @@ export function getConfig(): AppConfig {
     rateLimitHashSecret: process.env.MIA_RATE_LIMIT_HASH_SECRET?.trim() || readAuthJwtSecret(),
     redis: {
       url: process.env.MIA_REDIS_URL?.trim() || undefined,
-      prefix: process.env.MIA_REDIS_PREFIX?.trim() || `mia:${process.env.MIA_ENVIRONMENT ?? "local"}`,
+      prefix:
+        process.env.MIA_REDIS_PREFIX?.trim() || `mia:${process.env.MIA_ENVIRONMENT ?? "local"}`,
       required: readBooleanEnv("MIA_REDIS_REQUIRED"),
       connectTimeoutMs: readPositiveIntegerEnv("MIA_REDIS_CONNECT_TIMEOUT_MS", 5_000),
       commandTimeoutMs: readPositiveIntegerEnv("MIA_REDIS_COMMAND_TIMEOUT_MS", 2_000)
@@ -235,6 +262,18 @@ export function getConfig(): AppConfig {
       embeddingConcurrency: readPositiveIntegerEnv("MIA_EMBEDDING_CONCURRENCY", 3),
       acquireTimeoutMs: readPositiveIntegerEnv("MIA_LLM_ACQUIRE_TIMEOUT_MS", 10_000),
       leaseMs: readPositiveIntegerEnv("MIA_LLM_LEASE_MS", 30_000)
+    },
+    workflowScheduler: {
+      // P0 只建立配置契约，默认关闭，后续 Scheduler/Dispatcher/Worker 分阶段接入。
+      enabled: readBooleanEnv("MIA_WORKFLOW_SCHEDULER_ENABLED"),
+      pollMs: readPositiveIntegerEnv("MIA_WORKFLOW_SCHEDULER_POLL_MS", 15_000),
+      batchSize: readPositiveIntegerEnv("MIA_WORKFLOW_SCHEDULER_BATCH_SIZE", 100),
+      dispatchPollMs: readPositiveIntegerEnv("MIA_WORKFLOW_DISPATCH_POLL_MS", 5_000),
+      workerConcurrency: readPositiveIntegerEnv("MIA_WORKFLOW_WORKER_CONCURRENCY", 5),
+      heartbeatMs: readPositiveIntegerEnv("MIA_WORKFLOW_WORKER_HEARTBEAT_MS", 15_000),
+      staleMs: readPositiveIntegerEnv("MIA_WORKFLOW_WORKER_STALE_MS", 60_000),
+      shutdownGraceMs: readPositiveIntegerEnv("MIA_WORKFLOW_SHUTDOWN_GRACE_MS", 30_000),
+      maxCatchUpRuns: readIntegerEnvInRange("MIA_WORKFLOW_MAX_CATCH_UP_RUNS", 10, 1, 10)
     }
   };
 }
