@@ -35,6 +35,7 @@ import { tests as configuredHttpToolTests } from "../modules/tools/configured-ht
 import { tests as workflowTests } from "../modules/workflows/workflows.service.spec";
 import { tests as workflowCompilerTests } from "../modules/workflows/workflow-compiler.spec";
 import { tests as workflowExpressionTests } from "../modules/workflows/expression-parser.spec";
+import { tests as workflowSchedulePlannerTests } from "../modules/workflows/workflow-schedule-planner.spec";
 import { tests as workflowRuntimeTests } from "../modules/workflow_runtime/workflow-runtime.service.spec";
 import { tests as workflowCapabilityTests } from "../modules/workflow_runtime/capability-executors.spec";
 import { tests as workflowAppRunTests } from "../modules/workflow_runtime/workflow-app-runs.service.spec";
@@ -73,6 +74,7 @@ const tests: TestCase[] = [
   ...agentTests,
   ...agentVersionSnapshotTests,
   ...workflowExpressionTests,
+  ...workflowSchedulePlannerTests,
   ...workflowCompilerTests,
   ...workflowTests,
   ...workflowRuntimeTests,
