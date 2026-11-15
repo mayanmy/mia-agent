@@ -3,6 +3,8 @@ import { WorkflowRunMode } from "@prisma/client";
 
 import { runInWorkspaceContext } from "../../core/auth/workspace-context";
 import { AppError, ErrorCodes } from "../../core/errors";
+import { getConfig } from "../../core/config";
+import { WorkflowScheduleCancellationService } from "../workflows/workflow-schedule-cancellation.service";
 import { WorkflowSchedulesService } from "../workflows/workflow-schedules.service";
 import { WorkflowRuntimeEvent } from "./dto/workflow-run.dto";
 import { WorkflowRunTrace, WorkflowRunTraceService } from "./workflow-run-trace.service";
@@ -19,11 +21,13 @@ export type WorkflowScheduledRunResult = {
 @Injectable()
 export class WorkflowScheduledRunsService {
   private readonly logger = new Logger(WorkflowScheduledRunsService.name);
+  private readonly heartbeatMs = getConfig().workflowScheduler.heartbeatMs;
 
   constructor(
     private readonly schedules: WorkflowSchedulesService,
     private readonly runtime: WorkflowRuntimeService,
-    private readonly traces: WorkflowRunTraceService
+    private readonly traces: WorkflowRunTraceService,
+    private readonly cancellations: WorkflowScheduleCancellationService
   ) {}
 
   async execute(
@@ -40,9 +44,22 @@ export class WorkflowScheduledRunsService {
       let terminalError: { type: string; message: string } | undefined;
       const controller = new AbortController();
       let timedOut = false;
+      let maintaining = false;
       const onShutdown = () => controller.abort();
+      const unwatchCancel = this.cancellations.watch(run.scheduleRunId, () => controller.abort());
       shutdownSignal?.addEventListener("abort", onShutdown, { once: true });
       if (shutdownSignal?.aborted) controller.abort();
+      if (await this.schedules.isScheduleRunCancellationRequested(run.scheduleRunId)) {
+        controller.abort();
+      }
+      const heartbeat = setInterval(() => {
+        if (maintaining) return;
+        maintaining = true;
+        void this.maintainExecution(run.scheduleRunId, workerId, controller).finally(() => {
+          maintaining = false;
+        });
+      }, this.heartbeatMs);
+      heartbeat.unref();
       const timer = setTimeout(() => {
         timedOut = true;
         controller.abort();
@@ -72,6 +89,14 @@ export class WorkflowScheduledRunsService {
           signal: controller.signal,
           timeoutMs: run.timeoutSeconds * 1_000
         })) {
+          if (
+            event.type !== "workflow_completed" &&
+            event.type !== "workflow_failed" &&
+            event.type !== "workflow_canceled" &&
+            (await this.schedules.isScheduleRunCancellationRequested(run.scheduleRunId))
+          ) {
+            controller.abort();
+          }
           if (event.type === "workflow_canceled" && timedOut) {
             await this.traces.timeout(trace);
           } else {
@@ -96,6 +121,8 @@ export class WorkflowScheduledRunsService {
         status = timedOut ? "TIMED_OUT" : shutdownSignal?.aborted ? "CANCELED" : "FAILED";
       } finally {
         clearTimeout(timer);
+        clearInterval(heartbeat);
+        unwatchCancel();
         shutdownSignal?.removeEventListener("abort", onShutdown);
         await this.schedules
           .finishScheduleRun(run.scheduleRunId, status ?? "FAILED", terminalError)
@@ -138,6 +165,23 @@ export class WorkflowScheduledRunsService {
       };
     }
     return undefined;
+  }
+
+  private async maintainExecution(
+    scheduleRunId: string,
+    workerId: string,
+    controller: AbortController
+  ): Promise<void> {
+    try {
+      const active = await this.schedules.heartbeatScheduleRun(scheduleRunId, workerId);
+      if (!active || (await this.schedules.isScheduleRunCancellationRequested(scheduleRunId))) {
+        controller.abort();
+      }
+    } catch (error) {
+      this.logger.warn(
+        `定时 Workflow 心跳失败: scheduleRun=${scheduleRunId} error=${this.errorMessage(error)}`
+      );
+    }
   }
 
   private toOrchestrationError(error: unknown): { type: string; message: string } {

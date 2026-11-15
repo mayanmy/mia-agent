@@ -829,6 +829,7 @@ model WorkflowScheduleRun {
   attempt           Int                        @default(0)
   workerId          String?                    @map("worker_id")
   heartbeatAt       DateTime?                  @map("heartbeat_at") @db.Timestamptz(6)
+  cancelRequestedAt DateTime?                  @map("cancel_requested_at") @db.Timestamptz(6)
   startedAt         DateTime?                  @map("started_at") @db.Timestamptz(6)
   finishedAt        DateTime?                  @map("finished_at") @db.Timestamptz(6)
   errorType         String?                    @map("error_type")

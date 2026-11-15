@@ -52,6 +52,14 @@ function traceDouble() {
   };
 }
 
+const cancellations = {
+  watch: () => () => undefined
+};
+const scheduleControl = {
+  isScheduleRunCancellationRequested: async () => false,
+  heartbeatScheduleRun: async () => true
+};
+
 export const tests = [
   {
     name: "WorkflowScheduledRunsService executes the pinned version and converges success",
@@ -60,6 +68,7 @@ export const tests = [
       let runtimeRequest: Record<string, unknown> | undefined;
       let finished: Record<string, unknown> | undefined;
       const schedules = {
+        ...scheduleControl,
         claimScheduleRunExecution: async () => scheduleRun,
         linkScheduleRunAgentRun: async () => trace.calls.push("link"),
         assertScheduleRunExecutable: async () => trace.calls.push("validate"),
@@ -77,7 +86,8 @@ export const tests = [
       const service = new WorkflowScheduledRunsService(
         schedules as never,
         runtime as never,
-        trace.service as never
+        trace.service as never,
+        cancellations as never
       );
 
       const result = await service.execute("schedule-run-1", "worker-1");
@@ -102,7 +112,8 @@ export const tests = [
             throw new Error("duplicate job must not execute");
           }
         } as never,
-        {} as never
+        {} as never,
+        cancellations as never
       );
 
       assert.deepEqual(await service.execute("schedule-run-1", "worker-2"), {
@@ -119,6 +130,7 @@ export const tests = [
       let terminalError: { type: string; message: string } | undefined;
       const service = new WorkflowScheduledRunsService(
         {
+          ...scheduleControl,
           claimScheduleRunExecution: async () => scheduleRun,
           linkScheduleRunAgentRun: async () => undefined,
           assertScheduleRunExecutable: async () => {
@@ -132,7 +144,8 @@ export const tests = [
           }
         } as never,
         {} as never,
-        trace.service as never
+        trace.service as never,
+        cancellations as never
       );
 
       const result = await service.execute("schedule-run-1", "worker-1");
@@ -158,6 +171,7 @@ export const tests = [
       };
       const service = new WorkflowScheduledRunsService(
         {
+          ...scheduleControl,
           claimScheduleRunExecution: async () => ({ ...scheduleRun, timeoutSeconds: 0.001 }),
           linkScheduleRunAgentRun: async () => undefined,
           assertScheduleRunExecutable: async () => undefined,
@@ -166,7 +180,8 @@ export const tests = [
           }
         } as never,
         runtime as never,
-        trace.service as never
+        trace.service as never,
+        cancellations as never
       );
 
       const result = await service.execute("schedule-run-1", "worker-1");
@@ -199,13 +214,15 @@ export const tests = [
       };
       const service = new WorkflowScheduledRunsService(
         {
+          ...scheduleControl,
           claimScheduleRunExecution: async () => scheduleRun,
           linkScheduleRunAgentRun: async () => undefined,
           assertScheduleRunExecutable: async () => undefined,
           finishScheduleRun: async () => undefined
         } as never,
         runtime as never,
-        trace.service as never
+        trace.service as never,
+        cancellations as never
       );
 
       const execution = service.execute("schedule-run-1", "worker-1", shutdown.signal);
@@ -225,6 +242,7 @@ export const tests = [
       let runtimeSignalAborted = false;
       const service = new WorkflowScheduledRunsService(
         {
+          ...scheduleControl,
           claimScheduleRunExecution: async () => scheduleRun,
           linkScheduleRunAgentRun: async () => undefined,
           assertScheduleRunExecutable: async () => undefined,
@@ -236,13 +254,85 @@ export const tests = [
             yield { type: "workflow_canceled", data: {} };
           }
         } as never,
-        trace.service as never
+        trace.service as never,
+        cancellations as never
       );
 
       const result = await service.execute("schedule-run-1", "worker-1", shutdown.signal);
 
       assert.equal(runtimeSignalAborted, true);
       assert.equal(result.status, "CANCELED");
+    }
+  },
+  {
+    name: "WorkflowScheduledRunsService observes database cancellation without Pub/Sub",
+    run: async () => {
+      const trace = traceDouble();
+      let runtimeSignalAborted = false;
+      const service = new WorkflowScheduledRunsService(
+        {
+          ...scheduleControl,
+          claimScheduleRunExecution: async () => scheduleRun,
+          isScheduleRunCancellationRequested: async () => true,
+          linkScheduleRunAgentRun: async () => undefined,
+          assertScheduleRunExecutable: async () => undefined,
+          finishScheduleRun: async () => undefined
+        } as never,
+        {
+          async *runWorkflow(request: { signal: AbortSignal }) {
+            runtimeSignalAborted = request.signal.aborted;
+            yield { type: "workflow_canceled", data: {} };
+          }
+        } as never,
+        trace.service as never,
+        cancellations as never
+      );
+
+      const result = await service.execute("schedule-run-1", "worker-1");
+
+      assert.equal(runtimeSignalAborted, true);
+      assert.equal(result.status, "CANCELED");
+    }
+  },
+  {
+    name: "WorkflowScheduledRunsService heartbeat polls cancellation after Pub/Sub loss",
+    run: async () => {
+      const trace = traceDouble();
+      let cancellationReads = 0;
+      let heartbeatWrites = 0;
+      const service = new WorkflowScheduledRunsService(
+        {
+          ...scheduleControl,
+          claimScheduleRunExecution: async () => scheduleRun,
+          isScheduleRunCancellationRequested: async () => {
+            cancellationReads += 1;
+            return cancellationReads > 1;
+          },
+          heartbeatScheduleRun: async () => {
+            heartbeatWrites += 1;
+            return true;
+          },
+          linkScheduleRunAgentRun: async () => undefined,
+          assertScheduleRunExecutable: async () => undefined,
+          finishScheduleRun: async () => undefined
+        } as never,
+        {
+          async *runWorkflow(request: { signal: AbortSignal }) {
+            await new Promise<void>((resolve) =>
+              request.signal.addEventListener("abort", () => resolve(), { once: true })
+            );
+            yield { type: "workflow_canceled", data: {} };
+          }
+        } as never,
+        trace.service as never,
+        cancellations as never
+      );
+      (service as unknown as { heartbeatMs: number }).heartbeatMs = 1;
+
+      const result = await service.execute("schedule-run-1", "worker-1");
+
+      assert.equal(result.status, "CANCELED");
+      assert.ok(heartbeatWrites >= 1);
     }
   }
 ];

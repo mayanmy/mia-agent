@@ -7,6 +7,7 @@ import { WorkflowCompiler } from "./workflow-compiler";
 import { WorkflowSchedulePlanner } from "./workflow-schedule-planner";
 import { WorkflowSchedulesController } from "./workflow-schedules.controller";
 import { WorkflowSchedulesService } from "./workflow-schedules.service";
+import { WorkflowScheduleCancellationService } from "./workflow-schedule-cancellation.service";
 import { WorkflowsController } from "./workflows.controller";
 import { WorkflowsService } from "./workflows.service";
 
@@ -17,8 +18,9 @@ import { WorkflowsService } from "./workflows.service";
     WorkflowsService,
     WorkflowCompiler,
     WorkflowSchedulePlanner,
-    WorkflowSchedulesService
+    WorkflowSchedulesService,
+    WorkflowScheduleCancellationService
   ],
-  exports: [WorkflowsService, WorkflowSchedulesService]
+  exports: [WorkflowsService, WorkflowSchedulesService, WorkflowScheduleCancellationService]
 })
 export class WorkflowsModule {}

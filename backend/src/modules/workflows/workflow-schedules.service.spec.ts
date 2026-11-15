@@ -75,6 +75,13 @@ export const tests = [
         ),
         undefined
       );
+      assert.deepEqual(
+        Reflect.getMetadata(
+          "mia:workspace-roles",
+          WorkflowSchedulesController.prototype.cancelScheduleRun
+        ),
+        ["OWNER", "MANAGER"]
+      );
     }
   },
   {
@@ -377,27 +384,37 @@ export const tests = [
   {
     name: "WorkflowSchedulesService grants only one worker the QUEUED ScheduleRun",
     run: async () => {
-      let claimed = false;
+      let status = "QUEUED";
       const updates: Array<Record<string, unknown>> = [];
+      const current = () => ({
+        id: "schedule-run-1",
+        workspaceId,
+        scheduleId: "schedule-1",
+        workflowId: "workflow-1",
+        workflowVersionId: "version-1",
+        requestId: "request-1",
+        inputSnapshot: { city: "深圳" },
+        agentRunId: null,
+        cancelRequestedAt: null,
+        status,
+        schedule: {
+          timeoutSeconds: 1800,
+          concurrencyPolicy: "QUEUE",
+          status: "ACTIVE"
+        }
+      });
       const transaction = {
+        $queryRaw: async () => [{ pg_advisory_xact_lock: null }],
         workflowScheduleRun: {
           updateMany: async (query: Record<string, unknown>) => {
             updates.push(query);
-            if (claimed) return { count: 0 };
-            claimed = true;
+            if (status !== "QUEUED") return { count: 0 };
+            status = "RUNNING";
             return { count: 1 };
           },
-          findUniqueOrThrow: async () => ({
-            id: "schedule-run-1",
-            workspaceId,
-            scheduleId: "schedule-1",
-            workflowId: "workflow-1",
-            workflowVersionId: "version-1",
-            requestId: "request-1",
-            inputSnapshot: { city: "深圳" },
-            agentRunId: null,
-            schedule: { timeoutSeconds: 1800 }
-          })
+          findUnique: async ({ include }: { include?: unknown }) =>
+            include ? current() : { scheduleId: "schedule-1" },
+          count: async () => (status === "RUNNING" ? 1 : 0)
         },
         workflowSchedule: { update: async () => undefined }
       };
@@ -418,6 +435,264 @@ export const tests = [
       assert.equal(duplicate, null);
       assert.deepEqual((updates[0].where as Record<string, unknown>).status, "QUEUED");
       assert.deepEqual((updates[0].data as Record<string, unknown>).attempt, { increment: 1 });
+    }
+  },
+  {
+    name: "WorkflowSchedulesService defers QUEUE overlap without incrementing business attempt",
+    run: async () => {
+      let runClaimed = false;
+      let deferredData: Record<string, unknown> | undefined;
+      const transaction = {
+        $queryRaw: async () => [{ pg_advisory_xact_lock: null }],
+        workflowScheduleRun: {
+          findUnique: async ({ include }: { include?: unknown }) =>
+            include
+              ? {
+                  id: "run-queued",
+                  workspaceId,
+                  scheduleId: "schedule-1",
+                  workflowId: "workflow-1",
+                  workflowVersionId: "version-1",
+                  requestId: "request-1",
+                  inputSnapshot: {},
+                  agentRunId: null,
+                  cancelRequestedAt: null,
+                  status: "QUEUED",
+                  schedule: {
+                    timeoutSeconds: 1800,
+                    concurrencyPolicy: "QUEUE",
+                    status: "ACTIVE"
+                  }
+                }
+              : { scheduleId: "schedule-1" },
+          count: async () => 1,
+          updateMany: async () => {
+            runClaimed = true;
+            return { count: 1 };
+          }
+        },
+        workflowScheduleJob: {
+          updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+            deferredData = data;
+            return { count: 1 };
+          }
+        }
+      };
+      const service = new WorkflowSchedulesService(
+        {
+          $transaction: async <T>(callback: (client: typeof transaction) => Promise<T>) =>
+            callback(transaction)
+        } as never,
+        new WorkflowSchedulePlanner(),
+        tools as never
+      );
+
+      assert.equal(await service.claimScheduleRunExecution("run-queued", "worker-1"), null);
+      assert.equal(runClaimed, false);
+      assert.equal(deferredData?.dispatchStatus, "PENDING");
+      assert.equal(deferredData?.lastErrorCode, "schedule_concurrency_deferred");
+      assert.equal("attempt" in (deferredData ?? {}), false);
+    }
+  },
+  {
+    name: "WorkflowSchedulesService marks SKIP overlap as an auditable terminal Run",
+    run: async () => {
+      let runData: Record<string, unknown> | undefined;
+      let jobStatus: unknown;
+      const transaction = {
+        $queryRaw: async () => [{ pg_advisory_xact_lock: null }],
+        workflowScheduleRun: {
+          findUnique: async ({ include }: { include?: unknown }) =>
+            include
+              ? {
+                  id: "run-skipped",
+                  workspaceId,
+                  scheduleId: "schedule-1",
+                  workflowId: "workflow-1",
+                  workflowVersionId: "version-1",
+                  requestId: "request-1",
+                  inputSnapshot: {},
+                  agentRunId: null,
+                  cancelRequestedAt: null,
+                  status: "QUEUED",
+                  schedule: {
+                    timeoutSeconds: 1800,
+                    concurrencyPolicy: "SKIP",
+                    status: "ACTIVE"
+                  }
+                }
+              : { scheduleId: "schedule-1" },
+          count: async () => 1,
+          update: async ({ data }: { data: Record<string, unknown> }) => {
+            runData = data;
+          }
+        },
+        workflowScheduleJob: {
+          updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+            jobStatus = data.dispatchStatus;
+          }
+        },
+        workflowSchedule: { update: async () => undefined }
+      };
+      const service = new WorkflowSchedulesService(
+        {
+          $transaction: async <T>(callback: (client: typeof transaction) => Promise<T>) =>
+            callback(transaction)
+        } as never,
+        new WorkflowSchedulePlanner(),
+        tools as never
+      );
+
+      assert.equal(await service.claimScheduleRunExecution("run-skipped", "worker-1"), null);
+      assert.equal(runData?.status, "SKIPPED");
+      assert.equal(runData?.errorType, "schedule_overlap_skipped");
+      assert.equal(jobStatus, "COMPLETED");
+    }
+  },
+  {
+    name: "WorkflowSchedulesService allows up to three ALLOW runs and defers the fourth",
+    run: async () => {
+      const execute = async (runningCount: number) => {
+        let claimed = false;
+        let deferred = false;
+        const transaction = {
+          $queryRaw: async () => [{ pg_advisory_xact_lock: null }],
+          workflowScheduleRun: {
+            findUnique: async ({ include }: { include?: unknown }) =>
+              include
+                ? {
+                    id: "run-allow",
+                    workspaceId,
+                    scheduleId: "schedule-1",
+                    workflowId: "workflow-1",
+                    workflowVersionId: "version-1",
+                    requestId: "request-1",
+                    inputSnapshot: {},
+                    agentRunId: null,
+                    cancelRequestedAt: null,
+                    status: "QUEUED",
+                    schedule: {
+                      timeoutSeconds: 1800,
+                      concurrencyPolicy: "ALLOW",
+                      status: "ACTIVE"
+                    }
+                  }
+                : { scheduleId: "schedule-1" },
+            count: async () => runningCount,
+            updateMany: async () => {
+              claimed = true;
+              return { count: 1 };
+            }
+          },
+          workflowScheduleJob: {
+            updateMany: async () => {
+              deferred = true;
+            }
+          },
+          workflowSchedule: { update: async () => undefined }
+        };
+        const service = new WorkflowSchedulesService(
+          {
+            $transaction: async <T>(callback: (client: typeof transaction) => Promise<T>) =>
+              callback(transaction)
+          } as never,
+          new WorkflowSchedulePlanner(),
+          tools as never
+        );
+        const result = await service.claimScheduleRunExecution("run-allow", "worker-1");
+        return { result, claimed, deferred };
+      };
+
+      assert.equal((await execute(2)).claimed, true);
+      assert.deepEqual(await execute(3), { result: null, claimed: false, deferred: true });
+    }
+  },
+  {
+    name: "WorkflowSchedulesService cancels QUEUED immediately and requests RUNNING cancellation",
+    run: async () => {
+      let status = "QUEUED";
+      let cancelRequestedAt: Date | null = null;
+      const transaction = {
+        workflowScheduleRun: {
+          findFirst: async () => ({
+            id: "run-1",
+            scheduleId: "schedule-1",
+            status,
+            cancelRequestedAt
+          }),
+          update: async ({ data }: { data: Record<string, unknown> }) => {
+            status = String(data.status ?? status);
+            cancelRequestedAt = (data.cancelRequestedAt as Date | undefined) ?? cancelRequestedAt;
+          }
+        },
+        workflowScheduleJob: { updateMany: async () => ({ count: 1 }) },
+        workflowSchedule: { update: async () => undefined }
+      };
+      const service = new WorkflowSchedulesService(
+        {
+          $transaction: async <T>(callback: (client: typeof transaction) => Promise<T>) =>
+            callback(transaction)
+        } as never,
+        new WorkflowSchedulePlanner(),
+        tools as never
+      );
+
+      const queued = await service.requestScheduleRunCancel("run-1");
+      assert.equal(queued.status, "CANCELED");
+      status = "RUNNING";
+      cancelRequestedAt = null;
+      const running = await service.requestScheduleRunCancel("run-1");
+      assert.equal(running.status, "RUNNING");
+      assert.ok(running.cancelRequestedAt);
+    }
+  },
+  {
+    name: "WorkflowSchedulesService materializes an idempotent manual backfill Run and Outbox",
+    run: async () => {
+      const scheduledFor = new Date("2026-11-15T08:00:00.000Z");
+      let inserted = true;
+      let outboxCreates = 0;
+      const transaction = {
+        workflowScheduleRun: {
+          createMany: async () => ({ count: inserted ? 1 : 0 }),
+          findFirstOrThrow: async () => ({
+            id: "manual-run-1",
+            status: "QUEUED",
+            scheduledFor
+          })
+        },
+        workflowScheduleJob: {
+          create: async () => {
+            outboxCreates += 1;
+          }
+        }
+      };
+      const prisma = {
+        workflowSchedule: { findFirst: async () => scheduleRecord() },
+        workflow: { findFirst: async () => ({ id: "workflow-1" }) },
+        workflowVersion: {
+          findFirst: async () => ({ id: "version-1", workflowId: "workflow-1", version: 1, graph })
+        },
+        $transaction: async <T>(callback: (client: typeof transaction) => Promise<T>) =>
+          callback(transaction)
+      };
+      const service = new WorkflowSchedulesService(
+        prisma as never,
+        new WorkflowSchedulePlanner(),
+        tools as never
+      );
+
+      const created = await service.createManualRun("schedule-1", {
+        scheduledFor: scheduledFor.toISOString()
+      });
+      inserted = false;
+      const existing = await service.createManualRun("schedule-1", {
+        scheduledFor: scheduledFor.toISOString()
+      });
+
+      assert.equal(created.existing, false);
+      assert.equal(existing.existing, true);
+      assert.equal(outboxCreates, 1);
     }
   }
 ];

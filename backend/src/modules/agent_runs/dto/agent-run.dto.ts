@@ -39,6 +39,11 @@ export type CreateWorkflowScheduleAgentRunDto = {
   inputPreview: string;
 };
 
+export type AgentRunStatusSnapshot = {
+  runId: string;
+  status: AgentRunStatus;
+};
+
 /** Run 创建后供编排流程继续更新状态的最小上下文。 */
 export type AgentRunContext = {
   /** Run 主记录 ID。 */

@@ -24,6 +24,9 @@ export class WorkflowScheduleConsumer implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     if (!this.config.consumerEnabled) return;
+    if (this.config.staleMs <= this.config.heartbeatMs * 2) {
+      throw new Error("MIA_WORKFLOW_WORKER_STALE_MS 必须大于心跳间隔的两倍");
+    }
     if (!this.redis.isConfigured()) {
       throw new Error("Workflow Schedule Consumer 需要配置 MIA_REDIS_URL");
     }
@@ -33,8 +36,7 @@ export class WorkflowScheduleConsumer implements OnModuleInit, OnModuleDestroy {
       {
         connection: this.redis.createBullConnection(),
         prefix: this.keys.queuePrefix(),
-        // P3 灰度固定为 1；P4 实现并发策略后再读取配置提高并发。
-        concurrency: 1
+        concurrency: this.config.workerConcurrency
       }
     );
     await this.worker.waitUntilReady();
@@ -42,7 +44,18 @@ export class WorkflowScheduleConsumer implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     for (const controller of this.activeControllers.values()) controller.abort();
-    await this.worker?.close();
+    if (!this.worker) return;
+    const gracefulClose = this.worker.close();
+    let timer: NodeJS.Timeout | undefined;
+    const exceededGrace = await Promise.race([
+      gracefulClose.then(() => false),
+      new Promise<true>((resolve) => {
+        timer = setTimeout(() => resolve(true), this.config.shutdownGraceMs);
+        timer.unref();
+      })
+    ]);
+    if (timer) clearTimeout(timer);
+    if (exceededGrace) await this.worker.disconnect();
   }
 
   /** 独立为可测试的 Job 边界；销毁 Worker 时统一取消所有尚未完成的 Runtime。 */

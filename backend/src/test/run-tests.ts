@@ -37,6 +37,7 @@ import { tests as workflowCompilerTests } from "../modules/workflows/workflow-co
 import { tests as workflowExpressionTests } from "../modules/workflows/expression-parser.spec";
 import { tests as workflowSchedulePlannerTests } from "../modules/workflows/workflow-schedule-planner.spec";
 import { tests as workflowScheduleTests } from "../modules/workflows/workflow-schedules.service.spec";
+import { tests as workflowScheduleCancellationTests } from "../modules/workflows/workflow-schedule-cancellation.service.spec";
 import { tests as workflowRuntimeTests } from "../modules/workflow_runtime/workflow-runtime.service.spec";
 import { tests as workflowCapabilityTests } from "../modules/workflow_runtime/capability-executors.spec";
 import { tests as workflowAppRunTests } from "../modules/workflow_runtime/workflow-app-runs.service.spec";
@@ -46,6 +47,7 @@ import { tests as workflowRunTraceTests } from "../modules/workflow_runtime/work
 import { tests as workflowScheduleSchedulerTests } from "../jobs/workflow-schedule.scheduler.spec";
 import { tests as workflowScheduleDispatcherTests } from "../jobs/workflow-schedule.dispatcher.spec";
 import { tests as workflowScheduleConsumerTests } from "../jobs/workflow-schedule.consumer.spec";
+import { tests as workflowScheduleReconcilerTests } from "../jobs/workflow-schedule.reconciler.spec";
 
 type TestCase = {
   name: string;
@@ -82,9 +84,11 @@ const tests: TestCase[] = [
   ...workflowExpressionTests,
   ...workflowSchedulePlannerTests,
   ...workflowScheduleTests,
+  ...workflowScheduleCancellationTests,
   ...workflowScheduleSchedulerTests,
   ...workflowScheduleDispatcherTests,
   ...workflowScheduleConsumerTests,
+  ...workflowScheduleReconcilerTests,
   ...workflowCompilerTests,
   ...workflowTests,
   ...workflowRuntimeTests,

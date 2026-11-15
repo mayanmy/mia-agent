@@ -15,7 +15,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     this.client = this.createClient({ maxRetriesPerRequest: 2 });
-    this.client.on("error", (error) => this.logger.error(`Redis connection error: ${error.message}`));
+    this.client.on("error", (error) =>
+      this.logger.error(`Redis connection error: ${error.message}`)
+    );
     try {
       await this.withTimeout(this.client.ping());
     } catch (error) {
@@ -36,6 +38,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   /** BullMQ 需要自行管理阻塞连接，不能复用普通命令连接。 */
   createBullConnection(): Redis {
     return this.createClient({ maxRetriesPerRequest: null });
+  }
+
+  /** Pub/Sub 必须使用独立连接；进入订阅模式的连接不能再执行普通 Redis 命令。 */
+  createSubscriber(): Redis {
+    return this.createClient({ maxRetriesPerRequest: null });
+  }
+
+  async publish(channel: string, message: string): Promise<void> {
+    await this.getClient().publish(channel, message);
   }
 
   async ping(): Promise<boolean> {
@@ -67,7 +78,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return await Promise.race([
         promise,
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error("Redis command timeout")), this.config.commandTimeoutMs);
+          timer = setTimeout(
+            () => reject(new Error("Redis command timeout")),
+            this.config.commandTimeoutMs
+          );
         })
       ]);
     } finally {

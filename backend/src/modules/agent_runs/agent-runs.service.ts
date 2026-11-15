@@ -16,6 +16,7 @@ import { PageResult } from "../../core/result";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   AgentRunContext,
+  AgentRunStatusSnapshot,
   AgentRunErrorDto,
   CompleteAgentRunDto,
   CreateAgentRunDto,
@@ -264,6 +265,17 @@ export class AgentRunsService {
       select: { id: true, requestId: true, status: true }
     });
     return run ? { runId: run.id, requestId: run.requestId, status: run.status } : null;
+  }
+
+  /** 后台对账只读取明确给出的 Run ID 与终态，不向 jobs 层暴露 Prisma Model。 */
+  async getRunStatusSnapshots(runIds: string[]): Promise<AgentRunStatusSnapshot[]> {
+    const ids = [...new Set(runIds.map((id) => this.requireText(id, "runId")))];
+    if (ids.length === 0) return [];
+    const runs = await this.prisma.agentRun.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, status: true }
+    });
+    return runs.map((run) => ({ runId: run.id, status: run.status }));
   }
 
   /** 将 Run 从排队态切换到运行态；条件更新防止重复启动或覆盖终态。 */

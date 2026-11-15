@@ -42,6 +42,7 @@ export type AppConfig = {
     enabled: boolean;
     dispatcherEnabled: boolean;
     consumerEnabled: boolean;
+    reconcilerEnabled: boolean;
     dispatcherDryRun: boolean;
     pollMs: number;
     batchSize: number;
@@ -271,13 +272,14 @@ export function getConfig(): AppConfig {
       enabled: readBooleanEnv("MIA_WORKFLOW_SCHEDULER_ENABLED"),
       dispatcherEnabled: readBooleanEnv("MIA_WORKFLOW_DISPATCHER_ENABLED"),
       consumerEnabled: readBooleanEnv("MIA_WORKFLOW_CONSUMER_ENABLED"),
+      reconcilerEnabled: readBooleanEnv("MIA_WORKFLOW_RECONCILER_ENABLED"),
       dispatcherDryRun:
         process.env.MIA_WORKFLOW_DISPATCHER_DRY_RUN === undefined ||
         readBooleanEnv("MIA_WORKFLOW_DISPATCHER_DRY_RUN"),
       pollMs: readPositiveIntegerEnv("MIA_WORKFLOW_SCHEDULER_POLL_MS", 15_000),
       batchSize: readPositiveIntegerEnv("MIA_WORKFLOW_SCHEDULER_BATCH_SIZE", 100),
       dispatchPollMs: readPositiveIntegerEnv("MIA_WORKFLOW_DISPATCH_POLL_MS", 5_000),
-      workerConcurrency: readPositiveIntegerEnv("MIA_WORKFLOW_WORKER_CONCURRENCY", 5),
+      workerConcurrency: readIntegerEnvInRange("MIA_WORKFLOW_WORKER_CONCURRENCY", 5, 1, 20),
       heartbeatMs: readPositiveIntegerEnv("MIA_WORKFLOW_WORKER_HEARTBEAT_MS", 15_000),
       staleMs: readPositiveIntegerEnv("MIA_WORKFLOW_WORKER_STALE_MS", 60_000),
       shutdownGraceMs: readPositiveIntegerEnv("MIA_WORKFLOW_SHUTDOWN_GRACE_MS", 30_000),

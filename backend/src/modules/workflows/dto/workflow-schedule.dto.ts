@@ -146,3 +146,37 @@ export type WorkflowScheduleRunExecution = {
 };
 
 export type WorkflowScheduleRunTerminalStatus = "COMPLETED" | "FAILED" | "CANCELED" | "TIMED_OUT";
+
+export type WorkflowScheduleRunCancelResult = {
+  runId: string;
+  status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELED" | "TIMED_OUT" | "SKIPPED";
+  cancelRequestedAt: Date | null;
+};
+
+export type WorkflowScheduleManualRunDto = {
+  scheduledFor?: string;
+};
+
+export type WorkflowScheduleManualRunResult = {
+  runId: string;
+  status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELED" | "TIMED_OUT" | "SKIPPED";
+  scheduledFor: Date;
+  existing: boolean;
+};
+
+export type WorkflowScheduleStaleRun = {
+  scheduleRunId: string;
+  scheduleId: string;
+  agentRunId: string | null;
+  startedAt: Date | null;
+};
+
+export type WorkflowScheduleLinkedRun = {
+  scheduleRunId: string;
+  agentRunId: string;
+};
+
+export type WorkflowScheduleDispatchedJob = {
+  jobId: string;
+  scheduleRunId: string;
+};

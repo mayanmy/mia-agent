@@ -20,4 +20,8 @@ export class RedisKeyFactory {
   queuePrefix(): string {
     return `${this.prefix}:queue`;
   }
+
+  workflowScheduleCancelChannel(): string {
+    return this.create("workflow-schedule", "cancel");
+  }
 }

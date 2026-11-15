@@ -49,12 +49,32 @@ export class WorkflowScheduleQueue implements OnModuleInit, OnModuleDestroy {
   async enqueue(job: WorkflowScheduleJobDispatchDto): Promise<void> {
     if (!this.queue) throw new Error("Workflow Schedule Queue 尚未初始化");
     const prepared = this.prepare(job);
+    const existing = await this.queue.getJob(prepared.jobId);
+    if (existing) {
+      const state = await existing.getState();
+      if (state === "completed" || state === "failed") {
+        await existing.remove();
+      } else {
+        // 并发延迟期间旧 Job 仍 active 时必须让 Outbox 再次延期，不能误标 DISPATCHED。
+        throw new Error(`Workflow Schedule Job 已存在且状态为 ${state}`);
+      }
+    }
     await this.queue.add(prepared.name, prepared.data, {
       jobId: prepared.jobId,
       attempts: 1,
       removeOnComplete: { age: 7 * 86_400, count: 5_000 },
       removeOnFail: { age: 30 * 86_400, count: 10_000 }
     });
+  }
+
+  async hasRunnableJob(scheduleRunId: string): Promise<boolean> {
+    if (!this.queue) return false;
+    const job = await this.queue.getJob(scheduleRunId);
+    if (!job) return false;
+    const state = await job.getState();
+    return (
+      state === "active" || state === "waiting" || state === "delayed" || state === "prioritized"
+    );
   }
 
   async onModuleDestroy(): Promise<void> {

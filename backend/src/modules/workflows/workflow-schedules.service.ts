@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { HttpStatus, Injectable } from "@nestjs/common";
 import {
   Prisma,
+  PrismaClient,
   WorkflowScheduleJobDispatchStatus,
   WorkflowScheduleConcurrencyPolicy as PrismaConcurrencyPolicy,
   WorkflowScheduleMisfirePolicy as PrismaMisfirePolicy,
@@ -23,6 +24,11 @@ import {
   WorkflowScheduleCreateDto,
   WorkflowScheduleDetail,
   WorkflowScheduleListItem,
+  WorkflowScheduleManualRunDto,
+  WorkflowScheduleManualRunResult,
+  WorkflowScheduleStaleRun,
+  WorkflowScheduleLinkedRun,
+  WorkflowScheduleDispatchedJob,
   WorkflowScheduleMisfirePolicy,
   WorkflowSchedulePreview,
   WorkflowSchedulePreviewDto,
@@ -30,6 +36,7 @@ import {
   WorkflowScheduleUpgradeVersionDto,
   WorkflowScheduleJobDispatchDto,
   WorkflowScheduleRunExecution,
+  WorkflowScheduleRunCancelResult,
   WorkflowScheduleRunTerminalStatus
 } from "./dto/workflow-schedule.dto";
 import {
@@ -42,10 +49,17 @@ const MAX_NAME_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 2_000;
 const DEFAULT_TIMEZONE = "Asia/Shanghai";
 const DEFAULT_TIMEOUT_SECONDS = 1_800;
+const MAX_PARALLEL_SCHEDULE_RUNS = 3;
+const CONCURRENCY_RETRY_DELAY_MS = 5_000;
 
 type ScheduleRecord = Prisma.WorkflowScheduleGetPayload<{
   include: { workflowVersion: { select: { version: true } } };
 }>;
+
+type TransactionClient = Omit<
+  PrismaClient,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;
 
 type VersionRecord = {
   id: string;
@@ -238,6 +252,56 @@ export class WorkflowSchedulesService {
       status: WorkflowScheduleStatus.ARCHIVED,
       archivedAt: new Date(),
       nextRunAt: null
+    });
+  }
+
+  /** 手动补跑复用相同发生时间的业务幂等键；重复请求返回已有 Run，不创建派生重试。 */
+  async createManualRun(
+    scheduleIdValue: string,
+    payload: WorkflowScheduleManualRunDto = {}
+  ): Promise<WorkflowScheduleManualRunResult> {
+    const schedule = await this.requireSchedule(scheduleIdValue);
+    const version = await this.requireVersion(schedule.workflowId, schedule.workflowVersionId);
+    const inputs = this.jsonObject(schedule.inputs);
+    await this.validateVersionForSchedule(version, inputs);
+    const scheduledFor = payload.scheduledFor ? new Date(payload.scheduledFor) : new Date();
+    this.validDate(scheduledFor, "scheduledFor");
+
+    return this.prisma.$transaction(async (transaction) => {
+      const runId = randomUUID();
+      const inserted = await transaction.workflowScheduleRun.createMany({
+        data: [
+          {
+            id: runId,
+            workspaceId: schedule.workspaceId,
+            scheduleId: schedule.id,
+            workflowId: schedule.workflowId,
+            workflowVersionId: schedule.workflowVersionId,
+            scheduledFor,
+            trigger: WorkflowScheduleRunTrigger.MANUAL_BACKFILL,
+            status: WorkflowScheduleRunStatus.QUEUED,
+            inputSnapshot: inputs as Prisma.InputJsonValue,
+            scheduleRevision: schedule.revision,
+            requestId: randomUUID()
+          }
+        ],
+        skipDuplicates: true
+      });
+      const run = await transaction.workflowScheduleRun.findFirstOrThrow({
+        where: { scheduleId: schedule.id, scheduledFor },
+        select: { id: true, status: true, scheduledFor: true }
+      });
+      if (inserted.count === 1) {
+        await transaction.workflowScheduleJob.create({
+          data: { scheduleRunId: run.id }
+        });
+      }
+      return {
+        runId: run.id,
+        status: run.status,
+        scheduledFor: run.scheduledFor,
+        existing: inserted.count === 0
+      };
     });
   }
 
@@ -463,9 +527,58 @@ export class WorkflowSchedulesService {
     const id = this.id(scheduleRunId, "scheduleRunId");
     const workerId = this.id(workerIdValue, "workerId");
     return this.prisma.$transaction(async (transaction) => {
+      const candidate = await transaction.workflowScheduleRun.findUnique({
+        where: { id },
+        select: { scheduleId: true }
+      });
+      if (!candidate) return null;
+      // 同一 Schedule 的检查和状态切换必须串行；不同 Schedule 仍可被多个 Worker 并行认领。
+      await transaction.$queryRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${candidate.scheduleId}::text, 0))
+      `;
+      const current = await transaction.workflowScheduleRun.findUnique({
+        where: { id },
+        include: {
+          schedule: {
+            select: { timeoutSeconds: true, concurrencyPolicy: true, status: true }
+          }
+        }
+      });
+      if (!current || current.status !== WorkflowScheduleRunStatus.QUEUED) return null;
+      if (
+        current.cancelRequestedAt ||
+        current.schedule.status === WorkflowScheduleStatus.ARCHIVED
+      ) {
+        await this.cancelQueuedRun(transaction, current.id, current.scheduleId);
+        return null;
+      }
+      const runningCount = await transaction.workflowScheduleRun.count({
+        where: {
+          scheduleId: current.scheduleId,
+          status: WorkflowScheduleRunStatus.RUNNING
+        }
+      });
+      const atConcurrencyLimit =
+        current.schedule.concurrencyPolicy === PrismaConcurrencyPolicy.QUEUE
+          ? runningCount > 0
+          : current.schedule.concurrencyPolicy === PrismaConcurrencyPolicy.SKIP
+            ? runningCount > 0
+            : runningCount >= MAX_PARALLEL_SCHEDULE_RUNS;
+      if (atConcurrencyLimit) {
+        if (current.schedule.concurrencyPolicy === PrismaConcurrencyPolicy.SKIP) {
+          await this.skipOverlappingRun(transaction, current.id, current.scheduleId);
+        } else {
+          await this.deferScheduleRun(transaction, current.id);
+        }
+        return null;
+      }
       const startedAt = new Date();
       const claimed = await transaction.workflowScheduleRun.updateMany({
-        where: { id, status: WorkflowScheduleRunStatus.QUEUED },
+        where: {
+          id,
+          status: WorkflowScheduleRunStatus.QUEUED,
+          cancelRequestedAt: null
+        },
         data: {
           status: WorkflowScheduleRunStatus.RUNNING,
           workerId,
@@ -475,26 +588,229 @@ export class WorkflowSchedulesService {
         }
       });
       if (claimed.count !== 1) return null;
-      const run = await transaction.workflowScheduleRun.findUniqueOrThrow({
-        where: { id },
-        include: { schedule: { select: { timeoutSeconds: true } } }
-      });
       await transaction.workflowSchedule.update({
-        where: { id: run.scheduleId },
+        where: { id: current.scheduleId },
         data: { lastStartedAt: startedAt }
       });
       return {
-        scheduleRunId: run.id,
-        workspaceId: run.workspaceId,
-        scheduleId: run.scheduleId,
-        workflowId: run.workflowId,
-        workflowVersionId: run.workflowVersionId,
-        requestId: run.requestId,
-        inputs: this.jsonObject(run.inputSnapshot),
-        timeoutSeconds: run.schedule.timeoutSeconds,
-        agentRunId: run.agentRunId
+        scheduleRunId: current.id,
+        workspaceId: current.workspaceId,
+        scheduleId: current.scheduleId,
+        workflowId: current.workflowId,
+        workflowVersionId: current.workflowVersionId,
+        requestId: current.requestId,
+        inputs: this.jsonObject(current.inputSnapshot),
+        timeoutSeconds: current.schedule.timeoutSeconds,
+        agentRunId: current.agentRunId
       };
     });
+  }
+
+  /** QUEUED 可直接取消；RUNNING 只写请求时间，由持有 AbortController 的 Worker 收敛终态。 */
+  async requestScheduleRunCancel(runIdValue: string): Promise<WorkflowScheduleRunCancelResult> {
+    const id = this.id(runIdValue, "runId");
+    return this.prisma.$transaction(async (transaction) => {
+      const run = await transaction.workflowScheduleRun.findFirst({
+        where: { id, workspaceId: requireWorkspaceId() },
+        select: { id: true, scheduleId: true, status: true, cancelRequestedAt: true }
+      });
+      if (!run) throw this.notFound();
+      if (run.status === WorkflowScheduleRunStatus.QUEUED) {
+        const cancelRequestedAt = new Date();
+        await transaction.workflowScheduleRun.update({
+          where: { id },
+          data: {
+            status: WorkflowScheduleRunStatus.CANCELED,
+            cancelRequestedAt,
+            finishedAt: cancelRequestedAt,
+            errorType: "schedule_run_canceled",
+            errorMessage: "定时运行已在开始前取消"
+          }
+        });
+        await transaction.workflowScheduleJob.updateMany({
+          where: { scheduleRunId: id },
+          data: { dispatchStatus: WorkflowScheduleJobDispatchStatus.COMPLETED }
+        });
+        await transaction.workflowSchedule.update({
+          where: { id: run.scheduleId },
+          data: { lastFinishedAt: cancelRequestedAt }
+        });
+        return { runId: id, status: "CANCELED", cancelRequestedAt };
+      }
+      if (run.status === WorkflowScheduleRunStatus.RUNNING) {
+        const cancelRequestedAt = run.cancelRequestedAt ?? new Date();
+        if (!run.cancelRequestedAt) {
+          await transaction.workflowScheduleRun.update({
+            where: { id },
+            data: { cancelRequestedAt }
+          });
+        }
+        return { runId: id, status: "RUNNING", cancelRequestedAt };
+      }
+      return {
+        runId: id,
+        status: run.status,
+        cancelRequestedAt: run.cancelRequestedAt
+      };
+    });
+  }
+
+  async heartbeatScheduleRun(scheduleRunId: string, workerId: string): Promise<boolean> {
+    const updated = await this.prisma.workflowScheduleRun.updateMany({
+      where: {
+        id: this.id(scheduleRunId, "scheduleRunId"),
+        workerId: this.id(workerId, "workerId"),
+        status: WorkflowScheduleRunStatus.RUNNING
+      },
+      data: { heartbeatAt: new Date() }
+    });
+    return updated.count === 1;
+  }
+
+  async isScheduleRunCancellationRequested(scheduleRunId: string): Promise<boolean> {
+    const run = await this.prisma.workflowScheduleRun.findUnique({
+      where: { id: this.id(scheduleRunId, "scheduleRunId") },
+      select: { status: true, cancelRequestedAt: true }
+    });
+    return Boolean(run?.cancelRequestedAt || run?.status === WorkflowScheduleRunStatus.CANCELED);
+  }
+
+  async listStaleRunningScheduleRuns(
+    staleBefore: Date,
+    limit: number
+  ): Promise<WorkflowScheduleStaleRun[]> {
+    this.validDate(staleBefore, "staleBefore");
+    const runs = await this.prisma.workflowScheduleRun.findMany({
+      where: {
+        status: WorkflowScheduleRunStatus.RUNNING,
+        OR: [{ heartbeatAt: { lt: staleBefore } }, { heartbeatAt: null }]
+      },
+      orderBy: { updatedAt: "asc" },
+      take: this.reconciliationLimit(limit),
+      select: { id: true, scheduleId: true, agentRunId: true, startedAt: true }
+    });
+    return runs.map((run) => ({
+      scheduleRunId: run.id,
+      scheduleId: run.scheduleId,
+      agentRunId: run.agentRunId,
+      startedAt: run.startedAt
+    }));
+  }
+
+  async listLinkedRunningScheduleRuns(limit: number): Promise<WorkflowScheduleLinkedRun[]> {
+    const runs = await this.prisma.workflowScheduleRun.findMany({
+      where: { status: WorkflowScheduleRunStatus.RUNNING, agentRunId: { not: null } },
+      orderBy: { updatedAt: "asc" },
+      take: this.reconciliationLimit(limit),
+      select: { id: true, agentRunId: true }
+    });
+    return runs.flatMap((run) =>
+      run.agentRunId ? [{ scheduleRunId: run.id, agentRunId: run.agentRunId }] : []
+    );
+  }
+
+  async listStaleDispatchedScheduleJobs(
+    staleBefore: Date,
+    limit: number
+  ): Promise<WorkflowScheduleDispatchedJob[]> {
+    this.validDate(staleBefore, "staleBefore");
+    const jobs = await this.prisma.workflowScheduleJob.findMany({
+      where: {
+        dispatchStatus: WorkflowScheduleJobDispatchStatus.DISPATCHED,
+        updatedAt: { lt: staleBefore },
+        scheduleRun: { status: WorkflowScheduleRunStatus.QUEUED }
+      },
+      orderBy: { updatedAt: "asc" },
+      take: this.reconciliationLimit(limit),
+      select: { id: true, scheduleRunId: true }
+    });
+    return jobs.map((job) => ({ jobId: job.id, scheduleRunId: job.scheduleRunId }));
+  }
+
+  async rescheduleLostDispatchedJob(jobId: string): Promise<boolean> {
+    const updated = await this.prisma.workflowScheduleJob.updateMany({
+      where: {
+        id: this.id(jobId, "jobId"),
+        dispatchStatus: WorkflowScheduleJobDispatchStatus.DISPATCHED,
+        scheduleRun: { status: WorkflowScheduleRunStatus.QUEUED }
+      },
+      data: {
+        dispatchStatus: WorkflowScheduleJobDispatchStatus.PENDING,
+        nextDispatchAt: new Date(),
+        lastErrorCode: "bullmq_job_lost"
+      }
+    });
+    return updated.count === 1;
+  }
+
+  /** 只有从未开始且没有 Trace 的失联记录可安全回到 QUEUED；其余一律保守失败。 */
+  async reconcileStaleRunningScheduleRun(
+    run: WorkflowScheduleStaleRun
+  ): Promise<"REQUEUED" | "FAILED" | "UNCHANGED"> {
+    const id = this.id(run.scheduleRunId, "scheduleRunId");
+    if (!run.agentRunId && !run.startedAt) {
+      return this.prisma.$transaction(async (transaction) => {
+        const updated = await transaction.workflowScheduleRun.updateMany({
+          where: {
+            id,
+            status: WorkflowScheduleRunStatus.RUNNING,
+            agentRunId: null,
+            startedAt: null
+          },
+          data: { status: WorkflowScheduleRunStatus.QUEUED, workerId: null, heartbeatAt: null }
+        });
+        if (updated.count !== 1) return "UNCHANGED" as const;
+        await transaction.workflowScheduleJob.updateMany({
+          where: { scheduleRunId: id },
+          data: {
+            dispatchStatus: WorkflowScheduleJobDispatchStatus.PENDING,
+            nextDispatchAt: new Date(),
+            lastErrorCode: "worker_lost_before_start"
+          }
+        });
+        return "REQUEUED" as const;
+      });
+    }
+    return this.prisma.$transaction(async (transaction) => {
+      const finishedAt = new Date();
+      const failed = await transaction.workflowScheduleRun.updateMany({
+        where: { id, status: WorkflowScheduleRunStatus.RUNNING },
+        data: {
+          status: WorkflowScheduleRunStatus.FAILED,
+          finishedAt,
+          errorType: "worker_lost",
+          errorMessage: "Worker 心跳超时，因可能已产生副作用而禁止自动重跑"
+        }
+      });
+      if (failed.count !== 1) return "UNCHANGED" as const;
+      await transaction.workflowScheduleJob.updateMany({
+        where: { scheduleRunId: id },
+        data: { dispatchStatus: WorkflowScheduleJobDispatchStatus.COMPLETED }
+      });
+      await transaction.workflowSchedule.update({
+        where: { id: run.scheduleId },
+        data: { lastFinishedAt: finishedAt }
+      });
+      return "FAILED" as const;
+    });
+  }
+
+  async cancelArchivedQueuedScheduleRuns(limit: number): Promise<number> {
+    const runs = await this.prisma.workflowScheduleRun.findMany({
+      where: {
+        status: WorkflowScheduleRunStatus.QUEUED,
+        schedule: { status: WorkflowScheduleStatus.ARCHIVED }
+      },
+      orderBy: { createdAt: "asc" },
+      take: this.reconciliationLimit(limit),
+      select: { id: true, scheduleId: true }
+    });
+    for (const run of runs) {
+      await this.prisma.$transaction((transaction) =>
+        this.cancelQueuedRun(transaction, run.id, run.scheduleId)
+      );
+    }
+    return runs.length;
   }
 
   /** Worker 执行前重新读取版本 Graph，防止 MCP Tool 后续改为 CONFIRM 后仍无人值守运行。 */
@@ -579,6 +895,71 @@ export class WorkflowSchedulesService {
     });
   }
 
+  private async deferScheduleRun(
+    transaction: TransactionClient,
+    scheduleRunId: string
+  ): Promise<void> {
+    await transaction.workflowScheduleJob.updateMany({
+      where: { scheduleRunId },
+      data: {
+        dispatchStatus: WorkflowScheduleJobDispatchStatus.PENDING,
+        nextDispatchAt: new Date(Date.now() + CONCURRENCY_RETRY_DELAY_MS),
+        lastErrorCode: "schedule_concurrency_deferred"
+      }
+    });
+  }
+
+  private async skipOverlappingRun(
+    transaction: TransactionClient,
+    scheduleRunId: string,
+    scheduleId: string
+  ): Promise<void> {
+    const finishedAt = new Date();
+    await transaction.workflowScheduleRun.update({
+      where: { id: scheduleRunId },
+      data: {
+        status: WorkflowScheduleRunStatus.SKIPPED,
+        finishedAt,
+        errorType: "schedule_overlap_skipped",
+        errorMessage: "同一定时任务已有运行实例，本次按 SKIP 策略跳过"
+      }
+    });
+    await transaction.workflowScheduleJob.updateMany({
+      where: { scheduleRunId },
+      data: { dispatchStatus: WorkflowScheduleJobDispatchStatus.COMPLETED }
+    });
+    await transaction.workflowSchedule.update({
+      where: { id: scheduleId },
+      data: { lastFinishedAt: finishedAt }
+    });
+  }
+
+  private async cancelQueuedRun(
+    transaction: TransactionClient,
+    scheduleRunId: string,
+    scheduleId: string
+  ): Promise<void> {
+    const finishedAt = new Date();
+    await transaction.workflowScheduleRun.update({
+      where: { id: scheduleRunId },
+      data: {
+        status: WorkflowScheduleRunStatus.CANCELED,
+        cancelRequestedAt: finishedAt,
+        finishedAt,
+        errorType: "schedule_run_canceled",
+        errorMessage: "定时运行已取消或所属 Schedule 已归档"
+      }
+    });
+    await transaction.workflowScheduleJob.updateMany({
+      where: { scheduleRunId },
+      data: { dispatchStatus: WorkflowScheduleJobDispatchStatus.COMPLETED }
+    });
+    await transaction.workflowSchedule.update({
+      where: { id: scheduleId },
+      data: { lastFinishedAt: finishedAt }
+    });
+  }
+
   private async updateWithRevision(
     id: string,
     revision: number,
@@ -628,6 +1009,13 @@ export class WorkflowSchedulesService {
     if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
       throw new AppError(ErrorCodes.common.badRequest, `${field} 必须是有效时间`);
     }
+  }
+
+  private reconciliationLimit(value: number): number {
+    if (!Number.isInteger(value) || value < 1 || value > 1_000) {
+      throw new AppError(ErrorCodes.common.badRequest, "limit 必须是 1 到 1000 之间的整数");
+    }
+    return value;
   }
 
   private errorCode(value: string): string {

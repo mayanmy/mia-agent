@@ -9,20 +9,27 @@ import {
   WorkflowScheduleCreateDto,
   WorkflowScheduleDetail,
   WorkflowScheduleListItem,
+  WorkflowScheduleManualRunDto,
+  WorkflowScheduleManualRunResult,
   WorkflowSchedulePreview,
   WorkflowSchedulePreviewDto,
   WorkflowScheduleRevisionDto,
+  WorkflowScheduleRunCancelResult,
   WorkflowScheduleUpdateDto,
   WorkflowScheduleUpgradeVersionDto
 } from "./dto/workflow-schedule.dto";
 import { WorkflowSchedulesService } from "./workflow-schedules.service";
+import { WorkflowScheduleCancellationService } from "./workflow-schedule-cancellation.service";
 
 /** Schedule API 与 Workflow 草稿 API 分离，但数据和业务生命周期仍归 workflows 模块。 */
 @Controller()
 @Roles(UserRole.ADMIN, UserRole.USER)
 @WorkspaceRequired()
 export class WorkflowSchedulesController {
-  constructor(private readonly schedulesService: WorkflowSchedulesService) {}
+  constructor(
+    private readonly schedulesService: WorkflowSchedulesService,
+    private readonly cancellationService: WorkflowScheduleCancellationService
+  ) {}
 
   @Post("workflows/:workflowId/schedules/preview")
   previewSchedule(
@@ -96,5 +103,20 @@ export class WorkflowSchedulesController {
   ): Promise<null> {
     await this.schedulesService.archiveSchedule(scheduleId, payload.revision);
     return null;
+  }
+
+  @Post("workflow-schedule-runs/:runId/cancel")
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
+  cancelScheduleRun(@Param("runId") runId: string): Promise<WorkflowScheduleRunCancelResult> {
+    return this.cancellationService.requestCancel(runId);
+  }
+
+  @Post("workflow-schedules/:scheduleId/runs")
+  @WorkspaceRoles(WorkspaceRole.OWNER, WorkspaceRole.MANAGER)
+  createManualRun(
+    @Param("scheduleId") scheduleId: string,
+    @Body() payload: WorkflowScheduleManualRunDto
+  ): Promise<WorkflowScheduleManualRunResult> {
+    return this.schedulesService.createManualRun(scheduleId, payload);
   }
 }
