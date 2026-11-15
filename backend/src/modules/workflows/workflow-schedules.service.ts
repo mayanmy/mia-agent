@@ -1,8 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { HttpStatus, Injectable } from "@nestjs/common";
 import {
   Prisma,
+  WorkflowScheduleJobDispatchStatus,
   WorkflowScheduleConcurrencyPolicy as PrismaConcurrencyPolicy,
   WorkflowScheduleMisfirePolicy as PrismaMisfirePolicy,
+  WorkflowScheduleRunStatus,
+  WorkflowScheduleRunTrigger,
   WorkflowScheduleStatus
 } from "@prisma/client";
 
@@ -13,6 +17,8 @@ import { ToolsService } from "../tools/tools.service";
 import {
   WORKFLOW_SCHEDULE_CONCURRENCY_POLICIES,
   WORKFLOW_SCHEDULE_MISFIRE_POLICIES,
+  DueScheduleClaim,
+  MaterializedScheduleRuns,
   WorkflowScheduleConcurrencyPolicy,
   WorkflowScheduleCreateDto,
   WorkflowScheduleDetail,
@@ -21,7 +27,8 @@ import {
   WorkflowSchedulePreview,
   WorkflowSchedulePreviewDto,
   WorkflowScheduleUpdateDto,
-  WorkflowScheduleUpgradeVersionDto
+  WorkflowScheduleUpgradeVersionDto,
+  WorkflowScheduleJobDispatchDto
 } from "./dto/workflow-schedule.dto";
 import {
   MAX_WORKFLOW_SCHEDULE_CATCH_UP_RUNS,
@@ -43,6 +50,21 @@ type VersionRecord = {
   workflowId: string;
   version: number;
   graph: unknown;
+};
+
+type LockedSchedule = {
+  id: string;
+  workspaceId: string;
+  workflowId: string;
+  workflowVersionId: string;
+  status: WorkflowScheduleStatus;
+  cronExpression: string;
+  timezone: string;
+  inputs: unknown;
+  misfirePolicy: PrismaMisfirePolicy;
+  maxCatchUpRuns: number;
+  nextRunAt: Date | null;
+  revision: number;
 };
 
 /**
@@ -234,6 +256,203 @@ export class WorkflowSchedulesService {
     return this.getScheduleDetail(current.id);
   }
 
+  /** 跨 Workspace 读取到期候选；真正的状态确认和推进在单 Schedule 锁事务中完成。 */
+  async claimDueSchedules(now: Date, limit: number): Promise<DueScheduleClaim[]> {
+    this.validDate(now, "now");
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
+      throw new AppError(ErrorCodes.common.badRequest, "limit 必须是 1 到 1000 之间的整数");
+    }
+    const rows = await this.prisma.workflowSchedule.findMany({
+      where: {
+        status: WorkflowScheduleStatus.ACTIVE,
+        nextRunAt: { lte: now }
+      },
+      orderBy: [{ nextRunAt: "asc" }, { id: "asc" }],
+      take: limit,
+      select: { id: true, workspaceId: true, nextRunAt: true }
+    });
+    return rows.flatMap((row) =>
+      row.nextRunAt
+        ? [{ scheduleId: row.id, workspaceId: row.workspaceId, nextRunAt: row.nextRunAt }]
+        : []
+    );
+  }
+
+  /**
+   * 锁定一个 Schedule 后，在同一短事务内创建 Run、Outbox 并推进 nextRunAt。
+   * 不能先推进时间再创建 Run，否则事务中途失败会永久丢失计划执行点。
+   */
+  async materializeDueRuns(scheduleId: string, now: Date): Promise<MaterializedScheduleRuns> {
+    const id = this.id(scheduleId, "scheduleId");
+    this.validDate(now, "now");
+
+    return this.prisma.$transaction(async (transaction) => {
+      // SKIP LOCKED 让多个 Scheduler 跳过正在处理的同一任务，同时仍可并行处理其他任务。
+      const rows = await transaction.$queryRaw<LockedSchedule[]>`
+        SELECT
+          id,
+          workspace_id AS "workspaceId",
+          workflow_id AS "workflowId",
+          workflow_version_id AS "workflowVersionId",
+          status,
+          cron_expression AS "cronExpression",
+          timezone,
+          inputs,
+          misfire_policy AS "misfirePolicy",
+          max_catch_up_runs AS "maxCatchUpRuns",
+          next_run_at AS "nextRunAt",
+          revision
+        FROM workflow_schedules
+        WHERE id = ${id}::uuid
+        FOR UPDATE SKIP LOCKED
+      `;
+      const schedule = rows[0];
+      if (!schedule) return this.emptyMaterialization(id, false, null);
+      if (
+        schedule.status !== WorkflowScheduleStatus.ACTIVE ||
+        !schedule.nextRunAt ||
+        schedule.nextRunAt.getTime() > now.getTime()
+      ) {
+        return this.emptyMaterialization(id, true, schedule.nextRunAt);
+      }
+
+      const due = this.planner.resolveDueOccurrences(
+        {
+          cronExpression: schedule.cronExpression,
+          timezone: schedule.timezone,
+          nextRunAt: schedule.nextRunAt,
+          misfirePolicy: schedule.misfirePolicy,
+          maxCatchUpRuns: schedule.maxCatchUpRuns
+        },
+        now
+      );
+      const inputs = this.jsonObject(schedule.inputs);
+      const runData = due.occurrences.map((scheduledFor) => ({
+        id: randomUUID(),
+        workspaceId: schedule.workspaceId,
+        scheduleId: schedule.id,
+        workflowId: schedule.workflowId,
+        workflowVersionId: schedule.workflowVersionId,
+        scheduledFor,
+        trigger: WorkflowScheduleRunTrigger.SCHEDULED,
+        status: WorkflowScheduleRunStatus.QUEUED,
+        inputSnapshot: inputs as Prisma.InputJsonValue,
+        scheduleRevision: schedule.revision,
+        requestId: randomUUID()
+      }));
+      const inserted =
+        runData.length === 0
+          ? { count: 0 }
+          : await transaction.workflowScheduleRun.createMany({
+              data: runData,
+              skipDuplicates: true
+            });
+      const runs =
+        due.occurrences.length === 0
+          ? []
+          : await transaction.workflowScheduleRun.findMany({
+              where: {
+                scheduleId: schedule.id,
+                scheduledFor: { in: due.occurrences }
+              },
+              select: { id: true }
+            });
+      if (runs.length > 0) {
+        await transaction.workflowScheduleJob.createMany({
+          data: runs.map((run) => ({ scheduleRunId: run.id })),
+          skipDuplicates: true
+        });
+      }
+      const lastScheduledAt =
+        due.occurrences.at(-1) ?? (due.skippedCount > 0 ? schedule.nextRunAt : undefined);
+      await transaction.workflowSchedule.update({
+        where: { id: schedule.id },
+        data: {
+          nextRunAt: due.nextRunAt,
+          ...(lastScheduledAt ? { lastScheduledAt } : {})
+        }
+      });
+      return {
+        scheduleId: schedule.id,
+        createdRunCount: inserted.count,
+        duplicateRunCount: Math.max(0, due.occurrences.length - inserted.count),
+        skippedCount: due.skippedCount,
+        skippedCountTruncated: due.skippedCountTruncated,
+        nextRunAt: due.nextRunAt,
+        locked: true
+      };
+    });
+  }
+
+  async claimPendingScheduleJobs(
+    now: Date,
+    limit: number
+  ): Promise<WorkflowScheduleJobDispatchDto[]> {
+    this.validDate(now, "now");
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
+      throw new AppError(ErrorCodes.common.badRequest, "limit 必须是 1 到 1000 之间的整数");
+    }
+    const jobs = await this.prisma.workflowScheduleJob.findMany({
+      where: {
+        dispatchStatus: WorkflowScheduleJobDispatchStatus.PENDING,
+        nextDispatchAt: { lte: now }
+      },
+      orderBy: [{ nextDispatchAt: "asc" }, { id: "asc" }],
+      take: limit,
+      select: { id: true, scheduleRunId: true, dispatchAttempts: true }
+    });
+    return jobs.map((job) => ({
+      jobId: job.id,
+      scheduleRunId: job.scheduleRunId,
+      dispatchAttempts: job.dispatchAttempts
+    }));
+  }
+
+  async markScheduleJobDispatched(jobId: string): Promise<void> {
+    await this.prisma.workflowScheduleJob.updateMany({
+      where: {
+        id: this.id(jobId, "jobId"),
+        dispatchStatus: WorkflowScheduleJobDispatchStatus.PENDING
+      },
+      data: {
+        dispatchStatus: WorkflowScheduleJobDispatchStatus.DISPATCHED,
+        dispatchAttempts: { increment: 1 },
+        dispatchedAt: new Date(),
+        lastErrorCode: null
+      }
+    });
+  }
+
+  async rescheduleScheduleJob(
+    jobId: string,
+    errorCode: string,
+    nextDispatchAt: Date
+  ): Promise<void> {
+    this.validDate(nextDispatchAt, "nextDispatchAt");
+    await this.prisma.workflowScheduleJob.updateMany({
+      where: {
+        id: this.id(jobId, "jobId"),
+        dispatchStatus: WorkflowScheduleJobDispatchStatus.PENDING
+      },
+      data: {
+        dispatchAttempts: { increment: 1 },
+        lastErrorCode: this.errorCode(errorCode),
+        nextDispatchAt
+      }
+    });
+  }
+
+  async markScheduleJobDead(jobId: string, errorCode: string): Promise<void> {
+    await this.prisma.workflowScheduleJob.updateMany({
+      where: { id: this.id(jobId, "jobId") },
+      data: {
+        dispatchStatus: WorkflowScheduleJobDispatchStatus.DEAD,
+        dispatchAttempts: { increment: 1 },
+        lastErrorCode: this.errorCode(errorCode)
+      }
+    });
+  }
+
   private async updateWithRevision(
     id: string,
     revision: number,
@@ -261,6 +480,33 @@ export class WorkflowSchedulesService {
         HttpStatus.CONFLICT
       );
     }
+  }
+
+  private emptyMaterialization(
+    scheduleId: string,
+    locked: boolean,
+    nextRunAt: Date | null
+  ): MaterializedScheduleRuns {
+    return {
+      scheduleId,
+      createdRunCount: 0,
+      duplicateRunCount: 0,
+      skippedCount: 0,
+      skippedCountTruncated: false,
+      nextRunAt,
+      locked
+    };
+  }
+
+  private validDate(value: Date, field: string): void {
+    if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+      throw new AppError(ErrorCodes.common.badRequest, `${field} 必须是有效时间`);
+    }
+  }
+
+  private errorCode(value: string): string {
+    const normalized = value.trim().slice(0, 120);
+    return normalized || "QUEUE_ERROR";
   }
 
   private async requireWorkflow(workflowId: string): Promise<void> {

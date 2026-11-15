@@ -26,6 +26,7 @@ import { RolesGuard } from "./core/auth/roles.guard";
 import { WorkspaceGuard, WorkspaceRolesGuard } from "./core/auth/workspace.guard";
 import { WorkspaceContextInterceptor } from "./core/auth/workspace-context.interceptor";
 import { RedisModule } from "./modules/redis/redis.module";
+import { WorkflowScheduleJobsModule } from "./jobs/workflow-schedule-jobs.module";
 
 @Module({
   imports: [
@@ -49,7 +50,8 @@ import { RedisModule } from "./modules/redis/redis.module";
     KnowledgeModule,
     RetrievalModule,
     SkillsModule,
-    StorageModule
+    StorageModule,
+    WorkflowScheduleJobsModule
   ],
   providers: [
     // 默认拒绝所有内部接口，新增 Controller 时必须显式标记 @Public() 才能匿名访问。

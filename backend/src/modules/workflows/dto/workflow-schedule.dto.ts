@@ -106,3 +106,28 @@ export type WorkflowScheduleDueResult = {
   /** true 表示为了限制 CPU，skippedCount 只记录下限而非完整数量。 */
   skippedCountTruncated: boolean;
 };
+
+/** Scheduler 跨 Workspace 扫描时只消费稳定标识，不暴露完整数据库记录。 */
+export type DueScheduleClaim = {
+  scheduleId: string;
+  workspaceId: string;
+  nextRunAt: Date;
+};
+
+/** 单个 Schedule 短事务的物化摘要，供 Scheduler 统计与日志使用。 */
+export type MaterializedScheduleRuns = {
+  scheduleId: string;
+  createdRunCount: number;
+  duplicateRunCount: number;
+  skippedCount: number;
+  skippedCountTruncated: boolean;
+  nextRunAt: Date | null;
+  locked: boolean;
+};
+
+/** Dispatcher 只接收 Outbox 和 Run 标识，Job Data 不携带输入、计划或密钥。 */
+export type WorkflowScheduleJobDispatchDto = {
+  jobId: string;
+  scheduleRunId: string;
+  dispatchAttempts: number;
+};

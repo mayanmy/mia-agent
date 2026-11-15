@@ -156,6 +156,34 @@ enum WorkflowScheduleConcurrencyPolicy {
   @@map("workflow_schedule_concurrency_policy")
 }
 
+enum WorkflowScheduleRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+  TIMED_OUT
+  SKIPPED
+
+  @@map("workflow_schedule_run_status")
+}
+
+enum WorkflowScheduleRunTrigger {
+  SCHEDULED
+  MANUAL_BACKFILL
+
+  @@map("workflow_schedule_run_trigger")
+}
+
+enum WorkflowScheduleJobDispatchStatus {
+  PENDING
+  DISPATCHED
+  COMPLETED
+  DEAD
+
+  @@map("workflow_schedule_job_dispatch_status")
+}
+
 enum ChatSessionMessageRole {
   USER
   ASSISTANT
@@ -776,10 +804,61 @@ model WorkflowSchedule {
   archivedAt        DateTime?                         @map("archived_at") @db.Timestamptz(6)
   workflow          Workflow                          @relation(fields: [workflowId], references: [id], onDelete: Restrict)
   workflowVersion   WorkflowVersion                   @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
+  runs              WorkflowScheduleRun[]
 
   @@index([workspaceId, status, nextRunAt], map: "idx_workflow_schedules_due")
   @@index([workflowId, status, updatedAt(sort: Desc)], map: "idx_workflow_schedules_workflow")
   @@map("workflow_schedules")
+}
+
+/// 每个 Cron 计划时间点只允许一条执行记录；P2 仅物化为 QUEUED，不进入 Runtime。
+model WorkflowScheduleRun {
+  id                String                     @id @default(uuid()) @db.Uuid
+  workspaceId       String                     @map("workspace_id") @db.Uuid
+  scheduleId        String                     @map("schedule_id") @db.Uuid
+  workflowId        String                     @map("workflow_id") @db.Uuid
+  workflowVersionId String                     @map("workflow_version_id") @db.Uuid
+  scheduledFor      DateTime                   @map("scheduled_for") @db.Timestamptz(6)
+  trigger           WorkflowScheduleRunTrigger
+  status            WorkflowScheduleRunStatus  @default(QUEUED)
+  inputSnapshot     Json                       @map("input_snapshot") @db.JsonB
+  scheduleRevision  Int                        @map("schedule_revision")
+  requestId         String                     @map("request_id")
+  agentRunId        String?                    @unique(map: "uq_workflow_schedule_runs_agent_run") @map("agent_run_id") @db.Uuid
+  attempt           Int                        @default(0)
+  workerId          String?                    @map("worker_id")
+  heartbeatAt       DateTime?                  @map("heartbeat_at") @db.Timestamptz(6)
+  startedAt         DateTime?                  @map("started_at") @db.Timestamptz(6)
+  finishedAt        DateTime?                  @map("finished_at") @db.Timestamptz(6)
+  errorType         String?                    @map("error_type")
+  errorMessage      String?                    @map("error_message") @db.Text
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  schedule          WorkflowSchedule           @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  job               WorkflowScheduleJob?
+
+  @@unique([scheduleId, scheduledFor], map: "uq_workflow_schedule_runs_occurrence")
+  @@index([workspaceId, status, createdAt(sort: Desc)], map: "idx_workflow_schedule_runs_status")
+  @@index([scheduleId, createdAt(sort: Desc)], map: "idx_workflow_schedule_runs_schedule")
+  @@index([status, heartbeatAt], map: "idx_workflow_schedule_runs_recovery")
+  @@map("workflow_schedule_runs")
+}
+
+/// 数据库 Outbox 保证 Redis 暂时不可用时执行意图不丢失。
+model WorkflowScheduleJob {
+  id               String                            @id @default(uuid()) @db.Uuid
+  scheduleRunId    String                            @unique(map: "uq_workflow_schedule_jobs_run") @map("schedule_run_id") @db.Uuid
+  dispatchStatus   WorkflowScheduleJobDispatchStatus @default(PENDING) @map("dispatch_status")
+  dispatchAttempts Int                               @default(0) @map("dispatch_attempts")
+  nextDispatchAt   DateTime                          @default(now()) @map("next_dispatch_at") @db.Timestamptz(6)
+  lastErrorCode    String?                           @map("last_error_code")
+  dispatchedAt     DateTime?                         @map("dispatched_at") @db.Timestamptz(6)
+  createdAt        DateTime                          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  scheduleRun      WorkflowScheduleRun               @relation(fields: [scheduleRunId], references: [id], onDelete: Cascade)
+
+  @@index([dispatchStatus, nextDispatchAt], map: "idx_workflow_schedule_jobs_due")
+  @@map("workflow_schedule_jobs")
 }
 
 /// Skill 是管理员维护的可复用指令；MCP Prompt 导入只创建停用草稿，不自动注入 Agent。

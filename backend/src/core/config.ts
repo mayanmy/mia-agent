@@ -40,6 +40,9 @@ export type AppConfig = {
   };
   workflowScheduler: {
     enabled: boolean;
+    dispatcherEnabled: boolean;
+    consumerEnabled: boolean;
+    dispatcherDryRun: boolean;
     pollMs: number;
     batchSize: number;
     dispatchPollMs: number;
@@ -264,8 +267,13 @@ export function getConfig(): AppConfig {
       leaseMs: readPositiveIntegerEnv("MIA_LLM_LEASE_MS", 30_000)
     },
     workflowScheduler: {
-      // P0 只建立配置契约，默认关闭，后续 Scheduler/Dispatcher/Worker 分阶段接入。
+      // 调度、投递和消费独立开关，避免分阶段部署时误把尚未就绪的 Worker 一并开启。
       enabled: readBooleanEnv("MIA_WORKFLOW_SCHEDULER_ENABLED"),
+      dispatcherEnabled: readBooleanEnv("MIA_WORKFLOW_DISPATCHER_ENABLED"),
+      consumerEnabled: readBooleanEnv("MIA_WORKFLOW_CONSUMER_ENABLED"),
+      dispatcherDryRun:
+        process.env.MIA_WORKFLOW_DISPATCHER_DRY_RUN === undefined ||
+        readBooleanEnv("MIA_WORKFLOW_DISPATCHER_DRY_RUN"),
       pollMs: readPositiveIntegerEnv("MIA_WORKFLOW_SCHEDULER_POLL_MS", 15_000),
       batchSize: readPositiveIntegerEnv("MIA_WORKFLOW_SCHEDULER_BATCH_SIZE", 100),
       dispatchPollMs: readPositiveIntegerEnv("MIA_WORKFLOW_DISPATCH_POLL_MS", 5_000),

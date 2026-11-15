@@ -41,6 +41,8 @@ import { tests as workflowRuntimeTests } from "../modules/workflow_runtime/workf
 import { tests as workflowCapabilityTests } from "../modules/workflow_runtime/capability-executors.spec";
 import { tests as workflowAppRunTests } from "../modules/workflow_runtime/workflow-app-runs.service.spec";
 import { tests as workflowToolRunTests } from "../modules/workflow_runtime/workflow-tool-runs.service.spec";
+import { tests as workflowScheduleSchedulerTests } from "../jobs/workflow-schedule.scheduler.spec";
+import { tests as workflowScheduleDispatcherTests } from "../jobs/workflow-schedule.dispatcher.spec";
 
 type TestCase = {
   name: string;
@@ -77,6 +79,8 @@ const tests: TestCase[] = [
   ...workflowExpressionTests,
   ...workflowSchedulePlannerTests,
   ...workflowScheduleTests,
+  ...workflowScheduleSchedulerTests,
+  ...workflowScheduleDispatcherTests,
   ...workflowCompilerTests,
   ...workflowTests,
   ...workflowRuntimeTests,
