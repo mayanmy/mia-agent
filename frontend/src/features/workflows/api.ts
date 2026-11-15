@@ -9,6 +9,9 @@ import type {
   WorkflowScheduleListItem,
   WorkflowScheduleMisfirePolicy,
   WorkflowSchedulePreview,
+  WorkflowScheduleRunDetail,
+  WorkflowScheduleRunListItem,
+  WorkflowScheduleRunStatus,
   WorkflowVersionListItem,
   WorkflowValidationResult
 } from "./types";
@@ -276,5 +279,61 @@ export function archiveWorkflowSchedule(scheduleId: string, revision: number): P
   return request(`/api/v1/workflow-schedules/${encodeURIComponent(scheduleId)}`, {
     method: "DELETE",
     body: JSON.stringify({ revision })
+  });
+}
+
+export function listWorkflowScheduleRuns(
+  scheduleId: string,
+  page = 1,
+  pageSize = 20,
+  status?: WorkflowScheduleRunStatus
+): Promise<PageResult<WorkflowScheduleRunListItem>> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (status) params.set("status", status);
+  return request(
+    `/api/v1/workflow-schedules/${encodeURIComponent(scheduleId)}/runs?${params.toString()}`,
+    { dedupe: false }
+  );
+}
+
+export function getWorkflowScheduleRun(runId: string): Promise<WorkflowScheduleRunDetail> {
+  return request(`/api/v1/workflow-schedule-runs/${encodeURIComponent(runId)}`, {
+    dedupe: false
+  });
+}
+
+export function cancelWorkflowScheduleRun(runId: string): Promise<{
+  runId: string;
+  status: WorkflowScheduleRunStatus;
+  cancelRequestedAt: string | null;
+}> {
+  return request(`/api/v1/workflow-schedule-runs/${encodeURIComponent(runId)}/cancel`, {
+    method: "POST"
+  });
+}
+
+export function createWorkflowScheduleManualRun(
+  scheduleId: string,
+  scheduledFor?: string
+): Promise<{
+  runId: string;
+  status: WorkflowScheduleRunStatus;
+  scheduledFor: string;
+  existing: boolean;
+}> {
+  return request(`/api/v1/workflow-schedules/${encodeURIComponent(scheduleId)}/runs`, {
+    method: "POST",
+    body: JSON.stringify(scheduledFor ? { scheduledFor } : {})
+  });
+}
+
+export function upgradeWorkflowScheduleVersion(
+  scheduleId: string,
+  revision: number,
+  workflowVersionId: string
+): Promise<WorkflowScheduleDetail> {
+  return request(`/api/v1/workflow-schedules/${encodeURIComponent(scheduleId)}/upgrade-version`, {
+    method: "POST",
+    body: JSON.stringify({ revision, workflowVersionId })
   });
 }

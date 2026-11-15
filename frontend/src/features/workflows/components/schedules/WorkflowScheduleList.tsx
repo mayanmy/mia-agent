@@ -1,11 +1,14 @@
 import {
+  CloudUploadOutlined,
   DeleteOutlined,
   EditOutlined,
   PauseCircleOutlined,
   PlayCircleOutlined,
-  PlusOutlined
+  PlusOutlined,
+  UnorderedListOutlined,
+  ThunderboltOutlined
 } from "@ant-design/icons";
-import { Alert, Button, Drawer, Empty, List, Popconfirm, Space, Tooltip } from "antd";
+import { Badge, Button, Drawer, Empty, List, Popconfirm, Space, Tooltip } from "antd";
 
 import type { WorkflowScheduleListItem } from "../../types";
 import { WorkflowScheduleStatusTag } from "./WorkflowScheduleStatusTag";
@@ -20,6 +23,10 @@ type Props = {
   onPause: (schedule: WorkflowScheduleListItem) => void;
   onResume: (schedule: WorkflowScheduleListItem) => void;
   onArchive: (schedule: WorkflowScheduleListItem) => void;
+  onOpenRuns: (schedule: WorkflowScheduleListItem) => void;
+  onManualRun: (schedule: WorkflowScheduleListItem) => void;
+  onUpgrade: (schedule: WorkflowScheduleListItem) => void;
+  latestVersion: number | null;
 };
 
 export function WorkflowScheduleList({
@@ -31,7 +38,11 @@ export function WorkflowScheduleList({
   onEdit,
   onPause,
   onResume,
-  onArchive
+  onArchive,
+  onOpenRuns,
+  onManualRun,
+  onUpgrade,
+  latestVersion
 }: Props) {
   return (
     <Drawer
@@ -45,12 +56,6 @@ export function WorkflowScheduleList({
       }
       onClose={onClose}
     >
-      <Alert
-        showIcon
-        type="info"
-        message="调度执行尚未启用"
-        description="当前阶段仅提供配置、预览和状态管理，不会自动运行 Workflow。"
-      />
       <List
         className="workflowScheduleList"
         dataSource={schedules}
@@ -61,6 +66,46 @@ export function WorkflowScheduleList({
         renderItem={(schedule) => (
           <List.Item
             actions={[
+              <Tooltip title="运行历史" key="runs">
+                <Button
+                  aria-label={`查看 ${schedule.name} 的运行历史`}
+                  icon={<UnorderedListOutlined />}
+                  type="text"
+                  onClick={() => onOpenRuns(schedule)}
+                />
+              </Tooltip>,
+              <Popconfirm
+                key="manual-run"
+                title="立即补跑一次？"
+                description="将使用当前固定版本和输入创建一次运行。"
+                okText="创建运行"
+                cancelText="取消"
+                onConfirm={() => onManualRun(schedule)}
+              >
+                <Tooltip title="立即补跑">
+                  <Button
+                    aria-label={`立即补跑 ${schedule.name}`}
+                    icon={<ThunderboltOutlined />}
+                    type="text"
+                  />
+                </Tooltip>
+              </Popconfirm>,
+              <Tooltip
+                key="upgrade"
+                title={
+                  latestVersion && latestVersion > schedule.workflowVersion
+                    ? `升级到 v${latestVersion}`
+                    : "已是最新版本"
+                }
+              >
+                <Button
+                  aria-label={`升级 ${schedule.name} 的固定版本`}
+                  disabled={!latestVersion || latestVersion <= schedule.workflowVersion}
+                  icon={<CloudUploadOutlined />}
+                  type="text"
+                  onClick={() => onUpgrade(schedule)}
+                />
+              </Tooltip>,
               <Tooltip title="编辑配置" key="edit">
                 <Button
                   aria-label={`编辑 ${schedule.name}`}
@@ -112,6 +157,9 @@ export function WorkflowScheduleList({
                   <span>{schedule.name}</span>
                   <WorkflowScheduleStatusTag status={schedule.status} />
                   <span className="workflowScheduleVersion">v{schedule.workflowVersion}</span>
+                  {schedule.consecutiveFailures > 0 ? (
+                    <Badge count={`连续失败 ${schedule.consecutiveFailures} 次`} />
+                  ) : null}
                 </Space>
               }
               description={

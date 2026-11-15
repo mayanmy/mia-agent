@@ -17,6 +17,7 @@
     "prisma:studio": "prisma studio --schema prisma/schema.prisma",
     "users:bootstrap-admin": "npm run build && node dist/scripts/bootstrap-admin.js",
     "agent-runs:cleanup": "npm run build && node dist/scripts/cleanup-agent-runs.js",
+    "workflow-schedule-runs:cleanup": "npm run build && node dist/scripts/cleanup-workflow-schedule-runs.js",
     "agent-versions:backfill": "npm run build && node dist/scripts/backfill-agent-versions.js"
   },
   "dependencies": {

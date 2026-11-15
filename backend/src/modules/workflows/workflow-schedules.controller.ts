@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { UserRole, WorkspaceRole } from "@prisma/client";
 
 import { CurrentUser } from "../../core/auth/current-user.decorator";
 import { Roles } from "../../core/auth/roles.decorator";
 import { WorkspaceRequired, WorkspaceRoles } from "../../core/auth/workspace.decorator";
 import { CurrentUserDto } from "../users/dto/user.dto";
+import { PageResult } from "../../core/result";
 import {
   WorkflowScheduleCreateDto,
   WorkflowScheduleDetail,
@@ -15,6 +16,9 @@ import {
   WorkflowSchedulePreviewDto,
   WorkflowScheduleRevisionDto,
   WorkflowScheduleRunCancelResult,
+  WorkflowScheduleRunDetail,
+  WorkflowScheduleRunListItem,
+  WorkflowScheduleRunQueryDto,
   WorkflowScheduleUpdateDto,
   WorkflowScheduleUpgradeVersionDto
 } from "./dto/workflow-schedule.dto";
@@ -118,5 +122,18 @@ export class WorkflowSchedulesController {
     @Body() payload: WorkflowScheduleManualRunDto
   ): Promise<WorkflowScheduleManualRunResult> {
     return this.schedulesService.createManualRun(scheduleId, payload);
+  }
+
+  @Get("workflow-schedules/:scheduleId/runs")
+  listScheduleRuns(
+    @Param("scheduleId") scheduleId: string,
+    @Query() query: WorkflowScheduleRunQueryDto
+  ): Promise<PageResult<WorkflowScheduleRunListItem>> {
+    return this.schedulesService.listScheduleRuns(scheduleId, query);
+  }
+
+  @Get("workflow-schedule-runs/:runId")
+  getScheduleRun(@Param("runId") runId: string): Promise<WorkflowScheduleRunDetail> {
+    return this.schedulesService.getScheduleRunDetail(runId);
   }
 }

@@ -165,10 +165,44 @@ export type WorkflowScheduleListItem = {
   revision: number;
   createdAt: string;
   updatedAt: string;
+  /** 最近连续失败次数，用于在列表中提前暴露异常调度。 */
+  consecutiveFailures: number;
 };
 
 export type WorkflowScheduleDetail = WorkflowScheduleListItem & {
   inputs: Record<string, unknown>;
+};
+
+export type WorkflowScheduleRunStatus =
+  "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELED" | "TIMED_OUT" | "SKIPPED";
+
+export type WorkflowScheduleRunListItem = {
+  id: string;
+  scheduleId: string;
+  workflowId: string;
+  workflowVersionId: string;
+  workflowVersion: number;
+  trigger: "SCHEDULED" | "MANUAL_BACKFILL";
+  status: WorkflowScheduleRunStatus;
+  scheduledFor: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  queueWaitMs: number | null;
+  durationMs: number | null;
+  attempt: number;
+  agentRunId: string | null;
+  errorType: string | null;
+  errorMessage: string | null;
+};
+
+export type WorkflowScheduleRunDetail = WorkflowScheduleRunListItem & {
+  requestId: string;
+  scheduleRevision: number;
+  workerId: string | null;
+  heartbeatAt: string | null;
+  cancelRequestedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 /** Workflow Inspector 可选择的资源摘要。 */

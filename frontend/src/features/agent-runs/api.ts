@@ -5,7 +5,12 @@ export type AgentRunStatus =
   "QUEUED" | "RUNNING" | "WAITING_APPROVAL" | "COMPLETED" | "FAILED" | "CANCELED" | "TIMED_OUT";
 /** Run 的入口来源。 */
 export type AgentRunSource =
-  "INTERNAL_CHAT" | "PUBLIC_WIDGET" | "SERVICE_API" | "ASYNC_TASK" | "WORKFLOW_APP";
+  | "INTERNAL_CHAT"
+  | "PUBLIC_WIDGET"
+  | "SERVICE_API"
+  | "ASYNC_TASK"
+  | "WORKFLOW_APP"
+  | "WORKFLOW_SCHEDULE";
 
 /** Run Trace 列表中的运行摘要。 */
 export type AgentRunListItem = {

@@ -102,7 +102,8 @@ export const ErrorCodes = {
     scheduleVersionInvalid: 7022,
     scheduleInputInvalid: 7023,
     scheduleInteractiveToolUnsupported: 7024,
-    scheduleArchived: 7025
+    scheduleArchived: 7025,
+    scheduleRunNotFound: 7026
   },
   mcp: {
     notFound: 9001,

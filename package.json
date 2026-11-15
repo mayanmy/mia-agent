@@ -17,6 +17,7 @@
     "prisma:migrate": "npm --prefix backend run prisma:migrate",
     "prisma:deploy": "npm --prefix backend run prisma:deploy",
     "agent-runs:cleanup": "npm --prefix backend run agent-runs:cleanup",
+    "workflow-schedule-runs:cleanup": "npm --prefix backend run workflow-schedule-runs:cleanup",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "deploy:docker": "./deploy.sh",

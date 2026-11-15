@@ -694,5 +694,131 @@ export const tests = [
       assert.equal(existing.existing, true);
       assert.equal(outboxCreates, 1);
     }
+  },
+  {
+    name: "WorkflowSchedulesService returns paged run history with derived durations",
+    run: async () => {
+      const scheduledFor = new Date("2026-11-15T08:00:00.000Z");
+      const startedAt = new Date("2026-11-15T08:00:02.000Z");
+      const finishedAt = new Date("2026-11-15T08:00:05.500Z");
+      let runWhere: Record<string, unknown> | undefined;
+      const run = {
+        id: "schedule-run-1",
+        workspaceId,
+        scheduleId: "schedule-1",
+        workflowId: "workflow-1",
+        workflowVersionId: "version-1",
+        scheduledFor,
+        trigger: "SCHEDULED",
+        status: "COMPLETED",
+        inputSnapshot: {},
+        scheduleRevision: 1,
+        requestId: "request-1",
+        agentRunId: "agent-run-1",
+        attempt: 1,
+        workerId: "worker-1",
+        heartbeatAt: finishedAt,
+        cancelRequestedAt: null,
+        startedAt,
+        finishedAt,
+        errorType: null,
+        errorMessage: null,
+        createdAt: scheduledFor,
+        updatedAt: finishedAt
+      };
+      const service = new WorkflowSchedulesService(
+        {
+          workflowSchedule: { findFirst: async () => scheduleRecord() },
+          workflowScheduleRun: {
+            findMany: async ({ where }: { where: Record<string, unknown> }) => {
+              runWhere = where;
+              return [run];
+            },
+            count: async () => 1,
+            findFirst: async () => run
+          },
+          workflowVersion: {
+            findMany: async () => [{ id: "version-1", version: 1 }],
+            findUnique: async () => ({ version: 1 })
+          }
+        } as never,
+        new WorkflowSchedulePlanner(),
+        tools as never
+      );
+
+      const page = await service.listScheduleRuns("schedule-1", {
+        page: 1,
+        pageSize: 20,
+        status: "COMPLETED"
+      });
+      const detail = await service.getScheduleRunDetail("schedule-run-1");
+
+      assert.equal(page.list[0].queueWaitMs, 2_000);
+      assert.equal(page.list[0].durationMs, 3_500);
+      assert.equal(page.list[0].workflowVersion, 1);
+      assert.equal(detail.requestId, "request-1");
+      assert.equal((runWhere?.status as string | undefined) ?? null, "COMPLETED");
+    }
+  },
+  {
+    name: "WorkflowSchedulesService reports backlog health without exposing workspace data",
+    run: async () => {
+      const counts = [3, 1, 2, 1, 1, 4];
+      const service = new WorkflowSchedulesService(
+        {
+          workflowSchedule: { count: async () => counts.shift() },
+          workflowScheduleRun: {
+            count: async () => counts.shift(),
+            findFirst: async () => ({ createdAt: new Date("2026-11-12T23:59:30.000Z") })
+          },
+          workflowScheduleJob: { count: async () => counts.shift() }
+        } as never,
+        new WorkflowSchedulePlanner(),
+        tools as never
+      );
+
+      const summary = await service.getOperationalHealthSummary(now, 60_000, 60_000);
+
+      assert.deepEqual(summary, {
+        activeSchedules: 3,
+        overdueSchedules: 1,
+        queuedRuns: 2,
+        runningRuns: 1,
+        staleRunningRuns: 1,
+        pendingDispatches: 4,
+        oldestQueuedSeconds: 30
+      });
+    }
+  },
+  {
+    name: "WorkflowSchedulesService cleanup deletes only expired terminal status groups",
+    run: async () => {
+      const filters: Array<Record<string, unknown>> = [];
+      const prisma = {
+        workflowScheduleRun: {
+          deleteMany: ({ where }: { where: Record<string, unknown> }) => {
+            filters.push(where);
+            return Promise.resolve({ count: filters.length });
+          }
+        },
+        $transaction: async (operations: Array<Promise<{ count: number }>>) =>
+          Promise.all(operations)
+      };
+      const service = new WorkflowSchedulesService(
+        prisma as never,
+        new WorkflowSchedulePlanner(),
+        tools as never
+      );
+
+      const result = await service.cleanupExpiredRuns(90, 180, now);
+
+      assert.deepEqual(result, { completedDeleted: 1, failedDeleted: 2 });
+      assert.deepEqual((filters[0].status as { in: string[] }).in, [
+        "COMPLETED",
+        "CANCELED",
+        "SKIPPED"
+      ]);
+      assert.deepEqual((filters[1].status as { in: string[] }).in, ["FAILED", "TIMED_OUT"]);
+    }
   }
 ];

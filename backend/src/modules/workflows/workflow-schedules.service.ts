@@ -3,6 +3,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import {
   Prisma,
   PrismaClient,
+  WorkflowScheduleRun,
   WorkflowScheduleJobDispatchStatus,
   WorkflowScheduleConcurrencyPolicy as PrismaConcurrencyPolicy,
   WorkflowScheduleMisfirePolicy as PrismaMisfirePolicy,
@@ -13,6 +14,8 @@ import {
 
 import { requireWorkspaceId } from "../../core/auth/workspace-context";
 import { AppError, ErrorCodes } from "../../core/errors";
+import { normalizePageQuery, createPageResult } from "../../core/pagination";
+import { PageResult } from "../../core/result";
 import { PrismaService } from "../prisma/prisma.service";
 import { ToolsService } from "../tools/tools.service";
 import {
@@ -37,7 +40,12 @@ import {
   WorkflowScheduleJobDispatchDto,
   WorkflowScheduleRunExecution,
   WorkflowScheduleRunCancelResult,
-  WorkflowScheduleRunTerminalStatus
+  WorkflowScheduleRunDetail,
+  WorkflowScheduleRunListItem,
+  WorkflowScheduleRunTerminalStatus,
+  WorkflowScheduleRunQueryDto,
+  WorkflowScheduleHealthSummary,
+  WorkflowScheduleCleanupResult
 } from "./dto/workflow-schedule.dto";
 import {
   MAX_WORKFLOW_SCHEDULE_CATCH_UP_RUNS,
@@ -164,11 +172,165 @@ export class WorkflowSchedulesService {
       orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       include: { workflowVersion: { select: { version: true } } }
     });
-    return schedules.map((schedule) => this.toListItem(schedule));
+    const failures = await Promise.all(
+      schedules.map((schedule) => this.getConsecutiveFailures(schedule.id))
+    );
+    return schedules.map((schedule, index) => this.toListItem(schedule, failures[index] ?? 0));
   }
 
   async getScheduleDetail(scheduleId: string): Promise<WorkflowScheduleDetail> {
     return this.toDetail(await this.requireSchedule(scheduleId, true));
+  }
+
+  async listScheduleRuns(
+    scheduleId: string,
+    query: WorkflowScheduleRunQueryDto
+  ): Promise<PageResult<WorkflowScheduleRunListItem>> {
+    const schedule = await this.requireSchedule(scheduleId, true);
+    const page = normalizePageQuery(query);
+    const status = this.runStatus(query.status);
+    const where: Prisma.WorkflowScheduleRunWhereInput = {
+      scheduleId: schedule.id,
+      workspaceId: requireWorkspaceId(),
+      ...(status ? { status } : {})
+    };
+    const [runs, total] = await Promise.all([
+      this.prisma.workflowScheduleRun.findMany({
+        where,
+        orderBy: [{ scheduledFor: "desc" }, { id: "desc" }],
+        skip: page.skip,
+        take: page.take
+      }),
+      this.prisma.workflowScheduleRun.count({ where })
+    ]);
+    const versions = await this.prisma.workflowVersion.findMany({
+      where: { id: { in: [...new Set(runs.map((run) => run.workflowVersionId))] } },
+      select: { id: true, version: true }
+    });
+    const versionById = new Map(versions.map((version) => [version.id, version.version]));
+    return createPageResult(
+      runs.map((run) => this.toRunListItem(run, versionById.get(run.workflowVersionId) ?? 0)),
+      total,
+      page.page,
+      page.pageSize
+    );
+  }
+
+  async getScheduleRunDetail(runIdValue: string): Promise<WorkflowScheduleRunDetail> {
+    const run = await this.prisma.workflowScheduleRun.findFirst({
+      where: { id: this.id(runIdValue, "runId"), workspaceId: requireWorkspaceId() }
+    });
+    if (!run) {
+      throw new AppError(
+        ErrorCodes.workflow.scheduleRunNotFound,
+        "Workflow Schedule Run 不存在",
+        HttpStatus.NOT_FOUND
+      );
+    }
+    const version = await this.prisma.workflowVersion.findUnique({
+      where: { id: run.workflowVersionId },
+      select: { version: true }
+    });
+    return {
+      ...this.toRunListItem(run, version?.version ?? 0),
+      requestId: run.requestId,
+      scheduleRevision: run.scheduleRevision,
+      workerId: run.workerId,
+      heartbeatAt: run.heartbeatAt,
+      cancelRequestedAt: run.cancelRequestedAt,
+      createdAt: run.createdAt,
+      updatedAt: run.updatedAt
+    };
+  }
+
+  /** 聚合全局运行信号供基础健康检查使用；不返回任何 Workspace 级业务数据。 */
+  async getOperationalHealthSummary(
+    now = new Date(),
+    staleMs = 60_000,
+    overdueMs = 60_000
+  ): Promise<WorkflowScheduleHealthSummary> {
+    this.validDate(now, "now");
+    const staleBefore = new Date(now.getTime() - staleMs);
+    const overdueBefore = new Date(now.getTime() - overdueMs);
+    const [
+      activeSchedules,
+      overdueSchedules,
+      queuedRuns,
+      runningRuns,
+      staleRunningRuns,
+      pendingDispatches,
+      oldestQueued
+    ] = await Promise.all([
+      this.prisma.workflowSchedule.count({ where: { status: WorkflowScheduleStatus.ACTIVE } }),
+      this.prisma.workflowSchedule.count({
+        where: { status: WorkflowScheduleStatus.ACTIVE, nextRunAt: { lt: overdueBefore } }
+      }),
+      this.prisma.workflowScheduleRun.count({
+        where: { status: WorkflowScheduleRunStatus.QUEUED }
+      }),
+      this.prisma.workflowScheduleRun.count({
+        where: { status: WorkflowScheduleRunStatus.RUNNING }
+      }),
+      this.prisma.workflowScheduleRun.count({
+        where: {
+          status: WorkflowScheduleRunStatus.RUNNING,
+          OR: [{ heartbeatAt: null }, { heartbeatAt: { lt: staleBefore } }]
+        }
+      }),
+      this.prisma.workflowScheduleJob.count({
+        where: { dispatchStatus: WorkflowScheduleJobDispatchStatus.PENDING }
+      }),
+      this.prisma.workflowScheduleRun.findFirst({
+        where: { status: WorkflowScheduleRunStatus.QUEUED },
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true }
+      })
+    ]);
+    return {
+      activeSchedules,
+      overdueSchedules,
+      queuedRuns,
+      runningRuns,
+      staleRunningRuns,
+      pendingDispatches,
+      oldestQueuedSeconds: oldestQueued
+        ? Math.max(0, Math.floor((now.getTime() - oldestQueued.createdAt.getTime()) / 1_000))
+        : null
+    };
+  }
+
+  /** 仅清理终态调度记录；RUNNING/QUEUED 永不因保留策略被删除。 */
+  async cleanupExpiredRuns(
+    completedRetentionDays: number,
+    failedRetentionDays: number,
+    now = new Date()
+  ): Promise<WorkflowScheduleCleanupResult> {
+    const completedDays = this.retentionDays(completedRetentionDays, "completedRetentionDays");
+    const failedDays = this.retentionDays(failedRetentionDays, "failedRetentionDays");
+    this.validDate(now, "now");
+    const completedBefore = new Date(now.getTime() - completedDays * 86_400_000);
+    const failedBefore = new Date(now.getTime() - failedDays * 86_400_000);
+    const [completed, failed] = await this.prisma.$transaction([
+      this.prisma.workflowScheduleRun.deleteMany({
+        where: {
+          status: {
+            in: [
+              WorkflowScheduleRunStatus.COMPLETED,
+              WorkflowScheduleRunStatus.CANCELED,
+              WorkflowScheduleRunStatus.SKIPPED
+            ]
+          },
+          finishedAt: { lt: completedBefore }
+        }
+      }),
+      this.prisma.workflowScheduleRun.deleteMany({
+        where: {
+          status: { in: [WorkflowScheduleRunStatus.FAILED, WorkflowScheduleRunStatus.TIMED_OUT] },
+          finishedAt: { lt: failedBefore }
+        }
+      })
+    ]);
+    return { completedDeleted: completed.count, failedDeleted: failed.count };
   }
 
   async updateSchedule(
@@ -1122,7 +1284,7 @@ export class WorkflowSchedulesService {
     }
   }
 
-  private toListItem(schedule: ScheduleRecord): WorkflowScheduleListItem {
+  private toListItem(schedule: ScheduleRecord, consecutiveFailures = 0): WorkflowScheduleListItem {
     return {
       id: schedule.id,
       workflowId: schedule.workflowId,
@@ -1144,12 +1306,84 @@ export class WorkflowSchedulesService {
       createdByUserId: schedule.createdByUserId,
       revision: schedule.revision,
       createdAt: schedule.createdAt,
-      updatedAt: schedule.updatedAt
+      updatedAt: schedule.updatedAt,
+      consecutiveFailures
     };
   }
 
-  private toDetail(schedule: ScheduleRecord): WorkflowScheduleDetail {
-    return { ...this.toListItem(schedule), inputs: this.jsonObject(schedule.inputs) };
+  private toDetail(schedule: ScheduleRecord, consecutiveFailures = 0): WorkflowScheduleDetail {
+    return {
+      ...this.toListItem(schedule, consecutiveFailures),
+      inputs: this.jsonObject(schedule.inputs)
+    };
+  }
+
+  private async getConsecutiveFailures(scheduleId: string): Promise<number> {
+    const runs = await this.prisma.workflowScheduleRun.findMany({
+      where: {
+        scheduleId,
+        status: {
+          in: [
+            WorkflowScheduleRunStatus.COMPLETED,
+            WorkflowScheduleRunStatus.FAILED,
+            WorkflowScheduleRunStatus.CANCELED,
+            WorkflowScheduleRunStatus.TIMED_OUT,
+            WorkflowScheduleRunStatus.SKIPPED
+          ]
+        }
+      },
+      orderBy: [{ scheduledFor: "desc" }, { id: "desc" }],
+      take: 20,
+      select: { status: true }
+    });
+    let count = 0;
+    for (const run of runs) {
+      if (
+        run.status !== WorkflowScheduleRunStatus.FAILED &&
+        run.status !== WorkflowScheduleRunStatus.TIMED_OUT
+      ) {
+        break;
+      }
+      count += 1;
+    }
+    return count;
+  }
+
+  private toRunListItem(
+    run: WorkflowScheduleRun,
+    workflowVersion: number
+  ): WorkflowScheduleRunListItem {
+    return {
+      id: run.id,
+      scheduleId: run.scheduleId,
+      workflowId: run.workflowId,
+      workflowVersionId: run.workflowVersionId,
+      workflowVersion,
+      trigger: run.trigger,
+      status: run.status,
+      scheduledFor: run.scheduledFor,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      queueWaitMs: run.startedAt
+        ? Math.max(0, run.startedAt.getTime() - run.scheduledFor.getTime())
+        : null,
+      durationMs:
+        run.startedAt && run.finishedAt
+          ? Math.max(0, run.finishedAt.getTime() - run.startedAt.getTime())
+          : null,
+      attempt: run.attempt,
+      agentRunId: run.agentRunId,
+      errorType: run.errorType,
+      errorMessage: run.errorMessage
+    };
+  }
+
+  private runStatus(value: unknown): WorkflowScheduleRunStatus | undefined {
+    if (value === undefined || value === "") return undefined;
+    if (!Object.values(WorkflowScheduleRunStatus).includes(value as WorkflowScheduleRunStatus)) {
+      throw new AppError(ErrorCodes.common.badRequest, "Schedule Run status 无效");
+    }
+    return value as WorkflowScheduleRunStatus;
   }
 
   private cronExpression(value: unknown): string {
@@ -1211,6 +1445,13 @@ export class WorkflowSchedulesService {
       throw new AppError(ErrorCodes.common.badRequest, "revision 必须是正整数");
     }
     return Number(value);
+  }
+
+  private retentionDays(value: number, field: string): number {
+    if (!Number.isInteger(value) || value < 1 || value > 3_650) {
+      throw new AppError(ErrorCodes.common.badRequest, `${field} 必须是 1 到 3650 之间的整数`);
+    }
+    return value;
   }
 
   private catchUpRuns(value: unknown): number {

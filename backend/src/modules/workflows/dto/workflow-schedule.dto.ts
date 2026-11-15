@@ -81,6 +81,7 @@ export type WorkflowScheduleListItem = {
   revision: number;
   createdAt: Date;
   updatedAt: Date;
+  consecutiveFailures: number;
 };
 
 export type WorkflowScheduleDetail = WorkflowScheduleListItem & {
@@ -179,4 +180,58 @@ export type WorkflowScheduleLinkedRun = {
 export type WorkflowScheduleDispatchedJob = {
   jobId: string;
   scheduleRunId: string;
+};
+
+export type WorkflowScheduleRunStatusValue =
+  "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELED" | "TIMED_OUT" | "SKIPPED";
+
+export type WorkflowScheduleRunQueryDto = {
+  page?: string | number;
+  pageSize?: string | number;
+  status?: WorkflowScheduleRunStatusValue;
+};
+
+export type WorkflowScheduleRunListItem = {
+  id: string;
+  scheduleId: string;
+  workflowId: string;
+  workflowVersionId: string;
+  workflowVersion: number;
+  trigger: "SCHEDULED" | "MANUAL_BACKFILL";
+  status: WorkflowScheduleRunStatusValue;
+  scheduledFor: Date;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  queueWaitMs: number | null;
+  durationMs: number | null;
+  attempt: number;
+  agentRunId: string | null;
+  errorType: string | null;
+  errorMessage: string | null;
+};
+
+export type WorkflowScheduleRunDetail = WorkflowScheduleRunListItem & {
+  requestId: string;
+  scheduleRevision: number;
+  workerId: string | null;
+  heartbeatAt: Date | null;
+  cancelRequestedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/** 公共健康检查只暴露调度积压与卡死信号，不包含 Workspace 或业务输入。 */
+export type WorkflowScheduleHealthSummary = {
+  activeSchedules: number;
+  overdueSchedules: number;
+  queuedRuns: number;
+  runningRuns: number;
+  staleRunningRuns: number;
+  pendingDispatches: number;
+  oldestQueuedSeconds: number | null;
+};
+
+export type WorkflowScheduleCleanupResult = {
+  completedDeleted: number;
+  failedDeleted: number;
 };

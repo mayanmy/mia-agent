@@ -6,10 +6,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { listKnowledgeBases } from "../knowledge/api";
 import { listModelConfigs } from "../model-providers/api";
 import { listTools } from "../tools/api";
+import { AgentRunDetailDrawer } from "../agent-runs/components/AgentRunDetailDrawer";
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
 import {
   archiveWorkflow,
   archiveWorkflowSchedule,
+  createWorkflowScheduleManualRun,
   createWorkflowSchedule,
   createWorkflow,
   getPublishedWorkflowApp,
@@ -25,6 +27,7 @@ import {
   runPublishedWorkflow,
   updateWorkflow,
   updateWorkflowSchedule,
+  upgradeWorkflowScheduleVersion,
   updateWorkflowDraft,
   validateWorkflow
 } from "./api";
@@ -44,9 +47,11 @@ import { WorkflowRunModal } from "./components/WorkflowRunModal";
 import { WorkflowTraceDrawer } from "./components/WorkflowTraceDrawer";
 import { WorkflowScheduleFormModal } from "./components/schedules/WorkflowScheduleFormModal";
 import { WorkflowScheduleList } from "./components/schedules/WorkflowScheduleList";
+import { WorkflowScheduleRunsDrawer } from "./components/schedules/WorkflowScheduleRunsDrawer";
 import { appendNodeToGraph, insertNodeOnEdge } from "./editor/graph-commands";
 import { autoLayoutWorkflowGraph } from "./editor/auto-layout";
 import { useWorkflowEditor } from "./editor/useWorkflowEditor";
+import { useWorkflowScheduleRuns } from "./hooks/useWorkflowScheduleRuns";
 import type {
   WorkflowDetail,
   WorkflowGraph,
@@ -103,6 +108,8 @@ export function WorkflowsPage() {
   const [schedules, setSchedules] = useState<WorkflowScheduleListItem[]>([]);
   const [scheduleVersions, setScheduleVersions] = useState<WorkflowVersionListItem[]>([]);
   const [editingSchedule, setEditingSchedule] = useState<WorkflowScheduleDetail | null>(null);
+  const scheduleRuns = useWorkflowScheduleRuns();
+  const [scheduleAgentRunId, setScheduleAgentRunId] = useState<string | null>(null);
   // 自动布局坐标提交后递增版本号，通知画布在节点完成测量后重新适配视口。
   // 不直接从页面调用 React Flow 实例，保持路由页只负责业务状态编排。
   const [fitViewRevision, setFitViewRevision] = useState(0);
@@ -510,7 +517,7 @@ export function WorkflowsPage() {
     });
   }
 
-  /** Schedule 管理只针对已发布 Workflow；P1 读取配置但不会创建任何运行。 */
+  /** Schedule 管理只针对已发布 Workflow，并读取固定版本供创建和升级配置使用。 */
   async function openScheduleManager() {
     if (!workflow?.publishedVersion) {
       message.warning("请先发布 Workflow，再配置定时任务");
@@ -571,7 +578,7 @@ export function WorkflowsPage() {
       if (active) await resumeWorkflowSchedule(item.id, item.revision);
       else await pauseWorkflowSchedule(item.id, item.revision);
       setSchedules(await listWorkflowSchedules(workflow.id));
-      message.success(active ? "定时任务已启用；当前环境仍不会实际执行" : "定时任务已暂停");
+      message.success(active ? "定时任务已启用" : "定时任务已暂停");
     } catch (error) {
       message.error(error instanceof Error ? error.message : "更新定时任务状态失败");
     } finally {
@@ -591,6 +598,36 @@ export function WorkflowsPage() {
     } finally {
       setScheduleLoading(false);
     }
+  }
+
+  async function createManualScheduleRun(item: WorkflowScheduleListItem) {
+    try {
+      const result = await createWorkflowScheduleManualRun(item.id);
+      message.success(result.existing ? "相同计划时间的运行已存在" : "补跑任务已进入队列");
+      scheduleRuns.open(item);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "创建补跑任务失败");
+    }
+  }
+
+  function confirmScheduleVersionUpgrade(item: WorkflowScheduleListItem) {
+    if (!workflow) return;
+    const latest = scheduleVersions.reduce<WorkflowVersionListItem | null>(
+      (current, version) => (!current || version.version > current.version ? version : current),
+      null
+    );
+    if (!latest || latest.version <= item.workflowVersion) return;
+    modal.confirm({
+      title: `升级定时任务到 v${latest.version}`,
+      content: `“${item.name}”当前固定为 v${item.workflowVersion}。升级只影响后续运行，历史运行仍保留原版本。`,
+      okText: "确认升级",
+      cancelText: "取消",
+      onOk: async () => {
+        await upgradeWorkflowScheduleVersion(item.id, item.revision, latest.id);
+        setSchedules(await listWorkflowSchedules(workflow.id));
+        message.success(`已升级到 v${latest.version}`);
+      }
+    });
   }
 
   // 操作区作为纯展示内容注入悬浮 Chrome；保存、校验、发布仍由页面持有业务流程。
@@ -781,6 +818,11 @@ export function WorkflowsPage() {
       />
 
       <WorkflowScheduleList
+        latestVersion={scheduleVersions.reduce<number | null>(
+          (latest, version) =>
+            latest === null || version.version > latest ? version.version : latest,
+          null
+        )}
         loading={scheduleLoading}
         open={scheduleDrawerOpen}
         schedules={schedules}
@@ -791,8 +833,37 @@ export function WorkflowsPage() {
           setScheduleFormOpen(true);
         }}
         onEdit={(item) => void editSchedule(item)}
+        onOpenRuns={scheduleRuns.open}
+        onManualRun={(item) => void createManualScheduleRun(item)}
         onPause={(item) => void changeScheduleStatus(item, false)}
         onResume={(item) => void changeScheduleStatus(item, true)}
+        onUpgrade={confirmScheduleVersionUpgrade}
+      />
+
+      <WorkflowScheduleRunsDrawer
+        canceling={scheduleRuns.canceling}
+        detail={scheduleRuns.detail}
+        detailLoading={scheduleRuns.detailLoading}
+        loading={scheduleRuns.loading}
+        page={scheduleRuns.page}
+        pageSize={scheduleRuns.pageSize}
+        runs={scheduleRuns.runs}
+        schedule={scheduleRuns.schedule}
+        status={scheduleRuns.status}
+        total={scheduleRuns.total}
+        onCancelRun={() => void scheduleRuns.cancel()}
+        onClose={scheduleRuns.close}
+        onCloseDetail={scheduleRuns.closeDetail}
+        onOpenAgentRun={setScheduleAgentRunId}
+        onPageChange={scheduleRuns.changePage}
+        onRefresh={() => void scheduleRuns.refresh()}
+        onSelect={(run) => void scheduleRuns.openDetail(run)}
+        onStatusChange={scheduleRuns.changeStatus}
+      />
+
+      <AgentRunDetailDrawer
+        runId={scheduleAgentRunId}
+        onClose={() => setScheduleAgentRunId(null)}
       />
 
       <WorkflowScheduleFormModal
