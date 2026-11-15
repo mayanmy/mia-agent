@@ -96,7 +96,13 @@ export const ErrorCodes = {
     scheduleInputTooLarge: 7016,
     scheduleCatchUpLimitInvalid: 7017,
     scheduleTimeoutInvalid: 7018,
-    schedulePreviewCountInvalid: 7019
+    schedulePreviewCountInvalid: 7019,
+    scheduleNotFound: 7020,
+    scheduleRevisionConflict: 7021,
+    scheduleVersionInvalid: 7022,
+    scheduleInputInvalid: 7023,
+    scheduleInteractiveToolUnsupported: 7024,
+    scheduleArchived: 7025
   },
   mcp: {
     notFound: 9001,

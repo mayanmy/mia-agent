@@ -117,6 +117,60 @@ export type WorkflowPublishResult = {
   publishedAt: string;
 };
 
+/** 已发布不可变版本摘要，Schedule 必须固定到其中一个版本。 */
+export type WorkflowVersionListItem = {
+  id: string;
+  workflowId: string;
+  version: number;
+  graphSchemaVersion: number;
+  checksum: string;
+  publishedByUserId: string;
+  createdAt: string;
+};
+
+export type WorkflowScheduleStatus = "ACTIVE" | "PAUSED" | "ARCHIVED";
+export type WorkflowScheduleMisfirePolicy = "SKIP" | "RUN_ONCE" | "CATCH_UP";
+export type WorkflowScheduleConcurrencyPolicy = "QUEUE" | "SKIP" | "ALLOW";
+
+export type WorkflowScheduleOccurrence = {
+  scheduledFor: string;
+  localTime: string;
+};
+
+export type WorkflowSchedulePreview = {
+  cronExpression: string;
+  timezone: string;
+  nextOccurrences: WorkflowScheduleOccurrence[];
+};
+
+export type WorkflowScheduleListItem = {
+  id: string;
+  workflowId: string;
+  workflowVersionId: string;
+  workflowVersion: number;
+  name: string;
+  description: string;
+  status: WorkflowScheduleStatus;
+  cronExpression: string;
+  timezone: string;
+  misfirePolicy: WorkflowScheduleMisfirePolicy;
+  concurrencyPolicy: WorkflowScheduleConcurrencyPolicy;
+  maxCatchUpRuns: number;
+  timeoutSeconds: number;
+  nextRunAt: string | null;
+  lastScheduledAt: string | null;
+  lastStartedAt: string | null;
+  lastFinishedAt: string | null;
+  createdByUserId: string;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkflowScheduleDetail = WorkflowScheduleListItem & {
+  inputs: Record<string, unknown>;
+};
+
 /** Workflow Inspector 可选择的资源摘要。 */
 export type WorkflowResourceOption = {
   /** 资源 ID。 */

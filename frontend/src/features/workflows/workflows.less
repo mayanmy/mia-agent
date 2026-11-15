@@ -114,6 +114,90 @@
   grid-template-columns: 44px minmax(0, 1fr) auto;
 }
 
+.workflowScheduleList {
+  margin-top: 16px;
+}
+
+.workflowScheduleList .ant-list-item {
+  align-items: flex-start;
+  border: 1px solid var(--mia-border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  padding: 16px;
+}
+
+.workflowScheduleMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 6px;
+}
+
+.workflowScheduleMeta code,
+.workflowScheduleVersion {
+  background: #f4f6f8;
+  border-radius: 5px;
+  color: #475569;
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+.workflowScheduleForm {
+  margin-top: 18px;
+}
+
+.workflowScheduleFormGrid,
+.workflowSchedulePolicyGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workflowSchedulePolicyGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.workflowScheduleJsonInput {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.workflowSchedulePreview {
+  background: #f8fafc;
+  border: 1px solid var(--mia-border);
+  border-radius: 10px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+}
+
+.workflowSchedulePreview ol {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding-left: 22px;
+}
+
+.workflowSchedulePreview li span {
+  display: inline-block;
+  min-width: 250px;
+}
+
+.workflowSchedulePreview code {
+  color: #64748b;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .workflowScheduleFormGrid,
+  .workflowSchedulePolicyGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .workflowSchedulePreview li span {
+    display: block;
+    min-width: 0;
+  }
+}
+
 .workflowGalleryCardActions {
   align-items: center;
   display: inline-flex;

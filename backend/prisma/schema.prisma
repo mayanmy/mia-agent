@@ -132,6 +132,30 @@ enum WorkflowRunMode {
   @@map("workflow_run_mode")
 }
 
+enum WorkflowScheduleStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+
+  @@map("workflow_schedule_status")
+}
+
+enum WorkflowScheduleMisfirePolicy {
+  SKIP
+  RUN_ONCE
+  CATCH_UP
+
+  @@map("workflow_schedule_misfire_policy")
+}
+
+enum WorkflowScheduleConcurrencyPolicy {
+  QUEUE
+  SKIP
+  ALLOW
+
+  @@map("workflow_schedule_concurrency_policy")
+}
+
 enum ChatSessionMessageRole {
   USER
   ASSISTANT
@@ -685,19 +709,20 @@ model AgentWorkflow {
 
 /// Workflow 保存可编辑草稿；正式执行只能引用 workflow_versions 中的不可变版本。
 model Workflow {
-  id               String            @id @default(uuid()) @db.Uuid
-  workspaceId      String            @map("workspace_id") @db.Uuid
+  id               String             @id @default(uuid()) @db.Uuid
+  workspaceId      String             @map("workspace_id") @db.Uuid
   name             String
-  description      String            @default("") @db.Text
-  status           WorkflowStatus    @default(DRAFT)
-  draftGraph       Json              @map("draft_graph") @db.JsonB
-  draftRevision    Int               @default(1) @map("draft_revision")
-  publishedVersion Int?              @map("published_version")
-  createdByUserId  String            @map("created_by_user_id") @db.Uuid
-  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt        DateTime?         @map("deleted_at") @db.Timestamptz(6)
+  description      String             @default("") @db.Text
+  status           WorkflowStatus     @default(DRAFT)
+  draftGraph       Json               @map("draft_graph") @db.JsonB
+  draftRevision    Int                @default(1) @map("draft_revision")
+  publishedVersion Int?               @map("published_version")
+  createdByUserId  String             @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?          @map("deleted_at") @db.Timestamptz(6)
   versions         WorkflowVersion[]
+  schedules        WorkflowSchedule[]
 
   @@index([status, updatedAt(sort: Desc)], map: "idx_workflows_status_updated_at")
   @@index([createdByUserId, createdAt(sort: Desc)], map: "idx_workflows_creator_created_at")
@@ -706,21 +731,55 @@ model Workflow {
 
 /// 发布版本不可更新；graph 用于回显，compiled_plan 从 W2 开始由编译器生成。
 model WorkflowVersion {
-  id                 String   @id @default(uuid()) @db.Uuid
-  workspaceId        String   @map("workspace_id") @db.Uuid
-  workflowId         String   @map("workflow_id") @db.Uuid
+  id                 String             @id @default(uuid()) @db.Uuid
+  workspaceId        String             @map("workspace_id") @db.Uuid
+  workflowId         String             @map("workflow_id") @db.Uuid
   version            Int
-  graphSchemaVersion Int      @map("graph_schema_version")
-  graph              Json     @db.JsonB
-  compiledPlan       Json     @map("compiled_plan") @db.JsonB
+  graphSchemaVersion Int                @map("graph_schema_version")
+  graph              Json               @db.JsonB
+  compiledPlan       Json               @map("compiled_plan") @db.JsonB
   checksum           String
-  publishedByUserId  String   @map("published_by_user_id") @db.Uuid
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  workflow           Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  publishedByUserId  String             @map("published_by_user_id") @db.Uuid
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  workflow           Workflow           @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  schedules          WorkflowSchedule[]
 
   @@unique([workflowId, version], map: "uq_workflow_versions_workflow_version")
   @@index([workflowId, createdAt(sort: Desc)], map: "idx_workflow_versions_workflow_created_at")
   @@map("workflow_versions")
+}
+
+/// Workflow 定时任务固定引用不可变发布版本；P1 只保存配置，不产生执行记录。
+model WorkflowSchedule {
+  id                String                            @id @default(uuid()) @db.Uuid
+  workspaceId       String                            @map("workspace_id") @db.Uuid
+  workflowId        String                            @map("workflow_id") @db.Uuid
+  workflowVersionId String                            @map("workflow_version_id") @db.Uuid
+  name              String
+  description       String                            @default("") @db.Text
+  status            WorkflowScheduleStatus            @default(PAUSED)
+  cronExpression    String                            @map("cron_expression")
+  timezone          String
+  inputs            Json                              @db.JsonB
+  misfirePolicy     WorkflowScheduleMisfirePolicy     @default(RUN_ONCE) @map("misfire_policy")
+  concurrencyPolicy WorkflowScheduleConcurrencyPolicy @default(QUEUE) @map("concurrency_policy")
+  maxCatchUpRuns    Int                               @default(1) @map("max_catch_up_runs")
+  timeoutSeconds    Int                               @default(1800) @map("timeout_seconds")
+  nextRunAt         DateTime?                         @map("next_run_at") @db.Timestamptz(6)
+  lastScheduledAt   DateTime?                         @map("last_scheduled_at") @db.Timestamptz(6)
+  lastStartedAt     DateTime?                         @map("last_started_at") @db.Timestamptz(6)
+  lastFinishedAt    DateTime?                         @map("last_finished_at") @db.Timestamptz(6)
+  createdByUserId   String                            @map("created_by_user_id") @db.Uuid
+  revision          Int                               @default(1)
+  createdAt         DateTime                          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  archivedAt        DateTime?                         @map("archived_at") @db.Timestamptz(6)
+  workflow          Workflow                          @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+  workflowVersion   WorkflowVersion                   @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, status, nextRunAt], map: "idx_workflow_schedules_due")
+  @@index([workflowId, status, updatedAt(sort: Desc)], map: "idx_workflow_schedules_workflow")
+  @@map("workflow_schedules")
 }
 
 /// Skill 是管理员维护的可复用指令；MCP Prompt 导入只创建停用草稿，不自动注入 Agent。

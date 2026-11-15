@@ -16,10 +16,75 @@ export type WorkflowSchedulePreviewDto = {
   from?: string;
 };
 
+/** 创建定时任务；状态不由请求控制，P1 一律以 PAUSED 落库。 */
+export type WorkflowScheduleCreateDto = {
+  name?: string;
+  description?: string;
+  workflowVersionId?: string;
+  cronExpression?: string;
+  timezone?: string;
+  inputs?: Record<string, unknown>;
+  misfirePolicy?: WorkflowScheduleMisfirePolicy;
+  concurrencyPolicy?: WorkflowScheduleConcurrencyPolicy;
+  maxCatchUpRuns?: number;
+  timeoutSeconds?: number;
+};
+
+/** 更新时必须携带 revision，所有可变配置一次完成乐观锁写入。 */
+export type WorkflowScheduleUpdateDto = Partial<WorkflowScheduleCreateDto> & {
+  revision?: number;
+};
+
+/** 暂停、恢复和归档等状态写同样使用乐观锁。 */
+export type WorkflowScheduleRevisionDto = {
+  revision?: number;
+};
+
+/** 升级只允许切换到同一 Workflow 的不可变发布版本。 */
+export type WorkflowScheduleUpgradeVersionDto = WorkflowScheduleRevisionDto & {
+  workflowVersionId?: string;
+};
+
 /** 同时返回 UTC 与任务时区时间，避免前端自行重复计算 DST。 */
 export type WorkflowScheduleOccurrence = {
   scheduledFor: string;
   localTime: string;
+};
+
+/** 预览结果由后端统一计算，前端不得自行解释 Cron 或 DST。 */
+export type WorkflowSchedulePreview = {
+  cronExpression: string;
+  timezone: string;
+  nextOccurrences: WorkflowScheduleOccurrence[];
+};
+
+/** 管理列表与详情共享稳定字段，不向 Controller 暴露 Prisma Model。 */
+export type WorkflowScheduleListItem = {
+  id: string;
+  workflowId: string;
+  workflowVersionId: string;
+  workflowVersion: number;
+  name: string;
+  description: string;
+  status: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  cronExpression: string;
+  timezone: string;
+  misfirePolicy: WorkflowScheduleMisfirePolicy;
+  concurrencyPolicy: WorkflowScheduleConcurrencyPolicy;
+  maxCatchUpRuns: number;
+  timeoutSeconds: number;
+  nextRunAt: Date | null;
+  lastScheduledAt: Date | null;
+  lastStartedAt: Date | null;
+  lastFinishedAt: Date | null;
+  createdByUserId: string;
+  revision: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type WorkflowScheduleDetail = WorkflowScheduleListItem & {
+  inputs: Record<string, unknown>;
 };
 
 /** 计算漏跑窗口所需的稳定业务字段，不传递数据库对象。 */

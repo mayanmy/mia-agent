@@ -4,6 +4,12 @@ import type {
   WorkflowGraph,
   WorkflowListItem,
   WorkflowPublishResult,
+  WorkflowScheduleConcurrencyPolicy,
+  WorkflowScheduleDetail,
+  WorkflowScheduleListItem,
+  WorkflowScheduleMisfirePolicy,
+  WorkflowSchedulePreview,
+  WorkflowVersionListItem,
   WorkflowValidationResult
 } from "./types";
 
@@ -97,6 +103,19 @@ export type WorkflowAppRunResult = {
   events: Array<{ type: string; data: Record<string, unknown> }>;
 };
 
+export type WorkflowSchedulePayload = {
+  name: string;
+  description: string;
+  workflowVersionId: string;
+  cronExpression: string;
+  timezone: string;
+  inputs: Record<string, unknown>;
+  misfirePolicy: WorkflowScheduleMisfirePolicy;
+  concurrencyPolicy: WorkflowScheduleConcurrencyPolicy;
+  maxCatchUpRuns: number;
+  timeoutSeconds: number;
+};
+
 /** 分页读取 Workflow 管理列表。 */
 export function listWorkflows(page = 1, pageSize = 100): Promise<PageResult<WorkflowListItem>> {
   return request(`/api/v1/workflows?page=${page}&pageSize=${pageSize}`);
@@ -187,4 +206,75 @@ export function publishWorkflow(
 /** 归档 Workflow 并从默认管理列表移除。 */
 export function archiveWorkflow(id: string): Promise<null> {
   return request(`/api/v1/workflows/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function listWorkflowVersions(workflowId: string): Promise<WorkflowVersionListItem[]> {
+  return request(`/api/v1/workflows/${encodeURIComponent(workflowId)}/versions`);
+}
+
+export function previewWorkflowSchedule(
+  workflowId: string,
+  cronExpression: string,
+  timezone: string
+): Promise<WorkflowSchedulePreview> {
+  return request(`/api/v1/workflows/${encodeURIComponent(workflowId)}/schedules/preview`, {
+    method: "POST",
+    body: JSON.stringify({ cronExpression, timezone })
+  });
+}
+
+export function listWorkflowSchedules(workflowId: string): Promise<WorkflowScheduleListItem[]> {
+  return request(`/api/v1/workflows/${encodeURIComponent(workflowId)}/schedules`);
+}
+
+export function getWorkflowSchedule(scheduleId: string): Promise<WorkflowScheduleDetail> {
+  return request(`/api/v1/workflow-schedules/${encodeURIComponent(scheduleId)}`);
+}
+
+export function createWorkflowSchedule(
+  workflowId: string,
+  payload: WorkflowSchedulePayload
+): Promise<WorkflowScheduleDetail> {
+  return request(`/api/v1/workflows/${encodeURIComponent(workflowId)}/schedules`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateWorkflowSchedule(
+  scheduleId: string,
+  revision: number,
+  payload: WorkflowSchedulePayload
+): Promise<WorkflowScheduleDetail> {
+  return request(`/api/v1/workflow-schedules/${encodeURIComponent(scheduleId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ ...payload, revision })
+  });
+}
+
+export function pauseWorkflowSchedule(
+  scheduleId: string,
+  revision: number
+): Promise<WorkflowScheduleDetail> {
+  return request(`/api/v1/workflow-schedules/${encodeURIComponent(scheduleId)}/pause`, {
+    method: "POST",
+    body: JSON.stringify({ revision })
+  });
+}
+
+export function resumeWorkflowSchedule(
+  scheduleId: string,
+  revision: number
+): Promise<WorkflowScheduleDetail> {
+  return request(`/api/v1/workflow-schedules/${encodeURIComponent(scheduleId)}/resume`, {
+    method: "POST",
+    body: JSON.stringify({ revision })
+  });
+}
+
+export function archiveWorkflowSchedule(scheduleId: string, revision: number): Promise<null> {
+  return request(`/api/v1/workflow-schedules/${encodeURIComponent(scheduleId)}`, {
+    method: "DELETE",
+    body: JSON.stringify({ revision })
+  });
 }

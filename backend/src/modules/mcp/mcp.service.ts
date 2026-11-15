@@ -144,6 +144,25 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  /** 定时 Workflow 无人值守，创建或升级 Schedule 时必须静态拦截 CONFIRM Tool。 */
+  async getInteractiveApprovalToolIds(runtimeIds: string[]): Promise<string[]> {
+    const ids = runtimeIds.filter((id) => id.startsWith("mcp_"));
+    if (ids.length === 0) return [];
+    const tools = await this.prisma.mcpServerTool.findMany({
+      where: {
+        workspaceId: requireWorkspaceId(),
+        runtimeId: { in: ids },
+        OR: [
+          { approvalMode: McpApprovalMode.CONFIRM },
+          { approvalMode: null, server: { approvalMode: McpApprovalMode.CONFIRM } }
+        ]
+      },
+      select: { runtimeId: true }
+    });
+    const interactive = new Set(tools.map((tool) => tool.runtimeId));
+    return ids.filter((id) => interactive.has(id));
+  }
+
   /** 目录检索不读取 Schema；风险等级和 Server 名作为标签参与本地召回。 */
   async getRuntimeToolCatalog(runtimeIds: string[]): Promise<McpRuntimeToolCatalogItem[]> {
     if (runtimeIds.length === 0) return [];

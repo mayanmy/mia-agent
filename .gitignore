@@ -10,6 +10,7 @@ backend/.env
 backend/coverage
 backend/storage
 *.tsbuildinfo
-docs/demo
-docs/*.pdf
+# docs/demo
+# docs/*.pdf
+docs/*
 local-architecture-diagrams/

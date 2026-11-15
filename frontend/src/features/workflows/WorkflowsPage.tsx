@@ -9,17 +9,27 @@ import { listTools } from "../tools/api";
 import { WorkspacePageHeader } from "../../shared/components/WorkspacePageHeader";
 import {
   archiveWorkflow,
+  archiveWorkflowSchedule,
+  createWorkflowSchedule,
   createWorkflow,
   getPublishedWorkflowApp,
+  getWorkflowSchedule,
   getWorkflow,
+  listWorkflowSchedules,
+  listWorkflowVersions,
   listWorkflows,
+  pauseWorkflowSchedule,
+  previewWorkflowSchedule,
   publishWorkflow,
+  resumeWorkflowSchedule,
   runPublishedWorkflow,
   updateWorkflow,
+  updateWorkflowSchedule,
   updateWorkflowDraft,
   validateWorkflow
 } from "./api";
 import type { PublishedWorkflowApp, WorkflowAppRunResult } from "./api";
+import type { WorkflowSchedulePayload } from "./api";
 import { NodeInspector } from "./components/NodeInspector";
 import { NodePalette } from "./components/NodePalette";
 import { CreateWorkflowModal, type WorkflowCreateValues } from "./components/CreateWorkflowModal";
@@ -32,6 +42,8 @@ import { WorkflowGuide } from "./components/WorkflowGuide";
 import { WorkflowGallery } from "./components/WorkflowGallery";
 import { WorkflowRunModal } from "./components/WorkflowRunModal";
 import { WorkflowTraceDrawer } from "./components/WorkflowTraceDrawer";
+import { WorkflowScheduleFormModal } from "./components/schedules/WorkflowScheduleFormModal";
+import { WorkflowScheduleList } from "./components/schedules/WorkflowScheduleList";
 import { appendNodeToGraph, insertNodeOnEdge } from "./editor/graph-commands";
 import { autoLayoutWorkflowGraph } from "./editor/auto-layout";
 import { useWorkflowEditor } from "./editor/useWorkflowEditor";
@@ -42,6 +54,9 @@ import type {
   WorkflowNode,
   WorkflowNodeType,
   WorkflowResources,
+  WorkflowScheduleDetail,
+  WorkflowScheduleListItem,
+  WorkflowVersionListItem,
   WorkflowTraceNodeStatus,
   WorkflowValidationIssue
 } from "./types";
@@ -81,6 +96,13 @@ export function WorkflowsPage() {
   const [runResult, setRunResult] = useState<WorkflowAppRunResult | null>(null);
   const [runningWorkflow, setRunningWorkflow] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
+  const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false);
+  const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [schedules, setSchedules] = useState<WorkflowScheduleListItem[]>([]);
+  const [scheduleVersions, setScheduleVersions] = useState<WorkflowVersionListItem[]>([]);
+  const [editingSchedule, setEditingSchedule] = useState<WorkflowScheduleDetail | null>(null);
   // 自动布局坐标提交后递增版本号，通知画布在节点完成测量后重新适配视口。
   // 不直接从页面调用 React Flow 实例，保持路由页只负责业务状态编排。
   const [fitViewRevision, setFitViewRevision] = useState(0);
@@ -488,6 +510,89 @@ export function WorkflowsPage() {
     });
   }
 
+  /** Schedule 管理只针对已发布 Workflow；P1 读取配置但不会创建任何运行。 */
+  async function openScheduleManager() {
+    if (!workflow?.publishedVersion) {
+      message.warning("请先发布 Workflow，再配置定时任务");
+      return;
+    }
+    setScheduleDrawerOpen(true);
+    setScheduleLoading(true);
+    try {
+      const [items, versions] = await Promise.all([
+        listWorkflowSchedules(workflow.id),
+        listWorkflowVersions(workflow.id)
+      ]);
+      setSchedules(items);
+      setScheduleVersions(versions);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载定时任务失败");
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
+  async function editSchedule(item: WorkflowScheduleListItem) {
+    setScheduleLoading(true);
+    try {
+      setEditingSchedule(await getWorkflowSchedule(item.id));
+      setScheduleFormOpen(true);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载定时任务失败");
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
+  async function submitSchedule(payload: WorkflowSchedulePayload) {
+    if (!workflow) return;
+    setScheduleSaving(true);
+    try {
+      if (editingSchedule) {
+        await updateWorkflowSchedule(editingSchedule.id, editingSchedule.revision, payload);
+      } else {
+        await createWorkflowSchedule(workflow.id, payload);
+      }
+      setSchedules(await listWorkflowSchedules(workflow.id));
+      setScheduleFormOpen(false);
+      setEditingSchedule(null);
+      message.success(editingSchedule ? "定时任务已更新" : "定时任务已创建并保持暂停");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存定时任务失败");
+    } finally {
+      setScheduleSaving(false);
+    }
+  }
+
+  async function changeScheduleStatus(item: WorkflowScheduleListItem, active: boolean) {
+    if (!workflow) return;
+    setScheduleLoading(true);
+    try {
+      if (active) await resumeWorkflowSchedule(item.id, item.revision);
+      else await pauseWorkflowSchedule(item.id, item.revision);
+      setSchedules(await listWorkflowSchedules(workflow.id));
+      message.success(active ? "定时任务已启用；当前环境仍不会实际执行" : "定时任务已暂停");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "更新定时任务状态失败");
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
+  async function removeSchedule(item: WorkflowScheduleListItem) {
+    if (!workflow) return;
+    setScheduleLoading(true);
+    try {
+      await archiveWorkflowSchedule(item.id, item.revision);
+      setSchedules(await listWorkflowSchedules(workflow.id));
+      message.success("定时任务已归档");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "归档定时任务失败");
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
   // 操作区作为纯展示内容注入悬浮 Chrome；保存、校验、发布仍由页面持有业务流程。
   const editorActions = workflow ? (
     <WorkflowEditorActions
@@ -504,6 +609,7 @@ export function WorkflowsPage() {
           .catch(() => message.error("复制失败，请使用浏览器剪贴板权限后重试"));
       }}
       onOpenTrace={() => setTraceOpen(true)}
+      onOpenSchedules={() => void openScheduleManager()}
       onAutoLayout={() => {
         // 布局本身作为一次 Graph 修改进入 Undo/自动保存；随后单独触发视口动画。
         changeGraph(autoLayoutWorkflowGraph(graph));
@@ -672,6 +778,37 @@ export function WorkflowsPage() {
         workflowId={workflow?.id ?? null}
         onClose={() => setTraceOpen(false)}
         onReplay={setTraceStatuses}
+      />
+
+      <WorkflowScheduleList
+        loading={scheduleLoading}
+        open={scheduleDrawerOpen}
+        schedules={schedules}
+        onArchive={(item) => void removeSchedule(item)}
+        onClose={() => setScheduleDrawerOpen(false)}
+        onCreate={() => {
+          setEditingSchedule(null);
+          setScheduleFormOpen(true);
+        }}
+        onEdit={(item) => void editSchedule(item)}
+        onPause={(item) => void changeScheduleStatus(item, false)}
+        onResume={(item) => void changeScheduleStatus(item, true)}
+      />
+
+      <WorkflowScheduleFormModal
+        open={scheduleFormOpen}
+        saving={scheduleSaving}
+        schedule={editingSchedule}
+        versions={scheduleVersions}
+        onCancel={() => {
+          setScheduleFormOpen(false);
+          setEditingSchedule(null);
+        }}
+        onPreview={(cronExpression, timezone) => {
+          if (!workflow) return Promise.reject(new Error("请先选择 Workflow"));
+          return previewWorkflowSchedule(workflow.id, cronExpression, timezone);
+        }}
+        onSubmit={submitSchedule}
       />
     </section>
   );

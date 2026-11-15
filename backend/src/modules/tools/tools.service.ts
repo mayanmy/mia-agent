@@ -79,6 +79,11 @@ export class ToolsService {
     });
   }
 
+  /** 返回需要人工审批的 MCP Tool；Workflow Schedule 通过该公开边界做无人值守校验。 */
+  async getInteractiveApprovalToolIds(toolIds: string[]): Promise<string[]> {
+    return this.mcpService?.getInteractiveApprovalToolIds(toolIds) ?? [];
+  }
+
   /**
    * 绑定数量较小时保持完整 Schema 行为；超过阈值后先检索轻量目录，再延迟加载候选 Schema。
    * 召回完全确定且不调用 LLM，避免 Tool Search 自身引入额外费用和不稳定远程依赖。

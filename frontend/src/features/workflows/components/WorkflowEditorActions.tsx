@@ -1,5 +1,6 @@
 import {
   ApartmentOutlined,
+  CalendarOutlined,
   CheckOutlined,
   CloudUploadOutlined,
   HistoryOutlined,
@@ -29,6 +30,8 @@ export type WorkflowEditorActionsProps = {
   onRedo: () => void;
   /** 打开 Workflow 运行记录。 */
   onOpenTrace: () => void;
+  /** 打开当前 Workflow 的定时任务管理。 */
+  onOpenSchedules: () => void;
   /** 根据节点依赖重新排列画布。 */
   onAutoLayout: () => void;
   /** 使用当前 Graph 执行发布前校验。 */
@@ -57,6 +60,7 @@ export function WorkflowEditorActions({
   onUndo,
   onRedo,
   onOpenTrace,
+  onOpenSchedules,
   onAutoLayout,
   onValidate,
   onSave,
@@ -109,6 +113,9 @@ export function WorkflowEditorActions({
         </Tooltip>
         <Button icon={<HistoryOutlined />} onClick={onOpenTrace}>
           运行记录
+        </Button>
+        <Button icon={<CalendarOutlined />} onClick={onOpenSchedules}>
+          定时任务
         </Button>
         <Button icon={<CheckOutlined />} loading={saving} onClick={onValidate}>
           校验
