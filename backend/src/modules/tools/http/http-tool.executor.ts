@@ -90,6 +90,8 @@ export class HttpToolExecutor {
       if (this.isAbortError(error) && timedOut && !upstreamSignal?.aborted) {
         throw new ToolRuntimeError("tool_timeout", "HTTP 工具调用超时");
       }
+      const networkError = this.toNetworkError(error);
+      if (networkError) throw networkError;
       throw error;
     } finally {
       clearTimeout(timeout);
@@ -101,6 +103,42 @@ export class HttpToolExecutor {
     return Boolean(
       error && typeof error === "object" && "name" in error && error.name === "AbortError"
     );
+  }
+
+  /** undici 会把 DNS、TCP 和 TLS 失败包装成 `TypeError: fetch failed`，需读取 cause 才能给出可操作诊断。 */
+  private toNetworkError(error: unknown): ToolRuntimeError | null {
+    if (!(error instanceof Error) || error.message !== "fetch failed") return null;
+    const cause = error.cause;
+    const code = cause && typeof cause === "object" && "code" in cause ? String(cause.code) : "";
+
+    if (code === "CERT_HAS_EXPIRED") {
+      return new ToolRuntimeError(
+        "http_tls_certificate_expired",
+        "HTTP 工具目标服务的 TLS 证书已过期"
+      );
+    }
+    if (
+      [
+        "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+        "SELF_SIGNED_CERT_IN_CHAIN",
+        "DEPTH_ZERO_SELF_SIGNED_CERT"
+      ].includes(code)
+    ) {
+      return new ToolRuntimeError(
+        "http_tls_certificate_invalid",
+        "HTTP 工具目标服务的 TLS 证书无法验证"
+      );
+    }
+    if (code === "ENOTFOUND" || code === "EAI_AGAIN") {
+      return new ToolRuntimeError("http_dns_failed", "HTTP 工具目标域名解析失败");
+    }
+    if (code === "ECONNREFUSED") {
+      return new ToolRuntimeError("http_connection_refused", "HTTP 工具目标服务拒绝连接");
+    }
+    if (code === "ETIMEDOUT" || code === "UND_ERR_CONNECT_TIMEOUT") {
+      return new ToolRuntimeError("http_connection_timeout", "HTTP 工具连接目标服务超时");
+    }
+    return new ToolRuntimeError("http_network_failed", "HTTP 工具无法连接目标服务");
   }
 
   /** 校验模型参数并补入服务端默认值，拒绝未声明字段。 */

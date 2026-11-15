@@ -572,6 +572,38 @@ export const tests = [
   },
 
   {
+    name: "HttpToolExecutor exposes the wrapped TLS certificate failure",
+    run: async () => {
+      const executor = new HttpToolExecutor();
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (async () => {
+        throw new TypeError("fetch failed", {
+          cause: Object.assign(new Error("certificate has expired"), {
+            code: "CERT_HAS_EXPIRED"
+          })
+        });
+      }) as typeof fetch;
+
+      try {
+        await assert.rejects(
+          () => executor.execute(configuredHttpTool, { orderId: "ORD 1" }),
+          (error: unknown) => {
+            assert.ok(error instanceof Error && "errorType" in error);
+            assert.equal(
+              (error as Error & { errorType: string }).errorType,
+              "http_tls_certificate_expired"
+            );
+            assert.equal(error.message, "HTTP 工具目标服务的 TLS 证书已过期");
+            return true;
+          }
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
+  },
+
+  {
     name: "HttpToolExecutor redacts sensitive parameters in the displayed request URL",
     run: async () => {
       const executor = new HttpToolExecutor();
