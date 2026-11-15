@@ -41,8 +41,11 @@ import { tests as workflowRuntimeTests } from "../modules/workflow_runtime/workf
 import { tests as workflowCapabilityTests } from "../modules/workflow_runtime/capability-executors.spec";
 import { tests as workflowAppRunTests } from "../modules/workflow_runtime/workflow-app-runs.service.spec";
 import { tests as workflowToolRunTests } from "../modules/workflow_runtime/workflow-tool-runs.service.spec";
+import { tests as workflowScheduledRunTests } from "../modules/workflow_runtime/workflow-scheduled-runs.service.spec";
+import { tests as workflowRunTraceTests } from "../modules/workflow_runtime/workflow-run-trace.service.spec";
 import { tests as workflowScheduleSchedulerTests } from "../jobs/workflow-schedule.scheduler.spec";
 import { tests as workflowScheduleDispatcherTests } from "../jobs/workflow-schedule.dispatcher.spec";
+import { tests as workflowScheduleConsumerTests } from "../jobs/workflow-schedule.consumer.spec";
 
 type TestCase = {
   name: string;
@@ -81,11 +84,14 @@ const tests: TestCase[] = [
   ...workflowScheduleTests,
   ...workflowScheduleSchedulerTests,
   ...workflowScheduleDispatcherTests,
+  ...workflowScheduleConsumerTests,
   ...workflowCompilerTests,
   ...workflowTests,
   ...workflowRuntimeTests,
   ...workflowAppRunTests,
   ...workflowToolRunTests,
+  ...workflowScheduledRunTests,
+  ...workflowRunTraceTests,
   ...workflowCapabilityTests,
   ...knowledgeTests,
   ...modelRoutingTests,

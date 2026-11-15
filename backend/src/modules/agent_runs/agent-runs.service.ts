@@ -1,5 +1,13 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { AgentRun, AgentRunStatus, AgentRunStepStatus, Prisma, PrismaClient } from "@prisma/client";
+import {
+  AgentRun,
+  AgentRunSource,
+  AgentRunStatus,
+  AgentRunStepStatus,
+  Prisma,
+  PrismaClient,
+  WorkflowRunMode
+} from "@prisma/client";
 
 import { AppError, ErrorCodes } from "../../core/errors";
 import { requireWorkspaceId } from "../../core/auth/workspace-context";
@@ -10,7 +18,8 @@ import {
   AgentRunContext,
   AgentRunErrorDto,
   CompleteAgentRunDto,
-  CreateAgentRunDto
+  CreateAgentRunDto,
+  CreateWorkflowScheduleAgentRunDto
 } from "./dto/agent-run.dto";
 import {
   AgentRunStepContext,
@@ -191,6 +200,7 @@ export class AgentRunsService {
         workflowId: this.optionalText(payload.workflowId),
         workflowVersionId: this.optionalText(payload.workflowVersionId),
         workflowRunMode: payload.workflowRunMode,
+        workflowScheduleRunId: this.optionalText(payload.workflowScheduleRunId),
         inputPreview: this.truncate(payload.inputPreview, INPUT_PREVIEW_LIMIT)
       },
       select: {
@@ -205,6 +215,55 @@ export class AgentRunsService {
       requestId: run.requestId,
       status: run.status
     };
+  }
+
+  /**
+   * Schedule Trace 以 workflowScheduleRunId 幂等。Trace 已创建但回写 ScheduleRun 失败时，
+   * Worker 重试会找回同一条 Run，而不是产生第二条可执行记录。
+   */
+  async createWorkflowScheduleRun(
+    payload: CreateWorkflowScheduleAgentRunDto
+  ): Promise<AgentRunContext> {
+    const scheduleRunId = this.requireText(payload.workflowScheduleRunId, "workflowScheduleRunId");
+    const existing = await this.prisma.agentRun.findUnique({
+      where: { workflowScheduleRunId: scheduleRunId }
+    });
+    if (existing) return this.toScheduledRunContext(existing, payload);
+
+    try {
+      const created = await this.prisma.agentRun.create({
+        data: {
+          workspaceId: this.requireText(payload.workspaceId, "workspaceId"),
+          requestId: this.requireText(payload.requestId, "requestId"),
+          source: AgentRunSource.WORKFLOW_SCHEDULE,
+          workflowScheduleRunId: scheduleRunId,
+          workflowId: this.requireText(payload.workflowId, "workflowId"),
+          workflowVersionId: this.requireText(payload.workflowVersionId, "workflowVersionId"),
+          workflowRunMode: WorkflowRunMode.PUBLISHED,
+          inputPreview: this.truncate(payload.inputPreview, INPUT_PREVIEW_LIMIT)
+        }
+      });
+      return { runId: created.id, requestId: created.requestId, status: created.status };
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+        throw error;
+      }
+      const raced = await this.prisma.agentRun.findUnique({
+        where: { workflowScheduleRunId: scheduleRunId }
+      });
+      if (!raced) throw error;
+      return this.toScheduledRunContext(raced, payload);
+    }
+  }
+
+  async getRunByWorkflowScheduleRunId(scheduleRunId: string): Promise<AgentRunContext | null> {
+    const run = await this.prisma.agentRun.findUnique({
+      where: {
+        workflowScheduleRunId: this.requireText(scheduleRunId, "workflowScheduleRunId")
+      },
+      select: { id: true, requestId: true, status: true }
+    });
+    return run ? { runId: run.id, requestId: run.requestId, status: run.status } : null;
   }
 
   /** 将 Run 从排队态切换到运行态；条件更新防止重复启动或覆盖终态。 */
@@ -579,6 +638,24 @@ export class AgentRunsService {
       errorMessage: run.errorMessage,
       createdAt: run.createdAt
     };
+  }
+
+  private toScheduledRunContext(
+    run: AgentRun,
+    payload: CreateWorkflowScheduleAgentRunDto
+  ): AgentRunContext {
+    if (
+      run.workspaceId !== payload.workspaceId ||
+      run.workflowId !== payload.workflowId ||
+      run.workflowVersionId !== payload.workflowVersionId
+    ) {
+      throw new AppError(
+        ErrorCodes.common.conflict,
+        "ScheduleRun 已关联到不一致的 Agent Run",
+        HttpStatus.CONFLICT
+      );
+    }
+    return { runId: run.id, requestId: run.requestId, status: run.status };
   }
 
   /** 解析 ISO 时间筛选，拒绝无效日期，避免查询静默返回错误范围。 */

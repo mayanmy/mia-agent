@@ -227,6 +227,53 @@ export const tests = [
     }
   },
   {
+    name: "AgentRunsService idempotently reuses the AgentRun for a ScheduleRun",
+    run: async () => {
+      const existing = {
+        id: "agent-run-1",
+        requestId: "request-1",
+        status: AgentRunStatus.QUEUED,
+        workspaceId: "workspace-1",
+        workflowId: "workflow-1",
+        workflowVersionId: "version-1"
+      };
+      let createCalls = 0;
+      const prisma = {
+        agentRun: {
+          findUnique: async () => existing,
+          create: async () => {
+            createCalls += 1;
+            return existing;
+          }
+        }
+      };
+      const service = new AgentRunsService(prisma as never);
+      const result = await service.createWorkflowScheduleRun({
+        workspaceId: "workspace-1",
+        workflowScheduleRunId: "schedule-run-1",
+        requestId: "request-1",
+        workflowId: "workflow-1",
+        workflowVersionId: "version-1",
+        inputPreview: "{}"
+      });
+
+      assert.equal(result.runId, "agent-run-1");
+      assert.equal(createCalls, 0);
+      await assert.rejects(
+        () =>
+          service.createWorkflowScheduleRun({
+            workspaceId: "workspace-1",
+            workflowScheduleRunId: "schedule-run-1",
+            requestId: "request-1",
+            workflowId: "workflow-1",
+            workflowVersionId: "version-2",
+            inputPreview: "{}"
+          }),
+        (error) => error instanceof AppError && error.code === ErrorCodes.common.conflict
+      );
+    }
+  },
+  {
     name: "AgentRunsService completes a running Run and settles active Steps transactionally",
     run: async () => {
       const runUpdates: Array<Record<string, unknown>> = [];

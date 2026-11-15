@@ -131,3 +131,18 @@ export type WorkflowScheduleJobDispatchDto = {
   scheduleRunId: string;
   dispatchAttempts: number;
 };
+
+/** Worker 取得执行权后读取的不可变快照；不返回 Prisma Model 或 Schedule 可变配置。 */
+export type WorkflowScheduleRunExecution = {
+  scheduleRunId: string;
+  workspaceId: string;
+  scheduleId: string;
+  workflowId: string;
+  workflowVersionId: string;
+  requestId: string;
+  inputs: Record<string, unknown>;
+  timeoutSeconds: number;
+  agentRunId: string | null;
+};
+
+export type WorkflowScheduleRunTerminalStatus = "COMPLETED" | "FAILED" | "CANCELED" | "TIMED_OUT";

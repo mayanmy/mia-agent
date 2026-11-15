@@ -41,15 +41,41 @@ export class WorkflowScheduleDispatcher implements OnModuleInit, OnModuleDestroy
 
   private async runDispatch(now: Date): Promise<WorkflowScheduleDispatchResult> {
     const jobs = await this.schedules.claimPendingScheduleJobs(now, this.config.batchSize);
-    // P2 强制 dry-run：只验证最小 Job Data，并保留数据库 PENDING Outbox 给 P3 投递。
-    const prepared = jobs.map((job) => this.queue.prepare(job));
-    if (prepared.length > 0) {
-      this.logger.log(`Workflow Schedule Dispatcher dry-run: jobs=${prepared.length}`);
+    if (this.config.dispatcherDryRun) {
+      const prepared = jobs.map((job) => this.queue.prepare(job));
+      if (prepared.length > 0) {
+        this.logger.log(`Workflow Schedule Dispatcher dry-run: jobs=${prepared.length}`);
+      }
+      return {
+        pendingJobs: jobs.length,
+        dryRunJobs: prepared.length,
+        dispatchedJobs: 0
+      };
+    }
+    let dispatchedJobs = 0;
+    for (const job of jobs) {
+      try {
+        await this.queue.enqueue(job);
+        await this.schedules.markScheduleJobDispatched(job.jobId);
+        dispatchedJobs += 1;
+      } catch (error) {
+        const errorCode = error instanceof Error ? error.name : "QUEUE_ERROR";
+        if (job.dispatchAttempts + 1 >= 10) {
+          await this.schedules.markScheduleJobDead(job.jobId, errorCode);
+        } else {
+          const delayMs = Math.min(30_000, 1_000 * 2 ** job.dispatchAttempts);
+          await this.schedules.rescheduleScheduleJob(
+            job.jobId,
+            errorCode,
+            new Date(Date.now() + delayMs)
+          );
+        }
+      }
     }
     return {
       pendingJobs: jobs.length,
-      dryRunJobs: prepared.length,
-      dispatchedJobs: 0
+      dryRunJobs: 0,
+      dispatchedJobs
     };
   }
 

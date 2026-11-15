@@ -28,7 +28,9 @@ import {
   WorkflowSchedulePreviewDto,
   WorkflowScheduleUpdateDto,
   WorkflowScheduleUpgradeVersionDto,
-  WorkflowScheduleJobDispatchDto
+  WorkflowScheduleJobDispatchDto,
+  WorkflowScheduleRunExecution,
+  WorkflowScheduleRunTerminalStatus
 } from "./dto/workflow-schedule.dto";
 import {
   MAX_WORKFLOW_SCHEDULE_CATCH_UP_RUNS,
@@ -69,7 +71,7 @@ type LockedSchedule = {
 
 /**
  * Schedule 是 workflows 模块内的独立生命周期，但只固定到不可变 WorkflowVersion。
- * P1 不创建 Run 或队列 Job，因此 ACTIVE 仅代表业务意图，执行开关保持关闭。
+ * 调度执行仍只通过本服务暴露的 DTO 和状态用例访问，不向 Worker 泄漏 Prisma Model。
  */
 @Injectable()
 export class WorkflowSchedulesService {
@@ -450,6 +452,130 @@ export class WorkflowSchedulesService {
         dispatchAttempts: { increment: 1 },
         lastErrorCode: this.errorCode(errorCode)
       }
+    });
+  }
+
+  /** QUEUED -> RUNNING 条件更新是重复 Job 投递下的唯一执行权。 */
+  async claimScheduleRunExecution(
+    scheduleRunId: string,
+    workerIdValue: string
+  ): Promise<WorkflowScheduleRunExecution | null> {
+    const id = this.id(scheduleRunId, "scheduleRunId");
+    const workerId = this.id(workerIdValue, "workerId");
+    return this.prisma.$transaction(async (transaction) => {
+      const startedAt = new Date();
+      const claimed = await transaction.workflowScheduleRun.updateMany({
+        where: { id, status: WorkflowScheduleRunStatus.QUEUED },
+        data: {
+          status: WorkflowScheduleRunStatus.RUNNING,
+          workerId,
+          attempt: { increment: 1 },
+          startedAt,
+          heartbeatAt: startedAt
+        }
+      });
+      if (claimed.count !== 1) return null;
+      const run = await transaction.workflowScheduleRun.findUniqueOrThrow({
+        where: { id },
+        include: { schedule: { select: { timeoutSeconds: true } } }
+      });
+      await transaction.workflowSchedule.update({
+        where: { id: run.scheduleId },
+        data: { lastStartedAt: startedAt }
+      });
+      return {
+        scheduleRunId: run.id,
+        workspaceId: run.workspaceId,
+        scheduleId: run.scheduleId,
+        workflowId: run.workflowId,
+        workflowVersionId: run.workflowVersionId,
+        requestId: run.requestId,
+        inputs: this.jsonObject(run.inputSnapshot),
+        timeoutSeconds: run.schedule.timeoutSeconds,
+        agentRunId: run.agentRunId
+      };
+    });
+  }
+
+  /** Worker 执行前重新读取版本 Graph，防止 MCP Tool 后续改为 CONFIRM 后仍无人值守运行。 */
+  async assertScheduleRunExecutable(run: WorkflowScheduleRunExecution): Promise<void> {
+    const version = await this.prisma.workflowVersion.findFirst({
+      where: {
+        id: run.workflowVersionId,
+        workflowId: run.workflowId,
+        workspaceId: run.workspaceId
+      },
+      select: { id: true, workflowId: true, version: true, graph: true }
+    });
+    if (!version) {
+      throw new AppError(
+        ErrorCodes.workflow.scheduleVersionInvalid,
+        "定时运行引用的 Workflow Version 不存在",
+        HttpStatus.CONFLICT
+      );
+    }
+    await this.validateVersionForSchedule(version, run.inputs);
+  }
+
+  async linkScheduleRunAgentRun(scheduleRunId: string, agentRunId: string): Promise<void> {
+    const id = this.id(scheduleRunId, "scheduleRunId");
+    const normalizedAgentRunId = this.id(agentRunId, "agentRunId");
+    const linked = await this.prisma.workflowScheduleRun.updateMany({
+      where: {
+        id,
+        status: WorkflowScheduleRunStatus.RUNNING,
+        agentRunId: null
+      },
+      data: { agentRunId: normalizedAgentRunId }
+    });
+    if (linked.count === 1) return;
+    const current = await this.prisma.workflowScheduleRun.findUnique({
+      where: { id },
+      select: { agentRunId: true }
+    });
+    if (current?.agentRunId === normalizedAgentRunId) return;
+    throw new AppError(
+      ErrorCodes.common.conflict,
+      "ScheduleRun 无法关联 Agent Run",
+      HttpStatus.CONFLICT
+    );
+  }
+
+  async finishScheduleRun(
+    scheduleRunId: string,
+    status: WorkflowScheduleRunTerminalStatus,
+    error?: { type: string; message: string }
+  ): Promise<void> {
+    const id = this.id(scheduleRunId, "scheduleRunId");
+    const finishedAt = new Date();
+    await this.prisma.$transaction(async (transaction) => {
+      const run = await transaction.workflowScheduleRun.findUnique({
+        where: { id },
+        select: { scheduleId: true, status: true }
+      });
+      if (!run || run.status !== WorkflowScheduleRunStatus.RUNNING) return;
+      await transaction.workflowScheduleRun.update({
+        where: { id },
+        data: {
+          status,
+          finishedAt,
+          heartbeatAt: finishedAt,
+          ...(error
+            ? {
+                errorType: this.errorCode(error.type),
+                errorMessage: error.message.slice(0, 2_000)
+              }
+            : { errorType: null, errorMessage: null })
+        }
+      });
+      await transaction.workflowSchedule.update({
+        where: { id: run.scheduleId },
+        data: { lastFinishedAt: finishedAt }
+      });
+      await transaction.workflowScheduleJob.updateMany({
+        where: { scheduleRunId: id },
+        data: { dispatchStatus: WorkflowScheduleJobDispatchStatus.COMPLETED }
+      });
     });
   }
 

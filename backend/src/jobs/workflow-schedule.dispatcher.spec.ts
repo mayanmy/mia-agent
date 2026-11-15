@@ -41,5 +41,27 @@ export const tests = [
         data: { scheduleRunId: "run-1" }
       });
     }
+  },
+  {
+    name: "WorkflowScheduleDispatcher marks Outbox dispatched only after BullMQ enqueue",
+    run: async () => {
+      const calls: string[] = [];
+      const dispatcher = new WorkflowScheduleDispatcher(
+        {
+          claimPendingScheduleJobs: async () => [
+            { jobId: "job-1", scheduleRunId: "run-1", dispatchAttempts: 0 }
+          ],
+          markScheduleJobDispatched: async () => calls.push("mark")
+        } as never,
+        { enqueue: async () => calls.push("enqueue") } as never
+      );
+      (dispatcher as unknown as { config: { dispatcherDryRun: boolean } }).config.dispatcherDryRun =
+        false;
+
+      const result = await dispatcher.dispatchOnce(new Date("2026-11-15T00:00:00.000Z"));
+
+      assert.deepEqual(calls, ["enqueue", "mark"]);
+      assert.deepEqual(result, { pendingJobs: 1, dryRunJobs: 0, dispatchedJobs: 1 });
+    }
   }
 ];

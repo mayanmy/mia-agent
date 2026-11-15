@@ -373,5 +373,51 @@ export const tests = [
       );
       assert.equal(updateCalled, false);
     }
+  },
+  {
+    name: "WorkflowSchedulesService grants only one worker the QUEUED ScheduleRun",
+    run: async () => {
+      let claimed = false;
+      const updates: Array<Record<string, unknown>> = [];
+      const transaction = {
+        workflowScheduleRun: {
+          updateMany: async (query: Record<string, unknown>) => {
+            updates.push(query);
+            if (claimed) return { count: 0 };
+            claimed = true;
+            return { count: 1 };
+          },
+          findUniqueOrThrow: async () => ({
+            id: "schedule-run-1",
+            workspaceId,
+            scheduleId: "schedule-1",
+            workflowId: "workflow-1",
+            workflowVersionId: "version-1",
+            requestId: "request-1",
+            inputSnapshot: { city: "深圳" },
+            agentRunId: null,
+            schedule: { timeoutSeconds: 1800 }
+          })
+        },
+        workflowSchedule: { update: async () => undefined }
+      };
+      const service = new WorkflowSchedulesService(
+        {
+          $transaction: async <T>(callback: (client: typeof transaction) => Promise<T>) =>
+            callback(transaction)
+        } as never,
+        new WorkflowSchedulePlanner(),
+        tools as never
+      );
+
+      const first = await service.claimScheduleRunExecution("schedule-run-1", "worker-1");
+      const duplicate = await service.claimScheduleRunExecution("schedule-run-1", "worker-2");
+
+      assert.equal(first?.workflowVersionId, "version-1");
+      assert.equal(first?.timeoutSeconds, 1800);
+      assert.equal(duplicate, null);
+      assert.deepEqual((updates[0].where as Record<string, unknown>).status, "QUEUED");
+      assert.deepEqual((updates[0].data as Record<string, unknown>).attempt, { increment: 1 });
+    }
   }
 ];

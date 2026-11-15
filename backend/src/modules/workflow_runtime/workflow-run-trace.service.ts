@@ -3,7 +3,11 @@ import { AgentRunStepType } from "@prisma/client";
 
 import { AgentRunsService } from "../agent_runs/agent-runs.service";
 import type { AgentRunStepContext, TraceJsonValue } from "../agent_runs/dto/agent-run-step.dto";
-import type { AgentRunErrorDto, CreateAgentRunDto } from "../agent_runs/dto/agent-run.dto";
+import type {
+  AgentRunErrorDto,
+  CreateAgentRunDto,
+  CreateWorkflowScheduleAgentRunDto
+} from "../agent_runs/dto/agent-run.dto";
 import type { WorkflowRuntimeErrorData, WorkflowRuntimeEvent } from "./dto/workflow-run.dto";
 
 export type WorkflowRunTrace = {
@@ -34,6 +38,22 @@ export class WorkflowRunTraceService {
       firstTokenRecorded: false,
       terminal: false
     };
+  }
+
+  /** 先创建幂等 QUEUED Trace，待 ScheduleRun 回写 runId 成功后才能开始执行。 */
+  async prepareScheduled(payload: CreateWorkflowScheduleAgentRunDto): Promise<WorkflowRunTrace> {
+    const run = await this.agentRunsService.createWorkflowScheduleRun(payload);
+    return {
+      runId: run.runId,
+      sequence: 1,
+      activeSteps: new Map(),
+      firstTokenRecorded: false,
+      terminal: false
+    };
+  }
+
+  async startPrepared(trace: WorkflowRunTrace): Promise<void> {
+    await this.agentRunsService.startRun(trace.runId);
   }
 
   async record(trace: WorkflowRunTrace, event: WorkflowRuntimeEvent): Promise<void> {
@@ -98,7 +118,11 @@ export class WorkflowRunTraceService {
     }
 
     if (event.type === "workflow_failed") {
-      await this.agentRunsService.failRun(trace.runId, event.data.error);
+      if (event.data.error.type === "workflow_timeout") {
+        await this.agentRunsService.timeoutRun(trace.runId);
+      } else {
+        await this.agentRunsService.failRun(trace.runId, event.data.error);
+      }
       trace.terminal = true;
       return;
     }
@@ -121,6 +145,12 @@ export class WorkflowRunTraceService {
   async fail(trace: WorkflowRunTrace, error: AgentRunErrorDto): Promise<void> {
     if (trace.terminal) return;
     await this.agentRunsService.failRun(trace.runId, error);
+    trace.terminal = true;
+  }
+
+  async timeout(trace: WorkflowRunTrace): Promise<void> {
+    if (trace.terminal) return;
+    await this.agentRunsService.timeoutRun(trace.runId);
     trace.terminal = true;
   }
 

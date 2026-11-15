@@ -8,6 +8,7 @@
     "dev:api": "npm --prefix backend run dev",
     "dev:ops-demo": "npm --prefix examples/ops-demo-api run dev",
     "start:evaluation-worker": "npm --prefix backend run start:evaluation-worker",
+    "start:workflow-worker": "npm --prefix backend run start:workflow-worker",
     "build:web": "npm --prefix frontend run build",
     "build:api": "npm --prefix backend run build",
     "typecheck:web": "npm --prefix frontend run typecheck",

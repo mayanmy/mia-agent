@@ -282,6 +282,7 @@ enum AgentRunSource {
   SERVICE_API
   ASYNC_TASK
   WORKFLOW_APP
+  WORKFLOW_SCHEDULE
 
   @@map("agent_run_source")
 }
@@ -1437,6 +1438,7 @@ model AgentRun {
   workflowId             String?           @map("workflow_id") @db.Uuid
   workflowVersionId      String?           @map("workflow_version_id") @db.Uuid
   workflowRunMode        WorkflowRunMode?  @map("workflow_run_mode")
+  workflowScheduleRunId  String?           @unique(map: "uq_agent_runs_workflow_schedule_run") @map("workflow_schedule_run_id") @db.Uuid
   agentVersionId         String?           @map("agent_version_id") @db.Uuid
   configHash             String?           @map("config_hash")
   runtimeMode            AgentRuntimeMode? @map("runtime_mode")

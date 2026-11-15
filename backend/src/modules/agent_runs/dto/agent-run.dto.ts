@@ -23,7 +23,19 @@ export type CreateAgentRunDto = {
   workflowVersionId?: string;
   /** Workflow 的调试或发布运行模式。 */
   workflowRunMode?: WorkflowRunMode;
+  /** 定时 Workflow 的幂等来源记录；普通入口为空。 */
+  workflowScheduleRunId?: string;
   /** 脱敏截断后的输入摘要，不保存完整敏感内容。 */
+  inputPreview: string;
+};
+
+/** Worker 创建 Trace 时显式携带空间和 ScheduleRun，不能依赖 HTTP Workspace Context。 */
+export type CreateWorkflowScheduleAgentRunDto = {
+  workspaceId: string;
+  workflowScheduleRunId: string;
+  requestId: string;
+  workflowId: string;
+  workflowVersionId: string;
   inputPreview: string;
 };
 

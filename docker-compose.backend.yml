@@ -2,7 +2,16 @@ services:
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory-policy", "noeviction"]
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--appendfsync",
+        "everysec",
+        "--maxmemory-policy",
+        "noeviction"
+      ]
     volumes:
       - mia_redis_data:/data
     healthcheck:
@@ -63,6 +72,13 @@ services:
       MIA_REDIS_REQUIRED: ${MIA_REDIS_REQUIRED:-true}
       MIA_RATE_LIMIT_HASH_SECRET: ${MIA_RATE_LIMIT_HASH_SECRET:-}
       MIA_LLM_DISTRIBUTED_CONCURRENCY_ENABLED: ${MIA_LLM_DISTRIBUTED_CONCURRENCY_ENABLED:-true}
+      MIA_WORKFLOW_SCHEDULER_ENABLED: ${MIA_WORKFLOW_SCHEDULER_ENABLED:-false}
+      MIA_WORKFLOW_DISPATCHER_ENABLED: ${MIA_WORKFLOW_DISPATCHER_ENABLED:-false}
+      MIA_WORKFLOW_CONSUMER_ENABLED: "false"
+      MIA_WORKFLOW_DISPATCHER_DRY_RUN: ${MIA_WORKFLOW_DISPATCHER_DRY_RUN:-true}
+      MIA_WORKFLOW_SCHEDULER_POLL_MS: ${MIA_WORKFLOW_SCHEDULER_POLL_MS:-15000}
+      MIA_WORKFLOW_SCHEDULER_BATCH_SIZE: ${MIA_WORKFLOW_SCHEDULER_BATCH_SIZE:-100}
+      MIA_WORKFLOW_DISPATCH_POLL_MS: ${MIA_WORKFLOW_DISPATCH_POLL_MS:-5000}
       MIA_KNOWLEDGE_STORAGE_DIR: /app/storage/knowledge
       TOOLS_HTTP_ALLOWED_HOSTS: ${TOOLS_HTTP_ALLOWED_HOSTS:-}
       MIA_TOOLS_HTTP_ALLOW_LOCALHOST: ${MIA_TOOLS_HTTP_ALLOW_LOCALHOST:-false}
@@ -103,6 +119,36 @@ services:
       MIA_LLM_DISTRIBUTED_CONCURRENCY_ENABLED: "true"
       MIA_EVALUATION_WORKER_CONCURRENCY: ${MIA_EVALUATION_WORKER_CONCURRENCY:-1}
       MIA_KNOWLEDGE_STORAGE_DIR: /app/storage/knowledge
+    volumes:
+      - mia_knowledge_data:/app/storage/knowledge
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  workflow-worker:
+    build:
+      context: ./backend
+      target: runtime
+    command: ["node", "dist/workflow-worker.js"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      MIA_ENVIRONMENT: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mia}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mia}
+      MIA_SECRET_KEY: ${MIA_SECRET_KEY:?请在 .env.docker 中配置 MIA_SECRET_KEY}
+      MIA_AUTH_JWT_SECRET: ${MIA_AUTH_JWT_SECRET:?请在 .env.docker 中配置 MIA_AUTH_JWT_SECRET}
+      MIA_REDIS_URL: redis://redis:6379/0
+      MIA_REDIS_PREFIX: ${MIA_REDIS_PREFIX:-mia:production}
+      MIA_REDIS_REQUIRED: "true"
+      MIA_LLM_DISTRIBUTED_CONCURRENCY_ENABLED: "true"
+      MIA_WORKFLOW_SCHEDULER_ENABLED: "false"
+      MIA_WORKFLOW_DISPATCHER_ENABLED: "false"
+      MIA_WORKFLOW_CONSUMER_ENABLED: ${MIA_WORKFLOW_CONSUMER_ENABLED:-false}
+      MIA_KNOWLEDGE_STORAGE_DIR: /app/storage/knowledge
+      TOOLS_HTTP_ALLOWED_HOSTS: ${TOOLS_HTTP_ALLOWED_HOSTS:-}
+      MIA_TOOLS_HTTP_ALLOW_LOCALHOST: ${MIA_TOOLS_HTTP_ALLOW_LOCALHOST:-false}
     volumes:
       - mia_knowledge_data:/app/storage/knowledge
     depends_on:
