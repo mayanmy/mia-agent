@@ -695,8 +695,10 @@ export class WorkflowSchedulesService {
       });
       if (!candidate) return null;
       // 同一 Schedule 的检查和状态切换必须串行；不同 Schedule 仍可被多个 Worker 并行认领。
+      // PostgreSQL advisory lock 返回 void，Prisma 无法反序列化该类型；显式转成 text，
+      // 既保留事务级锁语义，也避免 Worker 在领取任务时因结果解码失败而退出。
       await transaction.$queryRaw`
-        SELECT pg_advisory_xact_lock(hashtextextended(${candidate.scheduleId}::text, 0))
+        SELECT pg_advisory_xact_lock(hashtextextended(${candidate.scheduleId}::text, 0))::text
       `;
       const current = await transaction.workflowScheduleRun.findUnique({
         where: { id },
