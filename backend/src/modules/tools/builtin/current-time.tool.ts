@@ -5,6 +5,7 @@ export const currentTimeTool: BuiltinTool = {
   name: "当前时间",
   description: "获取当前时间，适合回答和时间相关的问题。",
   enabled: true,
+  replayMetadata: { sideEffectLevel: "READ", replayPolicy: "REEXECUTE" },
   inputSchema: {
     type: "object",
     properties: {

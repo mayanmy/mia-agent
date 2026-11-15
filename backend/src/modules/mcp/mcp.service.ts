@@ -1107,6 +1107,8 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
       name: tool.title?.trim() || tool.remoteName,
       description: tool.description,
       enabled: true,
+      // MCP annotations 尚未形成可信治理契约时一律按未知副作用处理。
+      replayMetadata: { sideEffectLevel: "UNKNOWN", replayPolicy: "FORBIDDEN" },
       inputSchema: {
         ...schema,
         type: "object"

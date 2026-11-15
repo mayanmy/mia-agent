@@ -40,5 +40,66 @@ export const tests = [
         /只能管理自己创建的 HTTP 工具/u
       );
     }
+  },
+  {
+    name: "ConfiguredHttpToolsService validates conservative replay and idempotency metadata",
+    run: () => {
+      const service = new ConfiguredHttpToolsService({} as never);
+      const validateCreate = (
+        service as unknown as {
+          validateCreate: (payload: Record<string, unknown>) => {
+            replayMetadata: Record<string, unknown>;
+          };
+        }
+      ).validateCreate.bind(service);
+      const base = {
+        name: "工单工具",
+        slug: "ticket_tool",
+        method: "POST",
+        baseUrl: "https://example.com",
+        path: "/tickets"
+      };
+
+      assert.deepEqual(validateCreate({ ...base, method: "GET" }).replayMetadata, {
+        sideEffectLevel: "READ",
+        replayPolicy: "REEXECUTE"
+      });
+      assert.deepEqual(validateCreate(base).replayMetadata, {
+        sideEffectLevel: "UNKNOWN",
+        replayPolicy: "FORBIDDEN"
+      });
+      assert.deepEqual(
+        validateCreate({
+          ...base,
+          replayMetadata: {
+            sideEffectLevel: "IDEMPOTENT_WRITE",
+            replayPolicy: "REEXECUTE",
+            idempotency: {
+              supported: true,
+              transport: "HEADER",
+              fieldName: "Idempotency-Key"
+            }
+          }
+        }).replayMetadata,
+        {
+          sideEffectLevel: "IDEMPOTENT_WRITE",
+          replayPolicy: "REEXECUTE",
+          idempotency: {
+            supported: true,
+            transport: "HEADER",
+            fieldName: "Idempotency-Key",
+            resultLookupSupported: false
+          }
+        }
+      );
+      assert.throws(
+        () =>
+          validateCreate({
+            ...base,
+            replayMetadata: { sideEffectLevel: "UNKNOWN", replayPolicy: "REEXECUTE" }
+          }),
+        /不能放宽/u
+      );
+    }
   }
 ];

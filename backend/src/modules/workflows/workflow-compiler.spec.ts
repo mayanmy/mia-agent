@@ -299,5 +299,55 @@ export const tests = [
         ["low-end", "high-end"]
       );
     }
+  },
+  {
+    name: "WorkflowCompiler rejects a node that loosens an unknown tool replay policy",
+    run: async () => {
+      const toolGraph: WorkflowGraph = {
+        schemaVersion: 1,
+        nodes: [
+          { id: "start", type: "start", name: "开始", config: { inputs: [] } },
+          {
+            id: "write",
+            type: "tool",
+            name: "未知工具",
+            config: {
+              toolId: "mcp_unknown",
+              arguments: {},
+              replayPolicy: "REEXECUTE"
+            }
+          },
+          { id: "end", type: "end", name: "结束", config: { output: {} } }
+        ],
+        edges: [
+          { id: "e1", source: "start", target: "write" },
+          { id: "e2", source: "write", target: "end" }
+        ]
+      };
+      const compiler = new WorkflowCompiler(
+        {} as never,
+        {
+          ensureKnowledgeBaseIdsExist: async () => undefined,
+          getRetrievalConfigs: async () => []
+        } as never,
+        {
+          getToolDefinitions: async () => [
+            {
+              id: "mcp_unknown",
+              name: "Unknown",
+              description: "",
+              enabled: true,
+              inputSchema: { type: "object" },
+              replayMetadata: { sideEffectLevel: "UNKNOWN", replayPolicy: "FORBIDDEN" }
+            }
+          ]
+        } as never
+      );
+
+      const result = await compiler.compile(toolGraph);
+
+      assert.equal(result.valid, false);
+      assert.ok(result.issues.some((issue) => issue.code === "TOOL_REPLAY_POLICY_UNSAFE"));
+    }
   }
 ];

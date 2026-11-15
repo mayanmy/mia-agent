@@ -50,6 +50,7 @@ function toToolDefinition(tool: BuiltinTool): ToolDefinition {
     name: tool.name,
     description: tool.description,
     enabled: tool.enabled,
-    inputSchema: tool.inputSchema
+    inputSchema: tool.inputSchema,
+    replayMetadata: tool.replayMetadata
   };
 }

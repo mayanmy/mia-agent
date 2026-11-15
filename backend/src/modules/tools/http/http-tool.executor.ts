@@ -34,10 +34,11 @@ export class HttpToolExecutor {
   async execute(
     config: HttpToolRuntimeConfig,
     rawInput: Record<string, ToolJsonValue>,
-    upstreamSignal?: AbortSignal
+    upstreamSignal?: AbortSignal,
+    execution?: { idempotencyKey?: string }
   ): Promise<ToolJsonValue> {
     const input = this.validateInput(config.parameters, rawInput);
-    const request = this.buildRequest(config, input);
+    const request = this.buildRequest(config, input, execution?.idempotencyKey);
     const controller = new AbortController();
     let timedOut = false;
     const timeout = setTimeout(() => {
@@ -178,7 +179,8 @@ export class HttpToolExecutor {
   /** 使用结构化 URL/Headers API 组装请求，业务参数无法改变目标 Host。 */
   private buildRequest(
     config: HttpToolRuntimeConfig,
-    input: Record<string, ToolJsonValue>
+    input: Record<string, ToolJsonValue>,
+    idempotencyKey?: string
   ): { url: URL; displayUrl: URL; init: RequestInit } {
     let path = config.path;
     let displayPath = config.path;
@@ -214,6 +216,16 @@ export class HttpToolExecutor {
         headers.set(targetName, this.stringifyScalar(value));
       } else {
         body[targetName] = value;
+      }
+    }
+
+    const idempotency = config.replayMetadata.idempotency;
+    if (idempotency?.supported && idempotencyKey && idempotency.fieldName) {
+      // 幂等键只进入真实请求，不进入 input、displayUrl、Trace 或工具调用日志。
+      if (idempotency.transport === "HEADER") {
+        headers.set(idempotency.fieldName, idempotencyKey);
+      } else if (idempotency.transport === "BODY") {
+        body[idempotency.fieldName] = idempotencyKey;
       }
     }
 

@@ -482,6 +482,8 @@ export class WorkflowsService {
           name: `workflow_${app.workflowId.replaceAll("-", "_")}`,
           description: `${app.description || app.name}（Workflow v${app.version}）`,
           enabled: true,
+          // 后续由编译器聚合内部节点风险；未完成聚合前禁止嵌套 Workflow 自动重放。
+          replayMetadata: { sideEffectLevel: "UNKNOWN", replayPolicy: "FORBIDDEN" },
           inputSchema: {
             type: "object",
             properties: Object.fromEntries(

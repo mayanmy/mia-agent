@@ -5,6 +5,7 @@ import { ModelConfigType } from "@prisma/client";
 import { KnowledgeService } from "../knowledge/knowledge.service";
 import { ModelProvidersService } from "../model-providers/model-providers.service";
 import { ToolsService } from "../tools/tools.service";
+import { resolveReplayPolicy } from "../tools/tool-replay-policy";
 import {
   CompiledReference,
   CompiledWorkflowNode,
@@ -645,6 +646,23 @@ export class WorkflowCompiler {
     }
     for (const [id, definition] of toolById) {
       fingerprints[`tool:${id}`] = checksumJson(definition);
+    }
+    for (const node of nodes) {
+      if (node.type !== "tool") continue;
+      const toolId = this.nonEmptyString(node.config.toolId);
+      const definition = toolId ? toolById.get(toolId) : undefined;
+      if (!definition) continue;
+      try {
+        resolveReplayPolicy(definition.replayMetadata, node.config.replayPolicy);
+      } catch (error) {
+        this.addIssue(
+          issues,
+          "TOOL_REPLAY_POLICY_UNSAFE",
+          error instanceof Error ? error.message : "工具重放策略不安全",
+          node.id,
+          "replayPolicy"
+        );
+      }
     }
     return Object.fromEntries(
       Object.entries(fingerprints).sort(([left], [right]) => left.localeCompare(right))

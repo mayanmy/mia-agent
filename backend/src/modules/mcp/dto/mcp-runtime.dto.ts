@@ -1,4 +1,5 @@
 import { McpClientRuntimeConfig } from "../clients/mcp-protocol-client.factory";
+import { ToolReplayMetadata } from "../../tools/dto/tool.dto";
 
 /** 提供给 Agent Runtime 的 MCP 工具定义与审批元数据。 */
 export type McpRuntimeToolDefinition = {
@@ -12,6 +13,7 @@ export type McpRuntimeToolDefinition = {
     required?: string[];
     additionalProperties?: boolean;
   };
+  replayMetadata: ToolReplayMetadata;
 };
 
 /** 大规模 Tool Search 使用的轻量目录项，刻意不包含 input/output Schema。 */

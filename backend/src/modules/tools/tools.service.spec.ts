@@ -3,6 +3,12 @@ import * as assert from "node:assert/strict";
 import { HttpToolRuntimeConfig } from "./dto/http-tool.dto";
 import { HttpToolExecutor } from "./http/http-tool.executor";
 import { ToolsService } from "./tools.service";
+import {
+  highestSideEffectLevel,
+  minimumReplayPolicy,
+  resolveReplayPolicy
+} from "./tool-replay-policy";
+import { createLogicalOperationId, deriveIdempotencyKey } from "./tool-idempotency";
 
 const configuredHttpTool: HttpToolRuntimeConfig = {
   id: "tool-1",
@@ -29,7 +35,8 @@ const configuredHttpTool: HttpToolRuntimeConfig = {
   tokenCacheKey: "tool-1:1",
   timeoutMs: 1000,
   maxResponseBytes: 10000,
-  allowPrivateNetwork: true
+  allowPrivateNetwork: true,
+  replayMetadata: { sideEffectLevel: "READ", replayPolicy: "REEXECUTE" }
 };
 
 export const tests = [
@@ -42,6 +49,45 @@ export const tests = [
 
       assert.deepEqual(toolIds, ["http_request", "calculator", "current_time"]);
       assert.ok(tools.every((tool) => tool.enabled));
+    }
+  },
+  {
+    name: "Tool replay policy defaults conservatively and cannot be loosened",
+    run: async () => {
+      const service = new ToolsService();
+      const definitions = await service.getToolDefinitions([
+        "calculator",
+        "current_time",
+        "http_request"
+      ]);
+      assert.deepEqual(
+        definitions.map((tool) => [tool.id, tool.replayMetadata]),
+        [
+          ["calculator", { sideEffectLevel: "NONE", replayPolicy: "REUSE" }],
+          ["current_time", { sideEffectLevel: "READ", replayPolicy: "REEXECUTE" }],
+          ["http_request", { sideEffectLevel: "UNKNOWN", replayPolicy: "FORBIDDEN" }]
+        ]
+      );
+      assert.equal(
+        minimumReplayPolicy({ sideEffectLevel: "IDEMPOTENT_WRITE", replayPolicy: "REEXECUTE" }),
+        "FORBIDDEN"
+      );
+      assert.equal(
+        resolveReplayPolicy(
+          { sideEffectLevel: "NON_IDEMPOTENT_WRITE", replayPolicy: "REQUIRE_CONFIRMATION" },
+          "FORBIDDEN"
+        ),
+        "FORBIDDEN"
+      );
+      assert.throws(
+        () =>
+          resolveReplayPolicy(
+            { sideEffectLevel: "UNKNOWN", replayPolicy: "FORBIDDEN" },
+            "REEXECUTE"
+          ),
+        /不能放宽/u
+      );
+      assert.equal(highestSideEffectLevel(["READ", "UNKNOWN", "NONE"]), "UNKNOWN");
     }
   },
 
@@ -530,6 +576,71 @@ export const tests = [
           token: "[REDACTED]",
           note: "[REDACTED] suffix"
         });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
+  },
+
+  {
+    name: "HttpToolExecutor injects an idempotency key without exposing it in output",
+    run: async () => {
+      const executor = new HttpToolExecutor();
+      const originalFetch = globalThis.fetch;
+      let requestedHeaders = new Headers();
+      globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+        requestedHeaders = new Headers(init?.headers);
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }) as typeof fetch;
+      const logicalOperationId = createLogicalOperationId({
+        rootRunId: "run-root",
+        workflowVersionId: "workflow-version",
+        nodeId: "create-ticket",
+        originalAttempt: 1
+      });
+      const idempotencyKey = deriveIdempotencyKey("test-secret", logicalOperationId);
+
+      try {
+        const output = await executor.execute(
+          {
+            ...configuredHttpTool,
+            replayMetadata: {
+              sideEffectLevel: "IDEMPOTENT_WRITE",
+              replayPolicy: "REEXECUTE",
+              idempotency: {
+                supported: true,
+                transport: "HEADER",
+                fieldName: "Idempotency-Key"
+              }
+            }
+          },
+          { orderId: "ORD 1" },
+          undefined,
+          { idempotencyKey }
+        );
+
+        assert.equal(requestedHeaders.get("idempotency-key"), idempotencyKey);
+        assert.ok(!JSON.stringify(output).includes(idempotencyKey));
+        assert.equal(
+          deriveIdempotencyKey("test-secret", logicalOperationId),
+          idempotencyKey,
+          "同一逻辑操作必须生成稳定幂等键"
+        );
+        assert.notEqual(
+          deriveIdempotencyKey(
+            "test-secret",
+            createLogicalOperationId({
+              rootRunId: "run-root",
+              workflowVersionId: "workflow-version",
+              nodeId: "another-node",
+              originalAttempt: 1
+            })
+          ),
+          idempotencyKey
+        );
       } finally {
         globalThis.fetch = originalFetch;
       }

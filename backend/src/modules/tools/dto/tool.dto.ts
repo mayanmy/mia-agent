@@ -16,6 +16,27 @@ export type ToolInputSchema = {
   additionalProperties?: boolean;
 };
 
+/** 工具可能产生的外部副作用；UNKNOWN 必须采用最保守的重放策略。 */
+export type ToolSideEffectLevel =
+  "NONE" | "READ" | "IDEMPOTENT_WRITE" | "NON_IDEMPOTENT_WRITE" | "UNKNOWN";
+
+/** Run Replay 对单次工具执行的默认处理方式。 */
+export type ToolReplayPolicy = "REUSE" | "REEXECUTE" | "REQUIRE_CONFIRMATION" | "FORBIDDEN";
+
+export type ToolIdempotencyMetadata = {
+  supported: boolean;
+  transport: "HEADER" | "BODY" | "NATIVE";
+  fieldName?: string;
+  resultLookupSupported?: boolean;
+};
+
+/** 发布版本会把该元数据纳入工具资源指纹，避免策略变化静默影响历史版本。 */
+export type ToolReplayMetadata = {
+  sideEffectLevel: ToolSideEffectLevel;
+  replayPolicy: ToolReplayPolicy;
+  idempotency?: ToolIdempotencyMetadata;
+};
+
 /** 跨工具来源统一暴露的可调用定义。 */
 export type ToolDefinition = {
   id: string;
@@ -23,6 +44,7 @@ export type ToolDefinition = {
   description: string;
   enabled: boolean;
   inputSchema: ToolInputSchema;
+  replayMetadata: ToolReplayMetadata;
 };
 
 /** 工具管理列表所需的轻量摘要。 */
@@ -57,6 +79,8 @@ export type ToolExecutionRequest = {
   allowInteractiveApproval?: boolean;
   /** 批准后回传的一次性记录 ID；ToolsService 会先校验并消费，再解析真实工具。 */
   approvalId?: string;
+  /** 仅 Runtime 内部传递；不得写入 Tool 日志、Trace、模型上下文或管理 API。 */
+  idempotencyKey?: string;
   signal?: AbortSignal;
 };
 

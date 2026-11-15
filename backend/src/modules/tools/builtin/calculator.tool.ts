@@ -10,6 +10,7 @@ export const calculatorTool: BuiltinTool = {
   name: "计算器",
   description: "执行基础数学计算，适合处理确定性的数字运算。",
   enabled: true,
+  replayMetadata: { sideEffectLevel: "NONE", replayPolicy: "REUSE" },
   inputSchema: {
     type: "object",
     properties: {

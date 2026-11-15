@@ -13,6 +13,8 @@ export const httpRequestTool: BuiltinTool = {
   name: "HTTP 请求",
   description: "向指定 HTTP 接口发送请求，适合调用内部系统或外部 API。",
   enabled: true,
+  // method 由调用参数决定，发布时无法证明只读，因此默认禁止自动重放。
+  replayMetadata: { sideEffectLevel: "UNKNOWN", replayPolicy: "FORBIDDEN" },
   inputSchema: {
     type: "object",
     properties: {

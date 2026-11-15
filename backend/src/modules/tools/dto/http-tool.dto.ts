@@ -1,4 +1,4 @@
-import { ToolInputSchema, ToolJsonValue } from "./tool.dto";
+import { ToolInputSchema, ToolJsonValue, ToolReplayMetadata } from "./tool.dto";
 
 /** HTTP 工具 V1 允许的请求方法白名单。 */
 export type HttpToolMethod = "GET" | "POST";
@@ -93,6 +93,7 @@ export type HttpToolCreateDto = {
   timeoutMs?: number;
   maxResponseBytes?: number;
   allowPrivateNetwork?: boolean;
+  replayMetadata?: ToolReplayMetadata;
 };
 
 /** 更新 HTTP 工具的输入；未提供字段保持原值。 */
@@ -124,6 +125,7 @@ export type HttpToolListItem = {
   authType: HttpToolAuthType;
   secretConfigured: boolean;
   allowPrivateNetwork: boolean;
+  replayMetadata: ToolReplayMetadata;
   updatedAt: Date;
 };
 
@@ -172,4 +174,5 @@ export type HttpToolRuntimeConfig = {
   timeoutMs: number;
   maxResponseBytes: number;
   allowPrivateNetwork: boolean;
+  replayMetadata: ToolReplayMetadata;
 };

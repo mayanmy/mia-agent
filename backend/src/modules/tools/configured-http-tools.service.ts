@@ -24,7 +24,14 @@ import {
   HttpToolRuntimeConfig,
   HttpToolUpdateDto
 } from "./dto/http-tool.dto";
-import { ToolCatalogItem, ToolDefinition, ToolInputSchema, ToolJsonValue } from "./dto/tool.dto";
+import {
+  ToolCatalogItem,
+  ToolDefinition,
+  ToolInputSchema,
+  ToolJsonValue,
+  ToolReplayMetadata
+} from "./dto/tool.dto";
+import { resolveReplayPolicy } from "./tool-replay-policy";
 
 const HTTP_TOOL_PREFIX = "http_";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -117,6 +124,12 @@ export class ConfiguredHttpToolsService {
           timeoutMs: data.timeoutMs,
           maxResponseBytes: data.maxResponseBytes,
           allowPrivateNetwork: data.allowPrivateNetwork,
+          sideEffectLevel: data.replayMetadata.sideEffectLevel,
+          replayPolicy: data.replayMetadata.replayPolicy,
+          idempotencySupported: data.replayMetadata.idempotency?.supported ?? false,
+          idempotencyTransport: data.replayMetadata.idempotency?.transport,
+          idempotencyFieldName: data.replayMetadata.idempotency?.fieldName,
+          resultLookupSupported: data.replayMetadata.idempotency?.resultLookupSupported ?? false,
           createdByUserId: userId
         },
         include: {
@@ -199,7 +212,13 @@ export class ConfiguredHttpToolsService {
           secretId,
           timeoutMs: data.timeoutMs,
           maxResponseBytes: data.maxResponseBytes,
-          allowPrivateNetwork: data.allowPrivateNetwork
+          allowPrivateNetwork: data.allowPrivateNetwork,
+          sideEffectLevel: data.replayMetadata.sideEffectLevel,
+          replayPolicy: data.replayMetadata.replayPolicy,
+          idempotencySupported: data.replayMetadata.idempotency?.supported ?? false,
+          idempotencyTransport: data.replayMetadata.idempotency?.transport,
+          idempotencyFieldName: data.replayMetadata.idempotency?.fieldName,
+          resultLookupSupported: data.replayMetadata.idempotency?.resultLookupSupported ?? false
         },
         include: {
           secret: true,
@@ -307,7 +326,8 @@ export class ConfiguredHttpToolsService {
       tokenCacheKey: `${tool.id}:${tool.updatedAt.toISOString()}`,
       timeoutMs: tool.timeoutMs,
       maxResponseBytes: tool.maxResponseBytes,
-      allowPrivateNetwork: tool.allowPrivateNetwork
+      allowPrivateNetwork: tool.allowPrivateNetwork,
+      replayMetadata: this.readReplayMetadata(tool)
     };
   }
 
@@ -375,7 +395,8 @@ export class ConfiguredHttpToolsService {
         MAX_RESPONSE_BYTES,
         "maxResponseBytes"
       ),
-      allowPrivateNetwork: payload.allowPrivateNetwork ?? false
+      allowPrivateNetwork: payload.allowPrivateNetwork ?? false,
+      replayMetadata: this.normalizeReplayMetadata(payload.replayMetadata, method)
     };
   }
 
@@ -410,7 +431,8 @@ export class ConfiguredHttpToolsService {
             : { ...(existingCredentials ?? {}), ...payload.credentials },
         timeoutMs: payload.timeoutMs ?? existing.timeoutMs,
         maxResponseBytes: payload.maxResponseBytes ?? existing.maxResponseBytes,
-        allowPrivateNetwork: payload.allowPrivateNetwork ?? existing.allowPrivateNetwork
+        allowPrivateNetwork: payload.allowPrivateNetwork ?? existing.allowPrivateNetwork,
+        replayMetadata: payload.replayMetadata ?? this.readReplayMetadata(existing)
       },
       keepsExistingCredential
     );
@@ -1082,7 +1104,8 @@ export class ConfiguredHttpToolsService {
       name: tool.name,
       description: tool.description,
       enabled: tool.enabled,
-      inputSchema: this.buildInputSchema(this.readParameters(tool.parameters))
+      inputSchema: this.buildInputSchema(this.readParameters(tool.parameters)),
+      replayMetadata: this.readReplayMetadata(tool)
     };
   }
 
@@ -1127,6 +1150,7 @@ export class ConfiguredHttpToolsService {
       authType: tool.authType as HttpToolAuthType,
       secretConfigured: Boolean(tool.secret),
       allowPrivateNetwork: tool.allowPrivateNetwork,
+      replayMetadata: this.readReplayMetadata(tool),
       updatedAt: tool.updatedAt
     };
   }
@@ -1166,6 +1190,81 @@ export class ConfiguredHttpToolsService {
   /** Prisma Json 解包为已在写入时验证过的参数声明。 */
   private readParameters(value: Prisma.JsonValue): HttpToolParameter[] {
     return Array.isArray(value) ? (value as unknown as HttpToolParameter[]) : [];
+  }
+
+  private normalizeReplayMetadata(
+    value: ToolReplayMetadata | undefined,
+    method: HttpToolMethod
+  ): ToolReplayMetadata {
+    const fallback: ToolReplayMetadata =
+      method === "GET"
+        ? { sideEffectLevel: "READ", replayPolicy: "REEXECUTE" }
+        : { sideEffectLevel: "UNKNOWN", replayPolicy: "FORBIDDEN" };
+    if (!value) return fallback;
+    if (method === "GET" && value.sideEffectLevel !== "NONE" && value.sideEffectLevel !== "READ") {
+      throw new AppError(ErrorCodes.common.badRequest, "GET 工具只能声明 NONE 或 READ");
+    }
+    const idempotency = value.idempotency;
+    if (value.sideEffectLevel === "IDEMPOTENT_WRITE") {
+      if (!idempotency?.supported || !idempotency.fieldName) {
+        throw new AppError(
+          ErrorCodes.common.badRequest,
+          "幂等写工具必须声明幂等键传递位置和字段名"
+        );
+      }
+      if (idempotency.transport !== "HEADER" && idempotency.transport !== "BODY") {
+        throw new AppError(ErrorCodes.common.badRequest, "HTTP 工具幂等键只支持 HEADER 或 BODY");
+      }
+      if (idempotency.transport === "HEADER") {
+        this.normalizeHeaderName(idempotency.fieldName, "idempotency fieldName", new Set());
+      } else if (!/^[A-Za-z][A-Za-z0-9_.-]*$/u.test(idempotency.fieldName)) {
+        throw new AppError(ErrorCodes.common.badRequest, "idempotency fieldName 无效");
+      }
+    } else if (idempotency?.supported) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        "只有 IDEMPOTENT_WRITE 工具可以声明幂等能力"
+      );
+    }
+    try {
+      resolveReplayPolicy(value, value.replayPolicy);
+    } catch (error) {
+      throw new AppError(
+        ErrorCodes.common.badRequest,
+        error instanceof Error ? error.message : "replayPolicy 无效"
+      );
+    }
+    return {
+      sideEffectLevel: value.sideEffectLevel,
+      replayPolicy: value.replayPolicy,
+      ...(idempotency?.supported
+        ? {
+            idempotency: {
+              supported: true,
+              transport: idempotency.transport,
+              fieldName: idempotency.fieldName,
+              resultLookupSupported: idempotency.resultLookupSupported ?? false
+            }
+          }
+        : {})
+    };
+  }
+
+  private readReplayMetadata(tool: HttpTool): ToolReplayMetadata {
+    return {
+      sideEffectLevel: tool.sideEffectLevel as ToolReplayMetadata["sideEffectLevel"],
+      replayPolicy: tool.replayPolicy as ToolReplayMetadata["replayPolicy"],
+      ...(tool.idempotencySupported && tool.idempotencyTransport && tool.idempotencyFieldName
+        ? {
+            idempotency: {
+              supported: true,
+              transport: tool.idempotencyTransport as "HEADER" | "BODY",
+              fieldName: tool.idempotencyFieldName,
+              resultLookupSupported: tool.resultLookupSupported
+            }
+          }
+        : {})
+    };
   }
 
   /** Prisma Json 解包为固定 Header 列表。 */

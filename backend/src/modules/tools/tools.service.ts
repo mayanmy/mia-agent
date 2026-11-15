@@ -211,7 +211,9 @@ export class ToolsService {
       const output = mcpTool
         ? await this.requireMcpToolExecutor().execute(mcpTool, input, request.signal)
         : configuredTool
-          ? await this.requireHttpToolExecutor().execute(configuredTool, input, request.signal)
+          ? await this.requireHttpToolExecutor().execute(configuredTool, input, request.signal, {
+              idempotencyKey: request.idempotencyKey
+            })
           : await tool!.execute(input, {
               requestId: request.requestId,
               userId: request.userId,
